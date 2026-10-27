@@ -32,15 +32,22 @@ cd android
 .\gradlew --stop
 ```
 
-Then move the affected cache folders aside (they are regenerated):
+Then move the affected script/transform cache folders aside (they are
+regenerated; `modules-2` is left untouched because it contains downloaded
+dependencies):
 
 ```powershell
 $c = "$env:USERPROFILE\.gradle\caches\8.14"
-Move-Item "$c\transforms" "$c\transforms.bak"
 Move-Item "$c\kotlin-dsl" "$c\kotlin-dsl.bak"
+Move-Item "$c\groovy-dsl" "$c\groovy-dsl.bak"
+Move-Item "$c\transforms" "$c\transforms.bak"
+Move-Item "$c\generated-gradle-jars" "$c\generated-gradle-jars.bak"
+Move-Item "$c\dependencies-accessors" "$c\dependencies-accessors.bak"
 ```
 
-Do not delete `modules-2`; it contains downloaded dependencies.
+This cache corruption was observed on this machine after interrupted builds;
+clearing the script caches and rebuilding fixed it. A direct
+`.\gradlew :app:assembleDebug --no-daemon` is a useful diagnostic.
 
 ## Network notes
 

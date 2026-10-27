@@ -17,7 +17,9 @@ Phase 0 scaffold is in place:
 - License/attribution files and repository hygiene
 - Basic kana utilities + tests; debug APK builds
 
-Next: Phase 1 (UniDic/MeCab service, tokens, furigana, reader).
+Next: Phase 1 (UniDic/MeCab service, tokens, furigana, reader). See
+[docs/phase0-status.md](docs/phase0-status.md) for verified results and
+remaining spikes.
 
 ## Requirements
 
