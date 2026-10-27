@@ -9,6 +9,9 @@ Changes:
   when that file exists. Rikai-Mobile loads a user-supplied, read-only UniDic
   directory that has no `mecabrc`; the app passes its own private rc file via
   the existing `options` string instead of writing into the user's directory.
+- `src/dart_ffi.cpp` — `parse()` now returns an empty string when
+  `mecab_sparse_tostr()` returns NULL instead of letting Dart dereference a
+  null pointer.
 - `analysis_options.yaml` — disabled `avoid_print` and
   `curly_braces_in_flow_control_structures` for this vendored package so
   `flutter analyze` stays clean without rewriting upstream source.

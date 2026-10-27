@@ -7,19 +7,19 @@ dictionaries — all in one app, without network access.
 
 ## Status
 
-Phase 0 scaffold is in place:
+Phase 1 is working end to end with a real UniDic on the Android emulator:
 
-- Flutter Android project (`com.rikai.mobile`, minSdk 26, arm64 release)
-- Vendored MeCab (`packages/mecab_for_dart`, BSD-3) with a read-only UniDic
-  path patch
-- ONNX Runtime OCR plugin skeleton (`packages/rikai_ocr`)
-- Model catalog with hf-mirror fallback (`assets/models/manifest.json`)
-- License/attribution files and repository hygiene
-- Basic kana utilities + tests; debug APK builds
+- In-place MeCab/UniDic tokenization in a long-lived worker isolate, private
+  `mecabrc`, CSV-aware parsing of quoted UniDic fields
+- 29-field token mapping, furigana, lookup candidates and token offsets
+- Text reader with content-word highlighting, furigana toggle, font size and
+  copy; settings with UniDic validation and All Files Access
+- Native All Files Access MethodChannel (`rikai/storage_permission`)
+- OCR plugin skeleton, model catalog and license files from Phase 0
 
-Next: Phase 1 (UniDic/MeCab service, tokens, furigana, reader). See
-[docs/phase0-status.md](docs/phase0-status.md) for verified results and
-remaining spikes.
+Next: Phase 2 (MDict lookup, search and offline WebView rendering). See
+[docs/phase1-status.md](docs/phase1-status.md) and
+[docs/phase0-status.md](docs/phase0-status.md) for verified results.
 
 ## Requirements
 
@@ -42,6 +42,8 @@ See [docs/dev-setup.md](docs/dev-setup.md) for toolchain and device setup.
 ## Documents
 
 - [Development plan](docs/DEVELOPMENT_PLAN.md)
+- [Phase 0 status](docs/phase0-status.md)
+- [Phase 1 status](docs/phase1-status.md)
 - [Development setup](docs/dev-setup.md)
 - [Models](docs/models.md)
 - [Architecture decisions](docs/adr/)

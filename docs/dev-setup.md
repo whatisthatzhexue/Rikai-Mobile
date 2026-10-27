@@ -99,3 +99,39 @@ flutter emulators --launch Medium_Phone_API_36.1
 The debug APK includes x86_64 ONNX Runtime and MeCab libraries, so OCR and
 tokenization can be exercised on the x86_64 emulator (slowly). Final
 performance and vertical-text quality require an arm64 device.
+
+## MeCab integration test with a real UniDic
+
+`flutter test` installs the app immediately before running the test and
+uninstalls it afterwards. Grant `MANAGE_EXTERNAL_STORAGE` in a second shell
+while the test is starting:
+
+```bash
+# Push the dictionary. Git Bash on Windows rewrites /sdcard paths in every
+# command-line argument, including --dart-define, unless path conversion is
+# disabled.
+export MSYS_NO_PATHCONV=1
+adb shell mkdir -p /sdcard/Download
+adb push unidic/unidic-cwj-202512 /sdcard/Download/
+```
+
+```bash
+# Shell A: run the integration test (keep MSYS_NO_PATHCONV=1 exported, or the
+# --dart-define value becomes C:/GitBash/sdcard/...).
+export MSYS_NO_PATHCONV=1
+flutter test integration_test/mecab_android_test.dart -d emulator-5554 \
+  --dart-define=RIKAI_UNIDIC_PATH=/sdcard/Download/unidic-cwj-202512
+```
+
+```bash
+# Shell B: grant All Files Access as soon as the app is installed.
+while ! adb shell pm list packages | grep -q package:com.rikai.mobile; do
+  sleep 0.5
+done
+adb shell appops set com.rikai.mobile MANAGE_EXTERNAL_STORAGE allow
+```
+
+The test waits up to 120 seconds for the dictionary to become readable, so
+the grant can land after the test process has started. It verifies the real
+29-field UniDic output for `食べた東京`, line offsets and readings, and prints
+tokenization timing for a longer sample.

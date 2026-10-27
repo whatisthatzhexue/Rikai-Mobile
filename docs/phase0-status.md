@@ -49,8 +49,10 @@ native-assets hook):
 
 ## Known issues / remaining spikes
 
-- Android MeCab with the real 1.3 GB UniDic has not been loaded on a device yet;
-  this is the main Phase 0/1 gate. The native `.so` is built and packaged.
+- Android MeCab with the real 1.3 GB UniDic was validated on the x86_64
+  emulator in Phase 1 (`食べた東京` → `食べ/た/東京` with readings, 246 ms
+  service startup). See [docs/phase1-status.md](phase1-status.md). An arm64
+  device is still required for representative performance.
 - Running the root package with `dart run` on Windows triggers the
   `mecab_for_dart` native-assets hook, which fails in this Visual Studio
   environment. This does not affect Android builds; use an isolated Dart package

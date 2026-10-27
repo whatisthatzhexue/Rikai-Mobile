@@ -1,7 +1,8 @@
 # CLAUDE.md — Rikai-Mobile handoff
 
-> 给下一个 agent 的工作交接。先读本文件，再读 `docs/DEVELOPMENT_PLAN.md`（已批准的完整开发计划）
-> 和 `docs/phase0-status.md`（当前验证结果）。用户使用中文沟通；代码/标识符用英文。
+> 给下一个 agent 的工作交接。先读本文件，再读 `docs/DEVELOPMENT_PLAN.md`（已批准的完整开发计划）、
+> `docs/phase0-status.md` 和 `docs/phase1-status.md`（当前验证结果）。
+> 用户使用中文沟通；代码/标识符用英文。
 
 ## 1. 项目是什么
 
@@ -15,9 +16,9 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
 - Flutter 工程名：`rikai_mobile`
 - 最低系统：minSdk 26；compileSdk/targetSdk 36；NDK 28.2.13676358
 - 仅 Android；不做 iOS、不做云 OCR/云翻译/LLM。
-- 仓库已初始化 git，目前一次提交 `d0d94a3 feat: First Version`。
-  工作树可能有未提交的文档改动（README、docs/dev-setup、docs/phase0-status、本文件）；
-  不要擅自 `reset`/`commit`，除非用户明确要求。
+- 仓库已有两次提交：`d0d94a3 feat: First Version`、`dc70cee docs: 更新文档`。
+  Phase 1 改动（代码、测试、文档）当前仍在工作树中未提交；不要擅自
+  `reset`/`commit`，除非用户明确要求。
 
 ## 2. 已确认的架构决策（不要随意改）
 
@@ -37,10 +38,13 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
    - 不实现“导入时复制 1.3GB”作为默认行为。不要在用户 UniDic 目录创建 `mecabrc`。
 4. **MeCab**：vendored `mecab_for_dart` 2.0.5（BSD-3）在 `packages/mecab_for_dart`，
    路径依赖。已打补丁：`src/dart_ffi.cpp` 仅在 `<dicdir>/mecabrc` 存在时才传 `-r`。
-   应用必须自己创建**私有** `mecabrc`，并通过 `Mecab.create(..., options: '-r <私有rc路径>')`
+   应用必须自己创建**私有** `mecabrc`，并通过 `Mecab.create(..., options: '-r "<私有rc路径>"')`
    传入。`options` 字符串由 `generateArgs()` 按空格/双引号解析。
-   该 `-r` 传递方式尚未在 Android 上实测；若 MeCab 解析重复参数失败，改用
-   C++ 新增 `rcPath` 参数（Phase 1 spike 先验证）。
+   该方式已在 Android x86_64 模拟器 + 真实 1.3GB UniDic 上验证成功（见
+   `docs/phase1-status.md`），不需要改 C++ 的 `rcPath` 参数。
+   **注意**：UniDic 的 feature 行是带双引号的 CSV，例如
+   `"動詞%F2@1,形容詞%F4@-2"`；不能直接 `split(',')`，必须用
+   `lib/services/mecab/mecab_output_parser.dart`。
 5. **MDict**：`dict_reader` 1.6.1（MIT），长生命周期 worker isolate。
    - 开发测试词典为 MDict v2.0、UTF-8、463,312 条、zlib、未加密；
    - `locateAll` 命中后必须解析 `@@@LINK=目标` 重定向，再渲染；
@@ -52,81 +56,83 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
    **不得随包分发/不得提交**，下载前显示提示，支持本地导入。原项目 kha-white 是
    Apache-2.0，但当前下载源不是。INT8 draft 解码器 MVP 不做。
 
-## 3. 当前进展（Phase 0）
+## 3. 当前进展（Phase 0 + Phase 1 已完成）
 
 已完成：
 
-- Flutter Android 工程、依赖、Material 3 占位首页。
-- `packages/mecab_for_dart` vendored + rc 补丁；Android native assets 成功产出
-  `libmecab_dart.so`（arm64-v8a / armeabi-v7a / x86_64）。
-- `packages/rikai_ocr` 插件骨架：MethodChannel `rikai/ocr`，ONNX Runtime 1.28.0；
-  `initialize` 目前是空实现，`recognize` 返回 `NOT_IMPLEMENTED`。
-- `assets/models/manifest.json`：PaddleOCR v5、MangaOCR、方向模型的 URL/大小/许可；
-  默认 hf-mirror，HF 兜底；模型不入库。
-- 许可证/来源文件：`NOTICE`、`THIRD_PARTY_NOTICES.md`、`third_party/*`、`assets/licenses/`。
-- `lib/core/utils/kana.dart` 片假名↔平假名工具 + 8 个测试。
-- 文档：`docs/DEVELOPMENT_PLAN.md`、`docs/dev-setup.md`、`docs/phase0-status.md`、`docs/adr/`。
-- Debug APK 可构建：`build/app/outputs/flutter-apk/app-debug.apk`（约 260MB，全 ABI + debug）；
-  含 `libmecab_dart.so`、`libonnxruntime.so`、`libonnxruntime4j_jni.so`。
+- Flutter Android 工程、依赖、Material 3 首页、go_router 路由。
+- Phase 0 基建：vendored MeCab/native assets、`rikai_ocr` 骨架（MethodChannel
+  `rikai/ocr`、ORT 1.28.0）、模型 manifest、许可证、文档。
+- Phase 1（本次完成）：
+  - `lib/core/models/token.dart`：29 字段映射、注音优先级、查词候选、
+    内容词/功能词分类、UTF-16 offset。
+  - `lib/services/mecab/unidic_validator.dart`：校验 5 个必需文件、`sys.dic`
+    magic/size、版本 102、UTF-8、词条数与声明长度。
+  - `lib/services/mecab/mecab_output_parser.dart`：**引号感知 CSV 解析**，
+    修复 `"動詞%F2@1,形容詞%F4@-2"` 这类字段被误拆的问题。
+  - `lib/services/mecab/mecab_service.dart`：私有 `mecabrc`、长生命周期
+    isolate、串行 analyze、按行分词保留换行、错误码/超时、优雅释放。
+  - `lib/features/reader/*`：文本输入、`ReaderBlock`/`TokenChip`/
+    `FuriganaText`、内容词高亮、注音开关、字号、复制全文、token 详情。
+  - `lib/features/settings/settings_page.dart`：UniDic 路径/校验/权限引导、
+    注音/字号设置。
+  - All Files Access 原生 MethodChannel `rikai/storage_permission`
+    （`MainActivity.kt`）；Android 11+ 检查/跳转，API ≤29 申请读取权限。
+  - `integration_test/mecab_android_test.dart`：权限通道、真实 UniDic、
+    长文本、UI 注音渲染共 4 项设备测试。
 
 已验证：
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 8 tests passed
+flutter test     -> 41 tests passed
 flutter build apk --debug -> success
 ```
 
-主机的 MDict spike（`tool/spike_mdict.dart`，在隔离 Dart 包中运行）：
+真实 UniDic 模拟器集成测试（x86_64 API 36，4 项全部通过）：
+
+```text
+Storage permission: sdk=36 allFilesAccess=true
+MecabService.open: 246 ms
+食べ	たべ	動詞・一般・*・*	食べる	0..2
+た	た	助動詞・*・*・*	た	2..3
+東京	とうきょう	名詞・固有名詞・地名・一般	トウキョウ	3..5
+Analyzed 1100 tokens in 175 ms; non-standard layouts: 0
+reader page renders furigana for 食べた東京
+```
+
+主机 MDict spike（`tool/spike_mdict.dart`，在隔离 Dart 包中运行）：
 
 - `initDict()` ~200ms；463,312 条；RSS ~400MB；
 - `locateAll("東京")` <1ms；词条是 `@@@LINK=とうきょう【東京】`，解析后得到完整 HTML；
 - 前缀搜索正常。
 
-**尚未完成 / 关键门槛：**
+**尚未完成 / 下一步：**
 
-- 没有在 Android 真机/模拟器上实际加载 1.3GB UniDic 并跑 MeCab；
-  `libmecab_dart.so` 已打包，但 `MecabService` 还没写。
-- OCR 插件仍是骨架；PP-OCRv5/MangaOCR 模型没有实际执行过。
-- 没有识别历史、词典管理、设置、搜索、拍照、阅读区等业务页面。
-- Release APK 尚未构建（上一次 release 构建被用户中断；不要在没有必要时重复跑长构建）。
-- 没有真机连接；只有 x86_64 模拟器 `Medium_Phone_API_36.1`；最终性能/竖排需 arm64 真机。
+- Phase 2：MDict worker/repository、lookup 与 `@@@LINK`、离线 WebView 渲染、
+  搜索页、词典管理页。
+- OCR 插件仍是骨架；PP-OCRv5/MangaOCR 模型没有实际执行过（Phase 3/4）。
+- 识别历史、语料保存、引导页未实现（Phase 5）。
+- Release APK 尚未构建（不要在没有必要时重复跑长构建）。
+- 没有 arm64 真机；只有 x86_64 模拟器 `Medium_Phone_API_36.1`。
+  x86_64 仅验证功能，性能/竖排质量需 arm64 真机。
 
 ## 4. 未尽事宜（按优先级）
 
-### P0：Phase 0 剩余门槛
+### 已完成：UniDic/MeCab + Phase 1
 
-1. **Android UniDic/MeCab**：
-   - 写 `lib/services/mecab/mecab_service.dart`：
-     - 校验目录：`sys.dic`、`matrix.bin`、`char.bin`、`unk.dic`、`dicrc`；
-     - 校验 `sys.dic` 版本 102、UTF-8、词条数 > 0；
-     - 在应用私有目录创建 `mecabrc`（可为空或 `charset = UTF-8`）；
-     - 长生命周期 isolate 调 `Mecab.create(dictDir: path, options: '-r <private rc>')`；
-     - 串行 `analyze`，把异常映射为错误码。
-   - 用 `食べた東京` 验证分词和 29 字段映射。
-   - 推 UniDic 到设备/模拟器（见 §7），确认外部存储 mmap 可用；失败时先记录，再与用户确认回退方案（不要擅自改成复制）。
-2. **ORT 模型冒烟**：
-   - 下载 PaddleOCR det/rec 与 MangaOCR encoder/decoder（hf-mirror 可用）；
-   - 在插件里打开 ORT session，跑一张合成日文图片，确认模型算子/输入输出名；
-   - 记录耗时/内存。
+实现与验收记录见 §3、§6 和 `docs/phase1-status.md`。不要重写：
 
-### Phase 1：分词、注音、阅读区
+- 私有 `mecabrc` + `-r` 已在 Android 实测成功；
+- 1.3GB UniDic 外部存储 mmap 可用；
+- 29 字段映射与引号 CSV 解析已由真实词典验证；
+- All Files Access 原生通道已实现。
 
-- `lib/core/models/token.dart`：surface/pos1-4/lemma/orth/orthBase/pron/pronBase/kana/kanaBase/goshu/cType/cForm/lid/lemmaId/start/end。
-- 29 字段映射（已从真实 `sys.dic` 样本验证）：
-  - 0-3 pos1-4；4 cType；5 cForm；6 lForm/語彙素読み；7 lemma；8 orth；9 pron；
-    10 orthBase；11 pronBase；12 goshu；20 kana（仮名形出現形，注音首选）；
-    21 kanaBase；24-26 accent；27 lid；28 lemma_id。
-- 注音：`kana`(20) → `pron`(9) → `lForm`(6) → `surface`，片假名转平假名。
-- 查词候选：`orthBase` → `lemma` → `orth` → `kanaBase` → `kana` → `pron` → `surface`。
-- 阅读区：`ReaderBlock`/`TokenChip`/`FuriganaText`，内容词高亮、功能词弱化、复制全文。
-- 设置页：UniDic 路径、校验状态、All Files Access 引导。
-- **All Files Access 原生通道**：`permission_handler` 已移除（见 §5），需要在
-  `MainActivity.kt` 或独立 MethodChannel 中实现：
-  - 检查 `Environment.isExternalStorageManager()`；
-  - 跳转 `Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION`；
-  - Android 10 及以下申请 `READ_EXTERNAL_STORAGE`。
-- 单元测试：字段映射、假名、候选、标点/空白；Widget 测试阅读区。
+### 待完成：ORT 模型冒烟（Phase 3 前置）
+
+- 下载 PaddleOCR det/rec 与 MangaOCR encoder/decoder（hf-mirror 可用）；
+- 在插件里打开 ORT session，跑一张合成日文图片，确认模型算子/输入输出名；
+- 记录耗时/内存。
 
 ### Phase 2：MDict 查词/搜索/渲染
 
@@ -199,17 +205,24 @@ flutter build apk --debug -> success
 6. **误区：`mecab_for_dart` 要求 `<dicdir>/mecabrc`，于是往用户 UniDic 目录写文件。**
    - 正确做法：已 patch `packages/mecab_for_dart/src/dart_ffi.cpp`：只有该文件存在时才传
      `-r <dicdir>/mecabrc`。应用在**私有目录**创建 `mecabrc`，用
-     `Mecab.create(dictDir: path, options: '-r <私有rc路径>')` 传入。
-   - 先做 spike 验证 `-r` 通过 options 传递是否生效；若 MeCab 对重复/后置 `-r` 报错，
-     改 C++ 增加显式 `rcPath` 参数，**不要**写用户目录。
+     `Mecab.create(dictDir: path, options: '-r "<私有rc路径>"')` 传入。
+   - 该方式已在 Android x86_64 模拟器 + 真实 1.3GB UniDic 上验证成功；
+     不需要改 C++ 的 `rcPath` 参数，**不要**写用户目录。
 7. **误区：把 UniDic 复制到 app 存储“更稳”。**
    - 正确做法：用户明确选择原地路径；不要默认复制 1.3GB。
    - 权限不足：引导 All Files Access，或让用户放到
      `/sdcard/Android/data/com.rikai.mobile/files/`。
    - 外部存储 mmap 失败：记录具体错误并**询问用户**，不要静默改成复制方案。
-8. **误区：硬编码 29 字段并假设所有 UniDic 版本一致。**
-   - 正确做法：解析前校验字段数；按 §4 Phase 1 的索引映射；字段数异常时降级为
+8. **误区：硬编码 29 字段并假设所有 UniDic 版本一致；或用 `split(',')` 解析 feature。**
+   - 正确做法：解析前校验字段数；按下述索引映射；字段数异常时降级为
      “可点击、无注音”，记录日志，不崩溃。当前 2025.12 版本为 29 字段。
+   - **重要**：UniDic 的 feature 行是带双引号的 CSV，字段内可含逗号，例如
+     `"動詞%F2@1,形容詞%F4@-2"`。直接用 `TokenNode.features`（朴素 split）会把
+     助動詞/助詞解析成 30–31 字段。必须用
+     `lib/services/mecab/mecab_output_parser.dart` 的引号感知解析器。
+   - 索引：0-3 pos1-4；4 cType；5 cForm；6 lForm/語彙素読み；7 lemma；8 orth；
+     9 pron；10 orthBase；11 pronBase；12 goshu；20 kana；21 kanaBase；
+     24-26 accent；27 lid；28 lemma_id。
 9. **误区：注音直接用 `lemma` 或 `pron`。**
    - 正确做法：优先 `kana`(20)，回退 `pron`(9) → `lForm`(6) → `surface`；
      片假名转平假名。未知词可从 MDict 词条提取读音作为 P2 兜底。
@@ -268,6 +281,9 @@ flutter build apk --debug -> success
       - Android 10 及以下：申请 `READ_EXTERNAL_STORAGE`。
       - Manifest 已声明 `MANAGE_EXTERNAL_STORAGE`、`READ_EXTERNAL_STORAGE`
         （maxSdk 32）、`requestLegacyExternalStorage`。
+      - 已实现于 `android/app/src/main/kotlin/com/rikai/mobile/MainActivity.kt`
+        和 `lib/services/storage/permission_service.dart`（channel
+        `rikai/storage_permission`），设备端测试已验证。
 16. **误区：路径有中文就加 `subst` / `overridePathCheck` / `kotlin.incremental=false`。**
     - 正确做法：项目已在 `C:\Projects\Rikai-Mobile`（ASCII），这些配置已从
       `android/gradle.properties` 删除，不要恢复；直接构建即可。
@@ -334,22 +350,59 @@ flutter build apk --debug -> success
 | 词典/模型/UniDic 出现在 `git status` | 立即 `git check-ignore -v` 检查规则；不要提交；只保留 manifest/许可证 |
 | `flutter analyze` 报 vendored `mecab_for_dart` 的 lint | 该包 `analysis_options.yaml` 已关闭相关 lint；不要改上游源码或删除包 |
 | UniDic 加载后 OOM/卡死 | 确认 64 位；不要整体读入内存；检查 mmap/路径；记录设备内存；不要默认复制 |
+| adb/flutter 收到的 `/sdcard/...` 变成 `C:/GitBash/sdcard/...` | Git Bash 路径转换；`export MSYS_NO_PATHCONV=1`（§5.7 #26） |
+| 集成测试 `allFilesAccess=false` 或 `Cannot open file` | `flutter test` 重装应用丢失 appops；在测试运行期间循环重新授权（§5.7 #27） |
+| 助動詞/助詞 feature 数为 30/31、注音为空 | 引号内逗号被误拆；用 `mecab_output_parser.dart`（§5.2 #8） |
+| 分词失败后 loading 永不结束 | Riverpod 3 默认重试；给 provider 设 `retry: (_, __) => null`（§5.7 #28） |
+
+### 5.7 Phase 1 设备实测经验（2026-10-27）
+
+26. **误区：在 Git Bash 里直接传 `/sdcard/...` 给 adb 或 `--dart-define`。**
+    - 正确做法：MSYS 会把路径改写成 `C:/GitBash/sdcard/...`。运行前
+      `export MSYS_NO_PATHCONV=1`，对 `adb push`、`adb shell`、`flutter test` 都适用。
+27. **误区：`flutter test integration_test/... -d ...` 跑完仍保留应用与权限。**
+    - 正确做法：该命令测试前安装、测试后卸载应用，`MANAGE_EXTERNAL_STORAGE`
+      appops 随之丢失。用同一 shell 的后台循环在应用出现后反复执行
+      `adb shell appops set com.rikai.mobile MANAGE_EXTERNAL_STORAGE allow`；
+      集成测试会轮询最多 120 秒等待 UniDic 可读。命令见 `docs/dev-setup.md`。
+28. **误区：忽略 Riverpod 3 的默认 retry。**
+    - 正确做法：Riverpod 3 默认指数退避重试失败 provider；无效 UniDic 会反复初始化，
+      spinner 永不结束。`mecabServiceProvider` 已设 `retry: (_, __) => null`；
+      其它加载大文件/原生资源的 provider 也应显式关闭。
+29. **误区：外部存储 mmap 不可用。**
+    - 正确做法：已在 x86_64 API 36 模拟器验证 `/sdcard/Download` mmap 可用；
+      `MecabService.open` ~246ms。arm64 真机仍需复测。
+30. **误区：widget 测试里用 `pumpAndSettle` 等待真实文件 I/O 或权限通道。**
+    - 正确做法：mock `rikai/storage_permission`；真实文件 I/O 用 `tester.runAsync`
+      让出事件循环，否则无限 spinner 会让 `pumpAndSettle` 超时。
 
 ## 6. 关键文件
 
 ```text
-lib/main.dart, lib/app.dart, lib/features/home/home_page.dart   # 占位 UI
+lib/main.dart, lib/app.dart                                   # 入口 / go_router
+lib/features/home/home_page.dart                              # 首页
+lib/core/models/token.dart                                    # Token / 29 字段映射
 lib/core/utils/kana.dart                                      # 假名转换
-packages/mecab_for_dart/                                      # vendored MeCab（已打补丁）
+lib/services/mecab/unidic_validator.dart                      # UniDic 目录/头部校验
+lib/services/mecab/mecab_output_parser.dart                   # 引号感知 CSV 解析
+lib/services/mecab/mecab_service.dart                         # 私有 rc + 长生命周期 isolate
+lib/services/storage/settings_store.dart                      # SharedPreferences 设置
+lib/services/storage/permission_service.dart                  # 权限 MethodChannel Dart 侧
+lib/features/reader/                                          # 文本阅读区
+lib/features/settings/settings_page.dart                      # UniDic/权限/显示设置
+lib/state/providers.dart                                      # Riverpod providers
+packages/mecab_for_dart/                                      # vendored MeCab（补丁见 MODIFICATIONS.md）
 packages/rikai_ocr/                                           # OCR 插件骨架 + ORT
 assets/models/manifest.json                                   # 模型清单（不含模型本体）
+android/app/src/main/kotlin/com/rikai/mobile/MainActivity.kt  # 权限 MethodChannel 原生侧
 android/app/src/main/AndroidManifest.xml                      # 文件权限
 android/app/build.gradle.kts                                  # minSdk 26 / NDK 28
 docs/DEVELOPMENT_PLAN.md                                      # 已批准计划
-docs/phase0-status.md                                         # 当前验证结果
-docs/dev-setup.md                                             # 构建/数据/缓存修复
+docs/phase0-status.md, docs/phase1-status.md                  # 阶段验证结果
+docs/dev-setup.md                                             # 构建/数据/缓存/集成测试
 docs/adr/                                                     # 三个架构决策
 tool/spike_mdict.dart                                         # MDict 主机 spike
+integration_test/mecab_android_test.dart                      # 设备端 MeCab/权限/UI 测试
 third_party/overlay-translator/                               # Apache 许可/修改说明
 third_party/paddleocr4android/                                # MIT 许可/可选后端说明
 ```
@@ -376,6 +429,16 @@ flutter test
 flutter build apk --debug
 ```
 
+- 设备端集成测试（真实 UniDic；Git Bash 必须禁用路径转换）：
+
+```bash
+export MSYS_NO_PATHCONV=1
+flutter test integration_test/mecab_android_test.dart -d emulator-5554 \
+  --dart-define=RIKAI_UNIDIC_PATH=/sdcard/Download/unidic-cwj-202512
+```
+
+  测试会在安装后/卸载前短暂存在；需用后台循环重新授予
+  `MANAGE_EXTERNAL_STORAGE`，详见 `docs/dev-setup.md`。
 - Debug APK：`build/app/outputs/flutter-apk/app-debug.apk`。
 - Release（需要时）：`flutter build apk --release --target-platform android-arm64 --split-per-abi`。
 - 模拟器：`flutter emulators --launch Medium_Phone_API_36.1`（x86_64）。
@@ -404,10 +467,10 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
 
 ## 8. 建议的下一个动作
 
-1. 运行 `git status`，确认用户未提交的文档改动；不要覆盖。
-2. 实现 `MecabService` + `Token` + 私有 `mecabrc`，做最小文本阅读页；
-   用真实 UniDic 在模拟器/真机跑通 `食べた東京`。
-3. 同时实现 All Files Access 原生通道（不要用 permission_handler）。
-4. 通过后进入 Phase 2（MDict worker/lookup/WebView）。
-5. 每个阶段结束运行 analyze/test/debug build，并记录到 `docs/phase0-status.md`
-   或新的阶段状态文档。
+1. 运行 `git status`；Phase 1 改动尚未提交，不要覆盖或擅自 commit。
+2. 进入 Phase 2：先写 `DictionaryRepository` + `DictionaryWorker` isolate，
+   再实现 lookup/`@@@LINK`/`EntryRenderer`/WebView 与搜索页。
+3. 复用现有阅读区：把 token 详情 sheet 中的查词候选接到 MDict lookup。
+4. ORT 模型冒烟可在 Phase 3 前补做（见 §4）。
+5. 每个阶段结束运行 analyze/test/debug build，并记录到
+   `docs/phase1-status.md` 之后的新阶段状态文档；设备端测试按 §7 的命令运行。

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -13,7 +14,7 @@ class HomePage extends StatelessWidget {
         actions: [
           IconButton(
             tooltip: '设置',
-            onPressed: () => _comingSoon(context, '设置'),
+            onPressed: () => context.push('/settings'),
             icon: const Icon(Icons.settings_outlined),
           ),
         ],
@@ -21,10 +22,7 @@ class HomePage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          Text(
-            '日语阅读 · 离线查词',
-            style: theme.textTheme.headlineSmall,
-          ),
+          Text('日语阅读 · 离线查词', style: theme.textTheme.headlineSmall),
           const SizedBox(height: 8),
           Text(
             '拍照或输入日文，使用 UniDic 分词注音，点击单词查询 MDict 词典。',
@@ -44,7 +42,7 @@ class HomePage extends StatelessWidget {
             icon: Icons.text_fields,
             title: '输入文本',
             subtitle: '直接分词、注音、查词',
-            onTap: () => _comingSoon(context, '文本输入'),
+            onTap: () => context.push('/reader'),
           ),
           const SizedBox(height: 12),
           _ActionCard(
@@ -87,7 +85,7 @@ class HomePage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Phase 0 脚手架：功能页面将在后续阶段接入。',
+            '离线分词与注音已接入；OCR 与词典查询将在后续阶段接入。',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.outline,
             ),
@@ -98,9 +96,9 @@ class HomePage extends StatelessWidget {
   }
 
   void _comingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$feature 将在后续阶段接入')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$feature 将在后续阶段接入')));
   }
 }
 

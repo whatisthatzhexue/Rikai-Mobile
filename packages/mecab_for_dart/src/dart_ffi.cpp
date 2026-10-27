@@ -151,7 +151,11 @@ FFI_EXPORT void destroyMecab(void* tagger_ptr) {
 
 FFI_EXPORT const char* parse(void* tagger_ptr, const char* input) {
     if (!tagger_ptr) return "";
-    return mecab_sparse_tostr((mecab_t*)tagger_ptr, input);
+    // Rikai-Mobile: mecab_sparse_tostr() can return NULL (for example when
+    // memory allocation fails or the tagger was initialized incorrectly).
+    // Returning an empty string keeps the Dart side from dereferencing NULL.
+    const char* result = mecab_sparse_tostr((mecab_t*)tagger_ptr, input);
+    return result ? result : "";
 }
 
 FFI_EXPORT int32_t native_add(int32_t x, int32_t y) {
