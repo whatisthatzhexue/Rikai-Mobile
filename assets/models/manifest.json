@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "description": "Rikai-Mobile OCR model catalog. Model binaries are downloaded at runtime and are not part of the repository.",
+  "defaultMirrors": [
+    "https://hf-mirror.com",
+    "https://huggingface.co"
+  ],
+  "sets": {
+    "paddle_v5": {
+      "displayName": "PaddleOCR PP-OCRv5 mobile (det + rec + keys)",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://github.com/PaddlePaddle/PaddleOCR/blob/main/LICENSE",
+      "requiresAcceptance": false,
+      "files": [
+        {
+          "name": "det.onnx",
+          "urls": [
+            "https://hf-mirror.com/PaddlePaddle/PP-OCRv5_mobile_det_onnx/resolve/e6f4fa85f00e168c862bc462aebca69eef9b3d3d/inference.onnx",
+            "https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det_onnx/resolve/e6f4fa85f00e168c862bc462aebca69eef9b3d3d/inference.onnx"
+          ],
+          "size": 4826518,
+          "sha256": null
+        },
+        {
+          "name": "rec.onnx",
+          "urls": [
+            "https://hf-mirror.com/PaddlePaddle/PP-OCRv5_mobile_rec_onnx/resolve/ed152b8b495f84de93cda5709d768548a9127622/inference.onnx",
+            "https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_rec_onnx/resolve/ed152b8b495f84de93cda5709d768548a9127622/inference.onnx"
+          ],
+          "size": 16534782,
+          "sha256": null
+        },
+        {
+          "name": "keys.yml",
+          "urls": [
+            "https://hf-mirror.com/PaddlePaddle/PP-OCRv5_mobile_rec_onnx/resolve/ed152b8b495f84de93cda5709d768548a9127622/inference.yml",
+            "https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_rec_onnx/resolve/ed152b8b495f84de93cda5709d768548a9127622/inference.yml"
+          ],
+          "size": 148345,
+          "sha256": null
+        }
+      ]
+    },
+    "manga_ocr": {
+      "displayName": "MangaOCR 2025 ONNX (encoder + decoder + vocab)",
+      "license": "UNKNOWN",
+      "licenseUrl": "https://huggingface.co/l0wgear/manga-ocr-2025-onnx",
+      "licenseNote": "The model card does not declare a license. Rikai-Mobile downloads it from upstream and does not redistribute it. Users may import their own ONNX export instead.",
+      "requiresAcceptance": true,
+      "files": [
+        {
+          "name": "encoder_model.onnx",
+          "urls": [
+            "https://hf-mirror.com/l0wgear/manga-ocr-2025-onnx/resolve/main/encoder_model.onnx",
+            "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/encoder_model.onnx"
+          ],
+          "size": 22356885,
+          "sha256": null
+        },
+        {
+          "name": "decoder_model.onnx",
+          "urls": [
+            "https://hf-mirror.com/l0wgear/manga-ocr-2025-onnx/resolve/main/decoder_model.onnx",
+            "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/decoder_model.onnx"
+          ],
+          "size": 118053454,
+          "sha256": null
+        },
+        {
+          "name": "vocab.txt",
+          "urls": [
+            "https://hf-mirror.com/l0wgear/manga-ocr-2025-onnx/resolve/main/vocab.txt",
+            "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/vocab.txt"
+          ],
+          "size": 24072,
+          "sha256": null
+        },
+        {
+          "name": "config.json",
+          "urls": [
+            "https://hf-mirror.com/l0wgear/manga-ocr-2025-onnx/resolve/main/config.json",
+            "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/config.json"
+          ],
+          "size": 74852,
+          "sha256": null
+        },
+        {
+          "name": "generation_config.json",
+          "urls": [
+            "https://hf-mirror.com/l0wgear/manga-ocr-2025-onnx/resolve/main/generation_config.json",
+            "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/generation_config.json"
+          ],
+          "size": 231,
+          "sha256": null
+        },
+        {
+          "name": "preprocessor_config.json",
+          "urls": [
+            "https://hf-mirror.com/l0wgear/manga-ocr-2025-onnx/resolve/main/preprocessor_config.json",
+            "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/preprocessor_config.json"
+          ],
+          "size": 351,
+          "sha256": null
+        },
+        {
+          "name": "special_tokens_map.json",
+          "urls": [
+            "https://hf-mirror.com/l0wgear/manga-ocr-2025-onnx/resolve/main/special_tokens_map.json",
+            "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/special_tokens_map.json"
+          ],
+          "size": 695,
+          "sha256": null
+        }
+      ]
+    },
+    "orientation": {
+      "displayName": "PP-LCNet document / text-line orientation",
+      "license": "Apache-2.0",
+      "licenseUrl": "https://github.com/PaddlePaddle/PaddleOCR/blob/main/LICENSE",
+      "requiresAcceptance": false,
+      "files": [
+        {
+          "name": "doc_ori.onnx",
+          "urls": [
+            "https://hf-mirror.com/PaddlePaddle/PP-LCNet_x1_0_doc_ori_onnx/resolve/main/inference.onnx",
+            "https://huggingface.co/PaddlePaddle/PP-LCNet_x1_0_doc_ori_onnx/resolve/main/inference.onnx"
+          ],
+          "size": 6788069,
+          "sha256": "af9a0a4f317ff0709ce752067807f819cb15d883f8ecad89f28df1c6ee2d9c92"
+        },
+        {
+          "name": "textline_ori.onnx",
+          "urls": [
+            "https://hf-mirror.com/PaddlePaddle/PP-LCNet_x0_25_textline_ori_onnx/resolve/main/inference.onnx",
+            "https://huggingface.co/PaddlePaddle/PP-LCNet_x0_25_textline_ori_onnx/resolve/main/inference.onnx"
+          ],
+          "size": 1019454,
+          "sha256": "94a6a0a0425f2b5f08b5df72086f2d72abe40f1d22f6d12d2cd83674f11f2ff3"
+        }
+      ]
+    }
+  }
+}

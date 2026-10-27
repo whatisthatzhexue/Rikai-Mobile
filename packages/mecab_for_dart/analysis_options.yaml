@@ -1,0 +1,12 @@
+include: package:flutter_lints/flutter.yaml
+
+# Rikai-Mobile: vendored upstream sources are kept close to 2.0.5. These two
+# lints fire in the package's example/hook and one upstream method; disabling
+# them here avoids editing third-party source just for style.
+linter:
+  rules:
+    avoid_print: false
+    curly_braces_in_flow_control_structures: false
+
+# Additional information about this file can be found at
+# https://dart.dev/guides/language/analysis-options

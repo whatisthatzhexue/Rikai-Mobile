@@ -1,0 +1,73 @@
+# ---------------------------------------------------------------------------
+# Rikai-Mobile
+# ---------------------------------------------------------------------------
+
+# User-supplied / development data. Never commit dictionaries or UniDic.
+/unidic/
+/mdicts/
+
+# Upstream reference clones (their own .git). Adapted code lives in
+# packages/ and third_party/.
+/overlay-translator/
+/PaddleOCR4Android/
+
+# Model binaries are downloaded at runtime (see assets/models/manifest.json).
+**/*.onnx
+**/*.nb
+**/*.pdmodel
+**/*.pdiparams
+**/*.tflite
+**/*.gguf
+**/*.mlmodel
+**/*.bin.part
+
+# Vendored package build outputs / WASM artifacts.
+/packages/mecab_for_dart/emcc_out/
+**/build/
+**/.dart_tool/
+**/.gradle/
+
+# Signing and local machine configuration.
+local.properties
+android/local.properties
+key.properties
+*.jks
+*.keystore
+*.p12
+
+# ---------------------------------------------------------------------------
+# Flutter / Dart defaults
+# ---------------------------------------------------------------------------
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+*.iml
+*.ipr
+*.iws
+.idea/
+
+#.vscode/
+
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/coverage/
+
+app.*.symbols
+app.*.map.json
+
+/android/app/debug
+/android/app/profile
+/android/app/release

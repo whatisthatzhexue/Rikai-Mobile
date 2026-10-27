@@ -1,0 +1,72 @@
+Rikai-Mobile
+Copyright 2026 Rikai-Mobile contributors
+
+Rikai-Mobile is an offline Android Japanese reader and dictionary. It adapts
+open-source OCR code and loads user-supplied dictionaries. This NOTICE lists
+the upstream projects and the changes made for Rikai-Mobile.
+
+Adapted source code
+===================
+
+Screen Translator / overlay-translator
+--------------------------------------
+Copyright 2026 ciddwd
+Licensed under the Apache License, Version 2.0.
+Source: https://github.com/ciddwd/overlay-translator
+
+Rikai-Mobile adapts the ONNX Runtime OCR pipeline from overlay-translator
+(PaddleOCR PP-OCRv5 detection/recognition, manga-ocr recognition, orientation
+classification, reading-order sorting, DBNet post-processing). The extraction
+is minimal: overlay, capture, translation, ASR, speech, ML Kit, cloud OCR and
+bubble-rendering layers are not included. See
+third_party/overlay-translator/MODIFICATIONS.md for details. The upstream
+LICENSE and NOTICE are retained in third_party/overlay-translator/.
+
+PaddleOCR4Android
+-----------------
+Copyright 2026 jangviktor-web
+Licensed under the MIT License.
+Source: https://github.com/jangviktor-web/PaddleOCR4Android
+
+Rikai-Mobile evaluated PaddleOCR4Android's Paddle-Lite/OpenCV library module
+and keeps it as a documented optional backend. The MVP does not compile its
+native module; horizontal OCR uses the PP-OCRv5 ONNX models instead. The
+upstream MIT license is retained in third_party/paddleocr4android/.
+
+MeCab / mecab_for_dart
+----------------------
+MeCab: Copyright (C) 2001-2006 Taku Kudo <taku@chasen.org> and
+Copyright (C) 2004-2006 Nippon Telegraph and Telephone Corporation.
+MeCab is tri-licensed (GPL/LGPL/BSD); Rikai-Mobile uses the BSD option.
+mecab_for_dart: Copyright 2024 CaptainDario, BSD-3-Clause.
+Rikai-Mobile vendors mecab_for_dart 2.0.5 in packages/mecab_for_dart and makes
+a small change to how the MeCab rc file is located (see its MODIFICATIONS.md).
+
+Runtime libraries and models
+============================
+
+- ONNX Runtime 1.28.x, MIT License, Copyright (c) Microsoft Corporation.
+  Third-party notices: assets/licenses/ONNX-Runtime-ThirdPartyNotices.txt.
+- PaddleOCR PP-OCRv5 mobile detection/recognition ONNX models and PP-LCNet
+  orientation models, Apache License 2.0, Copyright (c) PaddlePaddle Authors.
+  Downloaded at runtime; not distributed in this repository.
+- manga-ocr original project, Apache License 2.0, Copyright kha-white.
+  The current ONNX download source (l0wgear/manga-ocr-2025-onnx) does not
+  declare a license on its model card. Rikai-Mobile downloads it from upstream
+  and does not redistribute it. Users may import their own model export.
+- dict_reader, MIT License, Copyright 2024 Mumulhl.
+  https://pub.dev/packages/dict_reader
+- Flutter and third-party Dart/Android packages retain their own licenses; the
+  in-app license page lists them.
+
+User-supplied data
+==================
+
+UniDic is supplied by the user and is not distributed with Rikai-Mobile.
+UniDic is licensed under GPL v2 / LGPL v2.1 / modified BSD (Copyright National
+Institute for Japanese Language and Linguistics). MDict dictionaries are
+supplied by the user; their original content licenses apply and they are not
+redistributed by this project.
+
+Model binaries, UniDic files, MDict files and user data are intentionally
+excluded from the repository by .gitignore.
