@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'app_fonts.dart';
+
 /// Normative design tokens for Rikai-Mobile.
 ///
 /// See `docs/design-tokens.md`. All UI (existing and new) must use these
@@ -21,6 +23,10 @@ abstract final class AppColors {
   static const Color background = Color(0xFFF5F7FA);
   static const Color surfaceMuted = Color(0xFFF0F4F9);
 
+  /// Deep blue used by the home brand header and drawer header.
+  static const Color header = blue700;
+  static const Color onHeader = Colors.white;
+
   static const Color textPrimary = Color(0xFF181818);
   static const Color textSecondary = Color(0xFF5C6470);
   static const Color textTertiary = Color(0xFF8A929E);
@@ -36,7 +42,7 @@ abstract final class AppColors {
 }
 
 abstract final class AppTypography {
-  static const String fontFamily = 'HarmonyOS Sans SC';
+  static const String fontFamily = AppFonts.harmony;
   static const List<String> fontFamilyFallback = [
     'Noto Sans CJK SC',
     'Noto Sans SC',
@@ -62,6 +68,11 @@ abstract final class AppTypography {
   static const double readerMax = 30;
   static const double readerDefault = 20;
   static const double furiganaRatio = 0.55;
+
+  /// Home action buttons: 72dp tall, 40sp glyphs with a 1.35 line box
+  /// (54dp ≈ 75% of the button height).
+  static const double homeAction = 40;
+  static const double homeActionHeightRatio = 1.35;
 }
 
 abstract final class AppSpacing {
@@ -92,12 +103,15 @@ abstract final class AppSizes {
   static const double iconLarge = 24;
   static const double emptyIcon = 40;
   static const double heroIcon = 48;
+  static const double homeActionHeight = 72;
+  static const double homeActionIcon = 28;
   static const double pageMaxWidth = 720;
   static const double borderWidth = 1;
 }
 
 abstract final class AppTheme {
-  static ThemeData light() {
+  static ThemeData light({String fontFamily = AppTypography.fontFamily}) {
+    final String? family = fontFamily.isEmpty ? null : fontFamily;
     const scheme = ColorScheme.light(
       primary: AppColors.primary,
       onPrimary: Colors.white,
@@ -199,8 +213,10 @@ abstract final class AppTheme {
     final base = ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      fontFamily: AppTypography.fontFamily,
-      fontFamilyFallback: AppTypography.fontFamilyFallback,
+      fontFamily: family,
+      fontFamilyFallback: family == null
+          ? null
+          : AppTypography.fontFamilyFallback,
       scaffoldBackgroundColor: AppColors.background,
       canvasColor: AppColors.surface,
       visualDensity: VisualDensity.compact,
@@ -213,7 +229,7 @@ abstract final class AppTheme {
     );
 
     return base.copyWith(
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textPrimary,
         surfaceTintColor: AppColors.transparent,
@@ -221,18 +237,18 @@ abstract final class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         toolbarHeight: AppSizes.appBar,
-        iconTheme: IconThemeData(
+        iconTheme: const IconThemeData(
           size: AppSizes.icon,
           color: AppColors.textSecondary,
         ),
         titleTextStyle: TextStyle(
-          fontFamily: AppTypography.fontFamily,
+          fontFamily: family,
           fontSize: AppTypography.headline,
           height: 1.25,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
         ),
-        shape: Border(bottom: BorderSide(color: AppColors.divider)),
+        shape: const Border(bottom: BorderSide(color: AppColors.divider)),
       ),
       cardTheme: CardThemeData(
         color: AppColors.surface,
@@ -263,9 +279,9 @@ abstract final class AppTheme {
           padding: const WidgetStatePropertyAll(
             EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           ),
-          textStyle: const WidgetStatePropertyAll(
+          textStyle: WidgetStatePropertyAll(
             TextStyle(
-              fontFamily: AppTypography.fontFamily,
+              fontFamily: family,
               fontSize: AppTypography.headline,
               fontWeight: FontWeight.w600,
             ),
@@ -284,9 +300,9 @@ abstract final class AppTheme {
             BorderSide(color: AppColors.border),
           ),
           shape: WidgetStatePropertyAll(roundedShape),
-          textStyle: const WidgetStatePropertyAll(
+          textStyle: WidgetStatePropertyAll(
             TextStyle(
-              fontFamily: AppTypography.fontFamily,
+              fontFamily: family,
               fontSize: AppTypography.headline,
               fontWeight: FontWeight.w600,
             ),
@@ -301,9 +317,9 @@ abstract final class AppTheme {
             EdgeInsets.symmetric(horizontal: AppSpacing.md),
           ),
           shape: WidgetStatePropertyAll(roundedShape),
-          textStyle: const WidgetStatePropertyAll(
+          textStyle: WidgetStatePropertyAll(
             TextStyle(
-              fontFamily: AppTypography.fontFamily,
+              fontFamily: family,
               fontSize: AppTypography.headline,
               fontWeight: FontWeight.w600,
             ),
@@ -334,19 +350,23 @@ abstract final class AppTheme {
           horizontal: AppSpacing.md,
           vertical: AppSpacing.md,
         ),
-        hintStyle: const TextStyle(
+        hintStyle: TextStyle(
+          fontFamily: family,
           fontSize: AppTypography.headline,
           color: AppColors.textTertiary,
         ),
-        labelStyle: const TextStyle(
+        labelStyle: TextStyle(
+          fontFamily: family,
           fontSize: AppTypography.title,
           color: AppColors.textSecondary,
         ),
-        helperStyle: const TextStyle(
+        helperStyle: TextStyle(
+          fontFamily: family,
           fontSize: AppTypography.title,
           color: AppColors.textTertiary,
         ),
-        errorStyle: const TextStyle(
+        errorStyle: TextStyle(
+          fontFamily: family,
           fontSize: AppTypography.title,
           color: AppColors.error,
         ),
@@ -385,11 +405,13 @@ abstract final class AppTheme {
           horizontal: AppSpacing.sm,
           vertical: AppSpacing.xxs,
         ),
-        labelStyle: const TextStyle(
+        labelStyle: TextStyle(
+          fontFamily: family,
           fontSize: AppTypography.title,
           color: AppColors.textPrimary,
         ),
-        secondaryLabelStyle: const TextStyle(
+        secondaryLabelStyle: TextStyle(
+          fontFamily: family,
           fontSize: AppTypography.title,
           color: AppColors.onPrimaryContainer,
         ),
@@ -400,8 +422,8 @@ abstract final class AppTheme {
         thickness: AppSizes.borderWidth,
         space: AppSizes.borderWidth,
       ),
-      listTileTheme: const ListTileThemeData(
-        contentPadding: EdgeInsets.symmetric(
+      listTileTheme: ListTileThemeData(
+        contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.xs,
         ),
@@ -409,11 +431,13 @@ abstract final class AppTheme {
         iconColor: AppColors.textSecondary,
         textColor: AppColors.textPrimary,
         titleTextStyle: TextStyle(
+          fontFamily: family,
           fontSize: AppTypography.headline,
           height: 1.4,
           color: AppColors.textPrimary,
         ),
         subtitleTextStyle: TextStyle(
+          fontFamily: family,
           fontSize: AppTypography.title,
           height: 1.5,
           color: AppColors.textSecondary,
@@ -440,14 +464,14 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
-        titleTextStyle: const TextStyle(
-          fontFamily: AppTypography.fontFamily,
+        titleTextStyle: TextStyle(
+          fontFamily: family,
           fontSize: AppTypography.headline,
           fontWeight: FontWeight.w600,
           color: AppColors.textPrimary,
         ),
-        contentTextStyle: const TextStyle(
-          fontFamily: AppTypography.fontFamily,
+        contentTextStyle: TextStyle(
+          fontFamily: family,
           fontSize: AppTypography.headline,
           height: AppTypography.textHeight,
           color: AppColors.textPrimary,
@@ -455,8 +479,8 @@ abstract final class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.textPrimary,
-        contentTextStyle: const TextStyle(
-          fontFamily: AppTypography.fontFamily,
+        contentTextStyle: TextStyle(
+          fontFamily: family,
           fontSize: AppTypography.headline,
           color: Colors.white,
         ),
@@ -465,16 +489,20 @@ abstract final class AppTheme {
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
       ),
-      tabBarTheme: const TabBarThemeData(
+      tabBarTheme: TabBarThemeData(
         labelColor: AppColors.primary,
         unselectedLabelColor: AppColors.textSecondary,
         indicatorColor: AppColors.primary,
         dividerColor: AppColors.border,
         labelStyle: TextStyle(
+          fontFamily: family,
           fontSize: AppTypography.headline,
           fontWeight: FontWeight.w600,
         ),
-        unselectedLabelStyle: TextStyle(fontSize: AppTypography.headline),
+        unselectedLabelStyle: TextStyle(
+          fontFamily: family,
+          fontSize: AppTypography.headline,
+        ),
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: AppColors.primary,
@@ -504,8 +532,8 @@ abstract final class AppTheme {
           borderRadius: BorderRadius.circular(AppRadius.md),
           side: const BorderSide(color: AppColors.border),
         ),
-        textStyle: const TextStyle(
-          fontFamily: AppTypography.fontFamily,
+        textStyle: TextStyle(
+          fontFamily: family,
           fontSize: AppTypography.headline,
           color: AppColors.textPrimary,
         ),

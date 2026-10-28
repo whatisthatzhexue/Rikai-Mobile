@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_tokens.dart';
+import 'app_drawer.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -11,8 +12,20 @@ class HomePage extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
+      drawer: const AppDrawer(),
       appBar: AppBar(
-        title: const Text('Rikai'),
+        title: const Text('主页'),
+        centerTitle: true,
+        backgroundColor: AppColors.header,
+        foregroundColor: AppColors.onHeader,
+        iconTheme: const IconThemeData(
+          size: AppSizes.icon,
+          color: AppColors.onHeader,
+        ),
+        titleTextStyle: theme.appBarTheme.titleTextStyle?.copyWith(
+          color: AppColors.onHeader,
+        ),
+        shape: const Border(),
         actions: [
           IconButton(
             tooltip: '设置',
@@ -24,45 +37,32 @@ class HomePage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg,
-          AppSpacing.sm,
+          AppSpacing.lg,
           AppSpacing.lg,
           AppSpacing.xl,
         ),
         children: [
-          Text('日语阅读 · 离线查词', style: theme.textTheme.headlineSmall),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            '拍照或输入日文，使用 UniDic 分词注音，点击单词查询 MDict 词典。',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          _ActionCard(
+          _HomeActionButton(
             icon: Icons.photo_camera_outlined,
-            title: '拍照识别',
-            subtitle: '横向 PaddleOCR / 纵向 MangaOCR',
+            label: '拍照识别',
             onTap: () => _comingSoon(context, '拍照识别'),
           ),
           const SizedBox(height: AppSpacing.md),
-          _ActionCard(
+          _HomeActionButton(
             icon: Icons.text_fields,
-            title: '输入文本',
-            subtitle: '直接分词、注音、查词',
+            label: '输入文本',
             onTap: () => context.push('/reader'),
           ),
           const SizedBox(height: AppSpacing.md),
-          _ActionCard(
+          _HomeActionButton(
             icon: Icons.search,
-            title: '查词',
-            subtitle: '在多本 MDict 词典中搜索',
+            label: '查词',
             onTap: () => context.push('/search'),
           ),
           const SizedBox(height: AppSpacing.md),
-          _ActionCard(
+          _HomeActionButton(
             icon: Icons.history,
-            title: '语料',
-            subtitle: '保存照片、OCR 文本和分词结果',
+            label: '语料',
             onTap: () => _comingSoon(context, '语料'),
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -72,29 +72,22 @@ class HomePage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('开始前', style: theme.textTheme.titleMedium),
+                  Text('使用前须知', style: theme.textTheme.titleMedium),
                   const SizedBox(height: AppSpacing.sm),
                   const _ChecklistItem(
                     icon: Icons.menu_book_outlined,
-                    text: '在设置中填写 UniDic 目录（约 1.3GB，原地读取）',
+                    text: '在设置中填写分词词典（UniDic）目录',
                   ),
                   const _ChecklistItem(
                     icon: Icons.library_books_outlined,
-                    text: '添加 MDict 词典（.mdx，可选 .mdd/.css）',
+                    text: '添加 MDict 词典（.mdx；同目录的 .mdd/.css 会自动发现）',
                   ),
                   const _ChecklistItem(
                     icon: Icons.download_outlined,
-                    text: '下载 OCR 模型（PaddleOCR ~22MB、MangaOCR ~140MB）',
+                    text: '下载 OCR 模型后可拍照识别',
                   ),
                 ],
               ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            '离线分词、注音与 MDict 查词已接入；OCR 与语料将在后续阶段接入。',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
             ),
           ),
         ],
@@ -109,33 +102,51 @@ class HomePage extends StatelessWidget {
   }
 }
 
-class _ActionCard extends StatelessWidget {
-  const _ActionCard({
+class _HomeActionButton extends StatelessWidget {
+  const _HomeActionButton({
     required this.icon,
-    required this.title,
-    required this.subtitle,
+    required this.label,
     required this.onTap,
   });
 
   final IconData icon;
-  final String title;
-  final String subtitle;
+  final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.sm,
+    final textStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
+      fontSize: AppTypography.homeAction,
+      height: AppTypography.homeActionHeightRatio,
+      fontWeight: FontWeight.w600,
+      color: AppColors.onHeader,
+    );
+
+    return SizedBox(
+      width: double.infinity,
+      height: AppSizes.homeActionHeight,
+      child: FilledButton(
+        onPressed: onTap,
+        style: FilledButton.styleFrom(
+          backgroundColor: AppColors.primary,
+          foregroundColor: AppColors.onHeader,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+          ),
         ),
-        leading: Icon(icon, size: AppSizes.iconLarge, color: AppColors.primary),
-        title: Text(title),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right, size: AppSizes.icon),
-        onTap: onTap,
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: AppSizes.homeActionIcon,
+              color: AppColors.onHeader,
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Text(label, style: textStyle),
+          ],
+        ),
       ),
     );
   }
@@ -154,7 +165,7 @@ class _ChecklistItem extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: AppSizes.iconSmall),
+          Icon(icon, size: AppSizes.iconSmall, color: AppColors.textSecondary),
           const SizedBox(width: AppSpacing.sm),
           Expanded(child: Text(text)),
         ],

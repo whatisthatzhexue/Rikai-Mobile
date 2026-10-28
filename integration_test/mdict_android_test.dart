@@ -155,6 +155,33 @@ void main() {
     print('suggestions=${prefix.suggestions.take(5).toList()}');
   });
 
+  testWidgets('warm-up removes the first lookup cold start', (tester) async {
+    await _waitForFiles();
+    final service = await MdictService.open();
+    addTearDown(service.dispose);
+    final probed = await _probe(service);
+
+    final warmUpWatch = Stopwatch()..start();
+    await service.warmUp([probed.info]);
+    warmUpWatch.stop();
+
+    final lookupWatch = Stopwatch()..start();
+    final result = await service.lookup(
+      query: '東京',
+      rawCandidates: const ['東京'],
+      dictionaries: [probed.info],
+    );
+    lookupWatch.stop();
+
+    expect(result.hasHits, isTrue);
+    // ignore: avoid_print
+    print(
+      'warmUp=${warmUpWatch.elapsedMilliseconds}ms '
+      'firstLookupAfterWarmUp=${lookupWatch.elapsedMilliseconds}ms',
+    );
+    expect(lookupWatch.elapsedMilliseconds, lessThan(200));
+  });
+
   testWidgets('reads MDD images and renders a clean entry', (tester) async {
     await _waitForFiles();
     final service = await MdictService.open();

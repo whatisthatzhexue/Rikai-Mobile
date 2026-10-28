@@ -79,6 +79,9 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
         query: _query,
         rawCandidates: rawCandidates,
         dictionaries: dictionaries,
+        maxEntriesPerDictionary: ref
+            .read(appSettingsProvider)
+            .maxEntriesPerDictionary,
       );
       if (!mounted) return;
       setState(() => _result = result);
@@ -104,16 +107,33 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
     _load([suggestion]);
   }
 
-  void _openGroup(DictionaryLookupGroup group) {
-    final groups = _result?.hitGroups ?? const <DictionaryLookupGroup>[];
-    if (groups.isEmpty) return;
+  void _openEntry(DictionaryLookupGroup group, LookupEntry entry) {
     final navigator = Navigator.of(context);
     navigator.pop();
     navigator.push(
       MaterialPageRoute<void>(
         builder: (context) => EntryPage(
           word: _query,
-          groups: groups,
+          groups: [
+            DictionaryLookupGroup(
+              dictionary: group.dictionary,
+              entries: [entry],
+            ),
+          ],
+          initialDictionaryId: group.dictionary.id,
+        ),
+      ),
+    );
+  }
+
+  void _openAll(DictionaryLookupGroup group) {
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    navigator.push(
+      MaterialPageRoute<void>(
+        builder: (context) => EntryPage(
+          word: _query,
+          groups: [group],
           initialDictionaryId: group.dictionary.id,
         ),
       ),
@@ -256,7 +276,11 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
     }
 
     if (result.hasHits) {
-      return LookupHitList(groups: result.hitGroups, onOpenGroup: _openGroup);
+      return LookupHitList(
+        groups: result.hitGroups,
+        onOpenEntry: _openEntry,
+        onOpenAll: _openAll,
+      );
     }
 
     return _NoHitList(

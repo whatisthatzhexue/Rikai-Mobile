@@ -20,9 +20,13 @@ UniDic and MDict dictionary:
 - Offline WebView entry rendering with scripts/network disabled, CSS injection,
   sanitized HTML and MDD images rewritten to local files
 - Search page, reader lookup sheet, dictionary management (add/enable/reorder/
-  revalidate/delete)
-- Blue/white design tokens with compact components and HarmonyOS Sans SC
-  (font downloaded by the user; see `assets/fonts/README.md`)
+  revalidate/delete), configurable per-dictionary entry limit (unlimited by
+  default), and single-result entry pages with 查看全部 for homographs
+- Blue/white design tokens with compact components, deep-blue home header,
+  large blue home actions, branded splash/launcher icon, left drawer with font
+  switching/help/copyright pages
+- HarmonyOS Sans SC is downloaded by the user (not in this repository; see
+  `assets/fonts/README.md`); the system font can be selected in the drawer
 
 Next: Phase 3 (PaddleOCR horizontal OCR and capture). See
 [docs/phase2-status.md](docs/phase2-status.md),

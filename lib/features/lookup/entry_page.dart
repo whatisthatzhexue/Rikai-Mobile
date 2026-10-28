@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -62,6 +64,11 @@ class _EntryPageState extends ConsumerState<EntryPage>
   }
 
   Future<RenderedEntry> _render(DictionaryLookupGroup group) async {
+    final cache = ref.read(entryRenderCacheProvider);
+    final cacheKey = _renderCacheKey(group);
+    final cached = cache.get(cacheKey);
+    if (cached != null) return cached;
+
     final service = await ref.read(mdictServiceProvider.future);
     final cacheRoot = await getApplicationCacheDirectory();
     final renderer = EntryRenderer(
@@ -69,10 +76,23 @@ class _EntryPageState extends ConsumerState<EntryPage>
       resourceLoader: (key) =>
           service.readResource(dictionary: group.dictionary, key: key),
     );
-    return renderer.render(
+    final rendered = await renderer.render(
       dictionary: group.dictionary,
       entries: group.entries,
     );
+    cache.put(cacheKey, rendered);
+    return rendered;
+  }
+
+  static String _renderCacheKey(DictionaryLookupGroup group) {
+    final payload = group.entries
+        .map(
+          (entry) =>
+              '${entry.matchedKey}\u0000${entry.headword}\u0000${entry.html}',
+        )
+        .join('\u0001');
+    final digest = sha1.convert(utf8.encode(payload)).toString();
+    return '${group.dictionary.id}:$digest';
   }
 
   void _retry(DictionaryLookupGroup group) {

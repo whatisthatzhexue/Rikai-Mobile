@@ -9,11 +9,14 @@ class LookupHitList extends StatelessWidget {
   const LookupHitList({
     super.key,
     required this.groups,
-    required this.onOpenGroup,
+    required this.onOpenEntry,
+    required this.onOpenAll,
   });
 
   final List<DictionaryLookupGroup> groups;
-  final ValueChanged<DictionaryLookupGroup> onOpenGroup;
+  final void Function(DictionaryLookupGroup group, LookupEntry entry)
+  onOpenEntry;
+  final ValueChanged<DictionaryLookupGroup> onOpenAll;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +56,15 @@ class LookupHitList extends StatelessWidget {
               ],
             ),
           ),
+          if (group.entries.length >= 2)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => onOpenAll(group),
+                icon: const Icon(Icons.list_alt, size: AppSizes.iconSmall),
+                label: Text('查看全部（${group.entries.length} 条）'),
+              ),
+            ),
           for (final entry in group.entries)
             Card(
               margin: const EdgeInsets.only(bottom: AppSpacing.sm),
@@ -66,7 +78,7 @@ class LookupHitList extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => onOpenGroup(group),
+                onTap: () => onOpenEntry(group, entry),
               ),
             ),
           if (group.error.isNotEmpty)

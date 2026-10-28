@@ -103,7 +103,7 @@ class MdictService {
     required String query,
     required Iterable<String> rawCandidates,
     required List<DictionaryInfo> dictionaries,
-    int maxEntriesPerDictionary = 3,
+    int maxEntriesPerDictionary = 0,
     int suggestionLimit = 30,
   }) async {
     final enabled = dictionaries.where((dict) => dict.enabled).toList();
@@ -162,6 +162,22 @@ class MdictService {
     }
 
     return LookupResult(query: query, candidates: candidates, groups: groups);
+  }
+
+  /// Opens and initializes the given dictionaries in the worker without
+  /// running a lookup. Used by the splash screen to remove the cold-start
+  /// initialization delay from the first dictionary navigation.
+  Future<void> warmUp(Iterable<DictionaryInfo> dictionaries) async {
+    final enabled = dictionaries
+        .where((dictionary) => dictionary.enabled && dictionary.isAvailable)
+        .toList(growable: false);
+    if (enabled.isEmpty) return;
+    await _request(<String, Object?>{
+      'cmd': 'warmup',
+      'dictionaries': enabled
+          .map(_dictionaryDescriptor)
+          .toList(growable: false),
+    });
   }
 
   /// Reads one MDD resource (image, font, ...) by the key found in entry HTML.
@@ -389,6 +405,9 @@ Future<Map<String, Object?>> _handleCommand(
   if (command == 'lookup') {
     return _lookup(message, openDictionaries);
   }
+  if (command == 'warmup') {
+    return _warmUp(message, openDictionaries);
+  }
   if (command == 'resource') {
     return _readResource(message, openDictionaries);
   }
@@ -524,7 +543,7 @@ Future<Map<String, Object?>> _lookup(
   }
 
   final candidates = rawCandidates.whereType<String>().toList(growable: false);
-  final maxEntries = message['maxEntries'] as int? ?? 3;
+  final maxEntries = message['maxEntries'] as int? ?? 0;
   final suggestionLimit = message['suggestionLimit'] as int? ?? 30;
   final groups = <Map<String, Object?>>[];
 
@@ -542,7 +561,7 @@ Future<Map<String, Object?>> _lookup(
         if (hits.isEmpty) continue;
 
         for (final hit in hits) {
-          if (entries.length >= maxEntries) break;
+          if (maxEntries > 0 && entries.length >= maxEntries) break;
           final fingerprint =
               '${hit.keyText}|${hit.recordBlockOffset}|${hit.startOffset}|'
               '${hit.endOffset}';
@@ -597,6 +616,29 @@ Future<Map<String, Object?>> _lookup(
   }
 
   return {'groups': groups};
+}
+
+Future<Map<String, Object?>> _warmUp(
+  Map<dynamic, dynamic> message,
+  Map<String, _OpenDictionary> openDictionaries,
+) async {
+  final rawDictionaries = message['dictionaries'];
+  if (rawDictionaries is! List) {
+    return const <String, Object?>{'opened': 0};
+  }
+
+  var opened = 0;
+  final errors = <String>[];
+  for (final rawDescriptor in rawDictionaries) {
+    if (rawDescriptor is! Map) continue;
+    try {
+      await _ensureOpen(rawDescriptor, openDictionaries);
+      opened++;
+    } catch (error) {
+      errors.add(error.toString());
+    }
+  }
+  return {'opened': opened, 'errors': errors};
 }
 
 Future<LookupEntry> _resolveEntry(

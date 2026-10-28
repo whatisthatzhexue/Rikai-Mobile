@@ -33,15 +33,19 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   @override
   void initState() {
     super.initState();
-    _textController = TextEditingController(text: widget.initialText);
-    if (widget.initialText.trim().isNotEmpty) {
+    // The controller is owned by a provider so the draft survives navigation
+    // for the whole app lifetime.
+    _textController = ref.read(readerDraftControllerProvider);
+    if (_textController.text.isEmpty && widget.initialText.trim().isNotEmpty) {
+      _textController.text = widget.initialText;
+    }
+    if (_textController.text.trim().isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _analyze());
     }
   }
 
   @override
   void dispose() {
-    _textController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -144,11 +148,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             ],
           ),
           IconButton(
-            onPressed: _copyText,
-            tooltip: '复制全文',
-            icon: const Icon(Icons.copy_all_outlined),
-          ),
-          IconButton(
             onPressed: () => context.push('/settings'),
             tooltip: '设置',
             icon: const Icon(Icons.settings_outlined),
@@ -173,7 +172,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                 textInputAction: TextInputAction.newline,
                 style: theme.textTheme.bodyLarge,
                 decoration: const InputDecoration(
-                  hintText: '输入或粘贴日文，例如：食べた東京',
+                  hintText: '例：何卒宜しくお願い致します。',
                   border: OutlineInputBorder(),
                   isDense: true,
                 ),
@@ -183,27 +182,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: Row(
                 children: [
+                  const Expanded(child: SizedBox()),
                   FilledButton.icon(
                     onPressed: _busy ? null : _analyze,
                     icon: const Icon(Icons.auto_awesome, size: AppSizes.icon),
                     label: const Text('分词'),
                   ),
-                  const SizedBox(width: AppSpacing.md),
-                  if (_tokens.isNotEmpty && !_busy)
-                    Text(
-                      '${_tokens.length} 个词',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: _copyText,
+                        icon: const Icon(
+                          Icons.copy_all_outlined,
+                          size: AppSizes.iconSmall,
+                        ),
+                        label: const Text('复制'),
                       ),
                     ),
-                  const Spacer(),
-                  TextButton.icon(
-                    onPressed: _copyText,
-                    icon: const Icon(
-                      Icons.copy_all_outlined,
-                      size: AppSizes.iconSmall,
-                    ),
-                    label: const Text('复制'),
                   ),
                 ],
               ),
@@ -262,7 +258,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       return const _EmptyState(
         icon: Icons.text_fields,
         title: '输入日文后点击「分词」',
-        message: '首次分词会在后台加载 UniDic，可能需要几秒钟。',
+        message: '首次分词会在后台加载分词功能，可能需要几秒钟。',
       );
     }
     if (_tokens.isEmpty) {

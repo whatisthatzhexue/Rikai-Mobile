@@ -97,14 +97,29 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     if (_lastQuery.isNotEmpty) _search(_lastQuery);
   }
 
-  void _openGroup(DictionaryLookupGroup group) {
-    final groups = _result?.hitGroups ?? const <DictionaryLookupGroup>[];
-    if (groups.isEmpty) return;
+  void _openEntry(DictionaryLookupGroup group, LookupEntry entry) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => EntryPage(
           word: _lastQuery,
-          groups: groups,
+          groups: [
+            DictionaryLookupGroup(
+              dictionary: group.dictionary,
+              entries: [entry],
+            ),
+          ],
+          initialDictionaryId: group.dictionary.id,
+        ),
+      ),
+    );
+  }
+
+  void _openAll(DictionaryLookupGroup group) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => EntryPage(
+          word: _lastQuery,
+          groups: [group],
           initialDictionaryId: group.dictionary.id,
         ),
       ),
@@ -252,7 +267,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     }
 
     if (result.hasHits) {
-      return LookupHitList(groups: result.hitGroups, onOpenGroup: _openGroup);
+      return LookupHitList(
+        groups: result.hitGroups,
+        onOpenEntry: _openEntry,
+        onOpenAll: _openAll,
+      );
     }
 
     final variants = lookupCandidatesFor([_lastQuery])

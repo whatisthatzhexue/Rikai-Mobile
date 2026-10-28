@@ -53,6 +53,7 @@ dependencies:
     path: packages/mecab_for_dart
   unorm_dart: ^0.3.3
   html: ^0.15.7
+  file_picker: ^13.3.0
 
 dev_dependencies:
   flutter_test:
@@ -66,6 +67,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -81,6 +83,7 @@ flutter:
   assets:
     - assets/models/
     - assets/licenses/
+    - assets/Rikai_Icon.jpg
 
   # HarmonyOS Sans SC is NOT distributed with this repository. Download it and
   # place it at assets/fonts/HarmonyOS_Sans_SC_Regular.ttf before building.
@@ -121,3 +124,13 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Launcher icon generation. Run:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/Rikai_Icon.jpg"
+  min_sdk_android: 26
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/Rikai_Icon.jpg"

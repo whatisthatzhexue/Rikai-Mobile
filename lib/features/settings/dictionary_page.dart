@@ -1,4 +1,8 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/dict_info.dart';
@@ -226,14 +230,6 @@ class _DictionaryCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.xs),
-            SelectableText(
-              dictionary.mdxPath,
-              maxLines: 2,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AppColors.textTertiary,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
             Wrap(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.xs,
@@ -363,6 +359,60 @@ class _AddDictionaryDialogState extends State<_AddDictionaryDialog> {
     super.dispose();
   }
 
+  Future<void> _pickDirectory() async {
+    try {
+      final directoryPath = await FilePicker.getDirectoryPath(
+        dialogTitle: '选择词典所在文件夹',
+      );
+      if (!mounted || directoryPath == null) return;
+
+      final directory = Directory(directoryPath);
+      if (!await directory.exists()) {
+        setState(() => _error = '无法访问该文件夹');
+        return;
+      }
+      final mdxFiles = <String>[];
+      await for (final entity in directory.list(followLinks: false)) {
+        if (entity is File && entity.path.toLowerCase().endsWith('.mdx')) {
+          mdxFiles.add(entity.path);
+        }
+      }
+      if (!mounted) return;
+      if (mdxFiles.isEmpty) {
+        setState(() => _error = '该文件夹中没有 .mdx 文件');
+        return;
+      }
+      if (mdxFiles.length == 1) {
+        _controller.text = mdxFiles.first;
+        setState(() => _error = '');
+        return;
+      }
+
+      final selected = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => SimpleDialog(
+          title: const Text('选择词典文件'),
+          children: [
+            for (final path in mdxFiles)
+              SimpleDialogOption(
+                onPressed: () => Navigator.of(dialogContext).pop(path),
+                child: Text(dictionaryFileName(path)),
+              ),
+          ],
+        ),
+      );
+      if (!mounted || selected == null) return;
+      _controller.text = selected;
+      setState(() => _error = '');
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = '无法打开文件管理器：${error.message ?? error.code}');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = '选择文件夹失败：$error');
+    }
+  }
+
   Future<void> _submit() async {
     final path = _controller.text.trim();
     if (path.isEmpty) {
@@ -406,11 +456,16 @@ class _AddDictionaryDialogState extends State<_AddDictionaryDialog> {
               autocorrect: false,
               enableSuggestions: false,
               onSubmitted: (_) => _busy ? null : _submit(),
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'MDX 文件路径',
                 hintText: '/sdcard/Download/dict/dict.mdx',
                 helperText: '原地读取；同目录同名 .mdd 与 .css 会自动发现。',
-                prefixIcon: Icon(Icons.description_outlined),
+                prefixIcon: const Icon(Icons.description_outlined),
+                suffixIcon: IconButton(
+                  tooltip: '选择词典文件夹',
+                  onPressed: _busy ? null : _pickDirectory,
+                  icon: const Icon(Icons.folder_open_outlined),
+                ),
               ),
             ),
             const SizedBox(height: AppSpacing.sm),

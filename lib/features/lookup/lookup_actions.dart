@@ -27,6 +27,9 @@ Future<LookupResult> performLookup(
     query: query,
     rawCandidates: rawCandidates ?? [query],
     dictionaries: selected,
+    maxEntriesPerDictionary: ref
+        .read(appSettingsProvider)
+        .maxEntriesPerDictionary,
   );
 }
 
@@ -86,9 +89,21 @@ Future<void> lookupAndOpenEntry(
     return;
   }
 
+  // A link follows the first exact result; the search UI offers “查看全部”
+  // when a dictionary has several homographs.
+  final firstGroup = hitGroups.first;
   navigator.push(
     MaterialPageRoute<void>(
-      builder: (context) => EntryPage(word: word, groups: hitGroups),
+      builder: (context) => EntryPage(
+        word: word,
+        groups: [
+          DictionaryLookupGroup(
+            dictionary: firstGroup.dictionary,
+            entries: [firstGroup.entries.first],
+          ),
+        ],
+        initialDictionaryId: firstGroup.dictionary.id,
+      ),
     ),
   );
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rikai_mobile/core/theme/app_fonts.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
 
 void main() {
@@ -23,6 +24,22 @@ void main() {
     expect(theme.textTheme.labelLarge?.fontSize, 16);
     expect(theme.textTheme.labelSmall?.fontSize, 12);
     expect(theme.textTheme.bodyMedium?.fontFamily, 'HarmonyOS Sans SC');
+  });
+
+  test('system font override clears the HarmonyOS family', () {
+    final theme = AppTheme.light(fontFamily: AppFonts.system);
+
+    expect(theme.textTheme.bodyMedium?.fontFamily, isNot('HarmonyOS Sans SC'));
+  });
+
+  test('home brand header and action buttons follow the revision', () {
+    expect(AppColors.header, AppColors.blue700);
+    expect(AppColors.onHeader, Colors.white);
+    expect(AppSizes.homeActionHeight, 72);
+    expect(AppTypography.homeAction, 40);
+    final textLineBox =
+        AppTypography.homeAction * AppTypography.homeActionHeightRatio;
+    expect(textLineBox / AppSizes.homeActionHeight, closeTo(0.75, 0.001));
   });
 
   test('components are compact', () {

@@ -215,7 +215,8 @@ void main() {
     expect(find.text('たべ'), findsOneWidget);
     expect(find.text('東京'), findsOneWidget);
     expect(find.text('とうきょう'), findsOneWidget);
-    expect(find.text('3 个词'), findsOneWidget);
+    expect(find.text('复制'), findsOneWidget);
+    expect(find.byTooltip('复制全文'), findsNothing);
     expect(find.byType(LinearProgressIndicator), findsNothing);
   });
 }

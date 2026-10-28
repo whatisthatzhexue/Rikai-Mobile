@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/theme/app_tokens.dart';
+import 'state/providers.dart';
 import 'features/home/home_page.dart';
 import 'features/lookup/search_page.dart';
 import 'features/reader/reader_page.dart';
@@ -30,14 +32,14 @@ GoRouter _createRouter() {
   );
 }
 
-class RikaiApp extends StatefulWidget {
+class RikaiApp extends ConsumerStatefulWidget {
   const RikaiApp({super.key});
 
   @override
-  State<RikaiApp> createState() => _RikaiAppState();
+  ConsumerState<RikaiApp> createState() => _RikaiAppState();
 }
 
-class _RikaiAppState extends State<RikaiApp> {
+class _RikaiAppState extends ConsumerState<RikaiApp> {
   late final GoRouter _router = _createRouter();
 
   @override
@@ -48,12 +50,16 @@ class _RikaiAppState extends State<RikaiApp> {
 
   @override
   Widget build(BuildContext context) {
+    final fontFamily = ref.watch(
+      appSettingsProvider.select((settings) => settings.fontFamily),
+    );
+
     return MaterialApp.router(
       title: 'Rikai',
       debugShowCheckedModeBanner: false,
       // Canonical v1 design is light blue/white; see docs/design-tokens.md.
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.light(),
+      theme: AppTheme.light(fontFamily: fontFamily),
+      darkTheme: AppTheme.light(fontFamily: fontFamily),
       themeMode: ThemeMode.light,
       routerConfig: _router,
     );

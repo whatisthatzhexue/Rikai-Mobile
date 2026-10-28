@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../services/mecab/unidic_validator.dart';
 import '../../services/storage/permission_service.dart';
+import '../../services/storage/settings_store.dart';
 import '../../state/providers.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -127,82 +129,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           AppSpacing.xxl,
         ),
         children: [
-          Text('UniDic', style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _pathController,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    decoration: const InputDecoration(
-                      labelText: 'UniDic 目录',
-                      hintText: '/sdcard/Download/unidic-cwj-202512',
-                      helperText: '应用原地读取，不复制文件，也不会写入该目录。',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.folder_open_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Row(
-                    children: [
-                      FilledButton.icon(
-                        onPressed: _validating ? null : _validateAndSave,
-                        icon: _validating
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.fact_check_outlined),
-                        label: Text(_validating ? '正在校验…' : '校验并保存'),
-                      ),
-                    ],
-                  ),
-                  if (_validation case final validation?) ...[
-                    const SizedBox(height: AppSpacing.lg),
-                    _ValidationCard(result: validation),
-                  ],
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Text('存储权限', style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          _buildPermissionCard(),
-          const SizedBox(height: AppSpacing.sm),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('应用外部私有目录', style: theme.textTheme.titleSmall),
-                  const SizedBox(height: AppSpacing.xs),
-                  const SelectableText(
-                    '/sdcard/Android/data/com.rikai.mobile/files/',
-                    style: TextStyle(fontFamily: 'monospace'),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    '把 UniDic 目录放到这里无需「所有文件访问」权限；'
-                    '在上方填写完整路径即可。',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
           Text('MDict 词典', style: theme.textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
           Card(
@@ -222,43 +148,205 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           const SizedBox(height: AppSpacing.xl),
           Text('阅读显示', style: theme.textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
-          Card(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  title: const Text('显示注音'),
-                  subtitle: const Text('在词条上方显示振假名'),
-                  value: settings.showFurigana,
-                  onChanged: (value) {
-                    ref
-                        .read(appSettingsProvider.notifier)
-                        .setShowFurigana(value);
-                  },
+          _buildDisplaySection(settings, theme),
+          const SizedBox(height: AppSpacing.xl),
+          Text('UniDic 分词', style: theme.textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          _buildUnidicSection(theme),
+          const SizedBox(height: AppSpacing.xl),
+          Text('存储权限', style: theme.textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          _buildPermissionCard(),
+          const SizedBox(height: AppSpacing.sm),
+          _buildPrivateDirectoryCard(theme),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDisplaySection(AppSettings settings, ThemeData theme) {
+    final maxEntries = settings.maxEntriesPerDictionary;
+    return Card(
+      child: Column(
+        children: [
+          SwitchListTile(
+            title: const Text('显示注音'),
+            subtitle: const Text('在词条上方显示振假名'),
+            value: settings.showFurigana,
+            onChanged: (value) {
+              ref.read(appSettingsProvider.notifier).setShowFurigana(value);
+            },
+          ),
+          const Divider(height: 1),
+          ListTile(
+            title: const Text('阅读字号'),
+            subtitle: Slider(
+              value: settings.readerFontSize,
+              min: 14,
+              max: 30,
+              divisions: 8,
+              label: settings.readerFontSize.round().toString(),
+              onChanged: (value) {
+                ref.read(appSettingsProvider.notifier).setReaderFontSize(value);
+              },
+            ),
+            trailing: Text(
+              settings.readerFontSize.round().toString(),
+              style: theme.textTheme.titleMedium,
+            ),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            title: const Text('每词典词条上限'),
+            subtitle: Text(maxEntries == 0 ? '无限制' : '最多 $maxEntries 条'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _showMaxEntriesDialog,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showMaxEntriesDialog() async {
+    final current = ref.read(appSettingsProvider).maxEntriesPerDictionary;
+    const choices = [0, 1, 3, 5, 10];
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('每词典词条上限'),
+        contentPadding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final choice in choices)
+              ListTile(
+                leading: Icon(
+                  current == choice
+                      ? Icons.check_circle
+                      : Icons.circle_outlined,
+                  color: current == choice
+                      ? AppColors.primary
+                      : AppColors.textTertiary,
                 ),
-                const Divider(height: 1),
-                ListTile(
-                  title: const Text('阅读字号'),
-                  subtitle: Slider(
-                    value: settings.readerFontSize,
-                    min: 14,
-                    max: 30,
-                    divisions: 8,
-                    label: settings.readerFontSize.round().toString(),
-                    onChanged: (value) {
-                      ref
-                          .read(appSettingsProvider.notifier)
-                          .setReaderFontSize(value);
-                    },
+                title: Text(choice == 0 ? '无限制' : '$choice 条'),
+                onTap: () => Navigator.of(dialogContext).pop(choice),
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    ref.read(appSettingsProvider.notifier).setMaxEntriesPerDictionary(selected);
+  }
+
+  Widget _buildUnidicSection(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _pathController,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: const InputDecoration(
+                labelText: 'UniDic 目录',
+                hintText: '/sdcard/Download/unidic-cwj-202512',
+                helperText: '可直接选择目录或手动填写；应用原地读取，不复制文件。',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.folder_open_outlined),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.sm,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _validating ? null : _pickUnidicDirectory,
+                  icon: const Icon(
+                    Icons.folder_open_outlined,
+                    size: AppSizes.icon,
                   ),
-                  trailing: Text(
-                    settings.readerFontSize.round().toString(),
-                    style: theme.textTheme.titleMedium,
-                  ),
+                  label: const Text('浏览…'),
+                ),
+                FilledButton.icon(
+                  onPressed: _validating ? null : _validateAndSave,
+                  icon: _validating
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(
+                          Icons.fact_check_outlined,
+                          size: AppSizes.icon,
+                        ),
+                  label: Text(_validating ? '正在校验…' : '校验并保存'),
                 ),
               ],
             ),
-          ),
-        ],
+            if (_validation case final validation?) ...[
+              const SizedBox(height: AppSpacing.lg),
+              _ValidationCard(result: validation),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickUnidicDirectory() async {
+    try {
+      final path = await FilePicker.getDirectoryPath(
+        dialogTitle: '选择 UniDic 目录',
+      );
+      if (!mounted || path == null) return;
+      _pathController.text = UnidicValidator.normalizePath(path);
+      await _validateAndSave();
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('无法打开文件管理器：${error.message ?? error.code}')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('选择目录失败：$error')));
+    }
+  }
+
+  Widget _buildPrivateDirectoryCard(ThemeData theme) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('应用外部私有目录', style: theme.textTheme.titleSmall),
+            const SizedBox(height: AppSpacing.xs),
+            const SelectableText(
+              '/sdcard/Android/data/com.rikai.mobile/files/',
+              style: TextStyle(fontFamily: 'monospace'),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '把 UniDic 目录放到这里无需「所有文件访问」权限；'
+              '在上方填写完整路径即可。',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -295,7 +383,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
         title: const Text('所有文件访问'),
         subtitle: Text(subtitle),
         trailing: granted
-            ? Icon(Icons.check_circle, color: Colors.green.shade600)
+            ? const Icon(Icons.check_circle, color: AppColors.success)
             : FilledButton(
                 onPressed: _permissionBusy ? null : _requestPermission,
                 child: Text(needsAllFiles ? '去授权' : '申请权限'),

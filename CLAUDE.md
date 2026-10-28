@@ -19,10 +19,15 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
 - **UI 强制规范**：所有现有与新增界面必须遵循 `docs/design-tokens.md`
   （蓝/白、3x 设计稿 72/48/36 → Flutter 24/16/12sp、4pt 间距、紧凑组件）。
   实现入口是 `lib/core/theme/app_tokens.dart`；页面不得硬编码颜色/字号/间距。
+  中期修正后：主页为深蓝品牌顶栏（`#003A99`、白字白图标、居中“主页”）、
+  左侧抽屉、72dp 高的蓝色功能按钮（40sp 文字/行高 1.35 = 75%），
+  启动页居中显示 `assets/Rikai_Icon.jpg` 与真实加载阶段；字体可在抽屉中
+  切换 HarmonyOS Sans / 系统字体。
 - **字体**：HarmonyOS Sans SC Regular，路径
   `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`。字体文件**不入库**（`.gitignore`
   已忽略）；用户自行从华为 HarmonyOS 设计资源下载，见 `assets/fonts/README.md`。
-  构建前必须存在，否则 Flutter 报缺失资产。
+  构建前必须存在，否则 Flutter 报缺失资产。应用图标源 `assets/Rikai_Icon.jpg`
+  由 `flutter_launcher_icons` 生成 Android 图标（配置在 `pubspec.yaml`）。
 - 仓库已有三次提交：`d0d94a3 feat: First Version`、`dc70cee docs: 更新文档`、
   `91dc386 feat: phase 1 UniDic tokenization, reader, and file access`。
   Phase 2 与设计规范改动当前仍在工作树中未提交；不要擅自 `reset`/`commit`，
@@ -106,12 +111,29 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
   - `docs/design-tokens.md` + `lib/core/theme/app_tokens.dart`：蓝/白 token、
     3x 72/48/36 → 24/16/12sp、4pt 间距、紧凑组件、TDesign 映射；已迁移
     既有 UI。HarmonyOS Sans SC 字体按用户要求**不入库**。
+  - 中期 UI/功能修正（`项目初始文档.txt`）：
+    - `lib/bootstrap.dart` 启动页：应用图标 + 主界面/已安装词典/分词功能阶段；
+      启动时预热已启用词典（MDict worker 常驻），修复首次跳词条卡顿。
+    - `flutter_launcher_icons` + `assets/Rikai_Icon.jpg` 生成桌面图标；
+      原生启动背景也显示图标。
+    - 主页深蓝顶栏、左侧抽屉（自定义字体/帮助/著作权信息）、大号蓝色功能按钮；
+      移除冗长介绍文字。
+    - 设置顺序改为 MDict → 阅读显示 → UniDic → 存储权限；UniDic/MDict 路径支持
+      系统文件夹选择；词典页不再显示路径。
+    - 阅读页示例 `何卒宜しくお願い致します。`、去掉标题栏复制、居中分词、
+      隐藏词数、输入草稿在整个应用生命周期保留；词性中的 `*` 不显示。
+    - 每词典词条上限可在设置中配置（默认无限制）。
+    - 查词结果点击只显示该词条；同词典 ≥2 条显示“查看全部（N 条）”。
+    - 渲染结果 LRU 缓存 + 启动预热；`EntryPage` 单/多词条按选择展示。
+    - 字体可切换 HarmonyOS Sans / 系统默认（持久化）。
+    - `file_picker` 的文件选择会复制到 cache，词典路径改用目录选择器，
+      保持原地读取。
 
 已验证：
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 67 tests passed
+flutter test     -> 81 tests passed
 flutter build apk --debug -> success
 ```
 
@@ -119,13 +141,16 @@ flutter build apk --debug -> success
 
 ```text
 Storage permission: sdk=36 allFilesAccess=true
-MecabService.open: 246 ms
-食べ	たべ	動詞・一般・*・*	食べる	0..2
-た	た	助動詞・*・*・*	た	2..3
+MecabService.open: 217 ms
+食べ	たべ	動詞・一般	食べる	0..2
+た	た	助動詞	た	2..3
 東京	とうきょう	名詞・固有名詞・地名・一般	トウキョウ	3..5
-Analyzed 1100 tokens in 175 ms; non-standard layouts: 0
+Analyzed 1100 tokens in 276 ms; non-standard layouts: 0
 reader page renders furigana for 食べた東京
 ```
+
+UI 修正后两个设备套件已重跑：MeCab 4/4、MDict 6/6（词性不再显示 `*`；
+`warmUp=415ms firstLookupAfterWarmUp=7ms`）。
 
 真实 MDict 设备集成测试（`integration_test/mdict_android_test.dart`，5 项全部通过）：
 
@@ -388,6 +413,9 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
 | 词典 HTML 注入或外部资源加载 | `EntryRenderer` 清洗 + 禁用 JS/网络；不要绕过（§5.7 #34） |
 | 假名/全角查询无命中 | 使用 `text_normalizer.dart` 的 NFKC/假名/stripkey 候选 |
 | 构建报 `unable to find asset ... HarmonyOS_Sans_SC_Regular.ttf` | 字体不入库；按 `assets/fonts/README.md` 下载到指定路径 |
+| 用户选择 MDX 后词典被复制到 cache、同目录 MDD 找不到 | 不要用 `file_picker.pickFiles`；用 `getDirectoryPath` 选择文件夹后列出 `.mdx`（§5.7 #36） |
+| 启动页一直转圈/词典首次跳转慢 | 检查 `BootstrapApp` 的 warmup 与 timeout；词典应通过启动预热常驻 worker（§5.7 #37） |
+| 搜索结果点击后显示其他词典内容 | 传单条 `DictionaryLookupGroup(entries:[entry])`；≥2 条才给“查看全部”（§5.7 #38） |
 
 ### 5.7 Phase 1 设备实测经验（2026-10-27）
 
@@ -437,13 +465,36 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
       必须同 basename 才会自动发现）；`flutter test` 会重装应用，需后台
       循环重授 All Files Access；搜索/词条页有持续动画时用定时
       `tester.pump` 轮询，不要 `pumpAndSettle`。
+36. **误区：用 `file_picker.pickFiles` 选择用户的 .mdx，然后把返回路径存起来。**
+    - 正确做法：该版本的 Android 文件选择会把文件**复制到应用 cache**，
+      同目录 MDD 不会一起复制，违反原地读取。用
+      `FilePicker.getDirectoryPath` 让用户选文件夹，再在 Dart 中列出该目录的
+      `.mdx` 并确认；UniDic 同理只选目录。
+37. **误区：每次打开词条都重新初始化词典/重新渲染 HTML。**
+    - 正确做法：`BootstrapApp` 在启动页对 `enabledDictionariesProvider` 调用
+      `MdictService.warmUp`（worker 常驻）；`EntryRenderCache` 以
+      dictionaryId + 词条 HTML 哈希做内存 LRU；revalidate/remove 时失效。
+38. **误区：点击一个搜索结果却把该词的所有词典/词条都显示出来。**
+    - 正确做法：单条点击只传 `DictionaryLookupGroup(entries: [entry])`；
+      同词典结果 ≥2 条时显示“查看全部（N 条）”，点击只传该词典的完整 group。
+      `entry://` 链接取第一个结果。
+39. **误区：改主页顶栏时直接改全局 `AppBarTheme`，导致设置/词条页也变深蓝。**
+    - 正确做法：主页局部覆盖 AppBar（`AppColors.header`/`onHeader`、
+      `iconTheme` white、`shape: Border()`）；其他页面保持白底顶栏。
+      首页大按钮使用 `AppSizes.homeActionHeight` + 40sp/1.35，且必须遵守
+      `docs/design-tokens.md`。
 
 ## 6. 关键文件
 
 ```text
-lib/main.dart, lib/app.dart                                   # 入口 / go_router
+lib/main.dart, lib/bootstrap.dart, lib/app.dart               # 启动页 / go_router
 lib/core/theme/app_tokens.dart                                # UI token / AppTheme
-lib/features/home/home_page.dart                              # 首页
+lib/core/theme/app_fonts.dart                                 # 字体选项
+lib/features/home/home_page.dart, app_drawer.dart             # 首页 / 抽屉
+lib/features/settings/{help_page,copyright_page,font_dialog}.dart
+assets/Rikai_Icon.jpg                                         # 图标/启动页源图
+android/app/src/main/res/drawable-nodpi/launch_icon.png       # 原生启动图标
+android/app/src/main/res/mipmap-*/                            # launcher icons
 lib/core/models/token.dart                                    # Token / 29 字段映射
 lib/core/models/dict_info.dart                                # 词典注册表模型
 lib/core/models/lookup_models.dart                            # lookup 结果分组
@@ -527,6 +578,8 @@ flutter test integration_test/mdict_android_test.dart -d emulator-5554 \
   同样需要 appops 授权循环；MDX/MDD 必须同 basename 才会自动发现。
 - 字体：构建前按 `assets/fonts/README.md` 下载 HarmonyOS Sans SC 到
   `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`（不入库）。
+- 图标：修改 `assets/Rikai_Icon.jpg` 后运行 `dart run flutter_launcher_icons`；
+  它会更新 `mipmap-*` 与 `colors.xml`，不要手改生成结果。
 - Debug APK：`build/app/outputs/flutter-apk/app-debug.apk`。
 - Release（需要时）：`flutter build apk --release --target-platform android-arm64 --split-per-abi`。
 - 模拟器：`flutter emulators --launch Medium_Phone_API_36.1`（x86_64）。
@@ -561,6 +614,6 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
 3. 进入 Phase 3：抽取 PaddleDetector/PaddleRecognizer/DBPostprocessor/
    TextBlockReadingOrder，做 ModelManager、拍照/相册与横向 OCR 阅读器串联。
 4. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
-   颜色/字号，字体文件不入库。
-5. 每个阶段结束运行 analyze/test/debug build，并记录到新的阶段状态文档；
-   设备端测试按 §7 的命令运行。
+   颜色/字号，字体文件不入库；主页深蓝顶栏只用于主页，不要改全局 AppBarTheme。
+5. 每个阶段结束运行 analyze/test/debug build（当前 81 tests / 10 项设备测试），
+   并记录到新的阶段状态文档；设备端测试按 §7 的命令运行。

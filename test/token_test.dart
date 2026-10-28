@@ -138,6 +138,20 @@ void main() {
     });
   });
 
+  group('pos label', () {
+    test('omits star placeholders', () {
+      final token = _token(
+        features: _features(pos1: '名詞', pos2: '普通名詞', pos3: '*', pos4: '*'),
+      );
+      expect(token.posLabel, '名詞・普通名詞');
+
+      final single = _token(
+        features: _features(pos1: '動詞', pos2: '*', pos3: '*', pos4: '*'),
+      );
+      expect(single.posLabel, '動詞');
+    });
+  });
+
   group('classification', () {
     test('content words are highlighted', () {
       expect(_token().isContentWord, isTrue);

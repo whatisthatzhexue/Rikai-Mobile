@@ -61,31 +61,64 @@ Device: `Medium_Phone_API_36.1` (x86_64 emulator, API 36). No arm64 device.
 ### Design tokens
 
 - `docs/design-tokens.md` — normative UI specification: blue/white palette
-  (`#0052D9` primary), 3x design sizes 72/48/36 → Flutter 24/16/12sp, 4pt
-  spacing, compact 40dp controls, 12dp cards, TDesign variable mapping.
+  (`#0052D9` primary, `#003A99` home header), 3x design sizes 72/48/36 →
+  Flutter 24/16/12sp, 4pt spacing, compact 40dp controls, 12dp cards,
+  TDesign variable mapping.
 - `lib/core/theme/app_tokens.dart` — all colors, typography, spacing, radii,
   sizes and `AppTheme.light()`; every existing screen was migrated to this
-  theme (light-only v1).
+  theme (light-only v1). The home header and 72dp/40sp action buttons are
+  documented exceptions.
 - HarmonyOS Sans SC Regular is declared in `pubspec.yaml` but **not committed**
   (`.gitignore`); users download it to
   `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf` per `assets/fonts/README.md`.
+  The drawer can switch between HarmonyOS Sans and the system font.
+
+### Mid-term UI/function revision (2026-10-28)
+
+Implemented from `项目初始文档.txt`:
+
+- Launcher icon generated from `assets/Rikai_Icon.jpg` with
+  `flutter_launcher_icons`; native launch screen and Flutter splash both show
+  the icon. The splash reports real phases: 正在加载主界面… / 正在加载已安装的
+  词典… (registry + enabled-dictionary warm-up) / 正在加载分词功能… (MeCab if
+  configured).
+- Home: deep-blue brand AppBar (`主页`, white menu/title/settings), left drawer
+  with app icon, 自定义字体, 帮助, 著作权信息; only the four large blue action
+  buttons and the 使用前须知 card remain (intro/footer copy and the UniDic size
+  note removed). Action labels are 40sp with a 54dp line box in a 72dp button
+  (75%).
+- Font switching: HarmonyOS Sans (bundled, user-downloaded) or system font,
+  persisted and applied to the whole app.
+- Settings order: MDict → 阅读显示 → UniDic 分词 → 存储权限. UniDic and MDict
+  paths can be chosen through the system file manager (directory picker; MDict
+  folder lists its `.mdx` files). MDict cards no longer print the file path.
+- Reader: example hint `何卒宜しくお願い致します。`; duplicate AppBar copy button
+  removed; centered 分词 button; word count removed; input draft persists for
+  the app lifetime; POS labels omit `*` placeholders.
+- Per-dictionary entry limit is a user setting (无限制 default).
+- Search results: tapping one hit opens only that entry; each dictionary with
+  ≥2 hits shows 查看全部（N 条） to open all entries of that dictionary.
+- Dictionary navigation cache: enabled dictionaries are pre-opened during the
+  splash (warm-up), and rendered entry HTML is cached in an in-memory LRU;
+  the first lookup after startup is hot.
 
 ## Verification
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 67 tests passed
+flutter test     -> 81 tests passed
 flutter build apk --debug -> success
 ```
 
-Device integration suite (`integration_test/mdict_android_test.dart`, 5 tests,
+Device integration suite (`integration_test/mdict_android_test.dart`, 6 tests,
 all passed with the real 講談社 dictionary):
 
 ```text
 MdictService.open=716ms probe=675ms title=講談社 日本語大辞典 第二版 双解版
 entries=463312 encoding=UTF-8 version=2.0
-lookup 東京=425ms matched=東京 headword=とうきょう【東京】 html=724 candidates=1
-hot lookup 東京=1ms
+lookup 東京=427ms matched=東京 headword=とうきょう【東京】 html=724 candidates=1
+hot lookup 東京=2ms
+warmUp=415ms firstLookupAfterWarmUp=7ms
 suggestions=[とうきょうえき, とうきょうえき【東京駅】]
 resource JC_Z24Z/A471.png -> 334 bytes
 rendered 2 entries, html=19273
@@ -94,8 +127,11 @@ search page opens a dictionary entry with the real MDict
 ```
 
 The 425 ms first lookup includes opening/initializing the 463,312-entry MDX in
-the worker; the second lookup is 1 ms. The Phase 1 MeCab device suite (4 tests)
-is unchanged and still passes.
+the worker; the second lookup is 1 ms. After the UI revision, both device suites
+were re-run: MeCab 4/4 passed (POS now renders without `*`, e.g. `動詞・一般`)
+and MDict 6/6 passed, including the search → single-entry WebView flow. Warm-up
+takes ~415 ms and the first lookup afterwards is 7 ms; the splash pre-opens
+enabled dictionaries, so the first on-device lookup is hot in normal launches.
 
 Run the MDict suite (Git Bash must disable path conversion; `flutter test`
 installs then uninstalls the app, so grant the app-op in a parallel loop):

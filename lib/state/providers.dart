@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/models/dict_info.dart';
+import '../core/theme/app_fonts.dart';
+import '../services/mdict/entry_cache.dart';
 import '../services/mdict/mdict_worker.dart';
 import '../services/mecab/mecab_service.dart';
 import '../services/storage/dictionary_store.dart';
@@ -29,6 +32,13 @@ final appSettingsProvider = NotifierProvider<AppSettingsNotifier, AppSettings>(
 
 final permissionServiceProvider = Provider<PermissionService>((ref) {
   return const PermissionService();
+});
+
+/// Reader input draft that survives navigation for the app's lifetime.
+final readerDraftControllerProvider = Provider<TextEditingController>((ref) {
+  final controller = TextEditingController();
+  ref.onDispose(controller.dispose);
+  return controller;
 });
 
 final mecabServiceProvider =
@@ -63,6 +73,11 @@ final mdictServiceProvider =
       retry: (retryCount, error) => null,
     );
 
+/// LRU cache for rendered entry pages (in-memory, app lifetime).
+final entryRenderCacheProvider = Provider<EntryRenderCache>((ref) {
+  return EntryRenderCache();
+});
+
 class AppSettingsNotifier extends Notifier<AppSettings> {
   late SettingsStore _store;
 
@@ -82,6 +97,14 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
 
   void setReaderFontSize(double value) {
     _update(state.copyWith(readerFontSize: value));
+  }
+
+  void setFontFamily(String value) {
+    _update(state.copyWith(fontFamily: AppFonts.sanitize(value)));
+  }
+
+  void setMaxEntriesPerDictionary(int value) {
+    _update(state.copyWith(maxEntriesPerDictionary: value < 0 ? 0 : value));
   }
 
   void _update(AppSettings next) {
@@ -202,6 +225,12 @@ class DictionaryRepositoryNotifier extends Notifier<List<DictionaryInfo>> {
 
     state = _sorted([...state, info]);
     await _store.save(state);
+    // Cache the reader in the worker so the first lookup after adding is hot.
+    try {
+      await service.warmUp([info]);
+    } catch (_) {
+      // Warm-up is an optimization; lookup will retry on demand.
+    }
     return info;
   }
 
@@ -232,6 +261,13 @@ class DictionaryRepositoryNotifier extends Notifier<List<DictionaryInfo>> {
       } catch (_) {
         // The next lookup reopens the dictionary if needed.
       }
+      if (updated.isAvailable) {
+        try {
+          await service.warmUp([updated]);
+        } catch (_) {
+          // Warm-up is an optimization only.
+        }
+      }
     } on MdictException catch (error) {
       updated = current.copyWith(
         lastError: error.message,
@@ -248,6 +284,7 @@ class DictionaryRepositoryNotifier extends Notifier<List<DictionaryInfo>> {
     next[index] = updated;
     state = _sorted(next);
     await _store.save(state);
+    ref.invalidate(entryRenderCacheProvider);
     return updated;
   }
 
@@ -269,6 +306,7 @@ class DictionaryRepositoryNotifier extends Notifier<List<DictionaryInfo>> {
         remaining[index].copyWith(order: index),
     ];
     await _store.save(state);
+    ref.invalidate(entryRenderCacheProvider);
   }
 
   Future<void> setEnabled(String id, bool enabled) async {

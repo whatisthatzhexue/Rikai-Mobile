@@ -165,7 +165,12 @@ class Token {
 
   /// Human-readable POS chain, e.g. `名詞・普通名詞・一般`.
   String get posLabel {
-    final parts = [pos1, pos2, pos3, pos4].where((p) => p.isNotEmpty);
+    final parts = [
+      pos1,
+      pos2,
+      pos3,
+      pos4,
+    ].where((part) => part.isNotEmpty && part != '*');
     return parts.join('・');
   }
 

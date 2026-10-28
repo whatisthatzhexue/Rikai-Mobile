@@ -28,6 +28,22 @@ See `assets/fonts/README.md`. `pubspec.yaml` declares the family, so
 `flutter pub get`/build fails with a missing-asset error until the file exists.
 UI tokens and component rules are in `docs/design-tokens.md`.
 
+## Launcher icon and splash
+
+The source icon is `assets/Rikai_Icon.jpg` (2048×2048). Launcher icons are
+generated with `flutter_launcher_icons`; re-run after changing the source:
+
+```bash
+dart run flutter_launcher_icons
+```
+
+The native launch screen uses `drawable-nodpi/launch_icon.png`; the Flutter
+splash (`lib/bootstrap.dart`) shows the same asset and the real initialization
+phases. File paths for UniDic/MDict can be chosen through the system directory
+picker; note that `file_picker`'s file picker copies files into its cache, so the
+app intentionally uses the directory picker to preserve the in-place reading
+contract.
+
 ## Build
 
 ```powershell
