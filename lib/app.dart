@@ -4,10 +4,12 @@ import 'package:go_router/go_router.dart';
 
 import 'core/theme/app_tokens.dart';
 import 'state/providers.dart';
+import 'features/capture/capture_page.dart';
 import 'features/home/home_page.dart';
 import 'features/lookup/search_page.dart';
 import 'features/reader/reader_page.dart';
 import 'features/settings/dictionary_page.dart';
+import 'features/settings/model_page.dart';
 import 'features/settings/settings_page.dart';
 
 GoRouter _createRouter() {
@@ -16,9 +18,21 @@ GoRouter _createRouter() {
       GoRoute(path: '/', builder: (context, state) => const HomePage()),
       GoRoute(
         path: '/reader',
-        builder: (context, state) =>
-            ReaderPage(initialText: state.uri.queryParameters['text'] ?? ''),
+        builder: (context, state) {
+          final extra = state.extra;
+          if (extra is ReaderRouteArgs) {
+            return ReaderPage(initialText: extra.text, replaceDraft: true);
+          }
+          return ReaderPage(
+            initialText: state.uri.queryParameters['text'] ?? '',
+          );
+        },
       ),
+      GoRoute(
+        path: '/capture',
+        builder: (context, state) => const CapturePage(),
+      ),
+      GoRoute(path: '/models', builder: (context, state) => const ModelPage()),
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsPage(),

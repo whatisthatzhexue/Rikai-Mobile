@@ -11,10 +11,26 @@ import '../../state/providers.dart';
 import '../lookup/lookup_sheet.dart';
 import 'reader_block.dart';
 
+/// Arguments used by go_router when another feature opens the reader with new
+/// text (for example after OCR).
+class ReaderRouteArgs {
+  const ReaderRouteArgs(this.text);
+
+  final String text;
+}
+
 class ReaderPage extends ConsumerStatefulWidget {
-  const ReaderPage({super.key, this.initialText = ''});
+  const ReaderPage({
+    super.key,
+    this.initialText = '',
+    this.replaceDraft = false,
+  });
 
   final String initialText;
+
+  /// When true, [initialText] replaces the app-lifetime draft. OCR results use
+  /// this; ordinary navigation keeps the user's previous draft.
+  final bool replaceDraft;
 
   @override
   ConsumerState<ReaderPage> createState() => _ReaderPageState();
@@ -36,8 +52,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     // The controller is owned by a provider so the draft survives navigation
     // for the whole app lifetime.
     _textController = ref.read(readerDraftControllerProvider);
-    if (_textController.text.isEmpty && widget.initialText.trim().isNotEmpty) {
-      _textController.text = widget.initialText;
+    if (widget.initialText.trim().isNotEmpty &&
+        (widget.replaceDraft || _textController.text.trim().isEmpty)) {
+      _textController.value = TextEditingValue(
+        text: widget.initialText,
+        selection: TextSelection.collapsed(offset: widget.initialText.length),
+      );
     }
     if (_textController.text.trim().isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _analyze());

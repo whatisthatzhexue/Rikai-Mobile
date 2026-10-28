@@ -12,30 +12,28 @@ layers are **not** included:
 - bubble rendering, text erase/mask repair, capture loop and page stability
 - cloud OCR engines (Baidu/Tencent/Youdao/Umi/Luna) and ML Kit OCR
 
-Adapted OCR code (to be placed in `packages/rikai_ocr/android/...`):
+Adapted OCR code in `packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/`:
 
-- PP-OCRv5 DBNet detection, CTC recognition, crop/warp and DB post-processing
-- manga-ocr ViT encoder + greedy decoder, bubble clustering, crop planning,
-  tiling, fragment/consolidation policies
-- orientation heuristics and PP-LCNet document/text-line orientation
-- reading-order sorting (horizontal LTR, vertical RTL, manga bands)
-- ONNX Runtime session/thread/buffer helpers
+| File | Upstream basis | Rikai modification |
+|---|---|---|
+| `DBPostprocessor.kt` | `ocr/DBPostprocessor.kt` | Package rename; removed mask/frame support, optional support quads and the column-split path. Keeps connected components, hull, min-area rect, score check and unclip. |
+| `PaddleRotateCrop.kt` | `ocr/PaddleRotateCrop.kt` | Package rename and reduced visibility; same OpenCV-compatible perspective/bicubic sampling. |
+| `PaddleOcrEngine.kt` | `ocr/PaddleOcrEngine.kt`, `PaddleDetectionSizing.kt` | New trimmed Phase 3 pipeline; no Hilt/Settings/Timber; sampled decode and EXIF handling; session ownership; 960-px detector; batch size one; no bubble/mask/overlay logic. |
+| `CtcDictionary.kt` | Paddle dictionary/CTC helpers in `PaddleOcrEngine.kt` | Extracted YAML `character_dict` parser and greedy CTC decoder; preserves U+3000 as the first key. |
+| `PaddleDetectionSizing.kt` | `ocr/PaddleDetectionSizing.kt` | Reduced to the fixed 960-px mobile input plan. |
 
-Changes required for extraction:
+Not yet copied (planned for Phase 4): manga-ocr encoder/decoder, bubble
+clustering, crop planning, tiling, fragment consolidation, orientation models,
+and vertical RTL reading order.
 
-- Remove Hilt annotations and dependency injection; construct classes with an
-  Android `Context` and a small `OcrConfig`.
-- Replace `Settings`/`SettingsRepository` with immutable OCR settings.
-- Replace `BuildConfig`, `R`, `LogRepository`, and Timber dependencies with
-  local constants/logging where necessary.
-- Split `PaddleOcrEngine` into detector and recognizer so the vertical pipeline
-  can reuse detection without loading the recognizer.
-- Replace upstream model installers with the Dart-side `ModelManager`.
-- Own one application-scoped `OrtEnvironment`; do not close it per engine
-  (upstream's `PaddleOcrEngine.close()` currently closes the shared environment).
-- Remove experimental speculative decoding from the MVP (keep the FP32 decoder;
-  the INT8 draft decoder can return later).
+Additional changes for extraction:
 
-Upstream `LICENSE` and `NOTICE` are retained in this directory. Every copied
-source file keeps its Apache-2.0 header and gets a short "Modified for
-Rikai-Mobile" note.
+- The Flutter plugin owns one `OrtEnvironment` for the app lifetime and closes
+  only its own sessions (upstream closed the shared environment per engine).
+- Model installation is handled by the Dart `OcrModelManager`; native code
+  receives local paths only.
+- Image decode, EXIF correction and max-2048 scaling happen in the plugin.
+- Vertical mode is not wired yet; it returns `UNSUPPORTED_MODE` until Phase 4.
+
+Upstream `LICENSE` and `NOTICE` are retained in this directory. Adapted files
+include an Apache-2.0 header and a "Modified for Rikai-Mobile" note.

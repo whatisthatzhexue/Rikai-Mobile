@@ -10,6 +10,7 @@ class AppSettings {
     this.readerFontSize = 20,
     this.fontFamily = AppFonts.harmony,
     this.maxEntriesPerDictionary = 0,
+    this.ocrMirror = '',
   });
 
   final String unidicPath;
@@ -22,12 +23,17 @@ class AppSettings {
   /// 0 means unlimited entries per dictionary.
   final int maxEntriesPerDictionary;
 
+  /// Optional custom Hugging Face mirror prefix. Empty uses the manifest URLs
+  /// (hf-mirror first, then huggingface.co).
+  final String ocrMirror;
+
   AppSettings copyWith({
     String? unidicPath,
     bool? showFurigana,
     double? readerFontSize,
     String? fontFamily,
     int? maxEntriesPerDictionary,
+    String? ocrMirror,
   }) {
     return AppSettings(
       unidicPath: unidicPath ?? this.unidicPath,
@@ -36,6 +42,7 @@ class AppSettings {
       fontFamily: fontFamily ?? this.fontFamily,
       maxEntriesPerDictionary:
           maxEntriesPerDictionary ?? this.maxEntriesPerDictionary,
+      ocrMirror: ocrMirror ?? this.ocrMirror,
     );
   }
 }
@@ -49,6 +56,7 @@ class SettingsStore {
   static const _readerFontSizeKey = 'reader_font_size';
   static const _fontFamilyKey = 'app_font_family';
   static const _maxEntriesKey = 'mdict_max_entries_per_dictionary';
+  static const _ocrMirrorKey = 'ocr_model_mirror';
 
   final SharedPreferences _preferences;
 
@@ -63,6 +71,7 @@ class SettingsStore {
           ? AppFonts.harmony
           : AppFonts.sanitize(storedFont),
       maxEntriesPerDictionary: maxEntries < 0 ? 0 : maxEntries,
+      ocrMirror: _preferences.getString(_ocrMirrorKey) ?? '',
     );
   }
 
@@ -72,5 +81,6 @@ class SettingsStore {
     await _preferences.setDouble(_readerFontSizeKey, settings.readerFontSize);
     await _preferences.setString(_fontFamilyKey, settings.fontFamily);
     await _preferences.setInt(_maxEntriesKey, settings.maxEntriesPerDictionary);
+    await _preferences.setString(_ocrMirrorKey, settings.ocrMirror);
   }
 }

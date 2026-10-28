@@ -35,7 +35,7 @@ class HomePage extends StatelessWidget {
           _HomeActionButton(
             icon: Icons.photo_camera_outlined,
             label: '拍照识别',
-            onTap: () => _comingSoon(context, '拍照识别'),
+            onTap: () => context.push('/capture'),
           ),
           const SizedBox(height: AppSpacing.md),
           _HomeActionButton(

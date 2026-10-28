@@ -7,10 +7,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/models/dict_info.dart';
+import '../core/models/ocr_model.dart';
 import '../core/theme/app_fonts.dart';
 import '../services/mdict/entry_cache.dart';
 import '../services/mdict/mdict_worker.dart';
 import '../services/mecab/mecab_service.dart';
+import '../services/ocr/model_manager.dart';
 import '../services/storage/dictionary_store.dart';
 import '../services/storage/permission_service.dart';
 import '../services/storage/settings_store.dart';
@@ -78,6 +80,16 @@ final entryRenderCacheProvider = Provider<EntryRenderCache>((ref) {
   return EntryRenderCache();
 });
 
+/// OCR model catalog. The manifest is checked into the app; model binaries are
+/// downloaded into getExternalFilesDir()/models/ at runtime.
+final ocrModelManifestProvider = FutureProvider<OcrModelManifest>((ref) {
+  return OcrModelManager().loadManifest();
+});
+
+final ocrModelManagerProvider = Provider<OcrModelManager>((ref) {
+  return OcrModelManager();
+});
+
 class AppSettingsNotifier extends Notifier<AppSettings> {
   late SettingsStore _store;
 
@@ -105,6 +117,10 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
 
   void setMaxEntriesPerDictionary(int value) {
     _update(state.copyWith(maxEntriesPerDictionary: value < 0 ? 0 : value));
+  }
+
+  void setOcrMirror(String value) {
+    _update(state.copyWith(ocrMirror: value.trim()));
   }
 
   void _update(AppSettings next) {

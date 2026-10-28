@@ -203,6 +203,46 @@ prefix suggestions, MDD image bytes, HTML sanitization/CSS injection, the
 dictionary registry, and the full search → entry WebView flow. Results are
 recorded in `docs/phase2-status.md`.
 
+## OCR integration test
+
+The Phase 3 suite runs the real PaddleOCR det/rec models from public storage and
+needs All Files Access just like the MeCab suite. Push models once:
+
+```bash
+export MSYS_NO_PATHCONV=1
+adb shell mkdir -p /sdcard/Download/rikai-models/paddle_v5
+adb push build/ocr-models/paddle_v5/det.onnx  /sdcard/Download/rikai-models/paddle_v5/
+adb push build/ocr-models/paddle_v5/rec.onnx  /sdcard/Download/rikai-models/paddle_v5/
+adb push build/ocr-models/paddle_v5/keys.yml  /sdcard/Download/rikai-models/paddle_v5/
+```
+
+```bash
+# Shell A
+export MSYS_NO_PATHCONV=1
+flutter test integration_test/ocr_android_test.dart -d emulator-5554 \
+  --dart-define=RIKAI_OCR_MODEL_DIR=/sdcard/Download/rikai-models/paddle_v5
+```
+
+Use the same app-op grant loop as the MeCab test. The test renders
+`ありがとう` on a PNG, runs the native detector/recognizer, verifies progress
+events, and prints timing/blocks. Results are recorded in
+`docs/phase3-status.md`.
+
+For manual app runs without a working model download, a debug build can point
+the model manager at a public folder:
+
+```bash
+export MSYS_NO_PATHCONV=1
+flutter build apk --debug \
+  --dart-define=RIKAI_OCR_MODELS_DIR=/sdcard/Download/rikai-models
+```
+
+That override is empty in normal builds. The app normally stores models in
+`getExternalFilesDir()/models/`. If you stage files with `adb push` into
+`Android/data`, launch the app/model manager first so the directory is owned by
+the app; shell-created directories under `Android/data` are not readable by the
+app on this emulator.
+
 **Important:** `flutter test integration_test/...` replaces
 `build/app/outputs/flutter-apk/app-debug.apk` with an APK whose entry point is
 the integration test. If you install that file manually it will stop on the

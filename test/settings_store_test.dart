@@ -14,6 +14,7 @@ void main() {
     expect(settings.maxEntriesPerDictionary, 0);
     expect(settings.showFurigana, isTrue);
     expect(settings.readerFontSize, 20);
+    expect(settings.ocrMirror, '');
   });
 
   test('persists font family and entry limit', () async {
@@ -25,12 +26,14 @@ void main() {
       const AppSettings(
         fontFamily: AppFonts.system,
         maxEntriesPerDictionary: 5,
+        ocrMirror: 'https://mirror.example',
       ),
     );
     final restored = SettingsStore(preferences).load();
 
     expect(restored.fontFamily, AppFonts.system);
     expect(restored.maxEntriesPerDictionary, 5);
+    expect(restored.ocrMirror, 'https://mirror.example');
   });
 
   test('sanitizes unknown font and negative limits', () async {

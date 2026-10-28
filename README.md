@@ -7,7 +7,7 @@ dictionaries — all in one app, without network access.
 
 ## Status
 
-Phases 1 and 2 are working end to end on the Android emulator with a real
+Phases 1–3 are working end to end on the Android emulator with a real
 UniDic and MDict dictionary:
 
 - In-place MeCab/UniDic tokenization in a long-lived worker isolate, private
@@ -27,8 +27,15 @@ UniDic and MDict dictionary:
   branded splash/launcher icon, and font switching/help/copyright pages
 - HarmonyOS Sans SC is downloaded by the user (not in this repository; see
   `assets/fonts/README.md`); the system font can be selected in the drawer
+- Phase 3 horizontal PaddleOCR: PP-OCRv5 det/rec via ONNX Runtime, camera and
+  gallery capture, EXIF-corrected max-2048 preprocessing, 960-px DBNet,
+  dynamic-width CTC recognition, progress/cancel, and a resumable/SHA-verified
+  model manager (hf-mirror → Hugging Face, local import)
+- OCR text flows into the same reader and MDict lookup UI; vertical MangaOCR
+  is Phase 4
 
-Next: Phase 3 (PaddleOCR horizontal OCR and capture). See
+Next: Phase 4 (vertical MangaOCR and automatic orientation). See
+[docs/phase3-status.md](docs/phase3-status.md),
 [docs/phase2-status.md](docs/phase2-status.md),
 [docs/phase1-status.md](docs/phase1-status.md) and
 [docs/phase0-status.md](docs/phase0-status.md) for verified results.
@@ -64,6 +71,7 @@ UI work must follow [docs/design-tokens.md](docs/design-tokens.md).
 - [Phase 0 status](docs/phase0-status.md)
 - [Phase 1 status](docs/phase1-status.md)
 - [Phase 2 status](docs/phase2-status.md)
+- [Phase 3 status](docs/phase3-status.md)
 - [Development setup](docs/dev-setup.md)
 - [Models](docs/models.md)
 - [Architecture decisions](docs/adr/)

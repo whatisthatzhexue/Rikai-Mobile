@@ -12,7 +12,17 @@ class CopyrightPage extends StatelessWidget {
           'mecab_for_dart Copyright 2024 CaptainDario。',
     ),
     ('dict_reader', 'MIT License。MDict MDX/MDD 解析库。'),
-    ('ONNX Runtime', 'MIT License，Copyright Microsoft Corporation。用于后续 OCR。'),
+    ('ONNX Runtime', 'MIT License，Copyright Microsoft Corporation。OCR 推理运行时。'),
+    (
+      'PaddleOCR PP-OCRv5 / PP-LCNet 模型',
+      'Apache License 2.0，Copyright PaddlePaddle Authors。'
+          '模型在应用内按需下载，不随本项目分发。',
+    ),
+    (
+      'MangaOCR 2025 ONNX',
+      '上游模型卡未声明许可证；应用只从上游下载、不随包分发，'
+          '也支持用户导入自行转换的模型。',
+    ),
     (
       'overlay-translator',
       'Apache License 2.0，Copyright 2026 ciddwd。OCR 流水线参考来源。',

@@ -7,7 +7,7 @@
   ],
   "sets": {
     "paddle_v5": {
-      "displayName": "PaddleOCR PP-OCRv5 mobile (det + rec + keys)",
+      "displayName": "PaddleOCR PP-OCRv5 横向模型（检测 + 识别 + 字符表）",
       "license": "Apache-2.0",
       "licenseUrl": "https://github.com/PaddlePaddle/PaddleOCR/blob/main/LICENSE",
       "requiresAcceptance": false,
@@ -42,10 +42,10 @@
       ]
     },
     "manga_ocr": {
-      "displayName": "MangaOCR 2025 ONNX (encoder + decoder + vocab)",
+      "displayName": "MangaOCR 2025 竖排模型（编码器 + 解码器 + 词表）",
       "license": "UNKNOWN",
       "licenseUrl": "https://huggingface.co/l0wgear/manga-ocr-2025-onnx",
-      "licenseNote": "The model card does not declare a license. Rikai-Mobile downloads it from upstream and does not redistribute it. Users may import their own ONNX export instead.",
+      "licenseNote": "模型卡未声明许可证。应用只从上游下载，不随包分发；也可导入自行转换的 ONNX 模型。",
       "requiresAcceptance": true,
       "files": [
         {
@@ -114,7 +114,7 @@
       ]
     },
     "orientation": {
-      "displayName": "PP-LCNet document / text-line orientation",
+      "displayName": "PP-LCNet 方向识别模型（文档 / 文本行）",
       "license": "Apache-2.0",
       "licenseUrl": "https://github.com/PaddlePaddle/PaddleOCR/blob/main/LICENSE",
       "requiresAcceptance": false,
