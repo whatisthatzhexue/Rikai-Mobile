@@ -46,12 +46,17 @@ class LookupHitList extends StatelessWidget {
                 Expanded(
                   child: Text(
                     group.dictionary.title,
-                    style: theme.textTheme.titleSmall,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ),
                 Text(
                   '${group.entries.length} 条',
-                  style: theme.textTheme.labelSmall,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ],
             ),
@@ -68,17 +73,44 @@ class LookupHitList extends StatelessWidget {
           for (final entry in group.entries)
             Card(
               margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: ListTile(
-                title: Text(
-                  entry.headword.isNotEmpty ? entry.headword : entry.matchedKey,
-                ),
-                subtitle: Text(
-                  htmlToPlainText(entry.html, maxLength: 90),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: const Icon(Icons.chevron_right),
+              child: InkWell(
                 onTap: () => onOpenEntry(group, entry),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              entry.headword.isNotEmpty
+                                  ? entry.headword
+                                  : entry.matchedKey,
+                              style: theme.textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              htmlToPlainText(entry.html, maxLength: 90),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontSize: AppTypography.helper,
+                                height: 1.5,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(left: AppSpacing.sm),
+                        child: Icon(Icons.chevron_right, size: AppSizes.icon),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           if (group.error.isNotEmpty)

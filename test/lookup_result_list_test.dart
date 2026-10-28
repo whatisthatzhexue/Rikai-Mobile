@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/dict_info.dart';
 import 'package:rikai_mobile/core/models/lookup_models.dart';
+import 'package:rikai_mobile/core/theme/app_tokens.dart';
 import 'package:rikai_mobile/features/lookup/lookup_result_list.dart';
 
 const DictionaryInfo _dictionary = DictionaryInfo(
@@ -33,6 +34,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        theme: AppTheme.light(),
         home: Scaffold(
           body: LookupHitList(
             groups: const [group],
@@ -45,6 +47,14 @@ void main() {
 
     expect(find.text('查看全部（2 条）'), findsOneWidget);
 
+    final nameText = tester.widget<Text>(find.text('Test Dictionary'));
+    final countText = tester.widget<Text>(find.text('2 条'));
+    expect(nameText.style?.fontSize, 16);
+    expect(countText.style?.fontSize, 16);
+    expect(countText.style?.color, nameText.style?.color);
+    final entryText = tester.widget<Text>(find.text('Alpha'));
+    expect(entryText.style?.fontSize, 24);
+
     await tester.tap(find.text('Alpha'));
     expect(opened, _alpha);
     expect(openedAll, isNull);
@@ -56,6 +66,7 @@ void main() {
   testWidgets('a single-entry group has no 查看全部 button', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        theme: AppTheme.light(),
         home: Scaffold(
           body: LookupHitList(
             groups: const [

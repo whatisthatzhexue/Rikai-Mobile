@@ -19,10 +19,14 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
 - **UI 强制规范**：所有现有与新增界面必须遵循 `docs/design-tokens.md`
   （蓝/白、3x 设计稿 72/48/36 → Flutter 24/16/12sp、4pt 间距、紧凑组件）。
   实现入口是 `lib/core/theme/app_tokens.dart`；页面不得硬编码颜色/字号/间距。
-  中期修正后：主页为深蓝品牌顶栏（`#003A99`、白字白图标、居中“主页”）、
-  左侧抽屉、72dp 高的蓝色功能按钮（40sp 文字/行高 1.35 = 75%），
-  启动页居中显示 `assets/Rikai_Icon.jpg` 与真实加载阶段；字体可在抽屉中
-  切换 HarmonyOS Sans / 系统字体。
+  二次修正后：**所有页面**统一深蓝顶栏（`#003A99`、白字白图标、
+  词条页 TabBar 白字），主页左侧抽屉为直角；主页四个 72dp 功能按钮
+  使用与顶栏相同的深蓝色，图标+文字居中对齐，文字 32sp（比首版 40sp
+  小 20%）。设置页为白底扁平分区、无卡片；长提示 14sp 必须完整换行，
+  用户不可变信息用 16sp 纯文本；帮助/著作权为 16sp 正文 + 18sp 栏目标题
+  + 分割线；查词结果的词典名/条目数 16sp 同色、词条标题 24sp。启动页居中
+  显示 `assets/Rikai_Icon.jpg` 与真实加载阶段；字体可在抽屉中切换
+  HarmonyOS Sans / 系统字体。
 - **字体**：HarmonyOS Sans SC Regular，路径
   `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`。字体文件**不入库**（`.gitignore`
   已忽略）；用户自行从华为 HarmonyOS 设计资源下载，见 `assets/fonts/README.md`。
@@ -116,24 +120,31 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
       启动时预热已启用词典（MDict worker 常驻），修复首次跳词条卡顿。
     - `flutter_launcher_icons` + `assets/Rikai_Icon.jpg` 生成桌面图标；
       原生启动背景也显示图标。
-    - 主页深蓝顶栏、左侧抽屉（自定义字体/帮助/著作权信息）、大号蓝色功能按钮；
-      移除冗长介绍文字。
-    - 设置顺序改为 MDict → 阅读显示 → UniDic → 存储权限；UniDic/MDict 路径支持
-      系统文件夹选择；词典页不再显示路径。
+    - **所有页面**统一深蓝顶栏（白字/白图标，TabBar 白字）；主页抽屉直角；
+      主页功能按钮与顶栏同色、图标+文字居中、32sp（比首版 40sp 小 20%）。
+    - 设置页改为白底扁平分区（无卡片、无组件套组件）：MDict → 阅读显示 →
+      UniDic → 存储权限；UniDic 输入框与按钮直接位于页面；长提示独立 14sp
+      文本完整换行；应用外部私有目录用 16sp 纯文本；权限提示 14sp 可换行。
+    - 帮助/著作权改为纯文本：正文 16sp、栏目标题 18sp、栏间分割线，无卡片。
+    - 查词结果：词典名/条目数 16sp 同色（与“查看全部”一致）、词条标题 24sp、
+      摘要 14sp；点击单条只显示该条，≥2 条显示“查看全部（N 条）”。
     - 阅读页示例 `何卒宜しくお願い致します。`、去掉标题栏复制、居中分词、
       隐藏词数、输入草稿在整个应用生命周期保留；词性中的 `*` 不显示。
     - 每词典词条上限可在设置中配置（默认无限制）。
-    - 查词结果点击只显示该词条；同词典 ≥2 条显示“查看全部（N 条）”。
     - 渲染结果 LRU 缓存 + 启动预热；`EntryPage` 单/多词条按选择展示。
     - 字体可切换 HarmonyOS Sans / 系统默认（持久化）。
     - `file_picker` 的文件选择会复制到 cache，词典路径改用目录选择器，
       保持原地读取。
+    - **重要坑**：`flutter test integration_test/...` 会把
+      `build/app/outputs/flutter-apk/app-debug.apk` 覆盖成集成测试入口 APK；
+      手动安装前必须重新 `flutter build apk --debug`，否则应用会停在系统
+      启动图（不是业务代码卡死）。
 
 已验证：
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 81 tests passed
+flutter test     -> 83 tests passed
 flutter build apk --debug -> success
 ```
 
@@ -416,6 +427,10 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
 | 用户选择 MDX 后词典被复制到 cache、同目录 MDD 找不到 | 不要用 `file_picker.pickFiles`；用 `getDirectoryPath` 选择文件夹后列出 `.mdx`（§5.7 #36） |
 | 启动页一直转圈/词典首次跳转慢 | 检查 `BootstrapApp` 的 warmup 与 timeout；词典应通过启动预热常驻 worker（§5.7 #37） |
 | 搜索结果点击后显示其他词典内容 | 传单条 `DictionaryLookupGroup(entries:[entry])`；≥2 条才给“查看全部”（§5.7 #38） |
+| 设备测试后手动安装 app-debug.apk 停在系统启动图 | 集成测试覆盖了 app-debug.apk；重新 `flutter build apk --debug` 再安装（§5.8 #40） |
+| 某个页面顶栏还是白底/深色字 | 不要页面局部覆盖 AppBar；全局 `AppTheme` 已统一深蓝白字（§5.8 #41） |
+| 设置页灰色提示被截断/太小 | 提示改为输入框外独立 14sp Text；不要用 `helperText` 单行显示（§5.8 #42） |
+| 查词结果词典名/条目数太小 | 16sp 同色；词条标题 24sp；摘要 14sp（§5.8 #45） |
 
 ### 5.7 Phase 1 设备实测经验（2026-10-27）
 
@@ -479,10 +494,49 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
       同词典结果 ≥2 条时显示“查看全部（N 条）”，点击只传该词典的完整 group。
       `entry://` 链接取第一个结果。
 39. **误区：改主页顶栏时直接改全局 `AppBarTheme`，导致设置/词条页也变深蓝。**
-    - 正确做法：主页局部覆盖 AppBar（`AppColors.header`/`onHeader`、
-      `iconTheme` white、`shape: Border()`）；其他页面保持白底顶栏。
-      首页大按钮使用 `AppSizes.homeActionHeight` + 40sp/1.35，且必须遵守
-      `docs/design-tokens.md`。
+    - 正确做法（已被 2026-10-28 二次要求覆盖）：现在**所有页面**统一深蓝
+      AppBar + 白字；不要再按页面单独设白底。详见 §5.8 #41。
+
+### 5.8 2026-10-28 UI/启动二次修正经验
+
+40. **误区：设备集成测试后直接安装 `build/app/outputs/flutter-apk/app-debug.apk` 手动验收。**
+    - 表现：应用停在系统启动图，Dart isolate 空闲、无 Flutter 首帧；
+      VM service 里出现 `ext.flutter.integrationTest`，缺少
+      `ext.flutter.debugDumpApp` 等框架扩展。
+    - 正确做法：`flutter test integration_test/...` 会用测试入口覆盖
+      `app-debug.apk`；手动安装前必须重新 `flutter build apk --debug`。
+      这是启动图卡死的首要排查项，不要误判为业务代码死锁。
+41. **误区：只在主页设置深蓝顶栏，其他页面保留白色 AppBar。**
+    - 正确做法：`AppBarTheme` 全局深蓝 `header` + 白字/白图标、
+      `systemOverlayStyle: light`、无底部分割线；页面不要局部覆盖颜色。
+      词条页 TabBar 位于深蓝顶栏内，使用白色 label/indicator，不要用品牌蓝。
+42. **误区：设置页用 Card 包住输入框和操作按钮；把长提示塞进
+    `InputDecoration.helperText`。**
+    - 正确做法：白底扁平分区；TextField/按钮直接放在页面上；提示用输入框外
+      独立 14sp Text，允许换行；用户不可变信息（外部私有目录）用 16sp 纯文本；
+      长权限说明用自定义 Row/Column，而非可能截断的 ListTile subtitle。
+43. **误区：主页功能按钮沿用首版的 40sp/左对齐/亮品牌蓝。**
+    - 正确做法：按钮背景与顶栏相同 `AppColors.header`；图标+文字整体居中；
+      文字 32sp（40sp 的 80%）；抽屉 `Drawer.shape` 使用直角。
+44. **误区：帮助/著作权继续用 Card/ListTile 小字。**
+    - 正确做法：白底纯文本；正文 16sp、栏目标题 18sp、每栏之间 Divider；
+      不嵌套卡片。
+45. **误区：查词结果沿用 12sp 的 titleSmall/labelSmall，且用 ListTile 承载
+    24sp 标题。**
+    - 正确做法：词典名/条目数 16sp 同色（与“查看全部”一致）；词条标题 24sp；
+      摘要 14sp；用自定义 Card+InkWell+Column，避免大字号被 ListTile 裁切。
+46. **误区：切换字体时只改 `ThemeData(fontFamily:)`，组件主题仍写死
+    HarmonyOS。**
+    - 正确做法：`AppTheme.light(fontFamily:)` 必须把 family 写入 AppBar、
+      按钮、对话框、SnackBar、弹层、输入框、ListTile、TabBar 等所有显式
+      TextStyle；系统字体时传 null。`ThemeData` 没有 `fontFamily` getter，
+      测试检查 `textTheme.*.fontFamily`。
+47. **误区：手动编辑 flutter_launcher_icons 生成的 mipmap，或把图标/字体
+    混在一起提交。**
+    - 正确做法：修改 `assets/Rikai_Icon.jpg` 后运行
+      `dart run flutter_launcher_icons`；图标源提交，字体不入库；原生启动图
+      使用 `drawable-nodpi/launch_icon.png`，Android 12+ 系统启动图使用
+      adaptive icon（圆形遮罩属正常）。
 
 ## 6. 关键文件
 
@@ -566,6 +620,8 @@ flutter test integration_test/mecab_android_test.dart -d emulator-5554 \
 
   测试会在安装后/卸载前短暂存在；需用后台循环重新授予
   `MANAGE_EXTERNAL_STORAGE`，详见 `docs/dev-setup.md`。
+  **测试会覆盖 `app-debug.apk` 为测试入口 APK；手动安装前必须重新
+  `flutter build apk --debug`，否则会停在系统启动图。**
 - 设备端 MDict 测试（把词典以 ASCII 名 push 到
   `/sdcard/Download/rikai-mdict/{dict.mdx,dict.mdd,dict.css}`）：
 
@@ -615,5 +671,5 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
    TextBlockReadingOrder，做 ModelManager、拍照/相册与横向 OCR 阅读器串联。
 4. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
    颜色/字号，字体文件不入库；主页深蓝顶栏只用于主页，不要改全局 AppBarTheme。
-5. 每个阶段结束运行 analyze/test/debug build（当前 81 tests / 10 项设备测试），
+5. 每个阶段结束运行 analyze/test/debug build（当前 83 tests / 10 项设备测试），
    并记录到新的阶段状态文档；设备端测试按 §7 的命令运行。

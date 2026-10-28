@@ -16,16 +16,6 @@ class HomePage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('主页'),
         centerTitle: true,
-        backgroundColor: AppColors.header,
-        foregroundColor: AppColors.onHeader,
-        iconTheme: const IconThemeData(
-          size: AppSizes.icon,
-          color: AppColors.onHeader,
-        ),
-        titleTextStyle: theme.appBarTheme.titleTextStyle?.copyWith(
-          color: AppColors.onHeader,
-        ),
-        shape: const Border(),
         actions: [
           IconButton(
             tooltip: '设置',
@@ -128,7 +118,7 @@ class _HomeActionButton extends StatelessWidget {
       child: FilledButton(
         onPressed: onTap,
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor: AppColors.header,
           foregroundColor: AppColors.onHeader,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
@@ -137,6 +127,7 @@ class _HomeActionButton extends StatelessWidget {
           ),
         ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,

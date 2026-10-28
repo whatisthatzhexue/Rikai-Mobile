@@ -16,6 +16,7 @@ class AppDrawer extends ConsumerWidget {
     final settings = ref.watch(appSettingsProvider);
 
     return Drawer(
+      shape: const RoundedRectangleBorder(),
       child: Column(
         children: [
           Container(

@@ -36,10 +36,32 @@ void main() {
     expect(AppColors.header, AppColors.blue700);
     expect(AppColors.onHeader, Colors.white);
     expect(AppSizes.homeActionHeight, 72);
-    expect(AppTypography.homeAction, 40);
+    // Centered content and a 20% smaller label than the first revision.
+    expect(AppTypography.homeAction, 32);
     final textLineBox =
         AppTypography.homeAction * AppTypography.homeActionHeightRatio;
-    expect(textLineBox / AppSizes.homeActionHeight, closeTo(0.75, 0.001));
+    expect(textLineBox, lessThan(AppSizes.homeActionHeight));
+  });
+
+  test('every app bar uses the deep blue brand header', () {
+    final theme = AppTheme.light();
+
+    expect(theme.appBarTheme.backgroundColor, AppColors.header);
+    expect(theme.appBarTheme.foregroundColor, AppColors.onHeader);
+    expect(theme.appBarTheme.titleTextStyle?.color, AppColors.onHeader);
+    expect(theme.appBarTheme.iconTheme?.color, AppColors.onHeader);
+    expect(theme.tabBarTheme.labelColor, AppColors.onHeader);
+    expect(theme.tabBarTheme.indicatorColor, AppColors.onHeader);
+  });
+
+  test('readability tokens are enlarged', () {
+    final theme = AppTheme.light();
+
+    expect(AppTypography.helper, 14);
+    expect(AppTypography.sectionHeading, 18);
+    expect(AppTypography.entryTitle, 24);
+    expect(theme.listTileTheme.subtitleTextStyle?.fontSize, 14);
+    expect(theme.inputDecorationTheme.helperStyle?.fontSize, 14);
   });
 
   test('components are compact', () {

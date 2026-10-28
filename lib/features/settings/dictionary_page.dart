@@ -459,7 +459,6 @@ class _AddDictionaryDialogState extends State<_AddDictionaryDialog> {
               decoration: InputDecoration(
                 labelText: 'MDX 文件路径',
                 hintText: '/sdcard/Download/dict/dict.mdx',
-                helperText: '原地读取；同目录同名 .mdd 与 .css 会自动发现。',
                 prefixIcon: const Icon(Icons.description_outlined),
                 suffixIcon: IconButton(
                   tooltip: '选择词典文件夹',
@@ -470,8 +469,19 @@ class _AddDictionaryDialogState extends State<_AddDictionaryDialog> {
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
+              '原地读取；同目录同名 .mdd 与 .css 会自动发现。',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: AppTypography.helper,
+                height: 1.5,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
               '若提示无法访问，请先在设置中授予所有文件访问。',
               style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: AppTypography.helper,
+                height: 1.5,
                 color: AppColors.textTertiary,
               ),
             ),
@@ -480,6 +490,8 @@ class _AddDictionaryDialogState extends State<_AddDictionaryDialog> {
               Text(
                 _error,
                 style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: AppTypography.helper,
+                  height: 1.5,
                   color: theme.colorScheme.error,
                 ),
               ),

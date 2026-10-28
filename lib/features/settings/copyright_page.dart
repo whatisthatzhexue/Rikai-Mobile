@@ -6,7 +6,6 @@ class CopyrightPage extends StatelessWidget {
   const CopyrightPage({super.key});
 
   static const List<(String, String)> _components = [
-    ('Rikai-Mobile', '离线日语阅读与查词应用。原创代码；仅读取用户提供的 UniDic 与 MDict 词典。'),
     (
       'MeCab / mecab_for_dart',
       'BSD-3-Clause，Copyright 2001-2006 Taku Kudo、NTT；'
@@ -35,53 +34,62 @@ class CopyrightPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final headingStyle = theme.textTheme.bodyLarge?.copyWith(
+      fontSize: AppTypography.sectionHeading,
+      fontWeight: FontWeight.w600,
+      color: AppColors.textPrimary,
+    );
+    final bodyStyle = theme.textTheme.bodyLarge?.copyWith(
+      height: 1.7,
+      color: AppColors.textPrimary,
+    );
+    final nameStyle = theme.textTheme.bodyLarge?.copyWith(
+      fontWeight: FontWeight.w600,
+      color: AppColors.textPrimary,
+    );
 
     return Scaffold(
+      backgroundColor: AppColors.surface,
       appBar: AppBar(title: const Text('著作权信息')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg,
-          AppSpacing.sm,
           AppSpacing.lg,
-          AppSpacing.xl,
+          AppSpacing.lg,
+          AppSpacing.xxl,
         ),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('第三方组件', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    '以下为应用使用或参考的开源组件与用户自备数据。',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
+          Text('Rikai-Mobile', style: headingStyle),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            '离线日语阅读与查词应用。原创代码；仅读取用户提供的 UniDic 与 '
+            'MDict 词典。',
+            style: bodyStyle,
           ),
+          const Divider(height: AppSpacing.xxl),
+          Text('第三方组件', style: headingStyle),
+          const SizedBox(height: AppSpacing.sm),
+          Text('以下为应用使用或参考的开源组件与用户自备数据。', style: bodyStyle),
           const SizedBox(height: AppSpacing.md),
-          for (final component in _components) ...[
-            Card(
-              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: ListTile(
-                title: Text(component.$1),
-                subtitle: Text(component.$2),
-              ),
-            ),
+          for (var index = 0; index < _components.length; index++) ...[
+            if (index > 0) const Divider(height: AppSpacing.xl),
+            Text(_components[index].$1, style: nameStyle),
+            const SizedBox(height: AppSpacing.xs),
+            Text(_components[index].$2, style: bodyStyle),
           ],
-          const SizedBox(height: AppSpacing.lg),
-          OutlinedButton.icon(
-            onPressed: () => showLicensePage(
-              context: context,
-              applicationName: 'Rikai-Mobile',
-              applicationVersion: '1.0.0',
-              applicationLegalese: 'Copyright 2026 Rikai-Mobile contributors',
+          const Divider(height: AppSpacing.xxl),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () => showLicensePage(
+                context: context,
+                applicationName: 'Rikai-Mobile',
+                applicationVersion: '1.0.0',
+                applicationLegalese: 'Copyright 2026 Rikai-Mobile contributors',
+              ),
+              icon: const Icon(Icons.description_outlined, size: AppSizes.icon),
+              label: const Text('查看开源许可证'),
             ),
-            icon: const Icon(Icons.description_outlined, size: AppSizes.icon),
-            label: const Text('查看开源许可证'),
           ),
         ],
       ),

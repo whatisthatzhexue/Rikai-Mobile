@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'app_fonts.dart';
 
@@ -62,6 +63,15 @@ abstract final class AppTypography {
   static const double displayHeight = 1.25;
   static const double textHeight = 1.5;
 
+  /// Secondary/helper copy in forms and settings. Always allowed to wrap.
+  static const double helper = 14;
+
+  /// Help/copyright section headings and other long-form sections.
+  static const double sectionHeading = 18;
+
+  /// Dictionary search result headword (1.5× the 16sp list title).
+  static const double entryTitle = 24;
+
   /// Reader content is a user setting (not UI chrome), documented in the
   /// design tokens as the reading scale.
   static const double readerMin = 14;
@@ -69,9 +79,9 @@ abstract final class AppTypography {
   static const double readerDefault = 20;
   static const double furiganaRatio = 0.55;
 
-  /// Home action buttons: 72dp tall, 40sp glyphs with a 1.35 line box
-  /// (54dp ≈ 75% of the button height).
-  static const double homeAction = 40;
+  /// Home action buttons: 72dp tall, centered content. The label was reduced
+  /// by 20% from the first revision (40sp → 32sp) at the user's request.
+  static const double homeAction = 32;
   static const double homeActionHeightRatio = 1.35;
 }
 
@@ -230,25 +240,26 @@ abstract final class AppTheme {
 
     return base.copyWith(
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: AppColors.header,
+        foregroundColor: AppColors.onHeader,
         surfaceTintColor: AppColors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: false,
         toolbarHeight: AppSizes.appBar,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
         iconTheme: const IconThemeData(
           size: AppSizes.icon,
-          color: AppColors.textSecondary,
+          color: AppColors.onHeader,
         ),
         titleTextStyle: TextStyle(
           fontFamily: family,
           fontSize: AppTypography.headline,
           height: 1.25,
           fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
+          color: AppColors.onHeader,
         ),
-        shape: const Border(bottom: BorderSide(color: AppColors.divider)),
+        shape: const Border(),
       ),
       cardTheme: CardThemeData(
         color: AppColors.surface,
@@ -357,17 +368,19 @@ abstract final class AppTheme {
         ),
         labelStyle: TextStyle(
           fontFamily: family,
-          fontSize: AppTypography.title,
+          fontSize: AppTypography.helper,
           color: AppColors.textSecondary,
         ),
         helperStyle: TextStyle(
           fontFamily: family,
-          fontSize: AppTypography.title,
+          fontSize: AppTypography.helper,
+          height: 1.5,
           color: AppColors.textTertiary,
         ),
         errorStyle: TextStyle(
           fontFamily: family,
-          fontSize: AppTypography.title,
+          fontSize: AppTypography.helper,
+          height: 1.5,
           color: AppColors.error,
         ),
         prefixIconColor: AppColors.textSecondary,
@@ -438,7 +451,7 @@ abstract final class AppTheme {
         ),
         subtitleTextStyle: TextStyle(
           fontFamily: family,
-          fontSize: AppTypography.title,
+          fontSize: AppTypography.helper,
           height: 1.5,
           color: AppColors.textSecondary,
         ),
@@ -490,10 +503,10 @@ abstract final class AppTheme {
         ),
       ),
       tabBarTheme: TabBarThemeData(
-        labelColor: AppColors.primary,
-        unselectedLabelColor: AppColors.textSecondary,
-        indicatorColor: AppColors.primary,
-        dividerColor: AppColors.border,
+        labelColor: AppColors.onHeader,
+        unselectedLabelColor: AppColors.onHeader.withValues(alpha: 0.72),
+        indicatorColor: AppColors.onHeader,
+        dividerColor: AppColors.transparent,
         labelStyle: TextStyle(
           fontFamily: family,
           fontSize: AppTypography.headline,

@@ -120,90 +120,90 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     final theme = Theme.of(context);
 
     return Scaffold(
+      backgroundColor: AppColors.surface,
       appBar: AppBar(title: const Text('设置')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg,
-          AppSpacing.sm,
+          AppSpacing.lg,
           AppSpacing.lg,
           AppSpacing.xxl,
         ),
         children: [
-          Text('MDict 词典', style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.library_books_outlined),
-              title: const Text('管理词典'),
-              subtitle: Text(
-                dictionaries.isEmpty
-                    ? '尚未添加 .mdx 词典'
-                    : '已添加 ${dictionaries.length} 本 · '
-                          '$enabledDictionaries 本启用',
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push('/dictionaries'),
+          _sectionTitle(theme, 'MDict 词典'),
+          ListTile(
+            leading: const Icon(Icons.library_books_outlined),
+            title: const Text('管理词典'),
+            subtitle: Text(
+              dictionaries.isEmpty
+                  ? '尚未添加 .mdx 词典'
+                  : '已添加 ${dictionaries.length} 本 · '
+                        '$enabledDictionaries 本启用',
             ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/dictionaries'),
           ),
-          const SizedBox(height: AppSpacing.xl),
-          Text('阅读显示', style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
+          const Divider(height: AppSpacing.xxl),
+          _sectionTitle(theme, '阅读显示'),
           _buildDisplaySection(settings, theme),
-          const SizedBox(height: AppSpacing.xl),
-          Text('UniDic 分词', style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
+          const Divider(height: AppSpacing.xxl),
+          _sectionTitle(theme, 'UniDic 分词'),
           _buildUnidicSection(theme),
-          const SizedBox(height: AppSpacing.xl),
-          Text('存储权限', style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          _buildPermissionCard(),
-          const SizedBox(height: AppSpacing.sm),
-          _buildPrivateDirectoryCard(theme),
+          const Divider(height: AppSpacing.xxl),
+          _sectionTitle(theme, '存储权限'),
+          _buildPermissionSection(theme),
+          const Divider(height: AppSpacing.xl),
+          _buildPrivateDirectoryInfo(theme),
         ],
       ),
     );
   }
 
+  Widget _sectionTitle(ThemeData theme, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Text(text, style: theme.textTheme.titleMedium),
+    );
+  }
+
   Widget _buildDisplaySection(AppSettings settings, ThemeData theme) {
     final maxEntries = settings.maxEntriesPerDictionary;
-    return Card(
-      child: Column(
-        children: [
-          SwitchListTile(
-            title: const Text('显示注音'),
-            subtitle: const Text('在词条上方显示振假名'),
-            value: settings.showFurigana,
+    return Column(
+      children: [
+        SwitchListTile(
+          title: const Text('显示注音'),
+          subtitle: const Text('在词条上方显示振假名'),
+          value: settings.showFurigana,
+          onChanged: (value) {
+            ref.read(appSettingsProvider.notifier).setShowFurigana(value);
+          },
+        ),
+        const Divider(height: 1),
+        ListTile(
+          title: const Text('阅读字号'),
+          subtitle: Slider(
+            value: settings.readerFontSize,
+            min: 14,
+            max: 30,
+            divisions: 8,
+            label: settings.readerFontSize.round().toString(),
             onChanged: (value) {
-              ref.read(appSettingsProvider.notifier).setShowFurigana(value);
+              ref.read(appSettingsProvider.notifier).setReaderFontSize(value);
             },
           ),
-          const Divider(height: 1),
-          ListTile(
-            title: const Text('阅读字号'),
-            subtitle: Slider(
-              value: settings.readerFontSize,
-              min: 14,
-              max: 30,
-              divisions: 8,
-              label: settings.readerFontSize.round().toString(),
-              onChanged: (value) {
-                ref.read(appSettingsProvider.notifier).setReaderFontSize(value);
-              },
-            ),
-            trailing: Text(
-              settings.readerFontSize.round().toString(),
-              style: theme.textTheme.titleMedium,
-            ),
+          trailing: Text(
+            settings.readerFontSize.round().toString(),
+            style: theme.textTheme.titleMedium,
           ),
-          const Divider(height: 1),
-          ListTile(
-            title: const Text('每词典词条上限'),
-            subtitle: Text(maxEntries == 0 ? '无限制' : '最多 $maxEntries 条'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _showMaxEntriesDialog,
-          ),
-        ],
-      ),
+        ),
+        const Divider(height: 1),
+        ListTile(
+          title: const Text('每词典词条上限'),
+          subtitle: Text(maxEntries == 0 ? '无限制' : '最多 $maxEntries 条'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _showMaxEntriesDialog,
+        ),
+      ],
     );
   }
 
@@ -246,60 +246,57 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   }
 
   Widget _buildUnidicSection(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _pathController,
+          autocorrect: false,
+          enableSuggestions: false,
+          decoration: const InputDecoration(
+            labelText: 'UniDic 目录',
+            hintText: '/sdcard/Download/unidic-cwj-202512',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.folder_open_outlined),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          '可直接选择目录或手动填写；应用原地读取，不复制文件。',
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontSize: AppTypography.helper,
+            height: 1.5,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.sm,
           children: [
-            TextField(
-              controller: _pathController,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: const InputDecoration(
-                labelText: 'UniDic 目录',
-                hintText: '/sdcard/Download/unidic-cwj-202512',
-                helperText: '可直接选择目录或手动填写；应用原地读取，不复制文件。',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.folder_open_outlined),
-              ),
+            OutlinedButton.icon(
+              onPressed: _validating ? null : _pickUnidicDirectory,
+              icon: const Icon(Icons.folder_open_outlined, size: AppSizes.icon),
+              label: const Text('浏览…'),
             ),
-            const SizedBox(height: AppSpacing.md),
-            Wrap(
-              spacing: AppSpacing.md,
-              runSpacing: AppSpacing.sm,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _validating ? null : _pickUnidicDirectory,
-                  icon: const Icon(
-                    Icons.folder_open_outlined,
-                    size: AppSizes.icon,
-                  ),
-                  label: const Text('浏览…'),
-                ),
-                FilledButton.icon(
-                  onPressed: _validating ? null : _validateAndSave,
-                  icon: _validating
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(
-                          Icons.fact_check_outlined,
-                          size: AppSizes.icon,
-                        ),
-                  label: Text(_validating ? '正在校验…' : '校验并保存'),
-                ),
-              ],
+            FilledButton.icon(
+              onPressed: _validating ? null : _validateAndSave,
+              icon: _validating
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.fact_check_outlined, size: AppSizes.icon),
+              label: Text(_validating ? '正在校验…' : '校验并保存'),
             ),
-            if (_validation case final validation?) ...[
-              const SizedBox(height: AppSpacing.lg),
-              _ValidationCard(result: validation),
-            ],
           ],
         ),
-      ),
+        if (_validation case final validation?) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _ValidationCard(result: validation),
+        ],
+      ],
     );
   }
 
@@ -324,71 +321,92 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     }
   }
 
-  Widget _buildPrivateDirectoryCard(ThemeData theme) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('应用外部私有目录', style: theme.textTheme.titleSmall),
-            const SizedBox(height: AppSpacing.xs),
-            const SelectableText(
-              '/sdcard/Android/data/com.rikai.mobile/files/',
-              style: TextStyle(fontFamily: 'monospace'),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              '把 UniDic 目录放到这里无需「所有文件访问」权限；'
-              '在上方填写完整路径即可。',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
+  Widget _buildPrivateDirectoryInfo(ThemeData theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('应用外部私有目录', style: theme.textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.xs),
+        const SelectableText(
+          '/sdcard/Android/data/com.rikai.mobile/files/',
+          style: TextStyle(
+            fontSize: AppTypography.headline,
+            fontFamily: 'monospace',
+          ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          '把 UniDic 目录放到这里无需「所有文件访问」权限；'
+          '在上方填写完整路径即可。',
+          style: theme.textTheme.bodyMedium,
+        ),
+      ],
     );
   }
 
-  Widget _buildPermissionCard() {
+  Widget _buildPermissionSection(ThemeData theme) {
     final status = _storageStatus;
     if (status == null) {
-      return const Card(
-        child: ListTile(
-          leading: SizedBox(
-            width: 24,
-            height: 24,
+      return Row(
+        children: [
+          const SizedBox(
+            width: 20,
+            height: 20,
             child: CircularProgressIndicator(strokeWidth: 2),
           ),
-          title: Text('所有文件访问'),
-          subtitle: Text('正在检查权限…'),
-        ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: Text('正在检查权限…', style: theme.textTheme.bodyLarge)),
+        ],
       );
     }
 
     final granted = status.granted;
     final needsAllFiles = status.sdkInt >= 30;
     final subtitle = granted
-        ? '已授权，可原地读取 /sdcard/... 下的 UniDic 与词典。'
+        ? '已授权，可原地读取 /sdcard/... 下的分词词典与 MDict 词典。'
         : needsAllFiles
         ? '未授权。Android 11+ 需要「所有文件访问」才能读取 /sdcard/... 目录。'
         : '未授予读取存储权限。';
 
-    return Card(
-      child: ListTile(
-        leading: Icon(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
           granted ? Icons.verified_user_outlined : Icons.gpp_maybe_outlined,
+          color: AppColors.textSecondary,
         ),
-        title: const Text('所有文件访问'),
-        subtitle: Text(subtitle),
-        trailing: granted
-            ? const Icon(Icons.check_circle, color: AppColors.success)
-            : FilledButton(
-                onPressed: _permissionBusy ? null : _requestPermission,
-                child: Text(needsAllFiles ? '去授权' : '申请权限'),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('所有文件访问', style: theme.textTheme.titleMedium),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                subtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: AppTypography.helper,
+                  height: 1.5,
+                  color: AppColors.textSecondary,
+                ),
               ),
-      ),
+            ],
+          ),
+        ),
+        if (granted)
+          const Padding(
+            padding: EdgeInsets.only(left: AppSpacing.sm),
+            child: Icon(Icons.check_circle, color: AppColors.success),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(left: AppSpacing.sm),
+            child: FilledButton(
+              onPressed: _permissionBusy ? null : _requestPermission,
+              child: Text(needsAllFiles ? '去授权' : '申请权限'),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -404,72 +422,84 @@ class _ValidationCard extends StatelessWidget {
     final valid = result.isValid;
     final color = valid ? AppColors.success : theme.colorScheme.error;
 
-    return Card(
-      color: valid
-          ? theme.colorScheme.surfaceContainerHighest
-          : theme.colorScheme.errorContainer.withValues(alpha: 0.4),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  valid ? Icons.check_circle_outline : Icons.error_outline,
-                  color: color,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: valid
+            ? AppColors.surfaceMuted
+            : AppColors.error.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                valid ? Icons.check_circle_outline : Icons.error_outline,
+                color: color,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  valid ? '校验通过' : '校验失败',
+                  style: theme.textTheme.titleSmall?.copyWith(color: color),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    valid ? '校验通过' : '校验失败',
-                    style: theme.textTheme.titleSmall?.copyWith(color: color),
-                  ),
-                ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(result.summary),
+          if (valid) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '词条数 ${_formatCount(result.entryCount ?? 0)} · '
+              '编码 ${result.charset} · 词典版本 ${result.version}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: AppTypography.helper,
+                height: 1.5,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
-            Text(result.summary),
-            if (valid) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                '词条数 ${_formatCount(result.entryCount ?? 0)} · '
-                '编码 ${result.charset} · 词典版本 ${result.version}',
-                style: theme.textTheme.bodySmall,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.xs,
-                children: [
-                  for (final entry in result.fileSizes.entries)
-                    Chip(
-                      visualDensity: VisualDensity.compact,
-                      label: Text(
-                        '${entry.key} ${_formatBytes(entry.value)}',
-                        style: theme.textTheme.bodySmall,
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final entry in result.fileSizes.entries)
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(
+                      '${entry.key} ${_formatBytes(entry.value)}',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: AppTypography.helper,
                       ),
                     ),
-                ],
+                  ),
+              ],
+            ),
+          ] else if (result.missingFiles.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '缺少：${result.missingFiles.join('、')}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: AppTypography.helper,
+                height: 1.5,
               ),
-            ] else if (result.missingFiles.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                '缺少：${result.missingFiles.join('、')}',
-                style: theme.textTheme.bodySmall,
-              ),
-            ],
-            if (!valid) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                '若路径正确，请确认已授予所有文件访问权限，或改用应用外部私有目录。',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+            ),
           ],
-        ),
+          if (!valid) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '若路径正确，请确认已授予所有文件访问权限，或改用应用外部私有目录。',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: AppTypography.helper,
+                height: 1.5,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

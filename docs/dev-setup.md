@@ -202,3 +202,9 @@ The suite verifies header metadata, `@@@LINK` resolution, hot lookup timing,
 prefix suggestions, MDD image bytes, HTML sanitization/CSS injection, the
 dictionary registry, and the full search → entry WebView flow. Results are
 recorded in `docs/phase2-status.md`.
+
+**Important:** `flutter test integration_test/...` replaces
+`build/app/outputs/flutter-apk/app-debug.apk` with an APK whose entry point is
+the integration test. If you install that file manually it will stop on the
+system splash. Always run `flutter build apk --debug` again before installing
+the app by hand.

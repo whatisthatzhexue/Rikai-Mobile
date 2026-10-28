@@ -22,9 +22,9 @@ UniDic and MDict dictionary:
 - Search page, reader lookup sheet, dictionary management (add/enable/reorder/
   revalidate/delete), configurable per-dictionary entry limit (unlimited by
   default), and single-result entry pages with 查看全部 for homographs
-- Blue/white design tokens with compact components, deep-blue home header,
-  large blue home actions, branded splash/launcher icon, left drawer with font
-  switching/help/copyright pages
+- Blue/white design tokens with compact components, a deep-blue app bar on
+  every page, large centered deep-blue home actions, square left drawer,
+  branded splash/launcher icon, and font switching/help/copyright pages
 - HarmonyOS Sans SC is downloaded by the user (not in this repository; see
   `assets/fonts/README.md`); the system font can be selected in the drawer
 

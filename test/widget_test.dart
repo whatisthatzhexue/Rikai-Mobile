@@ -61,6 +61,9 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.menu));
     await tester.pumpAndSettle();
+    final drawer = tester.widget<Drawer>(find.byType(Drawer));
+    final drawerShape = drawer.shape as RoundedRectangleBorder;
+    expect(drawerShape.borderRadius, BorderRadius.zero);
     expect(find.text('自定义字体'), findsOneWidget);
     expect(find.text('帮助'), findsOneWidget);
     expect(find.text('著作权信息'), findsOneWidget);
@@ -136,6 +139,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('UniDic 分词'), findsOneWidget);
     expect(find.text('校验并保存'), findsOneWidget);
+    expect(find.text('可直接选择目录或手动填写；应用原地读取，不复制文件。'), findsOneWidget);
+    expect(find.text('应用外部私有目录'), findsOneWidget);
+    expect(find.byType(Card), findsNothing);
 
     final mdictY = tester.getTopLeft(find.text('MDict 词典')).dy;
     final displayY = tester.getTopLeft(find.text('阅读显示')).dy;

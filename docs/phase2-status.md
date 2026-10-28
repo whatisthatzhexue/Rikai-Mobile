@@ -61,13 +61,14 @@ Device: `Medium_Phone_API_36.1` (x86_64 emulator, API 36). No arm64 device.
 ### Design tokens
 
 - `docs/design-tokens.md` — normative UI specification: blue/white palette
-  (`#0052D9` primary, `#003A99` home header), 3x design sizes 72/48/36 →
-  Flutter 24/16/12sp, 4pt spacing, compact 40dp controls, 12dp cards,
-  TDesign variable mapping.
+  (`#0052D9` primary, `#003A99` on every AppBar), 3x design sizes 72/48/36 →
+  Flutter 24/16/12sp plus 14/18/24sp readability tokens, 4pt spacing,
+  compact 40dp controls, 12dp cards, flat settings layout, TDesign mapping.
 - `lib/core/theme/app_tokens.dart` — all colors, typography, spacing, radii,
-  sizes and `AppTheme.light()`; every existing screen was migrated to this
-  theme (light-only v1). The home header and 72dp/40sp action buttons are
-  documented exceptions.
+  sizes and `AppTheme.light()`; every screen uses the deep-blue AppBar,
+  flat settings, 14sp helper text, 18sp help/copyright headings and 24sp
+  search-result headwords. Home actions are 72dp/32sp, centered and use the
+  same `header` color as the AppBar.
 - HarmonyOS Sans SC Regular is declared in `pubspec.yaml` but **not committed**
   (`.gitignore`); users download it to
   `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf` per `assets/fonts/README.md`.
@@ -82,22 +83,31 @@ Implemented from `项目初始文档.txt`:
   the icon. The splash reports real phases: 正在加载主界面… / 正在加载已安装的
   词典… (registry + enabled-dictionary warm-up) / 正在加载分词功能… (MeCab if
   configured).
-- Home: deep-blue brand AppBar (`主页`, white menu/title/settings), left drawer
-  with app icon, 自定义字体, 帮助, 著作权信息; only the four large blue action
-  buttons and the 使用前须知 card remain (intro/footer copy and the UniDic size
-  note removed). Action labels are 40sp with a 54dp line box in a 72dp button
-  (75%).
+- All pages use the same deep-blue AppBar (`#003A99`) with white title/icons;
+  the entry-page TabBar is white on blue. The home drawer is square-edged.
+- Home: left drawer with app icon, 自定义字体, 帮助, 著作权信息; only the four
+  large action buttons and the 使用前须知 card remain (intro/footer copy and
+  the UniDic size note removed). Buttons use the same `header` deep blue as the
+  AppBar, icons+labels are centered, labels are 32sp (20% smaller than the
+  first revision) in a 72dp button.
 - Font switching: HarmonyOS Sans (bundled, user-downloaded) or system font,
   persisted and applied to the whole app.
-- Settings order: MDict → 阅读显示 → UniDic 分词 → 存储权限. UniDic and MDict
-  paths can be chosen through the system file manager (directory picker; MDict
-  folder lists its `.mdx` files). MDict cards no longer print the file path.
+- Settings are flat (white page, section title + divider + controls, no cards):
+  MDict → 阅读显示 → UniDic 分词 → 存储权限. UniDic and MDict paths can be chosen
+  through the system file manager (directory picker; MDict folder lists its
+  `.mdx` files). MDict cards no longer print the file path. Long helper text is
+  a separate 14sp wrapping Text; the app-private external directory is plain
+  16sp text. Permission hints are 14sp and wrap.
 - Reader: example hint `何卒宜しくお願い致します。`; duplicate AppBar copy button
   removed; centered 分词 button; word count removed; input draft persists for
   the app lifetime; POS labels omit `*` placeholders.
 - Per-dictionary entry limit is a user setting (无限制 default).
-- Search results: tapping one hit opens only that entry; each dictionary with
-  ≥2 hits shows 查看全部（N 条） to open all entries of that dictionary.
+- Search results: dictionary name and entry count are 16sp in the same color;
+  entry headwords are 24sp (1.5×); summaries are 14sp. Tapping one hit opens only
+  that entry; each dictionary with ≥2 hits shows 查看全部（N 条） to open all
+  entries of that dictionary.
+- Help and copyright pages are pure text (no cards): 18sp section headings,
+  16sp body, dividers between sections.
 - Dictionary navigation cache: enabled dictionaries are pre-opened during the
   splash (warm-up), and rendered entry HTML is cached in an in-memory LRU;
   the first lookup after startup is hot.
@@ -106,7 +116,7 @@ Implemented from `项目初始文档.txt`:
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 81 tests passed
+flutter test     -> 83 tests passed
 flutter build apk --debug -> success
 ```
 
@@ -170,6 +180,14 @@ See `docs/dev-setup.md` for the All Files Access grant loop.
   an allowed future component library but is not adopted in this phase.
 - x86_64 timings are functional smoke results; arm64 performance remains to be
   measured.
+- `flutter test integration_test/...` overwrites
+  `build/app/outputs/flutter-apk/app-debug.apk` with a test-entrypoint APK.
+  Installing that file manually stops on the system splash; rebuild with
+  `flutter build apk --debug` before a manual install.
+- The 2026-10-28 UI refinement moved all AppBars to the deep-blue brand color,
+  made the home actions centered at 32sp, flattened settings, enlarged help/
+  copyright text, and raised search-result typography (16sp group/count,
+  24sp headword).
 
 ## Next
 
