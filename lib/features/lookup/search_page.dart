@@ -159,7 +159,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 textInputAction: TextInputAction.search,
                 onSubmitted: (_) => _search(),
                 decoration: InputDecoration(
-                  hintText: '输入日语词条，例如 東京 / とうきょう',
+                  hintText: '搜索……',
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _busy
                       ? const Padding(

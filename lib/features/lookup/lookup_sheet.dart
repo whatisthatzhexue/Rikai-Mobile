@@ -162,39 +162,27 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,
               0,
-              AppSpacing.sm,
+              AppSpacing.lg,
               AppSpacing.sm,
             ),
-            child: Row(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _token.surface,
-                        style: theme.textTheme.headlineSmall,
-                      ),
-                      if (_token.reading.isNotEmpty)
-                        Text(
-                          _token.reading,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        _token.posLabel.isEmpty ? '词性未知' : _token.posLabel,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
+                Text(_token.surface, style: theme.textTheme.headlineSmall),
+                // Do not repeat the reading when it is identical to the
+                // surface (e.g. ありがとう). Only distinct readings are shown
+                // in the blue reading line.
+                if (_token.hasDistinctReading)
+                  Text(
+                    _token.reading,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.primary,
+                    ),
                   ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  tooltip: '关闭',
-                  icon: const Icon(Icons.close),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  _token.posLabel.isEmpty ? '词性未知' : _token.posLabel,
+                  style: theme.textTheme.bodySmall,
                 ),
               ],
             ),

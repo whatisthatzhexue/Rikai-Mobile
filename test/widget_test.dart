@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/app.dart';
+import 'package:rikai_mobile/core/theme/app_tokens.dart';
 import 'package:rikai_mobile/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -103,6 +104,17 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('文本阅读'), findsOneWidget);
 
+    final readerScaffold = tester.widget<Scaffold>(find.byType(Scaffold).last);
+    expect(readerScaffold.backgroundColor, AppColors.surface);
+    final input = tester.widget<TextField>(find.byType(TextField));
+    expect(input.decoration?.filled, isFalse);
+    final controls = tester.widget<Container>(
+      find.byKey(const Key('reader-controls-surface')),
+    );
+    final decoration = controls.decoration! as BoxDecoration;
+    expect(decoration.color, AppColors.surface);
+    expect((decoration.border! as Border).bottom.color, AppColors.divider);
+
     await tester.enterText(find.byType(TextField), '食べた東京');
     await tester.tap(find.text('分词'));
     await tester.pumpAndSettle();
@@ -183,6 +195,8 @@ void main() {
     await tester.tap(find.text('查词'));
     await tester.pumpAndSettle();
 
+    final searchField = tester.widget<TextField>(find.byType(TextField));
+    expect(searchField.decoration?.hintText, '搜索……');
     expect(find.text('尚未添加 MDict 词典'), findsOneWidget);
     expect(find.text('管理词典'), findsOneWidget);
   });

@@ -6,8 +6,9 @@ import 'furigana_text.dart';
 
 /// One tappable word in the reader.
 ///
-/// Content words get a tinted background; particles and auxiliaries are muted;
-/// punctuation and symbols are rendered without a hit target or furigana.
+/// Content words get a tinted background and brand-blue text; particles,
+/// auxiliaries and punctuation stay black. The reading line uses the brand
+/// blue. The reader avoids grey text so the page feels calm and legible.
 class TokenChip extends StatelessWidget {
   const TokenChip({
     super.key,
@@ -32,13 +33,13 @@ class TokenChip extends StatelessWidget {
     final Color foreground;
     if (punctuation) {
       background = Colors.transparent;
-      foreground = scheme.onSurface.withValues(alpha: 0.7);
+      foreground = scheme.onSurface;
     } else if (contentWord) {
       background = scheme.primaryContainer.withValues(alpha: 0.75);
       foreground = scheme.onPrimaryContainer;
     } else {
       background = Colors.transparent;
-      foreground = scheme.onSurfaceVariant;
+      foreground = scheme.onSurface;
     }
 
     final reading = showFurigana && !punctuation && token.hasDistinctReading
@@ -66,7 +67,7 @@ class TokenChip extends StatelessWidget {
                 FuriganaText(
                   text: reading,
                   fontSize: fontSize * 0.55,
-                  color: scheme.onSurfaceVariant,
+                  color: scheme.primary,
                 ),
                 Text(
                   token.surface,

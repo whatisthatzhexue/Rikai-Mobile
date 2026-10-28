@@ -74,6 +74,25 @@ Device: `Medium_Phone_API_36.1` (x86_64 emulator, API 36). No arm64 device.
   `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf` per `assets/fonts/README.md`.
   The drawer can switch between HarmonyOS Sans and the system font.
 
+### UI polish: reading surface, transitions and lookup sheet (2026-10-28)
+
+- Search field hint is now simply `搜索……`.
+- The reader's reading surface, results and input/tokenize/copy toolbar are all
+  white. Only a 1px `divider` hairline runs along the bottom of the toolbar,
+  matching the line below the search field without introducing a grey band.
+  The input is `filled: false`, so no heavy colour block or seam appears while
+  long results scroll.
+- Reader tokens no longer use grey text: content words stay blue700 on blue50,
+  function words and punctuation are near-black (`textPrimary`), and furigana
+  uses the brand blue. The reader avoids grey to reduce visual noise.
+- All page routes use a global `SlideOverPageTransitionsBuilder`: the new page
+  slides in from the right over the stationary old page, with no fade, scale or
+  upward-fade. This also removes the white AppBar flash during navigation.
+- The reader lookup sheet no longer has a redundant close X; drag or tap the
+  scrim to dismiss it.
+- When a token's reading equals its surface (for example ありがとう), the blue
+  reading line is hidden and only the black surface is shown.
+
 ### Mid-term UI/function revision (2026-10-28)
 
 Implemented from `项目初始文档.txt`:
@@ -116,7 +135,7 @@ Implemented from `项目初始文档.txt`:
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 83 tests passed
+flutter test     -> 89 tests passed
 flutter build apk --debug -> success
 ```
 

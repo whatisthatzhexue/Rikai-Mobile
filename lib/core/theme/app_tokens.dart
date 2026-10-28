@@ -119,6 +119,35 @@ abstract final class AppSizes {
   static const double borderWidth = 1;
 }
 
+/// Slides a new page in from the right and leaves the previous page in place.
+///
+/// Deliberately contains no [FadeTransition]: cross-fading made the deep-blue
+/// AppBar flash white during navigation. The new page is opaque and physically
+/// covers the old one.
+class SlideOverPageTransitionsBuilder extends PageTransitionsBuilder {
+  const SlideOverPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T>? route,
+    BuildContext? context,
+    Animation<double> animation,
+    Animation<double>? secondaryAnimation,
+    Widget child,
+  ) {
+    if (route?.isFirst ?? false) return child;
+    return SlideTransition(
+      position: animation.drive(
+        Tween<Offset>(
+          begin: const Offset(1, 0),
+          end: Offset.zero,
+        ).chain(CurveTween(curve: Curves.easeOutCubic)),
+      ),
+      child: child,
+    );
+  }
+}
+
 abstract final class AppTheme {
   static ThemeData light({String fontFamily = AppTypography.fontFamily}) {
     final String? family = fontFamily.isEmpty ? null : fontFamily;
@@ -232,6 +261,16 @@ abstract final class AppTheme {
       visualDensity: VisualDensity.compact,
       splashFactory: InkSparkle.splashFactory,
       textTheme: textTheme,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: SlideOverPageTransitionsBuilder(),
+          TargetPlatform.fuchsia: SlideOverPageTransitionsBuilder(),
+          TargetPlatform.iOS: SlideOverPageTransitionsBuilder(),
+          TargetPlatform.linux: SlideOverPageTransitionsBuilder(),
+          TargetPlatform.macOS: SlideOverPageTransitionsBuilder(),
+          TargetPlatform.windows: SlideOverPageTransitionsBuilder(),
+        },
+      ),
     );
 
     final roundedShape = RoundedRectangleBorder(

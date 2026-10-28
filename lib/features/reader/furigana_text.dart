@@ -30,7 +30,7 @@ class FuriganaText extends StatelessWidget {
         style: TextStyle(
           fontSize: fontSize,
           height: 1.1,
-          color: color ?? Theme.of(context).colorScheme.onSurfaceVariant,
+          color: color ?? Theme.of(context).colorScheme.primary,
         ),
       ),
     );

@@ -76,6 +76,18 @@ void main() {
     expect(AppRadius.lg, 12);
   });
 
+  test('page transitions slide over instead of fading', () {
+    final theme = AppTheme.light();
+
+    for (final platform in TargetPlatform.values) {
+      expect(
+        theme.pageTransitionsTheme.builders[platform],
+        isA<SlideOverPageTransitionsBuilder>(),
+        reason: '$platform must not use a cross-fade transition',
+      );
+    }
+  });
+
   test('spacing scale is 4pt based', () {
     expect(AppSpacing.xxs, 2);
     for (final value in [

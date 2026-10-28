@@ -116,6 +116,9 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
+      // Keep the whole reading surface white. A grey page background under
+      // the input/toolbar made a visible band when long results scrolled.
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: const Text('文本阅读'),
         actions: [
@@ -157,55 +160,86 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.lg,
-                AppSpacing.sm,
-                AppSpacing.lg,
-                AppSpacing.sm,
-              ),
-              child: TextField(
-                controller: _textController,
-                minLines: 2,
-                maxLines: 6,
-                keyboardType: TextInputType.multiline,
-                textInputAction: TextInputAction.newline,
-                style: theme.textTheme.bodyLarge,
-                decoration: const InputDecoration(
-                  hintText: '例：何卒宜しくお願い致します。',
-                  border: OutlineInputBorder(),
-                  isDense: true,
+            Container(
+              key: const Key('reader-controls-surface'),
+              decoration: const BoxDecoration(
+                // Keep the toolbar area white to match the reading surface;
+                // only a light hairline separates it from the results, like
+                // the line below the search field on the lookup page.
+                color: AppColors.surface,
+                border: Border(
+                  bottom: BorderSide(
+                    color: AppColors.divider,
+                    width: AppSizes.borderWidth,
+                  ),
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Expanded(child: SizedBox()),
-                  FilledButton.icon(
-                    onPressed: _busy ? null : _analyze,
-                    icon: const Icon(Icons.auto_awesome, size: AppSizes.icon),
-                    label: const Text('分词'),
-                  ),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: _copyText,
-                        icon: const Icon(
-                          Icons.copy_all_outlined,
-                          size: AppSizes.iconSmall,
-                        ),
-                        label: const Text('复制'),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.sm,
+                      AppSpacing.lg,
+                      AppSpacing.sm,
+                    ),
+                    child: TextField(
+                      controller: _textController,
+                      minLines: 2,
+                      maxLines: 6,
+                      keyboardType: TextInputType.multiline,
+                      textInputAction: TextInputAction.newline,
+                      style: theme.textTheme.bodyLarge,
+                      decoration: const InputDecoration(
+                        hintText: '例：何卒宜しくお願い致します。',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        // No opaque panel inside the field; the white toolbar
+                        // stays visible behind it.
+                        filled: false,
                       ),
                     ),
                   ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      0,
+                      AppSpacing.lg,
+                      AppSpacing.sm,
+                    ),
+                    child: Row(
+                      children: [
+                        const Expanded(child: SizedBox()),
+                        FilledButton.icon(
+                          onPressed: _busy ? null : _analyze,
+                          icon: const Icon(
+                            Icons.auto_awesome,
+                            size: AppSizes.icon,
+                          ),
+                          label: const Text('分词'),
+                        ),
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: _copyText,
+                              icon: const Icon(
+                                Icons.copy_all_outlined,
+                                size: AppSizes.iconSmall,
+                              ),
+                              label: const Text('复制'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_busy)
+                    const LinearProgressIndicator(minHeight: AppSpacing.xxs),
                 ],
               ),
             ),
-            if (_busy) const LinearProgressIndicator(minHeight: AppSpacing.xxs),
-            const SizedBox(height: AppSpacing.sm),
             Expanded(child: _buildContent(settings)),
           ],
         ),

@@ -27,6 +27,13 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
   + 分割线；查词结果的词典名/条目数 16sp 同色、词条标题 24sp。启动页居中
   显示 `assets/Rikai_Icon.jpg` 与真实加载阶段；字体可在抽屉中切换
   HarmonyOS Sans / 系统字体。
+  阅读器阅读面、结果区与输入/分词/复制工具区**均为白色**；工具区底边
+  仅用 1px `divider` 浅色细线收边（类似查词搜索栏下方），不改变工具区
+  底色、不得形成厚重色块；输入框 `filled: false`。分词结果不使用灰色
+  （内容词蓝700、功能词/标点近黑、振假名品牌蓝）。查词搜索框占位符为「搜索……」；
+  阅读页查词弹层不设关闭叉，读音与词形相同时不显示蓝色读音。
+  **所有页面转场**使用全局 `SlideOverPageTransitionsBuilder`：新页面从右侧
+  滑入覆盖静止的旧页面，禁止淡入淡出，避免深蓝顶栏出现白色残影。
 - **字体**：HarmonyOS Sans SC Regular，路径
   `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`。字体文件**不入库**（`.gitignore`
   已忽略）；用户自行从华为 HarmonyOS 设计资源下载，见 `assets/fonts/README.md`。
@@ -133,6 +140,15 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
     - 每词典词条上限可在设置中配置（默认无限制）。
     - 渲染结果 LRU 缓存 + 启动预热；`EntryPage` 单/多词条按选择展示。
     - 字体可切换 HarmonyOS Sans / 系统默认（持久化）。
+    - 阅读器打磨：阅读面、结果区与输入/分词/复制工具区均为纯白；工具区
+      底边仅 1px `divider` 浅色细线（类似查词搜索栏下方）；输入框无填充；
+      长文滚动不再出现厚重色块；分词结果不使用灰色（内容词蓝700、
+      功能词/标点近黑、振假名品牌蓝）。
+    - 查词搜索框占位符改为「搜索……」；阅读页查词弹层移除右上角关闭叉；
+      读音与词形相同时不显示蓝色读音行。
+    - **所有页面**改用全局右滑覆盖转场
+      （`SlideOverPageTransitionsBuilder`）：新页面从右侧滑入覆盖旧页面，
+      旧页面不移动、不淡出，避免深蓝顶栏出现白色残影。
     - `file_picker` 的文件选择会复制到 cache，词典路径改用目录选择器，
       保持原地读取。
     - **重要坑**：`flutter test integration_test/...` 会把
@@ -144,7 +160,7 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 83 tests passed
+flutter test     -> 89 tests passed
 flutter build apk --debug -> success
 ```
 
@@ -431,6 +447,10 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
 | 某个页面顶栏还是白底/深色字 | 不要页面局部覆盖 AppBar；全局 `AppTheme` 已统一深蓝白字（§5.8 #41） |
 | 设置页灰色提示被截断/太小 | 提示改为输入框外独立 14sp Text；不要用 `helperText` 单行显示（§5.8 #42） |
 | 查词结果词典名/条目数太小 | 16sp 同色；词条标题 24sp；摘要 14sp（§5.8 #45） |
+| 页面跳转时顶栏发白/页面互相淡入淡出 | 不要用默认 Material 转场；全局 `SlideOverPageTransitionsBuilder` 右滑覆盖（§5.8 #48） |
+| 阅读器输入区/结果区出现灰白色块分界或缺少收边 | 阅读面与工具区均白底；工具区仅加 1px `divider` 底边；输入框 `filled: false`（§5.8 #49） |
+| 阅读分词结果发灰、看不清 | 内容词蓝700、功能词/标点近黑、振假名品牌蓝；禁用 textSecondary（§5.8 #50） |
+| 查词弹层右上角关闭叉多余/ありがとう重复显示读音 | 移除关闭叉；仅 `hasDistinctReading` 时显示蓝字读音（§5.8 #51） |
 
 ### 5.7 Phase 1 设备实测经验（2026-10-27）
 
@@ -537,6 +557,27 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
       `dart run flutter_launcher_icons`；图标源提交，字体不入库；原生启动图
       使用 `drawable-nodpi/launch_icon.png`，Android 12+ 系统启动图使用
       adaptive icon（圆形遮罩属正常）。
+48. **误区：页面跳转沿用 Material 默认的淡入/缩放转场。**
+    - 表现：旧页与新页交叉淡化，深蓝顶栏在过渡瞬间发白，出现白色瑕疵。
+    - 正确做法：`AppTheme.light()` 的 `pageTransitionsTheme` 在全部平台使用
+      `SlideOverPageTransitionsBuilder`：新页面从右侧滑入覆盖旧页面，旧页面
+      静止、无淡入淡出/缩放。不要给单个页面自定义转场；`Navigator.push`
+      的 `MaterialPageRoute` 与 go_router 都会继承全局主题。
+49. **误区：阅读器工具区没有浅色收边，或为了收边把工具区改成灰色底带。**
+    - 表现：输入框/分词/复制区域与长文分词列表之间缺少自然分隔，或出现
+      用户不想要的灰色底带；用户明确要求**保留白色工具区**，只保留细边。
+    - 正确做法：阅读面、结果列表与工具区均为 `AppColors.surface` 白色；
+      工具区底边仅 1px `AppColors.divider` 细线（`reader-controls-surface`
+      的 `Border.bottom`）；`TextField` 设 `filled: false`，不额外铺色块。
+      不要为了分隔感把工具区改成 `background`。
+50. **误区：阅读器功能词、标点和振假名使用 `textSecondary` 灰色。**
+    - 正确做法：内容词蓝50底 + 蓝700；功能词/标点透明底 + `textPrimary`
+      近黑；振假名品牌蓝 `primary`。阅读器内不使用灰色文字，靠蓝色/黑色/
+      字重建立层级；对应规范见 `docs/design-tokens.md` §3.2/TokenChip。
+51. **误区：查词弹层保留右上角关闭叉；词形与读音相同仍显示蓝字读音。**
+    - 正确做法：阅读页查词弹层可下滑/上滑/点击遮罩关闭，移除关闭 IconButton；
+      仅在 `token.hasDistinctReading` 为 true 时显示蓝色读音行，
+      `ありがとう（ありがとう）` 这类重复读音只保留黑色词形。
 
 ## 6. 关键文件
 
@@ -671,5 +712,5 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
    TextBlockReadingOrder，做 ModelManager、拍照/相册与横向 OCR 阅读器串联。
 4. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
    颜色/字号，字体文件不入库；主页深蓝顶栏只用于主页，不要改全局 AppBarTheme。
-5. 每个阶段结束运行 analyze/test/debug build（当前 83 tests / 10 项设备测试），
+5. 每个阶段结束运行 analyze/test/debug build（当前 89 tests / 10 项设备测试），
    并记录到新的阶段状态文档；设备端测试按 §7 的命令运行。
