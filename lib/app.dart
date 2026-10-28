@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/theme/app_tokens.dart';
 import 'features/home/home_page.dart';
+import 'features/lookup/search_page.dart';
 import 'features/reader/reader_page.dart';
+import 'features/settings/dictionary_page.dart';
 import 'features/settings/settings_page.dart';
 
 GoRouter _createRouter() {
@@ -17,6 +20,11 @@ GoRouter _createRouter() {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(path: '/search', builder: (context, state) => const SearchPage()),
+      GoRoute(
+        path: '/dictionaries',
+        builder: (context, state) => const DictionaryPage(),
       ),
     ],
   );
@@ -40,23 +48,13 @@ class _RikaiAppState extends State<RikaiApp> {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF3F5F90);
-
     return MaterialApp.router(
       title: 'Rikai',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: seed),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: seed,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
-      themeMode: ThemeMode.system,
+      // Canonical v1 design is light blue/white; see docs/design-tokens.md.
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.light(),
+      themeMode: ThemeMode.light,
       routerConfig: _router,
     );
   }

@@ -68,5 +68,10 @@ Institute for Japanese Language and Linguistics). MDict dictionaries are
 supplied by the user; their original content licenses apply and they are not
 redistributed by this project.
 
+The HarmonyOS Sans SC UI font is supplied by the user (downloaded from Huawei's
+HarmonyOS design resources) and is not distributed with Rikai-Mobile. It is
+used under the HarmonyOS Sans Fonts License Agreement; Copyright Huawei Device
+Co., Ltd.
+
 Model binaries, UniDic files, MDict files and user data are intentionally
 excluded from the repository by .gitignore.

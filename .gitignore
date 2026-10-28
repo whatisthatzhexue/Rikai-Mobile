@@ -11,6 +11,12 @@
 /overlay-translator/
 /PaddleOCR4Android/
 
+# User-supplied fonts. HarmonyOS Sans is not redistributed with the app; see
+# assets/fonts/README.md for the download instructions.
+/assets/fonts/*.ttf
+/assets/fonts/*.otf
+/assets/fonts/*.ttc
+
 # Model binaries are downloaded at runtime (see assets/models/manifest.json).
 **/*.onnx
 **/*.nb

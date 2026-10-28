@@ -14,6 +14,20 @@ The checkout lives at `C:\Projects\Rikai-Mobile` (ASCII path). A previous copy
 under a CJK path required an `android.overridePathCheck=true` / `subst` drive
 workaround; that is no longer needed and has been removed.
 
+## Fonts
+
+The UI font is **HarmonyOS Sans SC Regular**. The font file is **not** part of
+the repository (`.gitignore` excludes `assets/fonts/*.ttf`). Download it from
+Huawei's HarmonyOS design resources and place it at:
+
+```text
+assets/fonts/HarmonyOS_Sans_SC_Regular.ttf
+```
+
+See `assets/fonts/README.md`. `pubspec.yaml` declares the family, so
+`flutter pub get`/build fails with a missing-asset error until the file exists.
+UI tokens and component rules are in `docs/design-tokens.md`.
+
 ## Build
 
 ```powershell
@@ -135,3 +149,40 @@ The test waits up to 120 seconds for the dictionary to become readable, so
 the grant can land after the test process has started. It verifies the real
 29-field UniDic output for `食べた東京`, line offsets and readings, and prints
 tokenization timing for a longer sample.
+
+## MDict integration test with the real dictionary
+
+`flutter test` installs and later uninstalls the app, so use the same app-op
+grant loop described above. Push the dictionary with ASCII-only file names
+(MDD discovery requires the MDX/MDD basenames to match):
+
+```bash
+export MSYS_NO_PATHCONV=1
+adb shell mkdir -p /sdcard/Download/rikai-mdict
+adb push "mdicts/講談社 日本語大辞典 第二版 双解版/講談社 日本語大辞典 第二版 双解版.mdx" \
+  /sdcard/Download/rikai-mdict/dict.mdx
+adb push "mdicts/講談社 日本語大辞典 第二版 双解版/講談社 日本語大辞典 第二版 双解版.mdd" \
+  /sdcard/Download/rikai-mdict/dict.mdd
+adb push "mdicts/講談社 日本語大辞典 第二版 双解版/NihongoDaijiten.css" \
+  /sdcard/Download/rikai-mdict/dict.css
+```
+
+```bash
+# Shell A
+export MSYS_NO_PATHCONV=1
+flutter test integration_test/mdict_android_test.dart -d emulator-5554 \
+  --dart-define=RIKAI_MDICT_PATH=/sdcard/Download/rikai-mdict/dict.mdx
+```
+
+```bash
+# Shell B: grant All Files Access as soon as the app is installed.
+while ! adb shell pm list packages | grep -q package:com.rikai.mobile; do
+  sleep 0.5
+done
+adb shell appops set com.rikai.mobile MANAGE_EXTERNAL_STORAGE allow
+```
+
+The suite verifies header metadata, `@@@LINK` resolution, hot lookup timing,
+prefix suggestions, MDD image bytes, HTML sanitization/CSS injection, the
+dictionary registry, and the full search → entry WebView flow. Results are
+recorded in `docs/phase2-status.md`.

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../core/theme/app_tokens.dart';
 import '../../services/mecab/unidic_validator.dart';
 import '../../services/storage/permission_service.dart';
 import '../../state/providers.dart';
@@ -109,18 +111,27 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsProvider);
+    final dictionaries = ref.watch(dictionaryRepositoryProvider);
+    final enabledDictionaries = dictionaries
+        .where((dictionary) => dictionary.enabled)
+        .length;
     final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.xxl,
+        ),
         children: [
           Text('UniDic', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -136,7 +147,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                       prefixIcon: Icon(Icons.folder_open_outlined),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.md),
                   Row(
                     children: [
                       FilledButton.icon(
@@ -155,31 +166,31 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                     ],
                   ),
                   if (_validation case final validation?) ...[
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.lg),
                     _ValidationCard(result: validation),
                   ],
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.xl),
           Text('存储权限', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           _buildPermissionCard(),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('应用外部私有目录', style: theme.textTheme.titleSmall),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.xs),
                   const SelectableText(
                     '/sdcard/Android/data/com.rikai.mobile/files/',
                     style: TextStyle(fontFamily: 'monospace'),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.xs),
                   Text(
                     '把 UniDic 目录放到这里无需「所有文件访问」权限；'
                     '在上方填写完整路径即可。',
@@ -191,9 +202,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.xl),
+          Text('MDict 词典', style: theme.textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.library_books_outlined),
+              title: const Text('管理词典'),
+              subtitle: Text(
+                dictionaries.isEmpty
+                    ? '尚未添加 .mdx 词典'
+                    : '已添加 ${dictionaries.length} 本 · '
+                          '$enabledDictionaries 本启用',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/dictionaries'),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
           Text('阅读显示', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Card(
             child: Column(
               children: [
@@ -286,14 +314,14 @@ class _ValidationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final valid = result.isValid;
-    final color = valid ? Colors.green.shade700 : theme.colorScheme.error;
+    final color = valid ? AppColors.success : theme.colorScheme.error;
 
     return Card(
       color: valid
           ? theme.colorScheme.surfaceContainerHighest
           : theme.colorScheme.errorContainer.withValues(alpha: 0.4),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -303,7 +331,7 @@ class _ValidationCard extends StatelessWidget {
                   valid ? Icons.check_circle_outline : Icons.error_outline,
                   color: color,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
                     valid ? '校验通过' : '校验失败',
@@ -312,19 +340,19 @@ class _ValidationCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(result.summary),
             if (valid) ...[
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 '词条数 ${_formatCount(result.entryCount ?? 0)} · '
                 '编码 ${result.charset} · 词典版本 ${result.version}',
                 style: theme.textTheme.bodySmall,
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
               Wrap(
-                spacing: 6,
-                runSpacing: 4,
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
                 children: [
                   for (final entry in result.fileSizes.entries)
                     Chip(
@@ -337,14 +365,14 @@ class _ValidationCard extends StatelessWidget {
                 ],
               ),
             ] else if (result.missingFiles.isNotEmpty) ...[
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 '缺少：${result.missingFiles.join('、')}',
                 style: theme.textTheme.bodySmall,
               ),
             ],
             if (!valid) ...[
-              const SizedBox(height: 6),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 '若路径正确，请确认已授予所有文件访问权限，或改用应用外部私有目录。',
                 style: theme.textTheme.bodySmall?.copyWith(

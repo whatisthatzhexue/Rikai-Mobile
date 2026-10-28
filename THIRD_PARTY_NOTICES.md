@@ -28,6 +28,9 @@ and `third_party/*/LICENSE`.
 
 - **UniDic** — GPL v2 / LGPL v2.1 / modified BSD; Copyright NINJAL.
 - **MDict dictionaries** — original content licenses apply.
+- **HarmonyOS Sans SC font** — Copyright Huawei Device Co., Ltd.; HarmonyOS
+  Sans Fonts License Agreement. Downloaded by the user into
+  `assets/fonts/`; not redistributed in this repository.
 
 ## Modifications
 

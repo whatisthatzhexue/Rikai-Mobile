@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/token.dart';
+import '../../core/theme/app_tokens.dart';
 import 'token_chip.dart';
 
 /// A line of tokens wrapped to the available width.
@@ -21,8 +22,8 @@ class ReaderBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 2,
-      runSpacing: 8,
+      spacing: AppSpacing.xxs,
+      runSpacing: AppSpacing.sm,
       crossAxisAlignment: WrapCrossAlignment.end,
       children: [
         for (final token in tokens)

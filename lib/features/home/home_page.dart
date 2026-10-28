@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/theme/app_tokens.dart';
+
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
@@ -20,53 +22,58 @@ class HomePage extends StatelessWidget {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.xl,
+        ),
         children: [
           Text('日语阅读 · 离线查词', style: theme.textTheme.headlineSmall),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
           Text(
             '拍照或输入日文，使用 UniDic 分词注音，点击单词查询 MDict 词典。',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.xl),
           _ActionCard(
             icon: Icons.photo_camera_outlined,
             title: '拍照识别',
             subtitle: '横向 PaddleOCR / 纵向 MangaOCR',
             onTap: () => _comingSoon(context, '拍照识别'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           _ActionCard(
             icon: Icons.text_fields,
             title: '输入文本',
             subtitle: '直接分词、注音、查词',
             onTap: () => context.push('/reader'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           _ActionCard(
             icon: Icons.search,
             title: '查词',
             subtitle: '在多本 MDict 词典中搜索',
-            onTap: () => _comingSoon(context, '查词'),
+            onTap: () => context.push('/search'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           _ActionCard(
             icon: Icons.history,
             title: '语料',
             subtitle: '保存照片、OCR 文本和分词结果',
             onTap: () => _comingSoon(context, '语料'),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.xl),
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('开始前', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.sm),
                   const _ChecklistItem(
                     icon: Icons.menu_book_outlined,
                     text: '在设置中填写 UniDic 目录（约 1.3GB，原地读取）',
@@ -83,9 +90,9 @@ class HomePage extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.lg),
           Text(
-            '离线分词与注音已接入；OCR 与词典查询将在后续阶段接入。',
+            '离线分词、注音与 MDict 查词已接入；OCR 与语料将在后续阶段接入。',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.outline,
             ),
@@ -120,11 +127,14 @@ class _ActionCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: Icon(icon, size: 32),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.sm,
+        ),
+        leading: Icon(icon, size: AppSizes.iconLarge, color: AppColors.primary),
         title: Text(title),
         subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: const Icon(Icons.chevron_right, size: AppSizes.icon),
         onTap: onTap,
       ),
     );
@@ -140,12 +150,12 @@ class _ChecklistItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18),
-          const SizedBox(width: 8),
+          Icon(icon, size: AppSizes.iconSmall),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(child: Text(text)),
         ],
       ),

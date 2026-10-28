@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/token.dart';
+import '../../core/theme/app_tokens.dart';
 import 'furigana_text.dart';
 
 /// One tappable word in the reader.
@@ -50,14 +51,14 @@ class TokenChip extends StatelessWidget {
       button: tap != null,
       child: Material(
         color: background,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadius.sm),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: tap == null ? null : () => tap(token),
           child: Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: punctuation ? 0 : 3,
-              vertical: 2,
+              horizontal: punctuation ? 0 : AppSpacing.xs,
+              vertical: AppSpacing.xxs,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,

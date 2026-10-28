@@ -16,9 +16,17 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
 - Flutter 工程名：`rikai_mobile`
 - 最低系统：minSdk 26；compileSdk/targetSdk 36；NDK 28.2.13676358
 - 仅 Android；不做 iOS、不做云 OCR/云翻译/LLM。
-- 仓库已有两次提交：`d0d94a3 feat: First Version`、`dc70cee docs: 更新文档`。
-  Phase 1 改动（代码、测试、文档）当前仍在工作树中未提交；不要擅自
-  `reset`/`commit`，除非用户明确要求。
+- **UI 强制规范**：所有现有与新增界面必须遵循 `docs/design-tokens.md`
+  （蓝/白、3x 设计稿 72/48/36 → Flutter 24/16/12sp、4pt 间距、紧凑组件）。
+  实现入口是 `lib/core/theme/app_tokens.dart`；页面不得硬编码颜色/字号/间距。
+- **字体**：HarmonyOS Sans SC Regular，路径
+  `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`。字体文件**不入库**（`.gitignore`
+  已忽略）；用户自行从华为 HarmonyOS 设计资源下载，见 `assets/fonts/README.md`。
+  构建前必须存在，否则 Flutter 报缺失资产。
+- 仓库已有三次提交：`d0d94a3 feat: First Version`、`dc70cee docs: 更新文档`、
+  `91dc386 feat: phase 1 UniDic tokenization, reader, and file access`。
+  Phase 2 与设计规范改动当前仍在工作树中未提交；不要擅自 `reset`/`commit`，
+  除非用户明确要求。
 
 ## 2. 已确认的架构决策（不要随意改）
 
@@ -56,7 +64,7 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
    **不得随包分发/不得提交**，下载前显示提示，支持本地导入。原项目 kha-white 是
    Apache-2.0，但当前下载源不是。INT8 draft 解码器 MVP 不做。
 
-## 3. 当前进展（Phase 0 + Phase 1 已完成）
+## 3. 当前进展（Phase 0 + Phase 1 + Phase 2 已完成）
 
 已完成：
 
@@ -80,12 +88,30 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
     （`MainActivity.kt`）；Android 11+ 检查/跳转，API ≤29 申请读取权限。
   - `integration_test/mecab_android_test.dart`：权限通道、真实 UniDic、
     长文本、UI 注音渲染共 4 项设备测试。
+- Phase 2（本次完成）：
+  - `lib/services/mdict/mdict_worker.dart`：长生命周期 worker isolate；
+    `probe`/`lookup`/`resource`/`close`；懒打开、`@@@LINK` 最多 3 层、
+    多词形候选、前缀建议、MDD 资源、错误码。
+  - `lib/core/models/dict_info.dart` + `lib/services/storage/dictionary_store.dart`
+    + `lib/state/providers.dart`：词典注册表、原地路径、同目录 MDD（同名）/
+    CSS（目录内全部）发现、启用/排序/重新校验/删除；不复制文件。
+  - `lib/core/utils/text_normalizer.dart`：NFKC、全半角、大小写、平/片假名、
+    stripkey 候选。
+  - `lib/services/mdict/mdd_key.dart`：MDD key 前导反斜杠/斜杠转换、file://
+    与 percent-encoding 处理。
+  - `lib/services/mdict/entry_renderer.dart` + `lib/features/lookup/*`：
+    HTML 清洗、CSS 注入、MDD 图片缓存与 `file://` 重写、离线 WebView
+    （JS/网络关闭，`entry://` 导航，外部链接拦截）、词条页多词典 Tab、
+    阅读区查词弹层、搜索页、词典管理页。
+  - `docs/design-tokens.md` + `lib/core/theme/app_tokens.dart`：蓝/白 token、
+    3x 72/48/36 → 24/16/12sp、4pt 间距、紧凑组件、TDesign 映射；已迁移
+    既有 UI。HarmonyOS Sans SC 字体按用户要求**不入库**。
 
 已验证：
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 41 tests passed
+flutter test     -> 67 tests passed
 flutter build apk --debug -> success
 ```
 
@@ -101,17 +127,27 @@ Analyzed 1100 tokens in 175 ms; non-standard layouts: 0
 reader page renders furigana for 食べた東京
 ```
 
-主机 MDict spike（`tool/spike_mdict.dart`，在隔离 Dart 包中运行）：
+真实 MDict 设备集成测试（`integration_test/mdict_android_test.dart`，5 项全部通过）：
 
-- `initDict()` ~200ms；463,312 条；RSS ~400MB；
-- `locateAll("東京")` <1ms；词条是 `@@@LINK=とうきょう【東京】`，解析后得到完整 HTML；
-- 前缀搜索正常。
+```text
+MdictService.open=716ms probe=675ms title=講談社 日本語大辞典 第二版 双解版
+entries=463312 encoding=UTF-8 version=2.0
+lookup 東京=425ms matched=東京 headword=とうきょう【東京】 html=724
+hot lookup 東京=1ms
+suggestions=[とうきょうえき, とうきょうえき【東京駅】]
+resource JC_Z24Z/A471.png -> 334 bytes
+rendered 2 entries, html=19273
+repository: 講談社 日本語大辞典 第二版 双解版 463312 entries
+search page opens a dictionary entry with the real MDict
+```
+
+主机 MDict spike（`tool/spike_mdict.dart`，在隔离 Dart 包中运行）仍然有效：
+463,312 条、`@@@LINK` 重定向、前缀搜索正常。
 
 **尚未完成 / 下一步：**
 
-- Phase 2：MDict worker/repository、lookup 与 `@@@LINK`、离线 WebView 渲染、
-  搜索页、词典管理页。
-- OCR 插件仍是骨架；PP-OCRv5/MangaOCR 模型没有实际执行过（Phase 3/4）。
+- Phase 3：横向 PaddleOCR + 拍照；先补 ORT 模型冒烟（见 §4）。
+- Phase 4：纵向 MangaOCR、自动方向。
 - 识别历史、语料保存、引导页未实现（Phase 5）。
 - Release APK 尚未构建（不要在没有必要时重复跑长构建）。
 - 没有 arm64 真机；只有 x86_64 模拟器 `Medium_Phone_API_36.1`。
@@ -134,18 +170,11 @@ reader page renders furigana for 食べた東京
 - 在插件里打开 ORT session，跑一张合成日文图片，确认模型算子/输入输出名；
 - 记录耗时/内存。
 
-### Phase 2：MDict 查词/搜索/渲染
+### 已完成：Phase 2
 
-- `lib/services/mdict/mdict_worker.dart`：长生命周期 isolate，持有 `DictReader`。
-- `dictionary_repository.dart`：路径、元数据、排序、启用、失效检测（不复制）。
-- `lookup`：归一化（NFKC/全半角/平片假名/stripkey）→ `locateAll` →
-  `readOneMdx` → 解析 `@@@LINK=`（最多 3 层）→ 多词典分组。
-- 无命中：`search(prefix, limit: 30)`；活用形可先用 MeCab 取 lemma。
-- `EntryRenderer`：`package:html` 清洗脚本/iframe/对象/事件属性；注入外部 CSS；
-  MDD 资源按需提取并重写 `src`。
-- `flutter_inappwebview`：`javaScriptEnabled: false`、`blockNetworkLoads: true`、
-  仅本地文件；`shouldOverrideUrlLoading` 处理 `entry://` 与外部 URL。
-- 搜索页 + 词典管理页 + 词条页。
+实现与验收见 §3、§6 和 `docs/phase2-status.md`。不要重写 MDict worker、
+lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制：
+每词典最多 3 条、CSS 发现为目录内全部、MDD 缓存未清理、无模糊搜索。
 
 ### Phase 3：横向 PaddleOCR + 拍照
 
@@ -354,6 +383,11 @@ reader page renders furigana for 食べた東京
 | 集成测试 `allFilesAccess=false` 或 `Cannot open file` | `flutter test` 重装应用丢失 appops；在测试运行期间循环重新授权（§5.7 #27） |
 | 助動詞/助詞 feature 数为 30/31、注音为空 | 引号内逗号被误拆；用 `mecab_output_parser.dart`（§5.2 #8） |
 | 分词失败后 loading 永不结束 | Riverpod 3 默认重试；给 provider 设 `retry: (_, __) => null`（§5.7 #28） |
+| MDict 查词命中但 WebView 图片空白 | 用 `mdd_key.dart` 生成 key 变体，资源写入缓存并重写为 `file://`（§5.7 #32） |
+| 词条页空白 / CSS 图片不加载 | 使用 `InAppWebViewInitialData` + file base URL、`allowFileAccess: true`（§5.7 #33） |
+| 词典 HTML 注入或外部资源加载 | `EntryRenderer` 清洗 + 禁用 JS/网络；不要绕过（§5.7 #34） |
+| 假名/全角查询无命中 | 使用 `text_normalizer.dart` 的 NFKC/假名/stripkey 候选 |
+| 构建报 `unable to find asset ... HarmonyOS_Sans_SC_Regular.ttf` | 字体不入库；按 `assets/fonts/README.md` 下载到指定路径 |
 
 ### 5.7 Phase 1 设备实测经验（2026-10-27）
 
@@ -375,21 +409,59 @@ reader page renders furigana for 食べた東京
 30. **误区：widget 测试里用 `pumpAndSettle` 等待真实文件 I/O 或权限通道。**
     - 正确做法：mock `rikai/storage_permission`；真实文件 I/O 用 `tester.runAsync`
       让出事件循环，否则无限 spinner 会让 `pumpAndSettle` 超时。
+31. **误区：把 HarmonyOS Sans 字体提交到仓库，或页面里硬编码颜色/字号。**
+    - 正确做法：`assets/fonts/*.ttf` 已被 `.gitignore` 忽略；用户按
+      `assets/fonts/README.md` 自行下载。UI 必须使用
+      `lib/core/theme/app_tokens.dart` 与 `AppTheme.light()`，禁止散落
+      `Color(0x...)`/`fontSize: 数字`（阅读区用户字号除外）；规范见
+      `docs/design-tokens.md`。
+32. **误区：把 MDD key 直接当作 HTML 的 `src` 交给 `DictReader.locate`。**
+    - 正确做法：HTML 常写 `JC_Z24Z/A471.png`，MDD 实际 key 是
+      `\JC_Z24Z\A471.png`。必须用 `lib/services/mdict/mdd_key.dart` 生成
+      前导反斜杠、斜杠/反斜杠、file:// 与 percent-encoded 变体。
+33. **误区：WebView 直接加载原始 MDict HTML，或用字符串 loadData 而没有
+      file base URL。**
+    - 正确做法：`EntryRenderer` 清洗后，用 `InAppWebViewInitialData` +
+      `baseUrl: WebUri('file://.../<dictId>/')`；`allowFileAccess: true`、
+      `javaScriptEnabled: false`、`blockNetworkLoads: true`。MDD 图片先写入
+      缓存目录并重写为绝对 `file://` URL，否则 Android WebView 图片空白。
+34. **误区：只移除 `</style>` 就算清理了词典 CSS。**
+    - 正确做法：CSS 注入前移除 `</style>`、`<script>` 等标签序列
+      （`EntryRenderer._stripStyleClose`），防止字典 CSS 逃逸出 `<style>`。
+      同时清洗 `on*`、`srcdoc`、`srcset`、`javascript:`/`vbscript:`/
+      `data:text/html`，并阻断网络图片。
+35. **误区：用 dictionary 原始文件名/中文路径做设备集成测试，或在搜索
+      loading 时用 `pumpAndSettle`。**
+    - 正确做法：把测试词典以 ASCII 名 push 为
+      `/sdcard/Download/rikai-mdict/{dict.mdx,dict.mdd,dict.css}`（MDX/MDD
+      必须同 basename 才会自动发现）；`flutter test` 会重装应用，需后台
+      循环重授 All Files Access；搜索/词条页有持续动画时用定时
+      `tester.pump` 轮询，不要 `pumpAndSettle`。
 
 ## 6. 关键文件
 
 ```text
 lib/main.dart, lib/app.dart                                   # 入口 / go_router
+lib/core/theme/app_tokens.dart                                # UI token / AppTheme
 lib/features/home/home_page.dart                              # 首页
 lib/core/models/token.dart                                    # Token / 29 字段映射
+lib/core/models/dict_info.dart                                # 词典注册表模型
+lib/core/models/lookup_models.dart                            # lookup 结果分组
 lib/core/utils/kana.dart                                      # 假名转换
+lib/core/utils/text_normalizer.dart                           # NFKC/假名/stripkey 候选
 lib/services/mecab/unidic_validator.dart                      # UniDic 目录/头部校验
 lib/services/mecab/mecab_output_parser.dart                   # 引号感知 CSV 解析
 lib/services/mecab/mecab_service.dart                         # 私有 rc + 长生命周期 isolate
+lib/services/mdict/mdict_worker.dart                          # MDict isolate / lookup / MDD
+lib/services/mdict/mdd_key.dart                               # MDD key 变体
+lib/services/mdict/entry_renderer.dart                        # HTML 清洗/CSS/MDD 重写
 lib/services/storage/settings_store.dart                      # SharedPreferences 设置
+lib/services/storage/dictionary_store.dart                    # 词典注册表持久化
 lib/services/storage/permission_service.dart                  # 权限 MethodChannel Dart 侧
 lib/features/reader/                                          # 文本阅读区
+lib/features/lookup/                                          # 查词弹层/搜索/词条/WebView
 lib/features/settings/settings_page.dart                      # UniDic/权限/显示设置
+lib/features/settings/dictionary_page.dart                    # 词典管理
 lib/state/providers.dart                                      # Riverpod providers
 packages/mecab_for_dart/                                      # vendored MeCab（补丁见 MODIFICATIONS.md）
 packages/rikai_ocr/                                           # OCR 插件骨架 + ORT
@@ -398,11 +470,15 @@ android/app/src/main/kotlin/com/rikai/mobile/MainActivity.kt  # 权限 MethodCha
 android/app/src/main/AndroidManifest.xml                      # 文件权限
 android/app/build.gradle.kts                                  # minSdk 26 / NDK 28
 docs/DEVELOPMENT_PLAN.md                                      # 已批准计划
-docs/phase0-status.md, docs/phase1-status.md                  # 阶段验证结果
+docs/design-tokens.md                                         # UI 强制规范
+assets/fonts/README.md                                        # 字体下载说明（字体不入库）
+docs/phase0-status.md, docs/phase1-status.md,
+docs/phase2-status.md                                         # 阶段验证结果
 docs/dev-setup.md                                             # 构建/数据/缓存/集成测试
 docs/adr/                                                     # 三个架构决策
 tool/spike_mdict.dart                                         # MDict 主机 spike
 integration_test/mecab_android_test.dart                      # 设备端 MeCab/权限/UI 测试
+integration_test/mdict_android_test.dart                      # 设备端 MDict/渲染/UI 测试
 third_party/overlay-translator/                               # Apache 许可/修改说明
 third_party/paddleocr4android/                                # MIT 许可/可选后端说明
 ```
@@ -439,6 +515,18 @@ flutter test integration_test/mecab_android_test.dart -d emulator-5554 \
 
   测试会在安装后/卸载前短暂存在；需用后台循环重新授予
   `MANAGE_EXTERNAL_STORAGE`，详见 `docs/dev-setup.md`。
+- 设备端 MDict 测试（把词典以 ASCII 名 push 到
+  `/sdcard/Download/rikai-mdict/{dict.mdx,dict.mdd,dict.css}`）：
+
+```bash
+export MSYS_NO_PATHCONV=1
+flutter test integration_test/mdict_android_test.dart -d emulator-5554 \
+  --dart-define=RIKAI_MDICT_PATH=/sdcard/Download/rikai-mdict/dict.mdx
+```
+
+  同样需要 appops 授权循环；MDX/MDD 必须同 basename 才会自动发现。
+- 字体：构建前按 `assets/fonts/README.md` 下载 HarmonyOS Sans SC 到
+  `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`（不入库）。
 - Debug APK：`build/app/outputs/flutter-apk/app-debug.apk`。
 - Release（需要时）：`flutter build apk --release --target-platform android-arm64 --split-per-abi`。
 - 模拟器：`flutter emulators --launch Medium_Phone_API_36.1`（x86_64）。
@@ -467,10 +555,12 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
 
 ## 8. 建议的下一个动作
 
-1. 运行 `git status`；Phase 1 改动尚未提交，不要覆盖或擅自 commit。
-2. 进入 Phase 2：先写 `DictionaryRepository` + `DictionaryWorker` isolate，
-   再实现 lookup/`@@@LINK`/`EntryRenderer`/WebView 与搜索页。
-3. 复用现有阅读区：把 token 详情 sheet 中的查词候选接到 MDict lookup。
-4. ORT 模型冒烟可在 Phase 3 前补做（见 §4）。
-5. 每个阶段结束运行 analyze/test/debug build，并记录到
-   `docs/phase1-status.md` 之后的新阶段状态文档；设备端测试按 §7 的命令运行。
+1. 运行 `git status`；Phase 2 与设计规范改动尚未提交，不要覆盖或擅自 commit。
+2. 先补 ORT 模型冒烟（PaddleOCR det/rec、MangaOCR encoder/decoder，
+   hf-mirror 可下载），确认 ORT session 与输入输出。
+3. 进入 Phase 3：抽取 PaddleDetector/PaddleRecognizer/DBPostprocessor/
+   TextBlockReadingOrder，做 ModelManager、拍照/相册与横向 OCR 阅读器串联。
+4. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
+   颜色/字号，字体文件不入库。
+5. 每个阶段结束运行 analyze/test/debug build，并记录到新的阶段状态文档；
+   设备端测试按 §7 的命令运行。

@@ -96,4 +96,27 @@ void main() {
       findsWidgets,
     );
   });
+
+  testWidgets('search page shows the empty dictionary state', (tester) async {
+    await _pumpApp(tester);
+
+    await tester.tap(find.text('查词'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('尚未添加 MDict 词典'), findsOneWidget);
+    expect(find.text('管理词典'), findsOneWidget);
+  });
+
+  testWidgets('dictionary management opens from settings', (tester) async {
+    await _pumpApp(tester);
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('管理词典'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('MDict 词典'), findsOneWidget);
+    expect(find.text('尚未添加词典'), findsOneWidget);
+    expect(find.text('添加词典'), findsOneWidget);
+  });
 }

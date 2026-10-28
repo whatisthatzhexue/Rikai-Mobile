@@ -51,6 +51,8 @@ dependencies:
     path: packages/rikai_ocr
   mecab_for_dart:
     path: packages/mecab_for_dart
+  unorm_dart: ^0.3.3
+  html: ^0.15.7
 
 dev_dependencies:
   flutter_test:
@@ -79,6 +81,15 @@ flutter:
   assets:
     - assets/models/
     - assets/licenses/
+
+  # HarmonyOS Sans SC is NOT distributed with this repository. Download it and
+  # place it at assets/fonts/HarmonyOS_Sans_SC_Regular.ttf before building.
+  # See assets/fonts/README.md and docs/design-tokens.md.
+  fonts:
+    - family: HarmonyOS Sans SC
+      fonts:
+        - asset: assets/fonts/HarmonyOS_Sans_SC_Regular.ttf
+          weight: 400
 
   # To add assets to your application, add an assets section, like this:
   # assets:
