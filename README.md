@@ -1,14 +1,18 @@
 # Rikai-Mobile
 
-An offline Android Japanese reader and dictionary. Take a photo or paste text,
-run OCR (PaddleOCR for horizontal, MangaOCR for vertical), tokenize with the
-user's UniDic, show furigana, and look up any word in the user's MDict
-dictionaries — all in one app, without network access.
+An Android Japanese reader and dictionary whose core runs on-device. Take a
+photo or paste text, run OCR (PaddleOCR for horizontal, MangaOCR for vertical),
+tokenize with the user's UniDic, show furigana, and look up any word in the
+user's MDict dictionaries. OCR models may be downloaded during setup; after
+that, OCR, tokenization, and dictionary lookup are offline. Phase 6 (planned)
+adds an optional dictionary assistant that can call a user-configured LLM
+provider; it is not part of the current build.
 
 ## Status
 
 Phases 1–4 are working end to end on the Android emulator with a real
-UniDic and MDict dictionary:
+UniDic and MDict dictionary. Phase 5 is the next implementation phase; the
+Phase 6 dictionary assistant is currently design-only and is not implemented.
 
 - In-place MeCab/UniDic tokenization in a long-lived worker isolate, private
   `mecabrc`, CSV-aware parsing of quoted UniDic fields
@@ -53,12 +57,30 @@ UniDic and MDict dictionary:
   the existing model page; the unknown MangaOCR license is confirmed first
 - OCR text flows into the same reader and MDict lookup UI
 
-Next: Phase 5 (full corpus/history management, onboarding, release polish). See
+### Phase 6 planned: dictionary assistant (design only)
+
+Phase 6 is documented but **not implemented**. Once Phase 5 is complete and the
+design is approved, the planned home screen has five actions:
+`拍照识别`, `查句子`, `查单词`, `历史记录`, and the new `词典助手`.
+
+The planned assistant would combine local OCR, UniDic tokenization, and MDict
+lookup as schema-defined tools. It would support strict mode (every factual
+answer must be grounded in dictionary evidence) and loose mode (dictionary-based
+plus clearly marked model commentary), with user-selected small/complex models,
+clickable dictionary citations, a local dictionary-familiarization document, and
+user-approved furigana/annotation rules. Images would only be converted by
+on-device OCR and must never be sent to the LLM as vision input. The detailed
+design, privacy boundary, open questions, and acceptance criteria are in
+[docs/phase6-agent-design.md](docs/phase6-agent-design.md).
+
+Next: Phase 5 (full corpus/history management, onboarding, release polish).
+Phase 6 will start only after Phase 5 and explicit approval. See
+[docs/phase6-agent-design.md](docs/phase6-agent-design.md),
 [docs/phase4-status.md](docs/phase4-status.md),
 [docs/phase3-status.md](docs/phase3-status.md),
 [docs/phase2-status.md](docs/phase2-status.md),
 [docs/phase1-status.md](docs/phase1-status.md) and
-[docs/phase0-status.md](docs/phase0-status.md) for verified results.
+[docs/phase0-status.md](docs/phase0-status.md) for design and verified results.
 
 ## Requirements
 
@@ -68,6 +90,15 @@ Next: Phase 5 (full corpus/history management, onboarding, release polish). See
 - **HarmonyOS Sans SC Regular**, downloaded by the user (not in this repository):
   place it at `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`; see
   [assets/fonts/README.md](assets/fonts/README.md)
+
+### Phase 6 planned (not required for the current build)
+
+- Network access only when the optional dictionary assistant is configured and
+  the user explicitly sends a request.
+- A user-supplied API key and provider/model configuration for DeepSeek, Claude,
+  or another supported endpoint.
+- API keys must never be committed, logged, exported, or included in issue
+  reports. Images remain local and are processed by on-device OCR only.
 
 ## Build
 
@@ -82,7 +113,9 @@ flutter build apk --debug
 ```
 
 See [docs/dev-setup.md](docs/dev-setup.md) for toolchain and device setup.
-UI work must follow [docs/design-tokens.md](docs/design-tokens.md).
+UI work must follow [docs/design-tokens.md](docs/design-tokens.md). The current
+build contains no Agent/provider implementation, so Phase 6
+provider/fake-server tests are not part of the current build or test suite.
 
 ## Documents
 
@@ -94,6 +127,7 @@ UI work must follow [docs/design-tokens.md](docs/design-tokens.md).
 - [Phase 3 status](docs/phase3-status.md)
 - [Phase 3.5 capture/import status](docs/phase3.5-status.md)
 - [Phase 4 vertical OCR status](docs/phase4-status.md)
+- [Phase 6 agent design (planned)](docs/phase6-agent-design.md)
 - [Development setup](docs/dev-setup.md)
 - [Models](docs/models.md)
 - [Architecture decisions](docs/adr/)
@@ -105,3 +139,9 @@ Rikai-Mobile adapts code from overlay-translator (Apache-2.0) and evaluates
 PaddleOCR4Android (MIT). MeCab/mecab_for_dart are BSD-3. ONNX Runtime is MIT.
 UniDic and MDict dictionaries are supplied by the user and are not
 redistributed. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+The planned Phase 6 assistant would use user-supplied API keys and a
+user-selected remote LLM provider. Provider terms and privacy policies apply;
+Rikai-Mobile would not redistribute LLM weights, keys, or conversations. Images
+would remain on-device; only locally extracted text and tool results would be
+sent when the user explicitly initiates a request.

@@ -1,8 +1,12 @@
 # Rikai-Mobile 开发计划
 
-> 目标：Android 单端、完全离线的 Flutter 日语阅读/查词应用。用户拍照或输入文本 → 横向 PaddleOCR / 纵向 MangaOCR → UniDic 分词与注音 → 点击单词查询用户自备的 MDict 词典；支持搜索查词、词典偏好、语料保存。
+> 目标：Android 单端、核心离线的 Flutter 日语阅读/查词应用。用户拍照或输入文本 → 横向 PaddleOCR / 纵向 MangaOCR → UniDic 分词与注音 → 点击单词查询用户自备的 MDict 词典；支持搜索查词、词典偏好、语料保存。
 >
 > 本计划基于 2026-10-26 对两个克隆仓库、UniDic/MDict 实际数据、本机 Flutter/Android 环境和网络连通性的调研。已确认的产品/技术决策见 §3。
+>
+> **Phase 6（Mdict Agent）是后期设计扩展，未纳入本 MVP 的时间估算。** 设计指南见
+> `docs/phase6-agent-design.md`。MVP 的 OCR/UniDic/MDict 核心仍离线；Phase 6 才会
+> 引入用户自备 API Key 的可选在线 LLM。Phase 6 开工前需 Phase 5 完成并经用户批准。
 
 ---
 
@@ -15,7 +19,7 @@
 3. 文本经 UniDic 分词，每个词单元显示注音；点击词单元自动查 MDict。
 4. 支持基础搜索查词、词典选择偏好（本次搜索使用哪些词典）。
 5. UniDic 与 MDict 全部由用户提供，应用只负责加载、分词、信息提炼与词典检索。
-6. 完全离线；尊重 overlay-translator（Apache-2.0）与 PaddleOCR4Android（MIT）的许可证；模型大文件不入库。
+6. MVP 核心完全离线；尊重 overlay-translator（Apache-2.0）与 PaddleOCR4Android（MIT）的许可证；模型大文件不入库。Phase 6 的可选在线 Agent 见 §11，不属于本 MVP 的离线承诺。
 
 本期交付：可安装的 Android APK（arm64-v8a）、完整源码、开发/构建文档、许可证清单。
 
@@ -108,6 +112,10 @@
 | 分词 | MeCab + UniDic；vendored `mecab_for_dart` 2.0.5（BSD-3），原生资源构建 |
 | 状态管理 | Riverpod + go_router；SQLite 存历史；SharedPreferences/JSON 存设置 |
 | 最低系统 | minSdk 26，target/compileSdk 36 |
+
+> 表中“离线/本地”均指 MVP 核心。Phase 6 的词典助手是 post-MVP 可选扩展，
+> 用户可配置远程文本 LLM；它不是云 OCR，不使用视觉能力，图片仍只在本机 OCR。
+> 详见 `docs/phase6-agent-design.md` 和 §11。
 
 > 关于“仅原地路径”的重要后果：Android 11+ 需要 `MANAGE_EXTERNAL_STORAGE`（所有文件访问）才能读取 `/storage/emulated/0/...` 下的 UniDic/MDict；若用户拒绝，只能把文件放在 `/storage/emulated/0/Android/data/<包名>/files/` 等应用可访问目录，并在设置中填写该路径。应用不会复制 1.3GB 的 UniDic。该权限在 Google Play 上受限，本项目按 sideload/学习用途设计。
 
@@ -220,7 +228,8 @@ Rikai-Mobile/
 - 可选：`unorm_dart`（NFKC）、`flutter_launcher_icons`
 
 > 不引入 `flutter_html`：词典 CSS/表格/图片复杂，WebView 更接近桌面词典效果。
-> 不引入 Paddle-Lite/OpenCV；不引入 ML Kit/云 OCR/翻译/ASR/LLM。
+> MVP 不引入 Paddle-Lite/OpenCV、ML Kit、云 OCR/翻译/ASR/LLM。Phase 6 的
+> 可选 Agent 是独立的后期扩展，不在本 MVP 依赖表内；详见 §11。
 
 ---
 
@@ -536,6 +545,9 @@ EventChannel: model load/prewarm/OCR stage progress
 | 5 | 语料保存 + 打磨 + 发布 | 3–4 天 |
 | **合计** | | **17–23 天** |
 
+> Phase 6（Mdict Agent）是 post-MVP 设计扩展，不计入上表的工期和 MVP 范围；
+> 见 §11。
+
 ---
 
 ## 7. 风险与缓解
@@ -630,6 +642,7 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 - 生词本/收藏、导出/分享、云同步、多语言 UI。
 - 批量多页 OCR、自动裁边/透视校正 UI。
 - 模糊搜索/编辑距离、词典内部全文检索。
+- MVP 不做 LLM/Agent；Phase 6 的「词典助手」是后期可选扩展，见 §11。
 
 ---
 
@@ -640,3 +653,66 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 3. 确认 spike 结果后，按 Phase 1 → 5 顺序推进；每个 Phase 结束提交可运行版本与验收记录。
 4. 首个可演示里程碑：Phase 2（文本/OCR 文本 → 分词注音 → 点击查词），此时 OCR 可暂用占位/手动输入。
 5. 第二个可演示里程碑：Phase 4（横/竖 OCR 全链路）。
+
+---
+
+## 11. Phase 6 — Mdict Agent（后期设计，未纳入 MVP 估算）
+
+> 状态：**设计草案，未实现**。设计细节、schema 建议、开放问题和验收标准见
+> `docs/phase6-agent-design.md`。Phase 6 依赖 Phase 5 完成，并依赖 Phase 1–4
+> 已提供的 OCR、UniDic、MDict 接口；开工前需要用户单独批准。
+
+### 11.1 目标
+
+在现有阅读/查词应用上增加「词典助手」：把本地 OCR、UniDic 分词和 MDict 查词
+组织成 schema 化的工具，支持图片、文字或图片+文字输入，由用户配置的远程 LLM
+完成严格/宽松两种模式的学习辅助。核心 OCR/分词/查词仍离线；Agent 仅在用户
+配置 API Key 并主动请求时联网。
+
+### 11.2 主页与命名
+
+Phase 6 计划将主页固定为五个按钮：
+
+1. 拍照识别（不变）
+2. 查句子（原文本阅读；当前实现名为「输入文本」）
+3. 查单词（原查词）
+4. 历史记录（原语料）
+5. 词典助手（新 Agent）
+
+当前实现仍是四个按钮；Phase 6 UI 实施前不得提前改名或添加按钮。
+
+### 11.3 产品要求
+
+- **两种模式**：严格模式必须以词典工具结果为事实依据；宽松模式允许模型补充，
+  但必须与词典事实分开标注。
+- **模型分流**：简单任务（词典查询/整理）用用户选择的 small model；复杂任务
+  （词义推理/规则生成）用 complex model。
+- **输入**：图片、文字、图片+文字；图片只经本机 OCR，严禁发送给 LLM 视觉接口。
+- **输出**：安全 Markdown、ruby、日语声调横线、可点击词典来源。
+- **工具集**：本地 OCR、UniDic tokenization、MDict lookup/suggest，全部通过
+  JSON Schema 调用。
+- **引用**：`[来源N]` 由 orchestrator 发放并映射到真实 MDict 词条；点击来源打开
+  现有查词 sheet，再点击词条进入现有词条页。
+- **词典熟悉期**：首次使用 MDict/UniDic 前生成探针样本和 Markdown 规则说明，
+  用户确认后缓存；词典不变则复用。
+- **注音/标注规则**：用户可让 Agent 生成 app 专用安全 DSL，统一影响所有
+  UniDic token 展示；禁止执行任意代码。
+- **隐私**：API Key 安全存储，日志/导出脱敏；不发送图片、词典文件、UniDic 文件；
+  核心功能不依赖 provider 配置。
+
+### 11.4 建议实施顺序
+
+1. provider 配置、安全存储、隐私同意、fake-provider 测试骨架。
+2. OCR/UniDic/MDict tool adapters、JSON Schema、citation 基础设施。
+3. Agent loop、严格/宽松模式、small/complex model 路由。
+4. Markdown/ruby/声调渲染、citation UI、错误/空态。
+5. 词典熟悉期工作流和缓存。
+6. 注音/标注规则 DSL、预览、全局渲染接入。
+7. 会话/历史、性能/内存、许可与发布验收。
+
+### 11.5 验收
+
+Phase 6 的验收必须覆盖：五按钮 UI、无图片上云、严格引用、宽松补充标注、模型
+路由、citation 点击、熟悉文档复用/失效、annotation DSL 全局生效、API Key 脱敏、
+provider 失败恢复，以及未配置 provider 时核心离线功能不回归。完整清单见
+`docs/phase6-agent-design.md`。

@@ -17,3 +17,16 @@ texts used by the in-app license page are under `assets/licenses/`.
 - dict_reader: MIT, Copyright 2024 Mumulhl.
 - UniDic: GPL v2 / LGPL v2.1 / modified BSD; user-supplied, not distributed.
 - MDict dictionaries: user-supplied; original content licenses apply.
+
+## Phase 6 remote LLM providers (planned)
+
+Phase 6 is not implemented. When it is added, the dictionary assistant will use a
+user-supplied API key and a user-selected provider (for example DeepSeek or
+Claude). Provider terms of service and privacy policies apply to requests; this
+project does not redistribute LLM weights, API keys, prompts, or conversations.
+Images will remain on-device and be converted by local OCR; only locally
+extracted text, tokenization results, and dictionary tool results would be sent
+when the user explicitly initiates a request. API keys must not be committed,
+logged, or exported. If an SDK or other provider dependency is added later,
+update this file, `THIRD_PARTY_NOTICES.md`, `NOTICE`, and `assets/licenses/`
+as needed.

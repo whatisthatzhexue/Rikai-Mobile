@@ -51,6 +51,25 @@ does not redistribute it. The download screen shows this warning and asks for
 confirmation. Users may import an ONNX export they produced themselves from the
 Apache-2.0 model.
 
+## Phase 6 remote LLM configuration (planned)
+
+Phase 6 is not implemented. Unlike OCR models, the planned dictionary assistant
+does not add local LLM weights to `assets/models/manifest.json` or the model
+directory. LLM inference is hosted by a user-selected provider.
+
+Planned configuration:
+
+- provider (DeepSeek, Claude, or an OpenAI-compatible endpoint);
+- base URL where applicable;
+- API key (secure storage only, never in this repository or logs);
+- `smallModel` for simple lookup/formatting tasks;
+- `complexModel` for reasoning and rule generation.
+
+The existing OCR model manager remains unchanged. The Agent must never use a
+provider's image/vision endpoint, and its model configuration must not be
+required for the offline OCR/UniDic/MDict core. See
+`docs/phase6-agent-design.md` for privacy and acceptance details.
+
 ## Not used
 
 - `detector-v4-s_int8.onnx` (comic bubble detector): only needed for overlay

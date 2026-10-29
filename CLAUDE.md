@@ -1,28 +1,35 @@
 # CLAUDE.md — Rikai-Mobile handoff
 
-> 给下一个 agent 的工作交接。先读本文件，再读 `docs/DEVELOPMENT_PLAN.md`（已批准的完整开发计划）、
-> `docs/phase0-status.md` 和 `docs/phase1-status.md`（当前验证结果）。
+> 给下一个 agent 的工作交接。先读本文件，再读 `docs/DEVELOPMENT_PLAN.md`（MVP 计划）、
+> `docs/phase4-status.md`（当前验证结果）和 `docs/phase6-agent-design.md`
+> （Phase 6 设计草案，未实现）。
 > 用户使用中文沟通；代码/标识符用英文。
 
 ## 1. 项目是什么
 
-Android 单端、完全离线的 Flutter 日语阅读/查词应用：
+Android 单端的 Flutter 日语阅读/查词应用。**核心离线**：拍照或输入文本 →
+横向 PaddleOCR / 纵向 MangaOCR → UniDic（用户自备）分词与注音 → 点击单词查询
+用户自备的 MDict 词典；另有搜索查词、词典偏好、语料保存。
 
-拍照或输入文本 → 横向 PaddleOCR / 纵向 MangaOCR → UniDic（用户自备）分词与注音 →
-点击单词查询用户自备的 MDict 词典；另有搜索查词、词典偏好、语料保存。
+Phase 6（`docs/phase6-agent-design.md`，**设计草案，未实现**）计划增加「词典助手」：
+可选地调用用户配置的远程 LLM（DeepSeek/Claude 等），把本地 OCR、UniDic、MDict
+作为工具集；图片只在本机 OCR，禁止视觉上云。核心离线功能不得依赖该 Agent。
 
 - 项目根目录：`C:\Projects\Rikai-Mobile`（ASCII 路径，旧的 `E:\MyData\大工\...` 已不存在）
 - 包名/applicationId/namespace：`com.rikai.mobile`
 - Flutter 工程名：`rikai_mobile`
 - 最低系统：minSdk 26；compileSdk/targetSdk 36；NDK 28.2.13676358
-- 仅 Android；不做 iOS、不做云 OCR/云翻译/LLM。
+- 仅 Android；不做 iOS、不做云 OCR/云翻译。Phase 6 可选 Agent 允许用户配置的
+  **文本 LLM**（不是云 OCR/视觉）；未实现前不得默认联网或把图片发给模型。
 - **UI 强制规范**：所有现有与新增界面必须遵循 `docs/design-tokens.md`
   （蓝/白、3x 设计稿 72/48/36 → Flutter 24/16/12sp、4pt 间距、紧凑组件）。
   实现入口是 `lib/core/theme/app_tokens.dart`；页面不得硬编码颜色/字号/间距。
   二次修正后：**所有页面**统一深蓝顶栏（`#003A99`、白字白图标、
-  词条页 TabBar 白字），主页左侧抽屉为直角；主页四个 72dp 功能按钮
+  词条页 TabBar 白字），主页左侧抽屉为直角；主页**当前**四个 72dp 功能按钮
   使用与顶栏相同的深蓝色，图标+文字居中对齐，文字 32sp（比首版 40sp
-  小 20%）。设置页为白底扁平分区、无卡片；长提示 14sp 必须完整换行，
+  小 20%）。Phase 6 设计指南计划改为五个按钮（拍照识别/查句子/查单词/
+  历史记录/词典助手），但当前代码和 UI 仍是四个；未实施前不得提前改名或
+  新增第五个按钮。设置页为白底扁平分区、无卡片；长提示 14sp 必须完整换行，
   用户不可变信息用 16sp 纯文本；帮助/著作权为 16sp 正文 + 18sp 栏目标题
   + 分割线；查词结果的词典名/条目数 16sp 同色、词条标题 24sp。启动页居中
   显示 `assets/Rikai_Icon.jpg` 与真实加载阶段；字体可在抽屉中切换
@@ -44,7 +51,8 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
   复制按钮在照片显示区右下角，为深蓝长条，文案「复制文本」；语料预览卡片
   右下角的复制按钮仍为「复制」。识别方向、模型设置、页码导航贴近页面底部，
   页码箭头中心与左下/右下角按钮中心同高。
-  主页把「使用前须知」放在上方，四个功能按钮在剩余空间垂直居中。
+  主页把「使用前须知」放在上方，当前四个功能按钮在剩余空间垂直居中；
+  Phase 6 计划五个按钮时必须先更新设计 token/小屏滚动规则，不能直接硬编码。
   语料列表为大照片（完整 contain）+ 右上角红色圆形删除 + OCR 结果 + 日期，
   复制在**卡片右下角**；点开后进入「语料」详情：照片/OCR/分词、照片右下复制、
   语料间页码、左下删除，无多选/方向/模型设置/保存。列表与详情标题栏右上角
@@ -55,11 +63,11 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
   构建前必须存在，否则 Flutter 报缺失资产。应用图标源 `assets/Rikai_Icon.jpg`
   由 `flutter_launcher_icons` 生成 Android 图标（配置在 `pubspec.yaml`）。
 - 仓库已有多次提交（`d0d94a3`、`dc70cee`、`91dc386`、`deb6484`、
-  `b12d24f`、`95f90e0`、`9e17984`）。Phase 4 的竖向 MangaOCR、自动方向与
-  模型/照片集接入当前仍在工作树中未提交；不要擅自 `reset`/`commit`，除非用户
-  明确要求。
+  `b12d24f`、`95f90e0`、`9e17984`、`f287603`）。Phase 4 已提交为
+  `f287603`；Phase 6 目前只有文档设计，尚未实现。不要擅自 `reset`/`commit`，
+  除非用户明确要求。
 
-## 2. 已确认的架构决策（不要随意改）
+## 2. 已确认的架构决策（不要随意改；第 9 项为 Phase 6 设计边界）
 
 1. **统一 ONNX Runtime OCR**：
    - 横向：PaddleOCR PP-OCRv5 mobile det + rec（官方 ONNX）。
@@ -94,8 +102,19 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
 8. **MangaOCR 模型**：默认从 `l0wgear/manga-ocr-2025-onnx` 下载；模型卡许可未声明，
    **不得随包分发/不得提交**，下载前显示提示，支持本地导入。原项目 kha-white 是
    Apache-2.0，但当前下载源不是。INT8 draft 解码器 MVP 不做。
+9. **Phase 6 词典助手（设计边界，未批准实施）**：
+   - 核心 OCR/UniDic/MDict 仍在本机；Agent 是可选在线模块，只有用户配置
+     API Key/provider 并主动发送请求时才联网。
+   - 图片只能经本机 OCR；严禁把图片作为 LLM 视觉输入或调用 provider 的图像能力。
+   - 用户可选 small/complex 模型；严格模式必须引用真实词典工具结果，宽松模式
+     允许标注过的模型补充。
+   - 工具调用必须遵循 schema；citation 由 orchestrator 发放，模型不能自造来源。
+   - 词典熟悉文档按词典指纹缓存并经用户确认；注音/标注规则使用受验证的安全 DSL，
+     禁止执行任意代码。
+   - API Key 不进 SharedPreferences/日志/导出；Phase 6 不得破坏未配置 Agent 时的
+     离线核心。所有细节见 `docs/phase6-agent-design.md`。
 
-## 3. 当前进展（Phase 0–3 + Phase 3.5 已完成）
+## 3. 当前进展（Phase 0–4 + Phase 3.5 已完成）
 
 已完成：
 
@@ -281,6 +300,13 @@ Upside-down engine=paddle_v5 elapsed=270ms blocks=1 text="ありがとう"
 同时已手工走通：拍照识别 → 相册选择 → 开始识别 → 文本阅读 → 真实 UniDic
 分词 → 点击词条弹层。识别文本为 `ありがとう\n東京で食べた。`。
 
+**当前阶段状态：**
+
+- Phase 5 尚未完成。基础 `HistoryStore`、语料列表/详情和部分设置已提前实现，
+  但完整历史管理、首次启动引导、错误/空态打磨、release 构建仍未完成。
+- Phase 6 只有 `docs/phase6-agent-design.md` 设计草案，**没有代码、依赖或
+  provider 调用**；不得把 README/CLAUDE 的 planned 描述当成已实现。
+
 **尚未完成 / 下一步：**
 
 - Phase 5：完整识别历史/语料管理、首次启动引导、设置与发布打磨。
@@ -316,7 +342,8 @@ Upside-down engine=paddle_v5 elapsed=270ms blocks=1 text="ありがとう"
 
 实现与验收见 §3、§6 和 `docs/phase2-status.md`。不要重写 MDict worker、
 lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制：
-每词典最多 3 条、CSS 发现为目录内全部、MDD 缓存未清理、无模糊搜索。
+每词典词条上限可在设置中配置（默认无限制）、CSS 发现为目录内全部、
+MDD 缓存未清理、无模糊搜索。
 
 ### 已完成：Phase 3 横向 PaddleOCR + 拍照
 
@@ -342,12 +369,31 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
 - 已知限制：未移植上游 mask/panel/free-text 完整流水线、无 INT8 draft、
   90/270 文档方向未做整图旋转、无 arm64 真机。
 
-### Phase 5：语料保存/打磨/发布
+### Phase 5：语料保存/打磨/发布（未完成）
 
-- `HistoryStore`（sqflite）：图片压缩、OCR blocks JSON、全文、引擎、方向、时间。
+- 基础 `HistoryStore`（sqflite：图片副本、OCR 文本、blocks、模式/时间）和语料
+  列表/详情已提前实现；仍需完整历史管理、删除/清空、缓存清理和边界处理。
 - 首次启动引导（权限 → UniDic → 词典可选 → 模型可选 → 许可证）。
 - 设置、错误/空状态、字体、无障碍、关于/许可证页。
 - Release：arm64、R8、`--split-per-abi`；许可证审计；README/dev-setup 完善。
+
+### Phase 6：Mdict Agent（设计，未实现）
+
+先读 `docs/phase6-agent-design.md`；本节只给交接摘要，细节以设计文档为准。
+Phase 6 只能在 Phase 5 完成并经用户确认后实施。
+
+- 主页计划五个按钮：拍照识别、查句子、查单词、历史记录、词典助手；当前代码仍是
+  四个，实施前不要提前改名/加按钮。
+- Agent 使用本地 OCR/UniDic/MDict 工具 + 用户配置的远程 LLM；DeepSeek/Claude/
+  OpenAI-compatible 均通过 provider 适配层，不依赖 provider 的视觉能力。
+- 严格模式必须有真实词典 citation；宽松模式允许标记过的模型补充。工具 schema、
+  citation ID、词典熟悉文档、API Key 安全存储、注音/标注 DSL、Markdown/ruby/
+  声调渲染均是硬要求。
+- 推荐顺序：provider/密钥 → tool adapters + schema → agent loop/模式 → 渲染/
+  citation → 熟悉期 → 标注规则 → 测试/发布。
+- 禁止：把图片/base64 发给 LLM、把 provider 当云 OCR、把 API Key 放仓库/
+  SharedPreferences/日志、执行模型生成的任意代码、在 Phase 6 未实现时把文档
+  描述成已支持。
 
 ## 5. 项目误区 → 解决方案（重要）
 
@@ -501,9 +547,11 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
 23. **误区：删除 `unidic/`、`mdicts/`、两个上游 clone 来“清理仓库”。**
     - 正确做法：它们被 `.gitignore` 忽略，是开发数据/参考；不要删除。
       用户自备数据不提交；`overlay-translator/`、`PaddleOCR4Android/` 仅作参考。
-24. **误区：加 iOS/云 OCR/ML Kit/LLM 会更完整。**
-    - 正确做法：范围锁定 Android 单端、完全离线；OCR 用 ONNX；不引入 ML Kit
-      （专有条款）、云 OCR、LLM、iOS。
+24. **误区：把 Phase 6 的在线 Agent 当成“给项目加 LLM/云 OCR”或反过来继续声称纯离线。**
+    - 正确做法：MVP/核心仍锁定 Android 单端、离线 OCR/分词/词典；不引入 iOS、
+      ML Kit 或云 OCR/云翻译。Phase 6 是**可选的用户配置文本 LLM Agent**：
+      必须单独批准，默认不联网，图片不上传，不使用 provider 视觉，不把 API Key
+      写入仓库/日志；未实现前 README/CLAUDE 只能写 planned/design。
 25. **误区：恢复旧包名/旧 MainActivity。**
     - 正确做法：统一 `com.rikai.mobile`；唯一入口是
       `android/app/src/main/kotlin/com/rikai/mobile/MainActivity.kt`；
@@ -824,6 +872,34 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
       （≥0.99）180° 行时允许单独触发。旋转 180° 后必须重新跑 DBNet，不能只
       旋转识别用的 crop；坐标仍以旋转后的图像为准。
 
+### 5.11 Phase 6 词典助手（设计阶段陷阱）
+
+75. **误区：把图片/base64 或图片路径发给 LLM，让模型“顺便看看图”。**
+    - 正确做法：图片只在本机走 OCR；provider 请求体只能包含文本、分词/词典
+      工具结果和 schema。捕获请求测试必须断言没有图片字段/base64；严禁调用
+      provider 的视觉能力。
+76. **误区：严格模式没有词典依据时让模型补充一个“看起来合理”的答案。**
+    - 正确做法：严格模式的事实性陈述必须有真实工具 citation；没有依据就明确
+      说明未找到，不得编造词义/读音/翻译。宽松模式的模型补充必须与词典事实
+      分开标注，不能混在一起。
+77. **误区：把模型输出里的 `[来源1]` 直接当可信来源打开。**
+    - 正确做法：citation ID 由 orchestrator 根据真实工具结果发放并校验；伪造/
+      越界/失效 citation 只按普通文本显示，不能打开任意词典页。
+78. **误区：API Key 放进 SharedPreferences、URL、日志或崩溃报告。**
+    - 正确做法：使用 Android Keystore/安全存储；日志/导出/错误信息脱敏；提供
+      清除 Key 和配置的入口；仓库中不得出现真实 Key。
+79. **误区：每次新会话都重新让 Agent 探查词典。**
+    - 正确做法：词典熟悉文档按词典路径/stat、UniDic 版本和 schema/prompt 版本
+      缓存；用户确认后复用；词典变化/用户重置时失效。不要把熟悉文档写入用户的
+      UniDic/MDict 目录。
+80. **误区：允许 Agent 生成并直接执行任意 Dart/JS/Python 伪代码。**
+    - 正确做法：转换成受验证的安全 DSL（白名单字段/样式），支持预览、用户确认、
+      版本/回滚；统一 annotation engine 作用于所有 UniDic token 展示。禁止文件/
+      网络/反射/任意代码执行。
+81. **误区：为了 Phase 6 提前把主页改成五个按钮/改文案，或把 planned 写成已实现。**
+    - 正确做法：当前仍是四个按钮；Phase 6 实施时先更新 README、CLAUDE、设计
+      token 和测试，再改 UI。未实现前 README/CLAUDE 必须明确 planned/design。
+
 ## 6. 关键文件
 
 ```text
@@ -880,12 +956,13 @@ integration_test/ocr_android_test.dart                        # 横向/竖向/18
 android/app/src/main/kotlin/com/rikai/mobile/MainActivity.kt  # 权限 MethodChannel 原生侧
 android/app/src/main/AndroidManifest.xml                      # 文件权限
 android/app/build.gradle.kts                                  # minSdk 26 / NDK 28
-docs/DEVELOPMENT_PLAN.md                                      # 已批准计划
+docs/DEVELOPMENT_PLAN.md                                      # MVP 计划（Phase 6 见设计草案）
 docs/design-tokens.md                                         # UI 强制规范
 assets/fonts/README.md                                        # 字体下载说明（字体不入库）
 docs/phase0-status.md, docs/phase1-status.md,
 docs/phase2-status.md, docs/phase3-status.md,
 docs/phase3.5-status.md, docs/phase4-status.md               # 阶段验证结果
+docs/phase6-agent-design.md                                  # Phase 6 设计（未实现）
 docs/dev-setup.md                                             # 构建/数据/缓存/集成测试
 docs/adr/                                                     # 三个架构决策
 tool/spike_mdict.dart                                         # MDict 主机 spike
@@ -893,6 +970,20 @@ integration_test/mecab_android_test.dart                      # 设备端 MeCab/
 integration_test/mdict_android_test.dart                      # 设备端 MDict/渲染/UI 测试
 third_party/overlay-translator/                               # Apache 许可/修改说明
 third_party/paddleocr4android/                                # MIT 许可/可选后端说明
+```
+
+Phase 6 预计新增（**尚未创建**，实施时再落盘）：
+
+```text
+lib/features/agent/                                           # 对话/输入/模式/来源卡片
+lib/services/agent/                                           # provider 适配、agent loop、工具 registry
+lib/services/agent/tools/                                     # OCR/UniDic/MDict schema adapters
+lib/services/agent/familiarization/                           # 词典熟悉文档生成/缓存
+lib/services/agent/annotation/                                # 注音/标注安全 DSL 与统一渲染
+lib/core/models/agent_models.dart                             # 会话/消息/工具调用/citation
+lib/services/storage/agent_store.dart                         # 会话/熟悉文档/规则 SQLite
+lib/services/security/secret_store.dart                       # API Key 安全存储
+lib/services/agent/markdown_renderer.dart                     # Markdown/ruby/声调安全渲染
 ```
 
 开发数据（不入库）：
@@ -985,21 +1076,29 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
   移走并重建；不要动 `modules-2`。详见 `docs/dev-setup.md`。
 - Windows 主机 `dart run tool/spike_mdict.dart` 在根包会触发 MeCab native-assets
   hook 失败；用隔离 Dart 包运行（复制脚本 + 只依赖 `dict_reader`）。
+- Phase 6 尚未实现，当前没有 provider 测试命令或 API Key 配置。实施时必须加入
+  fake-provider 集成测试、请求体“无图片/base64”断言、citation 解析/点击测试、
+  strict/loose 模式测试、熟悉文档复用/失效测试、annotation DSL 校验测试和
+  API Key 脱敏测试；不得用真实 Key 跑自动化测试。
 
 ## 8. 建议的下一个动作
 
-1. 运行 `git status`；Phase 4 改动尚未提交，不要覆盖或擅自 commit。
-2. 进行实网模型下载验证（本机模拟器 DNS 不可用）：在可访问 hf-mirror 的
+1. 运行 `git status`；Phase 4 已提交为 `f287603`，Phase 6 文档改动默认未提交。
+   不要覆盖或擅自 commit，除非用户明确要求。
+2. 先完成 Phase 5：完整识别历史/语料管理、首次启动引导、设置/错误态/许可证页
+   与 release 打磨。不要重写已验证的 Paddle 横向路径或 MangaOCR 基础流水线；
+   新增优化（mask/panel、INT8 draft、90° 整图旋转）应作为独立增强。
+3. Phase 6 必须先完成设计评审并得到用户批准，再按
+   `docs/phase6-agent-design.md` 的顺序实施；Phase 6 不得抢占 Phase 5，在
+   Phase 5 未完成前不要开始 Phase 6 的 UI/数据层改造。
+4. 进行实网模型下载验证（本机模拟器 DNS 不可用）：在可访问 hf-mirror 的
    设备上验证 PaddleOCR/MangaOCR/orientation 下载、断点续传、镜像回退、
    本地导入与许可确认；确认模型目录与删除流程。
-3. 进行相机/照片集/多选/语料的 arm64 真机回归，重点验证 MangaOCR 竖排质量、
+5. 进行相机/照片集/多选/语料的 arm64 真机回归，重点验证 MangaOCR 竖排质量、
    连续多气泡页性能/内存，以及真实的 180°/90° 旋转照片；本机仅 x86_64。
-4. 若继续功能开发，进入 Phase 5：完整识别历史/语料管理、首次启动引导、
-   设置/错误态/许可证页与 release 打磨。不要重写已验证的 Paddle 横向路径或
-   MangaOCR 基础流水线；新增优化（mask/panel、INT8 draft、90° 整图旋转）
-   应作为独立增强。
-5. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
+6. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
    颜色/字号，字体与模型文件不入库；**所有页面**统一深蓝顶栏和右滑覆盖转场。
-6. 每个阶段结束运行 analyze/test/debug build（当前 108 unit tests / OCR 设备
+   Phase 6 的五按钮/Agent UI 也必须先补 token，不能直接改现有四按钮。
+7. 每个阶段结束运行 analyze/test/debug build（当前 108 unit tests / OCR 设备
    4 项；另有 MeCab 4、MDict 6），并记录到新的阶段状态文档；设备端测试按 §7
    的命令运行。
