@@ -163,10 +163,26 @@ class RikaiOcr {
         'Native OCR returned no readiness',
       );
     }
-    final readiness = raw.map(
-      (key, value) => MapEntry(key.toString(), value),
-    );
+    final readiness = raw.map((key, value) => MapEntry(key.toString(), value));
     _initializedKey = key;
+    _readiness = readiness;
+    return readiness;
+  }
+
+  /// Preloads optional native sessions for [mode].
+  ///
+  /// This is best-effort background work; the next [recognize] call still
+  /// lazily loads anything that is missing. Horizontal mode must not load
+  /// MangaOCR.
+  Future<Map<String, Object?>> prepare({required OcrMode mode}) async {
+    final raw = await _invoke('prepare', {'mode': mode.name});
+    if (raw is! Map) {
+      throw const OcrException(
+        'bad_result',
+        'Native OCR returned no readiness',
+      );
+    }
+    final readiness = raw.map((key, value) => MapEntry(key.toString(), value));
     _readiness = readiness;
     return readiness;
   }

@@ -4,6 +4,12 @@ Date: 2026-10-29
 Base: Phase 3 horizontal OCR (`docs/phase3-status.md`) and Phase 3.5
 (`docs/phase3.5-status.md`)
 
+> **Phase 4.5 supersedes parts of this document.** Lazy optional sessions,
+> stat-first fingerprints, 90° image correction, mixed routing, Manga quality
+> filtering and manual rotation are documented in
+> [`docs/phase4.5-status.md`](phase4.5-status.md). Phase 4 remains the baseline
+> record; Phase 5 is paused until Phase 4.5 acceptance passes.
+
 ## Scope
 
 Phase 4 adds the vertical OCR path and makes the photo set's “自动 / 横向 / 竖向”

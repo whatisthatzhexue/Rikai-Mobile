@@ -1,14 +1,19 @@
 import 'dart:io';
 
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 /// Owns private copies of photos in the app's capture session directory.
 class CaptureStorage {
+  CaptureStorage({Future<Directory> Function()? temporaryDirectory})
+    : _temporaryDirectory = temporaryDirectory ?? getTemporaryDirectory;
+
+  final Future<Directory> Function() _temporaryDirectory;
   int _sequence = 0;
 
   Future<Directory> sessionDirectory() async {
-    final temp = await getTemporaryDirectory();
+    final temp = await _temporaryDirectory();
     final directory = Directory(p.join(temp.path, 'rikai_capture'));
     if (!directory.existsSync()) {
       await directory.create(recursive: true);
@@ -43,6 +48,31 @@ class CaptureStorage {
     final target = File(p.join(directory.path, name));
     await File(sourcePath).copy(target.path);
     return target.path;
+  }
+
+  /// Rotates a private session copy clockwise and overwrites it in place.
+  /// The photo set clears that photo's OCR cache so the next run sees the new
+  /// orientation. Device originals are never modified.
+  Future<void> rotateSessionPhoto(String path, {int degrees = 90}) async {
+    final directory = await sessionDirectory();
+    final normalized = p.normalize(path);
+    if (!p.isWithin(directory.path, normalized)) {
+      throw FileSystemException('只能旋转照片集内的副本');
+    }
+    final file = File(normalized);
+    if (!file.existsSync()) {
+      throw FileSystemException('照片文件不存在');
+    }
+    final decoded = img.decodeImage(await file.readAsBytes());
+    if (decoded == null) {
+      throw FileSystemException('无法解码照片');
+    }
+    final rotated = img.copyRotate(decoded, angle: degrees);
+    final extension = p.extension(normalized).toLowerCase();
+    final encoded = extension == '.png'
+        ? img.encodePng(rotated)
+        : img.encodeJpg(rotated, quality: 95);
+    await file.writeAsBytes(encoded, flush: true);
   }
 
   Future<void> deleteSessionFile(String path) async {

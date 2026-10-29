@@ -65,6 +65,17 @@ internal class PaddleOcrEngine {
     private val docOrientation = DocOrientationRecognizer()
     private val textLineOrientation = TextLineOrientationRecognizer()
     private var mangaError: String? = null
+    private var mangaEncoderPath: String? = null
+    private var mangaDecoderPath: String? = null
+    private var mangaVocabPath: String? = null
+    private var mangaAvailable = false
+    private var docOrientationPath: String? = null
+    private var textLineOrientationPath: String? = null
+    private var docOrientationAvailable = false
+    private var textLineOrientationAvailable = false
+    private var docOrientationLoadFailed = false
+    private var textLineOrientationLoadFailed = false
+    private var threadCount = 1
 
     @Synchronized
     fun initialize(
@@ -89,6 +100,7 @@ internal class PaddleOcrEngine {
         val absoluteRec = recFile.absolutePath
         val absoluteKeys = keysFile.absolutePath
         val threads = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
+        threadCount = threads
 
         val parsedKeys = CtcDictionary.load(keysFile)
         val det = detSession
@@ -132,64 +144,176 @@ internal class PaddleOcrEngine {
             }
         }
 
-        // Optional vertical models are loaded independently. A missing or
-        // broken MangaOCR file must never disable the working horizontal OCR;
-        // vertical mode reports the specific error when the user selects it.
-        var mangaConfigured = false
-        var mangaReused = false
-        mangaError = if (
+        // Optional models are registered here, but their native sessions are
+        // created lazily. Horizontal-only use must not pay the MangaOCR
+        // encoder/decoder load cost, and a missing/broken optional model must
+        // never disable the working horizontal OCR.
+        if (detSession == null || recSession == null || dictionary == null) {
+            throw OcrFailure("ENGINE_ERROR", "OCR 模型尚未初始化")
+        }
+        configureOptionalModels(
+            mangaEncoderPath = mangaEncoderPath,
+            mangaDecoderPath = mangaDecoderPath,
+            mangaVocabPath = mangaVocabPath,
+            docOrientationPath = docOrientationPath,
+            textLineOrientationPath = textLineOrientationPath,
+        )
+        return readiness(reused = paddleReused)
+    }
+
+    /**
+     * Loads the optional models required by [mode] without decoding an image.
+     * Used by the Dart layer to warm the session while the photo-set page is
+     * idle. Failures are reflected in readiness rather than thrown.
+     */
+    @Synchronized
+    fun prepare(mode: String): Map<String, Any> {
+        if (mode != "auto" && mode != "horizontal" && mode != "vertical") {
+            throw OcrFailure("UNSUPPORTED_MODE", "不支持的识别模式：$mode")
+        }
+        if (mode != "horizontal") ensureMangaLoaded()
+        if (mode == "auto") {
+            ensureDocOrientationLoaded()
+            ensureTextLineOrientationLoaded()
+        }
+        return readiness(reused = true)
+    }
+
+    private fun configureOptionalModels(
+        mangaEncoderPath: String?,
+        mangaDecoderPath: String?,
+        mangaVocabPath: String?,
+        docOrientationPath: String?,
+        textLineOrientationPath: String?,
+    ) {
+        val nextManga = if (
             mangaEncoderPath.isNullOrBlank() ||
             mangaDecoderPath.isNullOrBlank() ||
             mangaVocabPath.isNullOrBlank()
         ) {
-            manga.close()
             null
         } else {
-            mangaConfigured = true
-            try {
-                val info = manga.initialize(mangaEncoderPath, mangaDecoderPath, mangaVocabPath)
-                mangaReused = info?.get("reused") == true
-                if (!manga.isReady()) "MangaOCR 模型文件不完整" else null
-            } catch (error: OcrFailure) {
-                error.message
-            } catch (error: Throwable) {
-                error.message ?: "MangaOCR 模型加载失败"
-            }
+            Triple(mangaEncoderPath, mangaDecoderPath, mangaVocabPath)
         }
-        docOrientation.initialize(docOrientationPath)
-        textLineOrientation.initialize(textLineOrientationPath)
+        val currentManga = if (
+            this.mangaEncoderPath == null ||
+            this.mangaDecoderPath == null ||
+            this.mangaVocabPath == null
+        ) {
+            null
+        } else {
+            Triple(this.mangaEncoderPath!!, this.mangaDecoderPath!!, this.mangaVocabPath!!)
+        }
+        if (nextManga != currentManga) {
+            manga.close()
+            mangaError = null
+        }
+        this.mangaEncoderPath = nextManga?.first
+        this.mangaDecoderPath = nextManga?.second
+        this.mangaVocabPath = nextManga?.third
+        mangaAvailable = nextManga != null &&
+            listOf(nextManga.first, nextManga.second, nextManga.third).all(::isReadableFile)
+        if (nextManga != null && !mangaAvailable && mangaError.isNullOrBlank()) {
+            mangaError = "MangaOCR 模型文件不完整"
+        }
+        // Re-initialization (for example after returning from model settings)
+        // gets one fresh lazy-load attempt even when the paths are unchanged.
+        if (nextManga != null && mangaAvailable && !manga.isReady()) {
+            mangaError = null
+        }
 
-        val activeDet = detSession ?: throw OcrFailure("ENGINE_ERROR", "OCR 模型尚未初始化")
-        val activeRec = recSession ?: throw OcrFailure("ENGINE_ERROR", "OCR 模型尚未初始化")
-        val activeKeys = dictionary ?: throw OcrFailure("ENGINE_ERROR", "OCR 字符表尚未加载")
-        return readiness(
-            det = activeDet,
-            rec = activeRec,
-            keys = activeKeys,
-            threads = threads,
-            reused = paddleReused && (!mangaConfigured || mangaReused),
-        )
+        val nextDoc = docOrientationPath?.takeIf { it.isNotBlank() }
+        if (this.docOrientationPath != nextDoc) {
+            docOrientation.close()
+            docOrientationLoadFailed = false
+        }
+        this.docOrientationPath = nextDoc
+        docOrientationAvailable = nextDoc != null && isReadableFile(nextDoc)
+        if (docOrientationAvailable) docOrientationLoadFailed = false
+
+        val nextTextLine = textLineOrientationPath?.takeIf { it.isNotBlank() }
+        if (this.textLineOrientationPath != nextTextLine) {
+            textLineOrientation.close()
+            textLineOrientationLoadFailed = false
+        }
+        this.textLineOrientationPath = nextTextLine
+        textLineOrientationAvailable = nextTextLine != null && isReadableFile(nextTextLine)
+        if (textLineOrientationAvailable) textLineOrientationLoadFailed = false
     }
 
-    private fun readiness(
-        det: OrtSession,
-        rec: OrtSession,
-        keys: CtcDictionary,
-        threads: Int,
-        reused: Boolean,
-    ): Map<String, Any> = mapOf(
-        "engine" to "paddle_v5",
-        "detInput" to det.inputNames.first(),
-        "recInput" to rec.inputNames.first(),
-        "keys" to keys.keys.size,
-        "threads" to threads,
-        "reused" to reused,
-        "mangaReady" to manga.isReady(),
-        "mangaError" to (mangaError ?: ""),
-        "docOrientationReady" to docOrientation.isReady(),
-        "textLineOrientationReady" to textLineOrientation.isReady(),
-        "manga" to manga.readiness(),
-    )
+    private fun isReadableFile(path: String): Boolean {
+        val file = File(path)
+        return file.isFile && file.length() > 0L
+    }
+
+    private fun ensureMangaLoaded(): Boolean {
+        if (!mangaAvailable) return false
+        if (manga.isReady()) return true
+        if (!mangaError.isNullOrBlank()) return false
+        val encoder = mangaEncoderPath ?: return false
+        val decoder = mangaDecoderPath ?: return false
+        val vocab = mangaVocabPath ?: return false
+        return try {
+            manga.initialize(encoder, decoder, vocab)
+            if (manga.isReady()) {
+                true
+            } else {
+                mangaError = "MangaOCR 模型文件不完整"
+                false
+            }
+        } catch (error: OcrFailure) {
+            mangaError = error.message
+            false
+        } catch (error: Throwable) {
+            mangaError = error.message ?: "MangaOCR 模型加载失败"
+            false
+        }
+    }
+
+    private fun ensureDocOrientationLoaded(): Boolean {
+        if (!docOrientationAvailable || docOrientationLoadFailed) return false
+        if (docOrientation.isReady()) return true
+        val path = docOrientationPath ?: return false
+        val loaded = docOrientation.initialize(path)
+        if (!loaded) docOrientationLoadFailed = true
+        return loaded
+    }
+
+    private fun ensureTextLineOrientationLoaded(): Boolean {
+        if (!textLineOrientationAvailable || textLineOrientationLoadFailed) return false
+        if (textLineOrientation.isReady()) return true
+        val path = textLineOrientationPath ?: return false
+        val loaded = textLineOrientation.initialize(path)
+        if (!loaded) textLineOrientationLoadFailed = true
+        return loaded
+    }
+
+    private fun readiness(reused: Boolean): Map<String, Any> {
+        val det = detSession ?: throw OcrFailure("ENGINE_ERROR", "OCR 模型尚未初始化")
+        val rec = recSession ?: throw OcrFailure("ENGINE_ERROR", "OCR 模型尚未初始化")
+        val keys = dictionary ?: throw OcrFailure("ENGINE_ERROR", "OCR 字符表尚未加载")
+        return mapOf(
+            "engine" to "paddle_v5",
+            "detInput" to det.inputNames.first(),
+            "recInput" to rec.inputNames.first(),
+            "keys" to keys.keys.size,
+            "threads" to threadCount,
+            "reused" to reused,
+            // `*Ready` remains the compatibility/availability flag used by the
+            // photo-set helper. `*Loaded` reports the lazy native session.
+            "mangaReady" to mangaAvailable,
+            "mangaAvailable" to mangaAvailable,
+            "mangaLoaded" to manga.isReady(),
+            "mangaError" to (mangaError ?: ""),
+            "docOrientationReady" to docOrientationAvailable,
+            "docOrientationAvailable" to docOrientationAvailable,
+            "docOrientationLoaded" to docOrientation.isReady(),
+            "textLineOrientationReady" to textLineOrientationAvailable,
+            "textLineOrientationAvailable" to textLineOrientationAvailable,
+            "textLineOrientationLoaded" to textLineOrientation.isReady(),
+            "manga" to manga.readiness(),
+        )
+    }
 
     @Synchronized
     fun recognize(
@@ -201,16 +325,6 @@ internal class PaddleOcrEngine {
         if (mode != "auto" && mode != "horizontal" && mode != "vertical") {
             throw OcrFailure("UNSUPPORTED_MODE", "不支持的识别模式：$mode")
         }
-        if (mode == "vertical" && !manga.isReady()) {
-            throw if (!mangaError.isNullOrBlank()) {
-                OcrFailure("MODEL_INVALID", "MangaOCR 模型无法使用：$mangaError")
-            } else {
-                OcrFailure(
-                    "MODEL_MISSING",
-                    "竖向识别需要先在「OCR 模型」中下载 MangaOCR 模型",
-                )
-            }
-        }
         val det = detSession ?: throw OcrFailure("ENGINE_ERROR", "OCR 模型尚未初始化")
         val rec = recSession ?: throw OcrFailure("ENGINE_ERROR", "OCR 模型尚未初始化")
         val keys = dictionary ?: throw OcrFailure("ENGINE_ERROR", "OCR 字符表尚未加载")
@@ -219,30 +333,70 @@ internal class PaddleOcrEngine {
         var activeBitmap = decoded
         try {
             if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
-            val docVerticalHint = mode != "horizontal" && docOrientation.isVerticalHint(activeBitmap)
             onProgress("detect", 0, 1)
             var quads = detectQuads(activeBitmap, det)
             onProgress("detect", 1, 1)
             if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
-            val useVertical = when (mode) {
-                "vertical" -> true
-                "auto" -> docVerticalHint || TextLayoutHeuristic.isVertical(quads)
-                else -> false
-            }
-            if (!useVertical &&
-                textLineOrientation.isReady() &&
-                textLineOrientation.shouldRotate180(activeBitmap, quads)
-            ) {
-                val rotated = rotate180(activeBitmap)
-                if (rotated != null) {
-                    activeBitmap = rotated
+
+            // A 90/270 page can look like ordinary vertical text after DBNet.
+            // Run the document classifier only when the image aspect and box
+            // geometry could describe a sideways page; ordinary landscape
+            // horizontal pages skip this optional model entirely.
+            if (mode == "auto" && shouldCheckDocumentOrientation(activeBitmap, quads)) {
+                val corrected = correctDocumentRotation(activeBitmap)
+                if (corrected != null) {
+                    if (activeBitmap !== decoded) activeBitmap.recycle()
+                    activeBitmap = corrected
                     onProgress("detect", 0, 1)
                     quads = detectQuads(activeBitmap, det)
                     onProgress("detect", 1, 1)
                     if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
                 }
             }
-            if (useVertical && manga.isReady()) {
+
+            var useVertical = when (mode) {
+                "vertical" -> true
+                "auto" -> TextLayoutHeuristic.isVertical(quads)
+                else -> false
+            }
+            if (!useVertical &&
+                mode == "auto" &&
+                ensureTextLineOrientationLoaded() &&
+                textLineOrientation.shouldRotate180(activeBitmap, quads)
+            ) {
+                val rotated = rotate180(activeBitmap)
+                if (rotated != null) {
+                    if (activeBitmap !== decoded) activeBitmap.recycle()
+                    activeBitmap = rotated
+                    onProgress("detect", 0, 1)
+                    quads = detectQuads(activeBitmap, det)
+                    onProgress("detect", 1, 1)
+                    if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
+                    useVertical = TextLayoutHeuristic.isVertical(quads)
+                }
+            }
+            if (useVertical && ensureMangaLoaded()) {
+                // A mostly-vertical page may still contain a horizontal caption
+                // or sound effect. Split obvious horizontal boxes out instead of
+                // feeding them to MangaOCR's bubble model.
+                val horizontalQuads = if (mode == "auto") {
+                    quads.filter { TextLayoutHeuristic.isStrongHorizontal(it) }
+                } else {
+                    emptyList()
+                }
+                if (horizontalQuads.isNotEmpty() && horizontalQuads.size < quads.size) {
+                    val verticalQuads = quads.filterNot { it in horizontalQuads }
+                    return recognizeMixed(
+                        bitmap = activeBitmap,
+                        verticalQuads = verticalQuads,
+                        horizontalQuads = horizontalQuads,
+                        rec = rec,
+                        keys = keys,
+                        started = started,
+                        onProgress = onProgress,
+                        isCancelled = isCancelled,
+                    )
+                }
                 val blocks = manga.recognize(
                     bitmap = activeBitmap,
                     quads = quads,
@@ -259,11 +413,38 @@ internal class PaddleOcrEngine {
                 )
             }
             if (mode == "vertical" && !manga.isReady()) {
-                throw OcrFailure(
-                    "MODEL_MISSING",
-                    "竖向识别需要先在「OCR 模型」中下载 MangaOCR 模型",
-                )
+                throw if (!mangaError.isNullOrBlank()) {
+                    OcrFailure("MODEL_INVALID", "MangaOCR 模型无法使用：$mangaError")
+                } else {
+                    OcrFailure(
+                        "MODEL_MISSING",
+                        "竖向识别需要先在「OCR 模型」中下载 MangaOCR 模型",
+                    )
+                }
             }
+
+            // A mostly-horizontal page can contain a vertical speech bubble.
+            // Require at least two strong vertical boxes so a tall logo or page
+            // number does not switch the whole page to MangaOCR.
+            if (mode == "auto" && !useVertical && mangaAvailable) {
+                val verticalQuads = quads.filter { TextLayoutHeuristic.isStrongVertical(it) }
+                if (verticalQuads.size >= 2 && verticalQuads.size < quads.size) {
+                    if (ensureMangaLoaded()) {
+                        val horizontalQuads = quads.filterNot { it in verticalQuads }
+                        return recognizeMixed(
+                            bitmap = activeBitmap,
+                            verticalQuads = verticalQuads,
+                            horizontalQuads = horizontalQuads,
+                            rec = rec,
+                            keys = keys,
+                            started = started,
+                            onProgress = onProgress,
+                            isCancelled = isCancelled,
+                        )
+                    }
+                }
+            }
+
             if (quads.isEmpty()) {
                 return NativeOcrResult(
                     engine = "paddle_v5",
@@ -274,14 +455,14 @@ internal class PaddleOcrEngine {
                 )
             }
 
-            val ordered = orderQuads(quads)
-            val blocks = mutableListOf<NativeOcrBlock>()
-            ordered.forEachIndexed { index, quad ->
-                if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
-                recognizeQuad(activeBitmap, quad, rec, keys)?.let { blocks.add(it) }
-                onProgress("recognize", index + 1, ordered.size)
-            }
-            val orderedBlocks = orderBlocks(blocks)
+            val orderedBlocks = recognizePaddleQuads(
+                bitmap = activeBitmap,
+                quads = quads,
+                rec = rec,
+                keys = keys,
+                onProgress = onProgress,
+                isCancelled = isCancelled,
+            )
             onProgress("done", 1, 1)
             return NativeOcrResult(
                 engine = "paddle_v5",
@@ -304,6 +485,17 @@ internal class PaddleOcrEngine {
         manga.close()
         docOrientation.close()
         textLineOrientation.close()
+        mangaAvailable = false
+        mangaError = null
+        mangaEncoderPath = null
+        mangaDecoderPath = null
+        mangaVocabPath = null
+        docOrientationAvailable = false
+        textLineOrientationAvailable = false
+        docOrientationPath = null
+        textLineOrientationPath = null
+        docOrientationLoadFailed = false
+        textLineOrientationLoadFailed = false
     }
 
     private fun closePaddleSessions() {
@@ -362,6 +554,98 @@ internal class PaddleOcrEngine {
         } finally {
             if (resized !== bitmap && !resized.isRecycled) resized.recycle()
         }
+    }
+
+    private fun recognizeMixed(
+        bitmap: Bitmap,
+        verticalQuads: List<DBPostprocessor.Quad>,
+        horizontalQuads: List<DBPostprocessor.Quad>,
+        rec: OrtSession,
+        keys: CtcDictionary,
+        started: Long,
+        onProgress: (stage: String, current: Int, total: Int) -> Unit,
+        isCancelled: () -> Boolean,
+    ): NativeOcrResult {
+        val verticalBlocks = if (verticalQuads.isEmpty()) {
+            emptyList()
+        } else {
+            manga.recognize(
+                bitmap = bitmap,
+                quads = verticalQuads,
+                onProgress = onProgress,
+                isCancelled = isCancelled,
+            )
+        }
+        val horizontalBlocks = recognizePaddleQuads(
+            bitmap = bitmap,
+            quads = horizontalQuads,
+            rec = rec,
+            keys = keys,
+            onProgress = onProgress,
+            isCancelled = isCancelled,
+        )
+        onProgress("done", 1, 1)
+        return NativeOcrResult(
+            engine = "paddle_v5+manga_ocr",
+            elapsedMs = SystemClock.elapsedRealtime() - started,
+            width = bitmap.width,
+            height = bitmap.height,
+            blocks = mergeMixedBlocks(verticalBlocks + horizontalBlocks),
+        )
+    }
+
+    private fun recognizePaddleQuads(
+        bitmap: Bitmap,
+        quads: List<DBPostprocessor.Quad>,
+        rec: OrtSession,
+        keys: CtcDictionary,
+        onProgress: (stage: String, current: Int, total: Int) -> Unit,
+        isCancelled: () -> Boolean,
+    ): List<NativeOcrBlock> {
+        if (quads.isEmpty()) return emptyList()
+        val ordered = orderQuads(quads)
+        val blocks = mutableListOf<NativeOcrBlock>()
+        ordered.forEachIndexed { index, quad ->
+            if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
+            recognizeQuad(bitmap, quad, rec, keys)?.let { blocks.add(it) }
+            onProgress("recognize", index + 1, ordered.size)
+        }
+        return orderBlocks(blocks)
+    }
+
+    /**
+     * Mixed pages are sorted in top-to-bottom bands. Horizontal blocks within a
+     * band read left-to-right; vertical blocks read right-to-left. This is a
+     * heuristic for captions/SFX on an otherwise vertical page, not a full
+     * panel-layout engine.
+     */
+    private fun mergeMixedBlocks(blocks: List<NativeOcrBlock>): List<NativeOcrBlock> {
+        if (blocks.size <= 1) return blocks
+        val averageHeight = blocks.map { (it.bottom - it.top).coerceAtLeast(1) }
+            .average().toFloat()
+        val lineThreshold = max(8f, averageHeight * 0.65f)
+        val lines = mutableListOf<MutableList<NativeOcrBlock>>()
+        for (block in blocks.sortedWith(compareBy({ it.top }, { it.left }))) {
+            val centerY = (block.top + block.bottom) / 2f
+            val line = lines.firstOrNull { existing ->
+                abs(existing.map { (it.top + it.bottom) / 2f }.average() - centerY) <= lineThreshold
+            }
+            if (line == null) {
+                lines.add(mutableListOf(block))
+            } else {
+                line.add(block)
+            }
+        }
+        return lines
+            .sortedBy { line -> line.minOf { it.top } }
+            .flatMap { line ->
+                line.sortedWith(
+                    compareBy(
+                        { if (it.orientation == "vertical") -it.right else it.left },
+                        { it.top },
+                    ),
+                )
+            }
     }
 
     private fun recognizeQuad(
@@ -458,6 +742,38 @@ internal class PaddleOcrEngine {
         } finally {
             if (!crop.isRecycled) crop.recycle()
         }
+    }
+
+    private fun shouldCheckDocumentOrientation(
+        bitmap: Bitmap,
+        quads: List<DBPostprocessor.Quad>,
+    ): Boolean {
+        if (!docOrientationAvailable || quads.isEmpty()) return false
+        // Only aspect/layout disagreement is ambiguous:
+        //   landscape page + vertical boxes = a portrait page rotated 90°;
+        //   portrait page + horizontal boxes = a landscape page rotated 90°.
+        // Upright portrait tategaki and upright landscape text skip the model,
+        // and square pages are left to DBNet geometry.
+        if (bitmap.width == bitmap.height) return false
+        val geometryVertical = TextLayoutHeuristic.isVertical(quads)
+        return if (bitmap.width > bitmap.height) {
+            geometryVertical
+        } else {
+            !geometryVertical
+        }
+    }
+
+    /**
+     * PP-LCNet labels the clockwise rotation of the input relative to upright,
+     * so the corrective rotation is the negative label. Only 90/270 are
+     * applied here; 180° horizontal correction stays with the text-line model.
+     */
+    private fun correctDocumentRotation(bitmap: Bitmap): Bitmap? {
+        if (!ensureDocOrientationLoaded()) return null
+        val orientation = docOrientation.classify(bitmap) ?: return null
+        if (!docOrientation.isConfident(orientation)) return null
+        if (orientation.angle != 90 && orientation.angle != 270) return null
+        return rotateBitmap(bitmap, -orientation.angle.toFloat())
     }
 
     private fun decodeBitmap(path: String): Bitmap {

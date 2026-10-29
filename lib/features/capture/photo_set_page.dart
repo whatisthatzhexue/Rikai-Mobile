@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -110,8 +111,10 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     if (!force) {
       final knownFingerprint = ocr.fingerprint;
       if (knownFingerprint != null) {
-        final key = photoOcrCacheKey(mode: mode, fingerprint: knownFingerprint);
-        final cached = photo.ocrCache[key];
+        final cached = photo.findOcrResult(
+          mode: mode,
+          fingerprint: knownFingerprint,
+        );
         if (cached != null) {
           try {
             await ocr.cancel();
@@ -133,6 +136,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
             _verticalReady = ocr.mangaReady;
           });
           await _startAnalysis(photo.id, cached.text);
+          unawaited(_prewarmModels());
           return;
         }
       }
@@ -158,7 +162,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       final fingerprint = await ocr.ensureReady(manifest);
       if (token != _runToken || _disposed) return;
       final key = photoOcrCacheKey(mode: mode, fingerprint: fingerprint);
-      final cached = photo.ocrCache[key];
+      final cached = photo.findOcrResult(mode: mode, fingerprint: fingerprint);
       setState(() {
         _fingerprint = fingerprint;
         _verticalReady = ocr.mangaReady;
@@ -174,6 +178,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       });
       if (cached != null && !force) {
         await _startAnalysis(photo.id, cached.text);
+        unawaited(_prewarmModels());
         return;
       }
       final result = await ocr.recognize(imagePath: photo.filePath, mode: mode);
@@ -194,6 +199,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
         _error = null;
       });
       await _startAnalysis(photo.id, text);
+      unawaited(_prewarmModels());
     } on OcrException catch (error) {
       if (token != _runToken || _disposed) return;
       if (error.code == 'CANCELLED') {
@@ -214,6 +220,22 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
           _error = _errorText(error);
         });
       }
+    }
+  }
+
+  Future<void> _prewarmModels() async {
+    if (_disposed || !mounted) return;
+    try {
+      final manifest = await ref.read(ocrModelManifestProvider.future);
+      if (_disposed || !mounted) return;
+      await ref.read(ocrServiceProvider).prewarm(manifest, mode: _mode);
+      if (_disposed || !mounted) return;
+      final ready = ref.read(ocrServiceProvider).mangaReady;
+      if (ready != _verticalReady) {
+        setState(() => _verticalReady = ready);
+      }
+    } catch (_) {
+      // Preload is best-effort; the next OCR call reports real errors.
     }
   }
 
@@ -284,10 +306,9 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
   }
 
   String _cachedText(CapturePhoto photo) {
-    final key = _fingerprint == null
-        ? null
-        : photoOcrCacheKey(mode: _mode, fingerprint: _fingerprint!);
-    return key == null ? '' : photo.ocrCache[key]?.text ?? '';
+    if (_fingerprint == null) return '';
+    return photo.findOcrResult(mode: _mode, fingerprint: _fingerprint!)?.text ??
+        '';
   }
 
   Future<void> _copyText(String text) async {
@@ -305,6 +326,33 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     ref.read(captureSessionProvider.notifier).setMode(mode);
     if (mounted) setState(() => _error = null);
     await _refreshCurrent();
+  }
+
+  Future<void> _rotateCurrent() async {
+    if (_busy || _saving) return;
+    final photo = ref.read(captureSessionProvider).current;
+    if (photo == null) return;
+    await _cancelRecognition();
+    if (!mounted) return;
+    setState(() {
+      _busy = true;
+      _stage = '正在旋转照片…';
+      _progress = 0;
+      _error = null;
+    });
+    try {
+      await ref.read(captureStorageProvider).rotateSessionPhoto(photo.filePath);
+      await FileImage(File(photo.filePath)).evict();
+      ref.read(captureSessionProvider.notifier).clearPhotoOcr(photo.id);
+      if (!mounted) return;
+      await _refreshCurrent(force: true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = '旋转失败：$error';
+      });
+    }
   }
 
   Future<void> _changePhoto(int delta) async {
@@ -338,10 +386,9 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    final key = _fingerprint == null
+    final cached = _fingerprint == null
         ? null
-        : photoOcrCacheKey(mode: _mode, fingerprint: _fingerprint!);
-    final cached = key == null ? null : photo.ocrCache[key];
+        : photo.findOcrResult(mode: _mode, fingerprint: _fingerprint!);
     final blocksJson = jsonEncode(
       (cached?.blocks ?? const []).map((block) {
         return {
@@ -394,7 +441,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       final manifest = await ref.read(ocrModelManifestProvider.future);
       final fingerprint = await ref
           .read(ocrServiceProvider)
-          .ensureReady(manifest);
+          .ensureReady(manifest, refresh: true);
       changed = previous != null && fingerprint != previous;
       if (changed) {
         ref.read(captureSessionProvider.notifier).clearOcrCache();
@@ -584,10 +631,22 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
                             ),
                           ),
                           Center(
-                            child: TextButton.icon(
-                              onPressed: _openModelSettings,
-                              icon: const Icon(Icons.settings_outlined),
-                              label: const Text('模型设置'),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                TextButton.icon(
+                                  onPressed: _busy || _saving
+                                      ? null
+                                      : _rotateCurrent,
+                                  icon: const Icon(Icons.rotate_right),
+                                  label: const Text('旋转'),
+                                ),
+                                TextButton.icon(
+                                  onPressed: _openModelSettings,
+                                  icon: const Icon(Icons.settings_outlined),
+                                  label: const Text('模型设置'),
+                                ),
+                              ],
                             ),
                           ),
                         ],

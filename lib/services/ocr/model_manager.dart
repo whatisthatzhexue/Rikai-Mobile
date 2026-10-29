@@ -168,6 +168,12 @@ class OcrModelManager {
   final Future<String> Function()? _modelsDirectory;
   final Future<int?> Function(String path)? _availableSpace;
 
+  /// SHA-256 results keyed by path. The value includes size + mtime, so a
+  /// replaced file is hashed again while repeated download/import/migration
+  /// checks hit the cached result. Full hashing is only needed once per file
+  /// revision.
+  final Map<String, String> _verifiedFileStats = {};
+
   /// Development/test escape hatch:
   /// `--dart-define=RIKAI_OCR_MODELS_DIR=/sdcard/Download/rikai-models`.
   /// Empty in normal builds; production always uses the app external files dir.
@@ -370,7 +376,7 @@ class OcrModelManager {
       if (directory.existsSync()) {
         for (final file in set.files) {
           final local = File(p.join(directory.path, file.name));
-          final valid = await _isValidFile(local, file);
+          final valid = await _hasExpectedSize(local, file);
           if (valid) {
             installedFiles++;
             installedBytes += file.size;
@@ -469,7 +475,10 @@ class OcrModelManager {
     final paths = <String, String>{};
     for (final file in set.files) {
       final local = File(p.join(directory.path, file.name));
-      if (!await _isValidFile(local, file)) {
+      // Readiness is on the UI's hot path. Size/stat is enough here: the
+      // native ONNX/keys loader validates the actual content when it opens the
+      // session, and downloads/imports still verify the pinned SHA-256.
+      if (!await _hasExpectedSize(local, file)) {
         throw OcrModelException(
           'MODEL_MISSING',
           '缺少 ${file.name}，请先在「OCR 模型」中下载或导入',
@@ -506,7 +515,7 @@ class OcrModelManager {
         }
         if (matched == null) return null;
         final local = File(p.join(directory.path, matched.name));
-        if (!await _isValidFile(local, matched)) return null;
+        if (!await _hasExpectedSize(local, matched)) return null;
         paths[name] = local.path;
       }
       return paths;
@@ -772,16 +781,40 @@ class OcrModelManager {
     return null;
   }
 
+  Future<bool> _hasExpectedSize(File file, OcrModelFile expected) async {
+    if (!file.existsSync()) return false;
+    try {
+      final stat = await file.stat();
+      return stat.type == FileSystemEntityType.file &&
+          stat.size == expected.size;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> _isValidFile(File file, OcrModelFile expected) async {
     if (!file.existsSync()) return false;
-    final length = await file.length();
-    if (length != expected.size) return false;
     final hash = expected.sha256;
-    if (hash == null || hash.isEmpty) return true;
     try {
+      final stat = await file.stat();
+      if (stat.type != FileSystemEntityType.file ||
+          stat.size != expected.size) {
+        return false;
+      }
+      if (hash == null || hash.isEmpty) return true;
+      final revision =
+          '${stat.size}:${stat.modified.millisecondsSinceEpoch}:$hash';
+      if (_verifiedFileStats[file.path] == revision) return true;
       final actual = await sha256.bind(file.openRead()).first;
-      return actual.toString() == hash;
+      final valid = actual.toString() == hash;
+      if (valid) {
+        _verifiedFileStats[file.path] = revision;
+      } else {
+        _verifiedFileStats.remove(file.path);
+      }
+      return valid;
     } catch (_) {
+      _verifiedFileStats.remove(file.path);
       return false;
     }
   }

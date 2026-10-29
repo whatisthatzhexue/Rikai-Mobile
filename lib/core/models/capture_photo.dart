@@ -67,6 +67,30 @@ class CapturePhoto {
     return copyWith(ocrCache: next);
   }
 
+  /// Exact cache lookup, then a safe manual-mode fallback.
+  ///
+  /// An auto result produced solely by Paddle is valid for manual horizontal,
+  /// and a solely-MangaOCR result is valid for manual vertical. Mixed results
+  /// never alias because they contain both layouts.
+  PhotoOcrResult? findOcrResult({
+    required OcrMode mode,
+    required String fingerprint,
+  }) {
+    final exact =
+        ocrCache[photoOcrCacheKey(mode: mode, fingerprint: fingerprint)];
+    if (exact != null) return exact;
+    if (mode != OcrMode.horizontal && mode != OcrMode.vertical) return null;
+    final auto =
+        ocrCache[photoOcrCacheKey(
+          mode: OcrMode.auto,
+          fingerprint: fingerprint,
+        )];
+    if (auto == null) return null;
+    if (mode == OcrMode.horizontal && auto.engine == 'paddle_v5') return auto;
+    if (mode == OcrMode.vertical && auto.engine == 'manga_ocr') return auto;
+    return null;
+  }
+
   CapturePhoto withoutOcr() => copyWith(ocrCache: const {});
 }
 

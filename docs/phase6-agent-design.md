@@ -2,7 +2,7 @@
 
 - 状态：**设计草案，未实现，未纳入 MVP 范围**
 - 来源：`项目初始文档.txt` 第 25–44 行「项目后期第六阶段设计指南」
-- 依赖：Phase 5 的完整历史/引导/发布打磨；Phase 1–4 已提供的 OCR、UniDic、MDict 接口
+- 依赖：Phase 4.5 的 OCR 验收、Phase 5 的完整历史/引导/发布打磨；Phase 1–4 已提供的 OCR、UniDic、MDict 接口
 - 约束：本文记录产品要求与建议架构，不代表已批准实施；不新增依赖、密钥或云端调用代码
 
 ## 1. 目标与边界
@@ -256,7 +256,7 @@ Phase 6 实施后至少覆盖：
 
 ## 14. 实施顺序（Phase 6，建议）
 
-Phase 6 必须在 Phase 5 完成并经用户确认后开始；以下顺序不是时间估算：
+Phase 6 必须在 Phase 4.5 验收、Phase 5 完成并经用户确认后开始；以下顺序不是时间估算：
 
 1. 6.1 Provider 配置、安全存储、隐私同意、fake provider 测试骨架。
 2. 6.2 OCR/UniDic/MDict tool adapters + JSON Schema + citation 基础设施。

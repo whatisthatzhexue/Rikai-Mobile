@@ -70,6 +70,7 @@ class RikaiOcrPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "initialize" -> initialize(call, result)
+            "prepare" -> prepare(call, result)
             "recognize" -> recognize(call, result)
             "cancel" -> {
                 cancelRequested.set(true)
@@ -133,6 +134,33 @@ class RikaiOcrPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
             } finally {
                 if (!replied.get()) {
                     replyError(result, "ENGINE_ERROR", "OCR 初始化未返回结果", replied)
+                }
+            }
+        }
+    }
+
+    private fun prepare(call: MethodCall, result: MethodChannel.Result) {
+        val args = call.arguments as? Map<*, *>
+        val mode = args?.get("mode") as? String ?: "auto"
+        val replied = AtomicBoolean(false)
+        scope.launch {
+            try {
+                val readiness = operationMutex.withLock {
+                    engine.prepare(mode)
+                }
+                replySuccess(result, readiness, replied)
+            } catch (error: OcrFailure) {
+                replyError(result, error.code, error.message, replied)
+            } catch (error: Throwable) {
+                replyError(
+                    result,
+                    "ENGINE_ERROR",
+                    error.message ?: "OCR 预热失败",
+                    replied,
+                )
+            } finally {
+                if (!replied.get()) {
+                    replyError(result, "ENGINE_ERROR", "OCR 预热未返回结果", replied)
                 }
             }
         }

@@ -11,6 +11,14 @@ models; all local paths are resolved by the Dart `OcrModelManager`. A missing
 optional set keeps horizontal OCR working. The native plugin never downloads
 anything itself.
 
+Phase 4.5 keeps optional ONNX sessions lazy: `initialize` loads PaddleOCR only,
+and the MangaOCR/orientation sessions are created when auto/vertical mode needs
+them (or by an explicit background `prepare`). Horizontal-only use therefore
+does not pay the 140 MB MangaOCR session cost. Runtime readiness and the model
+page's installed-status check use file existence and pinned size; downloads,
+imports and migrations still verify SHA-256, cached per path/size/mtime. The
+native ONNX loader is the final content check for existing files.
+
 | Set | Files | Approx. size | License | Source |
 |---|---|---:|---|---|
 | `paddle_v5` | `det.onnx`, `rec.onnx`, `keys.yml` | 22 MB | Apache-2.0 | PaddlePaddle/PP-OCRv5_mobile_*_onnx (pinned revisions) |

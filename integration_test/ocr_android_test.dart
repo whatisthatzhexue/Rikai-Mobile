@@ -55,6 +55,100 @@ Future<File> _renderSyntheticImage({bool upsideDown = false}) async {
   return file;
 }
 
+/// A mixed page: one horizontal caption on the left and a vertical manga
+/// column on the right. Auto mode must route each region independently.
+Future<File> _renderSyntheticMixedPage() async {
+  const width = 800;
+  const height = 800;
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  canvas.drawRect(
+    Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+    Paint()..color = Colors.white,
+  );
+  final horizontal = TextPainter(
+    text: const TextSpan(
+      text: 'ありがとう',
+      style: TextStyle(
+        color: Colors.black,
+        fontSize: 56,
+        fontFamily: 'sans-serif',
+        fontFamilyFallback: ['Noto Sans CJK JP', 'Noto Sans JP'],
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  horizontal.paint(canvas, const Offset(32, 64));
+  const vertical = ['こ', 'れ', 'は', 'テ', 'ス', 'ト', 'で', 'す'];
+  for (var index = 0; index < vertical.length; index++) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: vertical[index],
+        style: const TextStyle(
+          color: Colors.black,
+          fontSize: 52,
+          fontFamily: 'sans-serif',
+          fontFamilyFallback: ['Noto Sans CJK JP', 'Noto Sans JP'],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(canvas, Offset(660, 48 + index * 92.0));
+  }
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(width, height);
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  final directory = await getTemporaryDirectory();
+  final file = File('${directory.path}/rikai-ocr-mixed-page.png');
+  await file.writeAsBytes(bytes!.buffer.asUint8List(), flush: true);
+  return file;
+}
+
+/// A multi-line page rotated 90° clockwise. A single short line is too sparse
+/// for the document-orientation classifier, while a real page has enough
+/// structure to produce a confident 90/270 label.
+Future<File> _renderSyntheticSidewaysPage({bool clockwise = true}) async {
+  const pageWidth = 800;
+  const pageHeight = 1200;
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  if (clockwise) {
+    canvas.translate(pageHeight.toDouble(), 0);
+    canvas.rotate(math.pi / 2);
+  } else {
+    canvas.translate(0, pageWidth.toDouble());
+    canvas.rotate(-math.pi / 2);
+  }
+  canvas.drawRect(
+    Rect.fromLTWH(0, 0, pageWidth.toDouble(), pageHeight.toDouble()),
+    Paint()..color = Colors.white,
+  );
+  for (var line = 0; line < 8; line++) {
+    final painter = TextPainter(
+      text: const TextSpan(
+        text: 'ありがとう',
+        style: TextStyle(
+          color: Colors.black,
+          fontSize: 56,
+          fontFamily: 'sans-serif',
+          fontFamilyFallback: ['Noto Sans CJK JP', 'Noto Sans JP'],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(canvas, Offset(48, 48 + line * 130.0));
+  }
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(pageHeight, pageWidth);
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  final directory = await getTemporaryDirectory();
+  final file = File(
+    '${directory.path}/rikai-ocr-sideways-page-${clockwise ? '90' : '270'}.png',
+  );
+  await file.writeAsBytes(bytes!.buffer.asUint8List(), flush: true);
+  return file;
+}
+
 /// A single vertical Japanese column, similar to a manga speech bubble crop.
 Future<File> _renderSyntheticVerticalImage() async {
   const width = 180;
@@ -190,6 +284,31 @@ void main() {
     }
   });
 
+  testWidgets('horizontal OCR keeps optional sessions lazy', (tester) async {
+    final image = await _renderSyntheticImage();
+    final ocr = RikaiOcr();
+    try {
+      final readiness = await _initializeMangaAwareOcr(ocr);
+      if (readiness['mangaAvailable'] != true) {
+        fail(
+          'MangaOCR models are missing. Push build/ocr-models/manga_ocr to '
+          '${(await _installedModelsDirectory()).path}/manga_ocr',
+        );
+      }
+      expect(readiness['mangaLoaded'], isFalse);
+
+      await ocr.recognize(imagePath: image.path, mode: OcrMode.horizontal);
+      final afterHorizontal = await ocr.prepare(mode: OcrMode.horizontal);
+      expect(afterHorizontal['mangaLoaded'], isFalse);
+
+      final afterAuto = await ocr.prepare(mode: OcrMode.auto);
+      expect(afterAuto['mangaLoaded'], isTrue);
+    } finally {
+      await ocr.dispose();
+      if (image.existsSync()) await image.delete();
+    }
+  });
+
   testWidgets('MangaOCR recognizes a synthetic vertical bubble on Android', (
     tester,
   ) async {
@@ -215,6 +334,7 @@ void main() {
       // ignore: avoid_print
       print('MangaOCR readiness=$readiness');
       expect(readiness['mangaReady'], isTrue);
+      expect(readiness['mangaLoaded'], isFalse);
 
       final autoResult = await ocr.recognize(
         imagePath: image.path,
@@ -231,6 +351,8 @@ void main() {
       expect(autoResult.blocks, isNotEmpty);
       expect(autoText, isNotEmpty);
       expect(autoText, contains('これは'));
+      final warmed = await ocr.prepare(mode: OcrMode.auto);
+      expect(warmed['mangaLoaded'], isTrue);
 
       final verticalResult = await ocr.recognize(
         imagePath: image.path,
@@ -245,6 +367,107 @@ void main() {
       );
       expect(verticalResult.engine, 'manga_ocr');
       expect(verticalText, contains('これは'));
+    } finally {
+      await ocr.dispose();
+      if (image.existsSync()) await image.delete();
+    }
+  });
+
+  testWidgets('auto OCR routes horizontal and vertical regions separately', (
+    tester,
+  ) async {
+    final image = await _renderSyntheticMixedPage();
+    final ocr = RikaiOcr();
+    try {
+      final readiness = await _initializeMangaAwareOcr(ocr);
+      if (readiness['mangaAvailable'] != true) {
+        fail(
+          'MangaOCR models are missing. Push build/ocr-models/manga_ocr to '
+          '${(await _installedModelsDirectory()).path}/manga_ocr',
+        );
+      }
+      await ocr.prepare(mode: OcrMode.auto);
+      final result = await ocr.recognize(
+        imagePath: image.path,
+        mode: OcrMode.auto,
+      );
+      final text = composeOcrText(result.blocks);
+      // ignore: avoid_print
+      print(
+        'Mixed engine=${result.engine} elapsed=${result.elapsedMs}ms '
+        'blocks=${result.blocks.length} text="$text"',
+      );
+      for (final block in result.blocks) {
+        // ignore: avoid_print
+        print(
+          'mixed block orientation=${block.orientation} '
+          'rect=(${block.left},${block.top},${block.right},${block.bottom}) '
+          '"${block.text}"',
+        );
+      }
+      expect(result.engine, 'paddle_v5+manga_ocr');
+      expect(text, contains('ありがとう'));
+      expect(text, contains('これは'));
+    } finally {
+      await ocr.dispose();
+      if (image.existsSync()) await image.delete();
+    }
+  });
+
+  testWidgets('auto OCR corrects a 90-degree sideways page', (tester) async {
+    final image = await _renderSyntheticSidewaysPage();
+    final ocr = RikaiOcr();
+    try {
+      final readiness = await _initializeMangaAwareOcr(ocr);
+      // ignore: avoid_print
+      print('Sideways readiness=$readiness');
+      if (readiness['docOrientationReady'] != true) {
+        fail(
+          'Document orientation model is missing. Push build/ocr-models/'
+          'orientation to ${(await _installedModelsDirectory()).path}/orientation',
+        );
+      }
+      final result = await ocr.recognize(
+        imagePath: image.path,
+        mode: OcrMode.auto,
+      );
+      final text = composeOcrText(result.blocks);
+      // ignore: avoid_print
+      print(
+        'Sideways engine=${result.engine} elapsed=${result.elapsedMs}ms '
+        'blocks=${result.blocks.length} text="$text"',
+      );
+      expect(result.engine, 'paddle_v5');
+      expect(text, contains('ありがとう'));
+    } finally {
+      await ocr.dispose();
+      if (image.existsSync()) await image.delete();
+    }
+  });
+
+  testWidgets('auto OCR corrects a 270-degree sideways page', (tester) async {
+    final image = await _renderSyntheticSidewaysPage(clockwise: false);
+    final ocr = RikaiOcr();
+    try {
+      final readiness = await _initializeMangaAwareOcr(ocr);
+      if (readiness['docOrientationReady'] != true) {
+        fail(
+          'Document orientation model is missing. Push build/ocr-models/'
+          'orientation to ${(await _installedModelsDirectory()).path}/orientation',
+        );
+      }
+      final result = await ocr.recognize(
+        imagePath: image.path,
+        mode: OcrMode.auto,
+      );
+      final text = composeOcrText(result.blocks);
+      // ignore: avoid_print
+      print(
+        'Sideways 270 engine=${result.engine} elapsed=${result.elapsedMs}ms '
+        'blocks=${result.blocks.length} text="$text"',
+      );
+      expect(result.engine, 'paddle_v5');
+      expect(text, contains('ありがとう'));
     } finally {
       await ocr.dispose();
       if (image.existsSync()) await image.delete();

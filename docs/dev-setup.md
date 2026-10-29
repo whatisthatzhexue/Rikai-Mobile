@@ -227,7 +227,7 @@ full `http(s)://host` prefix.
 
 ## OCR integration test
 
-The Phase 4 suite runs the real PaddleOCR, MangaOCR and orientation models from
+The Phase 4.5 suite runs the real PaddleOCR, MangaOCR and orientation models from
 public storage and needs All Files Access just like the MeCab suite. Push models
 once; `_modelDir` points at the Paddle folder and the test finds the sibling
 `manga_ocr/` and `orientation/` folders:
@@ -251,10 +251,11 @@ flutter test integration_test/ocr_android_test.dart -d emulator-5554 \
   --dart-define=RIKAI_OCR_MODEL_DIR=/sdcard/Download/rikai-models/paddle_v5
 ```
 
-Use the same app-op grant loop as the MeCab test. The suite (4 cases) renders
-horizontal/vertical/upside-down PNGs, verifies automatic and manual vertical
-routing, the 180° re-run, progress events, cancellation, and prints timing/blocks.
-Results are recorded in `docs/phase4-status.md`.
+Use the same app-op grant loop as the MeCab test. The Phase 4.5 suite (8 cases)
+renders horizontal/vertical/mixed/90°/270°/upside-down PNGs, verifies automatic,
+manual and mixed routing, lazy optional sessions, the 90°/270°/180° corrections,
+progress events, cancellation, and prints timing/blocks. Results are recorded in
+`docs/phase4.5-status.md`.
 
 For manual app runs without a working model download, a debug build can point
 the model manager at a public folder:

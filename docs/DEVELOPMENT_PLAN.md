@@ -7,6 +7,10 @@
 > **Phase 6（Mdict Agent）是后期设计扩展，未纳入本 MVP 的时间估算。** 设计指南见
 > `docs/phase6-agent-design.md`。MVP 的 OCR/UniDic/MDict 核心仍离线；Phase 6 才会
 > 引入用户自备 API Key 的可选在线 LLM。Phase 6 开工前需 Phase 5 完成并经用户批准。
+>
+> **Phase 4.5（OCR 质量与性能收敛）已插入 Phase 4 与 Phase 5 之间。** 记录见
+> `docs/phase4.5-status.md`。在 Phase 4.5 的 arm64/真实页面验收通过前，不推进
+> Phase 5。
 
 ---
 
@@ -515,7 +519,44 @@ EventChannel: model load/prewarm/OCR stage progress
 - MangaOCR 目标 < 10s/页（中端真机）；内存不 OOM。
 - 无 MangaOCR 模型时，纵向模式给出下载提示，横向仍可用。
 
+### Phase 4.5 — OCR 质量与性能收敛（插入阶段，进行中）
+
+目标：先把“能用的 MVP”收敛到可接受的实际体验，再进入 Phase 5。详细记录见
+`docs/phase4.5-status.md`。
+
+任务：
+
+1. **模型生命周期**：PaddleOCR 必需；MangaOCR/orientation 懒加载；横向模式
+   不创建 MangaOCR session；提供后台 `prepare` 预热；readiness 区分
+   available/loaded。
+2. **校验与指纹**：运行时路径/指纹先 stat（路径、大小、mtime），SHA-256 只在
+   下载/导入/迁移，并按文件修订缓存；原生加载做内容兜底。
+3. **方向**：doc orientation 只在“图像长宽比与框布局矛盾”时运行；90/270
+   旋转整图并重新 DBNet；textline 180° 只在 auto 横向运行。
+4. **混合排版**：auto 按框方向分区路由（横向框 Paddle、纵向框 Manga），合并
+   阅读顺序；结果 engine 记录为 `paddle_v5+manga_ocr`。
+5. **Manga 质量**：按检测框尺寸自适应气泡 gap/padding；过滤低置信度/控制字符
+   噪声；改进多气泡/多面板顺序。
+6. **交互与缓存**：手动模式复用兼容的 auto 结果；照片集提供“旋转 90° 并重新
+   识别”入口；缓存命中时不重新识别。
+7. **验收**：x86_64 设备套件通过；arm64 真机验证横排/竖排/混合/倒置/90°、
+   连续多页内存与耗时；真实漫画页质量。
+
+验收门槛：
+
+- 横向-only 不加载 MangaOCR；首次进入照片集不因模型 SHA 校验卡顿。
+- 2048px 横排页 PaddleOCR < 5s（arm64 中端机）；单页漫画 MangaOCR < 10s，
+  无 OOM。
+- 横排、竖排、混合、倒置、90° 旋转均有真实图片回归结果。
+- 缓存命中返回照片集不重新 OCR；手动模式不重复生成兼容结果。
+- 现有单元测试、OCR 设备套件和新增真实页回归全部通过。
+
+> 状态：4.5-A/B/C 的主要代码与 x86_64 合成测试已完成；arm64/真实页面验收
+> 未完成。Phase 5 暂缓。
+
 ### Phase 5 — 语料保存、打磨与发布（3–4 天）
+
+> 前置条件：Phase 4.5 的 arm64/真实页面验收通过。此前不开始 Phase 5。
 
 任务：
 
@@ -542,8 +583,9 @@ EventChannel: model load/prewarm/OCR stage progress
 | 2 | MDict/查词/搜索/渲染 | 3–4 天 |
 | 3 | 横向 PaddleOCR + 拍照 | 3–4 天 |
 | 4 | 纵向 MangaOCR + 自动方向 | 3–4 天 |
+| 4.5 | OCR 质量与性能收敛 | 进行中（未计入原估算） |
 | 5 | 语料保存 + 打磨 + 发布 | 3–4 天 |
-| **合计** | | **17–23 天** |
+| **合计** | | **17–23 天（不含 4.5）** |
 
 > Phase 6（Mdict Agent）是 post-MVP 设计扩展，不计入上表的工期和 MVP 范围；
 > 见 §11。
@@ -561,7 +603,7 @@ EventChannel: model load/prewarm/OCR stage progress
 | MangaOCR 模型许可未声明 | 合规风险 | 不随包分发；下载前提示；仅本地使用；支持用户导入 Apache-2.0 转换模型 |
 | 模型下载源不稳定（HF/GitHub 受限） | 无法下载 | hf-mirror 优先；自定义镜像；本地导入；断点续传/重试 |
 | ORT/Paddle 模型算子不兼容 | OCR 失败 | Phase 0 spike；固定 ORT 1.28.0；准备 PP-OCRv5 备用模型/版本 |
-| 竖排/混合排版识别差 | 体验差 | MangaOCR 优先竖排；自动+手动方向；P2 按块方向路由 |
+| 竖排/混合排版识别差 | 体验差 | Phase 4.5 已做按块方向路由、90° 纠正、尺寸自适应气泡；arm64 真实页待验 |
 | WebView HTML 安全/兼容 | 安全问题或渲染异常 | 禁 JS/网络、HTML 清洗、仅本地文件；真实词典回归测试 |
 | APK 体积/内存 | 安装门槛 | 模型按需下载；release 仅 arm64；限制图片尺寸；释放 ORT/Bitmap |
 | 中文系统字体导致日文字形错误 | 阅读体验 | 内置 Noto Sans JP（OFL）或 JP 字体回退 |

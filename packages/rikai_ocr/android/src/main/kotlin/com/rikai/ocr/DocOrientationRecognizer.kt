@@ -20,6 +20,12 @@ import kotlin.math.exp
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+internal data class DocOrientation(
+    val angle: Int,
+    val confidence: Float,
+    val margin: Float,
+)
+
 internal class DocOrientationRecognizer {
     private var session: OrtSession? = null
     private var inputName: String = ""
@@ -70,15 +76,18 @@ internal class DocOrientationRecognizer {
     fun isReady(): Boolean = session != null
 
     /**
-     * True only for a high-confidence 90/270 document rotation. 0/180 and
-     * low-confidence outputs deliberately stay neutral; DBNet box geometry is
-     * still allowed to choose the vertical recognizer.
+     * Returns the classifier's best rotation label. The label is the clockwise
+     * image rotation relative to upright, so the correction is `-angle`.
+     * Low-confidence results are rejected by the caller.
+     *
+     * The PP-LCNet ONNX outputs logits. Its softmax probability is often only
+     * 0.3–0.5 even for a clear page, so we also expose the top-1/top-2 margin.
      */
     @Synchronized
-    fun isVerticalHint(bitmap: Bitmap): Boolean {
-        val active = session ?: return false
+    fun classify(bitmap: Bitmap): DocOrientation? {
+        val active = session ?: return null
         val name = inputName
-        if (name.isEmpty()) return false
+        if (name.isEmpty()) return null
         return try {
             val input = bitmapToInput(bitmap)
             val tensor = OnnxTensor.createTensor(
@@ -89,21 +98,34 @@ internal class DocOrientationRecognizer {
             tensor.use {
                 active.run(mapOf(name to it)).use { result ->
                     val scores = extractScores(result.get(0).value)
-                    if (scores.size != LABEL_ANGLES.size) return false
+                    if (scores.size != LABEL_ANGLES.size) return null
                     val probabilities = probabilities(scores)
-                    val best = probabilities.indices.maxByOrNull { i -> probabilities[i] }
-                        ?: return false
-                    val angle = LABEL_ANGLES[best]
-                    val confidence = probabilities[best]
-                    confidence >= MIN_VERTICAL_CONFIDENCE && (angle == 90 || angle == 270)
+                    if (probabilities.size != scores.size) return null
+                    val sorted = scores.indices.sortedByDescending { i -> scores[i] }
+                    val best = sorted.firstOrNull() ?: return null
+                    val second = sorted.getOrNull(1)
+                    val margin = if (second == null) {
+                        scores[best]
+                    } else {
+                        (scores[best] - scores[second]).coerceAtLeast(0f)
+                    }
+                    DocOrientation(
+                        angle = LABEL_ANGLES[best],
+                        confidence = probabilities[best],
+                        margin = margin,
+                    )
                 }
             }
         } catch (_: OutOfMemoryError) {
-            false
+            null
         } catch (_: Throwable) {
-            false
+            null
         }
     }
+
+    fun isConfident(orientation: DocOrientation): Boolean =
+        orientation.confidence >= MIN_VERTICAL_CONFIDENCE ||
+            orientation.margin >= MIN_ROTATION_MARGIN
 
     @Synchronized
     fun close() {
@@ -207,6 +229,7 @@ internal class DocOrientationRecognizer {
         private const val RESIZE_SHORT = 256
         private const val INPUT_SIZE = 224
         private const val MIN_VERTICAL_CONFIDENCE = 0.65f
+        private const val MIN_ROTATION_MARGIN = 0.35f
         private val LABEL_ANGLES = intArrayOf(0, 90, 180, 270)
         private val MEAN = floatArrayOf(0.485f, 0.456f, 0.406f)
         private val STD = floatArrayOf(0.229f, 0.224f, 0.225f)

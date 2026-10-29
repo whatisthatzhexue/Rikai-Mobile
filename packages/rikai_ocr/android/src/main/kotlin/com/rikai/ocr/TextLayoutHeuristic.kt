@@ -21,6 +21,18 @@ internal object TextLayoutHeuristic {
     private const val STRONG_VERTICAL_RATIO = 5.0f
     private const val STRONG_VERTICAL_MIN_COUNT = 3
 
+    fun isStrongHorizontal(quad: DBPostprocessor.Quad): Boolean {
+        val width = quad.width.coerceAtLeast(1f)
+        val height = quad.height.coerceAtLeast(1f)
+        return width > height * PORTRAIT_RATIO
+    }
+
+    fun isStrongVertical(quad: DBPostprocessor.Quad): Boolean {
+        val width = quad.width.coerceAtLeast(1f)
+        val height = quad.height.coerceAtLeast(1f)
+        return height > width * PORTRAIT_RATIO
+    }
+
     fun isVertical(quads: List<DBPostprocessor.Quad>): Boolean {
         if (quads.isEmpty()) return false
         if (quads.size == 1) {
@@ -59,20 +71,24 @@ internal object TextLayoutHeuristic {
     private fun looksStacked(quads: List<DBPostprocessor.Quad>): Boolean {
         if (quads.size < 3) return false
         val boxes = quads.map { it.axisAlignedBounds() }
-        val square = boxes.all { bounds ->
+        // Consider only square/tall boxes. This lets a vertical column coexist
+        // with a horizontal caption on a mixed page without the caption
+        // disqualifying the whole stack.
+        val candidates = boxes.filter { bounds ->
             val width = (bounds[2] - bounds[0]).coerceAtLeast(1)
             val height = (bounds[3] - bounds[1]).coerceAtLeast(1)
-            val ratio = width.toFloat() / height
-            ratio in 0.6f..1.6f
+            width.toFloat() / height <= 1.6f
         }
-        if (!square) return false
-        val averageWidth = boxes.map { (it[2] - it[0]).coerceAtLeast(1) }.average().toFloat()
-        val centers = boxes.map { (it[0] + it[2]) / 2f }
+        if (candidates.size < 3) return false
+        val averageWidth = candidates.map { (it[2] - it[0]).coerceAtLeast(1) }
+            .average().toFloat()
+        val centers = candidates.map { (it[0] + it[2]) / 2f }
         val spreadX = (centers.maxOrNull() ?: 0f) - (centers.minOrNull() ?: 0f)
         if (spreadX > averageWidth * 0.5f) return false
-        val sorted = boxes.sortedBy { it[1] }
+        val sorted = candidates.sortedBy { it[1] }
         val totalHeight = (sorted.last()[3] - sorted.first()[1]).coerceAtLeast(1)
-        val averageHeight = boxes.map { (it[3] - it[1]).coerceAtLeast(1) }.average().toFloat()
+        val averageHeight = candidates.map { (it[3] - it[1]).coerceAtLeast(1) }
+            .average().toFloat()
         return totalHeight / averageHeight >= 2.5f
     }
 }

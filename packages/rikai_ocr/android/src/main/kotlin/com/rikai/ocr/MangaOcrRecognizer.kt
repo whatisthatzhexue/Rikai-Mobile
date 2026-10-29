@@ -459,12 +459,27 @@ internal class MangaOcrRecognizer {
         }.filter { it.width > 1 && it.height > 1 }
         if (rects.isEmpty()) return emptyList()
 
+        // Scale the clustering gap with the detected text size. A fixed 18 px
+        // merges small furigana with neighbouring columns on dense pages and
+        // over-separates large display lettering.
+        val medianSide = rects.map { minOf(it.width, it.height).toFloat() }
+            .sorted()
+            .let { values ->
+                if (values.size % 2 == 1) {
+                    values[values.size / 2]
+                } else {
+                    (values[values.size / 2 - 1] + values[values.size / 2]) / 2f
+                }
+            }
+        val gap = (medianSide * 0.4f).roundToInt().coerceIn(MIN_BUBBLE_GAP, MAX_BUBBLE_GAP)
+        val padding = (medianSide * 0.15f).roundToInt()
+            .coerceIn(MIN_CROP_PADDING, MAX_CROP_PADDING)
         val bubbles = MangaBubbleClusterer.cluster(
             rects = rects,
             imageWidth = bitmap.width,
             imageHeight = bitmap.height,
-            padding = CROP_PADDING,
-            gap = BUBBLE_GAP,
+            padding = padding,
+            gap = gap,
         )
         if (bubbles.isEmpty()) return emptyList()
         val plans = MangaCropPlanner.plan(
@@ -472,7 +487,7 @@ internal class MangaOcrRecognizer {
             rects = rects,
             imageWidth = bitmap.width,
             imageHeight = bitmap.height,
-            padding = CROP_PADDING,
+            padding = padding,
         )
         if (plans.isEmpty()) return emptyList()
 
@@ -496,15 +511,20 @@ internal class MangaOcrRecognizer {
 
         val blocks = chunks.mapNotNull { (bubbleIndex, parts) ->
             val bubble = bubbles.getOrNull(bubbleIndex) ?: return@mapNotNull null
-            val text = parts.sortedBy { it.cropIndex }
-                .joinToString(separator = "") { it.result.text }
-                .trim()
+            val text = sanitizeText(
+                parts.sortedBy { it.cropIndex }
+                    .joinToString(separator = "") { it.result.text },
+            )
             if (text.isEmpty() || !hasReadableCharacter(text)) return@mapNotNull null
             val confidence = parts.map { it.result.confidence }
                 .filter { it.isFinite() }
                 .average()
                 .takeIf { it.isFinite() }
                 ?.toFloat() ?: 0f
+            // Drop decoder noise from low-quality crops. Correct manga-ocr
+            // bubbles are normally well above this; the threshold is
+            // deliberately conservative so short sound effects survive.
+            if (confidence < MIN_BUBBLE_CONFIDENCE) return@mapNotNull null
             NativeOcrBlock(
                 text = text,
                 left = bubble.contentRect.left,
@@ -706,6 +726,19 @@ internal class MangaOcrRecognizer {
         }
     }
 
+    private fun sanitizeText(value: String): String {
+        val cleaned = StringBuilder(value.length)
+        for (character in value) {
+            when {
+                character == '�' -> Unit
+                character.code < 0x20 && character != '\n' && character != '\t' -> Unit
+                character.code == 0x7F -> Unit
+                else -> cleaned.append(character)
+            }
+        }
+        return cleaned.toString().trim()
+    }
+
     private fun hasReadableCharacter(text: String): Boolean =
         text.any { it.isLetterOrDigit() }
 
@@ -804,7 +837,10 @@ internal class MangaOcrRecognizer {
         private const val MASK_ID = 4
         private const val IMAGE_SIZE = 224
         private const val MAX_TOKENS = 48
-        private const val BUBBLE_GAP = 18
-        private const val CROP_PADDING = 6
+        private const val MIN_BUBBLE_GAP = 10
+        private const val MAX_BUBBLE_GAP = 24
+        private const val MIN_CROP_PADDING = 4
+        private const val MAX_CROP_PADDING = 10
+        private const val MIN_BUBBLE_CONFIDENCE = 0.10f
     }
 }

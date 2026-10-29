@@ -73,9 +73,9 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
 
     bool hasMissing(String fingerprint) {
       return photos.any(
-        (photo) => !photo.ocrCache.containsKey(
-          photoOcrCacheKey(mode: widget.mode, fingerprint: fingerprint),
-        ),
+        (photo) =>
+            photo.findOcrResult(mode: widget.mode, fingerprint: fingerprint) ==
+            null,
       );
     }
 
@@ -112,7 +112,10 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
           mode: widget.mode,
           fingerprint: fingerprint,
         );
-        if (photo.ocrCache.containsKey(key)) continue;
+        if (photo.findOcrResult(mode: widget.mode, fingerprint: fingerprint) !=
+            null) {
+          continue;
+        }
         setState(() => _recognizingPhotoId = photo.id);
         try {
           final result = await ref
@@ -214,10 +217,12 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
     var saved = 0;
     try {
       for (final photo in selected) {
-        final key = _fingerprint == null
+        final cached = _fingerprint == null
             ? null
-            : photoOcrCacheKey(mode: widget.mode, fingerprint: _fingerprint!);
-        final cached = key == null ? null : photo.ocrCache[key];
+            : photo.findOcrResult(
+                mode: widget.mode,
+                fingerprint: _fingerprint!,
+              );
         final blocksJson = jsonEncode(
           (cached?.blocks ?? const []).map((block) {
             return {
@@ -392,13 +397,12 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
                     itemCount: photos.length,
                     itemBuilder: (context, index) {
                       final photo = photos[index];
-                      final key = _fingerprint == null
+                      final result = _fingerprint == null
                           ? null
-                          : photoOcrCacheKey(
+                          : photo.findOcrResult(
                               mode: widget.mode,
                               fingerprint: _fingerprint!,
                             );
-                      final result = key == null ? null : photo.ocrCache[key];
                       return _PhotoGridTile(
                         photo: photo,
                         text: result?.text,

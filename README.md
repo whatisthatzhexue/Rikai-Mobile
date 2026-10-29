@@ -11,8 +11,10 @@ provider; it is not part of the current build.
 ## Status
 
 Phases 1–4 are working end to end on the Android emulator with a real
-UniDic and MDict dictionary. Phase 5 is the next implementation phase; the
-Phase 6 dictionary assistant is currently design-only and is not implemented.
+UniDic and MDict dictionary. **Phase 4.5 (OCR quality and performance
+convergence) is in progress**; Phase 5 is paused until the Phase 4.5 real-device
+acceptance checks pass. The Phase 6 dictionary assistant is design-only and is
+not implemented.
 
 - In-place MeCab/UniDic tokenization in a long-lived worker isolate, private
   `mecabrc`, CSV-aware parsing of quoted UniDic fields
@@ -50,17 +52,29 @@ Phase 6 dictionary assistant is currently design-only and is not implemented.
 - Reader lookup keeps the keyboard closed before/after the token sheet
 - Phase 4 vertical MangaOCR: one shared DBNet pass, bubble clustering/crop
   planning, RTL reading order, and a Chinese prompt when the model is missing
+- Phase 4.5 lazy model sessions: horizontal-only OCR never loads MangaOCR;
+  optional sessions are created on demand or by background prewarm, and
+  readiness reports availability separately from loaded state
+- Stat-first model fingerprints/readiness; SHA-256 remains on download/import
+  and is cached per file revision, removing repeated full hashes from page
+  re-entry
 - Automatic mode routes horizontal/vertical from box geometry and optional
-  PP-LCNet document/text-line orientation; upside-down horizontal pages get
-  one 180° re-run when the orientation set is installed
+  PP-LCNet orientation; confident 90/270 pages are rotated and re-detected;
+  mixed pages can route strong horizontal boxes to PaddleOCR and vertical
+  boxes to MangaOCR (`paddle_v5+manga_ocr`)
+- Upside-down horizontal pages get one 180° re-run when the orientation set is
+  installed; MangaOCR grouping uses size-aware gaps and filters low-confidence
+  noise
+- Manual “旋转” rotates the private photo copy 90° clockwise and re-runs OCR;
+  a manual mode reuses a compatible auto result when safe
 - MangaOCR and orientation models can be downloaded or locally imported from
   the existing model page; the unknown MangaOCR license is confirmed first
 - OCR text flows into the same reader and MDict lookup UI
 
 ### Phase 6 planned: dictionary assistant (design only)
 
-Phase 6 is documented but **not implemented**. Once Phase 5 is complete and the
-design is approved, the planned home screen has five actions:
+Phase 6 is documented but **not implemented**. Once Phase 4.5 and Phase 5 are
+complete and the design is approved, the planned home screen has five actions:
 `拍照识别`, `查句子`, `查单词`, `历史记录`, and the new `词典助手`.
 
 The planned assistant would combine local OCR, UniDic tokenization, and MDict
@@ -73,8 +87,10 @@ on-device OCR and must never be sent to the LLM as vision input. The detailed
 design, privacy boundary, open questions, and acceptance criteria are in
 [docs/phase6-agent-design.md](docs/phase6-agent-design.md).
 
-Next: Phase 5 (full corpus/history management, onboarding, release polish).
-Phase 6 will start only after Phase 5 and explicit approval. See
+Next: finish Phase 4.5 real-device acceptance, then Phase 5 (full corpus/history
+management, onboarding, release polish). Phase 6 will start only after Phase 5
+and explicit approval. See
+[docs/phase4.5-status.md](docs/phase4.5-status.md),
 [docs/phase6-agent-design.md](docs/phase6-agent-design.md),
 [docs/phase4-status.md](docs/phase4-status.md),
 [docs/phase3-status.md](docs/phase3-status.md),
@@ -127,6 +143,7 @@ provider/fake-server tests are not part of the current build or test suite.
 - [Phase 3 status](docs/phase3-status.md)
 - [Phase 3.5 capture/import status](docs/phase3.5-status.md)
 - [Phase 4 vertical OCR status](docs/phase4-status.md)
+- [Phase 4.5 OCR convergence status](docs/phase4.5-status.md)
 - [Phase 6 agent design (planned)](docs/phase6-agent-design.md)
 - [Development setup](docs/dev-setup.md)
 - [Models](docs/models.md)

@@ -51,6 +51,14 @@ class CaptureSessionNotifier extends Notifier<CaptureSessionState> {
     state = state.copyWith(photos: next);
   }
 
+  void clearPhotoOcr(String photoId) {
+    final index = state.photos.indexWhere((photo) => photo.id == photoId);
+    if (index < 0) return;
+    final next = state.photos.toList();
+    next[index] = next[index].withoutOcr();
+    state = state.copyWith(photos: next);
+  }
+
   void clearOcrCache() {
     state = state.copyWith(
       photos: state.photos
