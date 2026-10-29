@@ -259,9 +259,7 @@ class DictionaryRepositoryNotifier extends Notifier<List<DictionaryInfo>> {
     final siblings = await _discoverSiblings(path);
     final info = DictionaryInfo(
       id: DictionaryInfo.idForPath(path),
-      title: metadata.title.isEmpty
-          ? dictionaryTitleFallback(path)
-          : metadata.title,
+      title: displayDictionaryTitle(metadata.title, path),
       mdxPath: path,
       mddPaths: siblings.mddPaths,
       cssPaths: siblings.cssPaths,
@@ -295,9 +293,7 @@ class DictionaryRepositoryNotifier extends Notifier<List<DictionaryInfo>> {
       final metadata = await service.probe(current.mdxPath);
       final siblings = await _discoverSiblings(current.mdxPath);
       updated = current.copyWith(
-        title: metadata.title.isEmpty
-            ? dictionaryTitleFallback(current.mdxPath)
-            : metadata.title,
+        title: displayDictionaryTitle(metadata.title, current.mdxPath),
         mddPaths: siblings.mddPaths,
         cssPaths: siblings.cssPaths,
         entryCount: metadata.entryCount,

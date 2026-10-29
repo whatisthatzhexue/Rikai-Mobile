@@ -114,51 +114,82 @@ disabled in the UI.
 - App-session photo set with `BoxFit.contain` preview, OCR text/mode/cache,
   page navigation, auto recognition on photo/mode change, cancel/retry, and
   disabled vertical mode.
-- The photo area can be enlarged/shrunk by dragging its bottom edge, and a tap
-  opens a black full-screen viewer with pinch zoom and pan.
+- The photo area can be enlarged/shrunk by dragging its bottom edge (single
+  white bar, no grey pill), and a tap opens a black full-screen viewer with
+  pinch zoom and pan.
 - Delete and save are 52dp round actions fixed at the **screen**
   bottom-left/right. Delete confirms and defaults to not deleting originals;
   save uses the deep-blue header colour with a white icon and confirms before
   writing the photo + OCR text + mode + blocks to the local corpus.
 - “分析句子” was removed. After OCR the page automatically tokenizes when
   UniDic is configured and renders the same `ReaderBlock` tokens as the text
-  reader (tap a token to look up). Without UniDic, or when tokenization fails,
-  it shows the OCR text with a reason. A title-bar copy action is always
-  available once text exists, and the reader options menu provides the same
+  reader (tap a token to look up). Without UniDic it shows OCR text; a
+  tokenization failure is a red banner over the top of the photo below the AppBar
+  with a retry action, so it never covers the result area. Copy is a deep-blue
+  bar at the photo's bottom-right; the reader options menu provides the same
   16/20/24/28 font sizes and furigana toggle.
+- The OCR mode is stored in the capture session. Cache hits use the
+  app-level `OcrService.fingerprint` before touching the models, so returning
+  from model settings, the multi-select page or another page does not re-run
+  OCR when mode/fingerprint are unchanged. Returning from model settings only
+  clears the cache and forces recognition when the fingerprint changed.
+- The multi-select page receives the current fingerprint and only recognizes
+  photos without a matching cache entry; when all are cached it shows their
+  text without a progress flicker. Its OCR preview is 20sp.
 - Single Photo Set AppBar “多选” entry; the selection page uses the same round
   delete/save icons for batch operations, with confirmation. The duplicate
   “保存到语料库（后续支持）” buttons were removed.
-- Model settings is centered; no duplicate text action.
+- Model settings is centered; no duplicate text action. The mode selector,
+  model-settings link and page arrows sit at the bottom; the arrow centre line
+  matches the screen-corner buttons.
 
 ### Corpus
 
 - `HistoryStore` (sqflite, app support dir) stores sessions and copies photos to
-  `corpus/images`; corpus page lists entries, reopens text in the reader, and
-  deletes records/photos. Full tokenization/history management remains Phase 5.
+  `corpus/images`. The corpus list shows a large, uncropped photo with a red
+  round delete action at its top-right, the full OCR result below, then the
+  recognition date.
+- Opening an entry goes to `/corpus-detail`: full photo with resize/zoom, OCR
+  original, date, and a tokenized ReaderBlock section. Page arrows move between
+  corpus entries, the title is “语料”, and only a bottom-left delete action is
+  shown (no multi-select, orientation, model settings or save). All data and
+  tokenization are local/offline.
+- Full history/corpus management remains Phase 5.
 
 ## Verification
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 106 tests passed
+flutter test     -> 107 tests passed
 flutter build apk --debug -> success
 ```
 
 Unit coverage added: model role/size import, existing-file fill, 416/Content-
-Range reset, read-only status, migration, custom mirror, capture session cache,
-recursive dictionary scan, and reader line grouping.
+Range reset, read-only status, migration, custom mirror, capture session mode
+and cache, recursive dictionary scan, dictionary-title sanitization, and reader
+line grouping.
 
 Manual emulator checks:
 
+- home layout: usage notice at the top, four deep-blue actions centred in the
+  remaining space;
 - live camera preview, shutter, gallery multi-select, photo-set OCR and
   text-to-reader flow;
 - photo set automatically tokenized `ありがとう / 東京で食べた。` with UniDic and
-  rendered ReaderBlocks; copy and the 16/20/24/28 font menu worked;
-- photo-area resize by dragging the bottom handle and full-screen pinch viewer
+  rendered ReaderBlocks; copy (bottom-right deep-blue bar) and the 16/20/24/28
+  font menu worked;
+- photo-area resize with the single white handle and full-screen pinch viewer
   opening from a photo tap;
+- tokenization failure showed the red retry banner over the top of the photo
+  without covering the OCR result area;
+- returning from model settings and from multi-select reused cached OCR with
+  no progress/re-recognition; multi-select showed cached text immediately and
+  used 20sp previews;
 - photo-set screen-corner delete/save actions (52 dp each, save deep blue);
-  save confirmation; corpus list/thumbnail; single and batch save snackbars;
+  page-arrow centres aligned with the action centres;
+- save confirmation; corpus list showed the full photo, top-right red delete,
+  OCR text and date; corpus detail showed photo/OCR/tokens, corpus-to-corpus
+  navigation, bottom-left delete and no save/multi/orientation/model controls;
 - model page directory/space/mirror/installed state;
 - MDict folder scan of `/sdcard/Download/rikai-mdict` showing title, size and
   “已在词典库中” without the English MDD/CSS suffix; importing a second MDX
@@ -175,8 +206,10 @@ download is still pending a network-capable device.
 - No arm64 device; camera/OCR performance remains functional-only on x86_64.
 - Gallery “delete original” is best-effort because image_picker exposes a cache
   copy, not a MediaStore delete handle; the UI falls back to session removal.
-- Corpus saves photo + OCR text + blocks + mode/time; full tokenization/history
-  management remains Phase 5.
+- Corpus saves photo + OCR text + blocks + mode/time and re-tokenizes on detail
+  open; full history management remains Phase 5.
 - Vertical OCR and orientation routing remain Phase 4.
 - Batch corpus save was verified on the emulator for a single selected photo;
   a multi-photo/large-set pass remains desirable.
+- The corpus detail photo/token sections are read-only apart from delete and
+  navigation; editing/exporting corpus text remains Phase 5.

@@ -24,59 +24,84 @@ class HomePage extends StatelessWidget {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.lg,
-          AppSpacing.lg,
-          AppSpacing.xl,
-        ),
+      body: Column(
         children: [
-          _HomeActionButton(
-            icon: Icons.photo_camera_outlined,
-            label: '拍照识别',
-            onTap: () => context.push('/capture'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.lg,
+              AppSpacing.sm,
+            ),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('使用前须知', style: theme.textTheme.titleMedium),
+                    const SizedBox(height: AppSpacing.sm),
+                    const _ChecklistItem(
+                      icon: Icons.menu_book_outlined,
+                      text: '在设置中填写分词词典（UniDic）目录',
+                    ),
+                    const _ChecklistItem(
+                      icon: Icons.library_books_outlined,
+                      text: '添加 MDict 词典（.mdx；同目录的 .mdd/.css 会自动发现）',
+                    ),
+                    const _ChecklistItem(
+                      icon: Icons.download_outlined,
+                      text: '下载 OCR 模型后可拍照识别',
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          const SizedBox(height: AppSpacing.md),
-          _HomeActionButton(
-            icon: Icons.text_fields,
-            label: '输入文本',
-            onTap: () => context.push('/reader'),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _HomeActionButton(
-            icon: Icons.search,
-            label: '查词',
-            onTap: () => context.push('/search'),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _HomeActionButton(
-            icon: Icons.history,
-            label: '语料',
-            onTap: () => context.push('/corpus'),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('使用前须知', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: AppSpacing.sm),
-                  const _ChecklistItem(
-                    icon: Icons.menu_book_outlined,
-                    text: '在设置中填写分词词典（UniDic）目录',
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.sm,
+                      AppSpacing.lg,
+                      AppSpacing.xl,
+                    ),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _HomeActionButton(
+                            icon: Icons.photo_camera_outlined,
+                            label: '拍照识别',
+                            onTap: () => context.push('/capture'),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          _HomeActionButton(
+                            icon: Icons.text_fields,
+                            label: '输入文本',
+                            onTap: () => context.push('/reader'),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          _HomeActionButton(
+                            icon: Icons.search,
+                            label: '查词',
+                            onTap: () => context.push('/search'),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          _HomeActionButton(
+                            icon: Icons.history,
+                            label: '语料',
+                            onTap: () => context.push('/corpus'),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  const _ChecklistItem(
-                    icon: Icons.library_books_outlined,
-                    text: '添加 MDict 词典（.mdx；同目录的 .mdd/.css 会自动发现）',
-                  ),
-                  const _ChecklistItem(
-                    icon: Icons.download_outlined,
-                    text: '下载 OCR 模型后可拍照识别',
-                  ),
-                ],
+                ),
               ),
             ),
           ),

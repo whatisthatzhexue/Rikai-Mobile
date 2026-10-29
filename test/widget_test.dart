@@ -52,6 +52,11 @@ void main() {
     expect(find.text('输入文本'), findsOneWidget);
     expect(find.text('查词'), findsOneWidget);
     expect(find.text('语料'), findsOneWidget);
+    // The usage notice sits above the action grid.
+    expect(
+      tester.getTopLeft(find.text('使用前须知')).dy,
+      lessThan(tester.getTopLeft(find.text('拍照识别')).dy),
+    );
     // Detailed intro/footer copy was removed by the UI revision.
     expect(find.textContaining('日语阅读 · 离线查词'), findsNothing);
     expect(find.textContaining('Phase 0'), findsNothing);

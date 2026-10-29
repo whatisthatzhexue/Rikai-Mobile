@@ -36,11 +36,17 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
   滑入覆盖静止的旧页面，禁止淡入淡出，避免深蓝顶栏出现白色残影。
   拍照页使用实时相机预览 + 半透明底部控制遮罩；照片集的删除/保存是**整个画面**
   左下/右下角的 52dp 圆形图标（删除错误色、保存深蓝 `header` + 白图标），
-  保存/删除均二次确认；照片区可拖拽下边缘调整高度，点击进入黑底全屏缩放查看；
-  照片集标题栏只保留一个「多选」入口，多选页沿用同一套图标。
-  照片集不再有“分析句子”：拍照 OCR 后若已配置 UniDic，直接按文本阅读页
-  TokenChip 显示并点词查词；未配置/失败时显示 OCR 原文。任何情况下都保留
-  标题栏复制，并与文本阅读页共用字号/注音菜单。
+  保存/删除均二次确认；照片区可拖拽下边缘调整高度（纯白单色指示条），点击进入
+  黑底全屏缩放查看；照片集标题栏只保留字号/注音菜单与一个「多选」入口，
+  多选页沿用同一套图标。照片集不再有“分析句子”：拍照 OCR 后若已配置 UniDic，
+  直接按文本阅读页 TokenChip 显示并点词查词；未配置时显示 OCR 原文；分词失败
+  使用叠在照片顶部、标题栏下方的红色横幅（含重试），不占用 OCR 结果区。
+  复制按钮在照片显示区右下角，为深蓝长条；识别方向、模型设置、页码导航贴近
+  页面底部，页码箭头中心与左下/右下角按钮中心同高。
+  主页把「使用前须知」放在上方，四个功能按钮在剩余空间垂直居中。
+  语料列表为大照片（完整 contain）+ 右上角红色圆形删除 + OCR 结果 + 日期；
+  点开后进入「语料」详情：照片/OCR/分词、语料间页码、左下删除，
+  无多选/方向/模型设置/保存。
 - **字体**：HarmonyOS Sans SC Regular，路径
   `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`。字体文件**不入库**（`.gitignore`
   已忽略）；用户自行从华为 HarmonyOS 设计资源下载，见 `assets/fonts/README.md`。
@@ -189,14 +195,21 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
     进度/取消）；扫描行不再显示 MDD/CSS 英文尾注，导入完成直接回词典管理页
     且不弹结果对话框。模型目录可配置、校验、默认迁移、仅切换。
   - 照片集 OCR 后自动分词（已配置 UniDic 时按阅读器 TokenChip 展示）、
-    标题栏复制/字号/注音、照片区下边缘拖拽调高、全屏缩放查看。
+    字号/注音、照片区下边缘拖拽调高、全屏缩放查看；复制改为照片右下角深蓝
+    长条；分词错误为照片顶部红色横幅；模式保存在会话中。
+  - OCR 缓存使用应用级模型指纹快路径：从模型设置、多选页或其它页面返回时，
+    模式/指纹一致直接显示缓存；多选页只补识别未缓存照片。
+  - 语料列表改为完整大照片 + 右上角红色圆形删除 + OCR + 日期；新增语料详情页，
+    展示照片/OCR/分词并支持语料间翻页，仅左下删除、无保存/多选/方向/模型设置。
+  - MDict 扫描/导入不再显示 `Instance of ...` 等调试英文；词典标题也会过滤
+    此类字符串。
   - 阅读页查词键盘行为修复；OCR 阅读页使用本地草稿控制器。
 
 已验证：
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 106 tests passed
+flutter test     -> 107 tests passed
 flutter build apk --debug -> success
 ```
 
@@ -517,6 +530,10 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
 | MDict 导入弹结果框/列表尾部有英文 | 扫描行只显示中文状态；导入完成直接返回，失败只用 SnackBar（§5.10 #64） |
 | 本地导入仍提示缺少 det.onnx/rec.onnx | 上游文件名为 inference.onnx/inference.yml；按大小+角色匹配（§5.10 #65） |
 | 模型目录切换后仍读旧文件 | 保存设置后 manager 回调读取新路径；默认迁移校验后再保存（§5.10 #66） |
+| 返回照片集或多选页又重跑 OCR | 模式存会话、指纹存 OcrService；命中缓存直接渲染，多选只补缺失（§5.10 #67） |
+| 主页使用前须知仍在按钮下方 | 须知放上方，四个按钮在剩余空间垂直居中（§5.10 #68） |
+| 语料仍是缩略图/点击进文本阅读 | 大照片完整 contain + 右上删除 + OCR + 日期；点击进语料详情（§5.10 #69） |
+| 语料详情只显示 OCR 或只显示分词 | 两段都显示；OCR 原文 + ReaderBlock 分词，可点词查词（§5.10 #70） |
 
 ### 5.7 Phase 1 设备实测经验（2026-10-27）
 
@@ -694,7 +711,9 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
       `permission_handler`。
 60. **误区：把照片集的删除/保存按钮放在照片区域内部，或把保存做成白底。**
     - 正确做法：用户要求它们固定在**整个画面**左下/右下角；照片区只放照片。
-      页面底部预留 `AppSizes.captureBottomReserve`，避免遮住分页/操作区。
+      不再在底部额外预留 64dp；识别方向、模型设置、页码导航贴近页面底部，
+      `CapturePageNavigation` 固定 52dp 高、底边距 12，使页码箭头中心与
+      52dp 删除/保存按钮中心同高。
       两者统一使用 `CaptureRoundButton`（52dp、24dp 图标），删除为错误色、
       保存为深蓝 `header` + 白图标；白底按钮在照片背景下对比不足。
       均二次确认；保存写入 `HistoryStore`（照片副本 + OCR 文本 + blocks + 模式/时间）。
@@ -702,21 +721,26 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
     - 正确做法：照片集标题栏只保留一个「多选」；多选页标题改为「选择照片」，
       正文只显示已选数量，全选放标题栏；删除/保存沿用同一
       `CaptureRoundButton` 图标，不再放“保存到语料库（后续支持）”等重复文字。
-62. **误区：照片集保留“分析句子”按钮，或只把 OCR 原文塞进文本框。**
+62. **误区：照片集保留“分析句子”按钮，把分词错误塞进结果区，或把复制放标题栏。**
     - 正确做法：用户要求删除分析按钮；已配置 UniDic 时 OCR 完成后自动分词，
       直接使用 `ReaderBlock`/`buildReaderLines` 按文本阅读页渲染，点词打开查词弹层。
-      未配置或分词失败时显示 OCR 原文和原因。标题栏始终提供复制；字号/注音
-      使用与阅读页同一个 `ReaderOptionsMenu`（16/20/24/28 + 显示注音）。
-      不要把照片集再跳转到 `/reader` 作为唯一分析入口。
-63. **误区：照片区高度写死，或只能看缩略图。**
-    - 正确做法：照片区下边缘提供 28dp 拖拽热区和指示条，向下拖动扩大照片区
-      （默认 250、最小 120，给结果/操作区留空间）；点击照片进入黑底全屏
-      `InteractiveViewer`，支持双指缩放与平移，参考系统画册。
-64. **误区：MDict 批量导入完成弹结果对话框，或在扫描行尾部显示 MDD/CSS 英文。**
+      未配置时显示 OCR 原文；分词失败用**红色横幅叠在照片顶部、标题栏下方**，
+      带白字“重试”，不能占用/推挤 OCR 结果区。
+      复制按钮改为照片显示区右下角的深蓝 `header` 长条（白字白图标）；
+      标题栏只留字号/注音菜单和“多选”。字号/注音使用与阅读页同一个
+      `ReaderOptionsMenu`（16/20/24/28 + 显示注音）。
+63. **误区：照片区高度写死，或拖拽指示条是白线外套灰色胶囊。**
+    - 正确做法：照片区下边缘提供 28dp 拖拽热区，指示条必须是**纯白单色**
+      44×4dp（不要深色胶囊/描边）；向下拖动扩大照片区（默认 250、最小 120，
+      给结果/操作区留空间）；点击照片进入黑底全屏 `InteractiveViewer`，
+      支持双指缩放与平移，参考系统画册。
+64. **误区：MDict 批量导入完成弹结果对话框，或扫描时显示 MDD/CSS、Instance of 等英文。**
     - 正确做法：扫描行只显示路径、大小和中文状态（可导入/已存在/不支持），
-      不追加 `MDD n · CSS n` 等英文尾注，也不显示原始英文异常。词典管理的
-      资源标签使用“资源/样式/无资源”。导入结束后直接返回词典管理页；
-      仅在失败/取消时用非阻塞 SnackBar 报告数量，不要弹“导入结果”对话框。
+      不追加 `MDD n · CSS n` 等英文尾注，也不显示原始英文异常；扫描进度不显示
+      文件名。词典标题若是 `Instance of ...`/`Exception ...` 等 Dart 调试文本，
+      用 `displayDictionaryTitle` 回退文件名。词典管理的资源标签使用
+      “资源/样式/无资源”。导入结束后直接返回词典管理页；仅在失败/取消时用
+      非阻塞 SnackBar 报告数量，不要弹“导入结果”对话框。
 65. **误区：本地导入模型按 manifest 的 det.onnx/rec.onnx 精确文件名匹配。**
     - 正确做法：上游下载常为两个 `inference.onnx` + `inference.yml`；按
       文件大小、扩展名和角色映射，命中已安装文件时只补缺失项；先写
@@ -725,6 +749,28 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
     - 正确做法：先校验新目录读写/空间；默认复制并逐文件校验后再保存设置
       和删除旧文件，支持“仅切换”；目录失效时保留设置并提供重新选择，
       不崩溃、不清空其他设置。
+67. **误区：每次从模型设置/多选/其它页面返回照片集都重新 OCR。**
+    - 正确做法：OCR 缓存键是“照片 + 模式 + 模型指纹”，模式存在
+      `CaptureSessionState.mode`（会话级，不得因页面重建重置为自动）。
+      `OcrService.fingerprint` 在应用会话内保留；照片集先用它查缓存并直接渲染，
+      无需 `ensureReady`。模型设置返回时只有指纹变化才清缓存并 `force`
+      重新识别；指纹不变必须 `_refreshCurrent(force:false)`。多选页传入
+      `initialFingerprint`，进入时先查缓存，只补识别缺失照片；全部命中时
+      不要显示/闪一下进度。
+68. **误区：主页功能按钮仍在最上方，使用前须知在下方。**
+    - 正确做法：使用前须知卡片在上方；四个功能按钮在剩余空间垂直居中
+      （小屏可滚动）。保持深蓝 `header`、32sp、整体居中。
+69. **误区：语料页沿用 72dp 缩略图和右侧小删除按钮；点击语料仍跳文本阅读页。**
+    - 正确做法：语料卡片展示完整大照片（`BoxFit.contain`，最大
+      `corpusPhotoMaxHeight`），右上角叠放与照片集同款的错误色圆形删除按钮
+      （`corpusAction` 44dp，可适当缩小）；照片下是完整 OCR 文本，再下是识别日期。
+      点击卡片进入 `/corpus-detail`（`CorpusDetailPage`）：照片/OCR/分词结果，
+      语料间页码，标题「语料」，左下角删除；无多选/方向/模型设置/保存。
+      该页只使用本机图片、`HistoryStore`、MeCab/MDict，不得联网。
+70. **误区：语料详情把 OCR 原文和分词结果只显示其中一种。**
+    - 正确做法：两者都显示：OCR 原文（`SelectableText`）+ 分词结果
+      （`ReaderBlock`，可点词查词）；未配置 UniDic/失败时保留 OCR 原文并给出
+      中文说明/重试。翻页/删除后重新分析当前语料，旧分析用 token 丢弃。
 
 ## 6. 关键文件
 
@@ -744,7 +790,9 @@ lib/core/models/ocr_model.dart                                # OCR 模型清单
 lib/services/ocr/model_manager.dart                           # 下载/续传/校验/导入
 lib/services/ocr/ocr_text_composer.dart                       # 原生行块 → 阅读文本
 lib/features/capture/                                         # 相机/照片集/多选/保存/缩放查看
-lib/features/corpus/corpus_page.dart                          # 语料列表/打开/删除
+lib/features/capture/photo_pane.dart                          # 共用照片区/白色拖拽条
+lib/features/corpus/corpus_page.dart                          # 语料大照片列表/删除
+lib/features/corpus/corpus_detail_page.dart                   # 语料详情/OCR/分词/翻页
 lib/services/storage/history_store.dart                       # 语料 SQLite + 图片副本
 lib/features/settings/model_page.dart                         # OCR 模型/目录/迁移
 lib/features/settings/dictionary_import_page.dart             # MDict 文件夹导入
@@ -762,6 +810,8 @@ lib/services/storage/settings_store.dart                      # SharedPreference
 lib/services/storage/dictionary_store.dart                    # 词典注册表持久化
 lib/services/storage/permission_service.dart                  # 权限 MethodChannel Dart 侧
 lib/features/reader/                                          # 文本阅读区/共享字号注音菜单/分行
+lib/features/reader/reader_options.dart                       # 阅读页与照片集共用字号/注音菜单
+lib/features/reader/reader_lines.dart                         # 文本按行分组 ReaderBlock
 lib/features/lookup/                                          # 查词弹层/搜索/词条/WebView
 lib/features/settings/settings_page.dart                      # UniDic/权限/显示设置
 lib/features/settings/dictionary_page.dart                    # 词典管理
@@ -889,5 +939,5 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
    接入同一检测器。
 4. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
    颜色/字号，字体与模型文件不入库；**所有页面**统一深蓝顶栏和右滑覆盖转场。
-5. 每个阶段结束运行 analyze/test/debug build（当前 106 tests / 12 项设备测试），
+5. 每个阶段结束运行 analyze/test/debug build（当前 107 tests / 12 项设备测试），
    并记录到新的阶段状态文档；设备端测试按 §7 的命令运行。

@@ -32,11 +32,13 @@ UniDic and MDict dictionary:
   batch selection, and EXIF-corrected max-2048 preprocessing
 - Photo set auto-tokenizes OCR text with UniDic and renders it like the text
   reader; copy and font/furigana controls stay available without UniDic
-- Resizable photo area and a full-screen pinch-zoom photo viewer
+- Resizable photo area with a white drag handle and a full-screen pinch-zoom
+  photo viewer; OCR/session caches survive page navigation
 - Model manager with configurable directory/migration, hf-mirror → Hugging Face
   → custom mirror, resumable SHA-256-verified downloads, and local import
 - Photo-set save action stores the photo + OCR text in the local corpus; the
-  corpus page can reopen, read, or delete entries
+  corpus list shows full photos + OCR + date, and a detail page shows the photo,
+  OCR and tokenization with corpus-to-corpus navigation
 - MDict folder import recursively scans subfolders, previews importable/existing/
   unsupported dictionaries, and imports selected entries with progress, then
   returns directly to dictionary management

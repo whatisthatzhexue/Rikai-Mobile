@@ -16,9 +16,14 @@ import 'capture_buttons.dart';
 import 'capture_dialogs.dart';
 
 class PhotoMultiSelectPage extends ConsumerStatefulWidget {
-  const PhotoMultiSelectPage({super.key, required this.mode});
+  const PhotoMultiSelectPage({
+    super.key,
+    required this.mode,
+    this.initialFingerprint,
+  });
 
   final OcrMode mode;
+  final String? initialFingerprint;
 
   @override
   ConsumerState<PhotoMultiSelectPage> createState() =>
@@ -40,6 +45,7 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
   @override
   void initState() {
     super.initState();
+    _fingerprint = widget.initialFingerprint;
     _progressSubscription = ref.read(ocrServiceProvider).progress.listen((
       event,
     ) {
@@ -61,6 +67,35 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
   Future<void> _recognizeMissing() async {
     if (_disposed) return;
     final token = ++_runToken;
+    final photos = ref.read(captureSessionProvider).photos;
+    final knownFingerprint =
+        _fingerprint ?? ref.read(ocrServiceProvider).fingerprint;
+
+    bool hasMissing(String fingerprint) {
+      return photos.any(
+        (photo) => !photo.ocrCache.containsKey(
+          photoOcrCacheKey(mode: widget.mode, fingerprint: fingerprint),
+        ),
+      );
+    }
+
+    if (knownFingerprint != null) {
+      if (_fingerprint != knownFingerprint && mounted) {
+        setState(() => _fingerprint = knownFingerprint);
+      }
+      if (!hasMissing(knownFingerprint)) {
+        if (mounted) {
+          setState(() {
+            _busy = false;
+            _error = null;
+            _progress = 1;
+            _recognizingPhotoId = null;
+          });
+        }
+        return;
+      }
+    }
+
     setState(() {
       _busy = true;
       _error = null;
@@ -68,13 +103,9 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
       _recognizingPhotoId = null;
     });
     try {
-      final manifest = await ref.read(ocrModelManifestProvider.future);
-      final fingerprint = await ref
-          .read(ocrServiceProvider)
-          .ensureReady(manifest);
+      final fingerprint = knownFingerprint ?? await _ensureFingerprint();
       if (token != _runToken || _disposed) return;
       setState(() => _fingerprint = fingerprint);
-      final photos = ref.read(captureSessionProvider).photos;
       for (final photo in photos) {
         if (token != _runToken || _disposed) return;
         final key = photoOcrCacheKey(
@@ -115,6 +146,11 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
         });
       }
     }
+  }
+
+  Future<String> _ensureFingerprint() async {
+    final manifest = await ref.read(ocrModelManifestProvider.future);
+    return ref.read(ocrServiceProvider).ensureReady(manifest);
   }
 
   Future<void> _cancelRecognition() async {
@@ -466,7 +502,10 @@ class _PhotoGridTile extends StatelessWidget {
                     text == null || text!.isEmpty ? '尚未识别' : text!,
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontSize: AppTypography.ocrPreview,
+                      height: 1.4,
+                    ),
                   ),
                 ),
               ],

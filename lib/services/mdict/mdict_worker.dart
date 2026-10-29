@@ -491,8 +491,7 @@ void _validateHeader(Map<String, String> header) {
 }
 
 String _titleFor(DictReader reader, String path) {
-  final title = (reader.header['Title'] ?? '').trim();
-  return title.isEmpty ? dictionaryTitleFallback(path) : title;
+  return displayDictionaryTitle(reader.header['Title'] ?? '', path);
 }
 
 Future<_OpenDictionary> _ensureOpen(

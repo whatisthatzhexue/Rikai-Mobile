@@ -12,6 +12,8 @@ class CaptureRoundButton extends StatelessWidget {
     required this.background,
     required this.onPressed,
     this.foreground = AppColors.onHeader,
+    this.size = AppSizes.captureAction,
+    this.iconSize = AppSizes.iconLarge,
   });
 
   final String tooltip;
@@ -19,20 +21,18 @@ class CaptureRoundButton extends StatelessWidget {
   final Color background;
   final Color foreground;
   final VoidCallback? onPressed;
+  final double size;
+  final double iconSize;
 
   @override
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: tooltip,
       onPressed: onPressed,
-      iconSize: AppSizes.iconLarge,
+      iconSize: iconSize,
       style: ButtonStyle(
-        fixedSize: const WidgetStatePropertyAll(
-          Size.square(AppSizes.captureAction),
-        ),
-        minimumSize: const WidgetStatePropertyAll(
-          Size.square(AppSizes.captureAction),
-        ),
+        fixedSize: WidgetStatePropertyAll(Size.square(size)),
+        minimumSize: WidgetStatePropertyAll(Size.square(size)),
         padding: const WidgetStatePropertyAll(EdgeInsets.zero),
         shape: const WidgetStatePropertyAll(CircleBorder()),
         backgroundColor: WidgetStateProperty.resolveWith((states) {
@@ -49,6 +49,63 @@ class CaptureRoundButton extends StatelessWidget {
         }),
       ),
       icon: Icon(icon),
+    );
+  }
+}
+
+/// Bottom page navigation shared by the photo set and the corpus detail page.
+///
+/// The fixed [AppSizes.captureAction] height puts the arrow centre at the same
+/// height as the screen-corner delete/save actions.
+class CapturePageNavigation extends StatelessWidget {
+  const CapturePageNavigation({
+    super.key,
+    required this.index,
+    required this.count,
+    required this.onPrevious,
+    required this.onNext,
+    this.previousTooltip = '上一张',
+    this.nextTooltip = '下一张',
+  });
+
+  final int index;
+  final int count;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+  final String previousTooltip;
+  final String nextTooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        0,
+        AppSpacing.lg,
+        AppSpacing.md,
+      ),
+      child: SizedBox(
+        height: AppSizes.captureAction,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              tooltip: previousTooltip,
+              onPressed: index > 0 ? onPrevious : null,
+              icon: const Icon(Icons.arrow_back),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: Text('${index + 1}/$count'),
+            ),
+            IconButton(
+              tooltip: nextTooltip,
+              onPressed: index < count - 1 ? onNext : null,
+              icon: const Icon(Icons.arrow_forward),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

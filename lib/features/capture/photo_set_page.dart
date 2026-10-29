@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,6 +23,7 @@ import '../reader/reader_options.dart';
 import 'capture_buttons.dart';
 import 'capture_dialogs.dart';
 import 'photo_multi_select_page.dart';
+import 'photo_pane.dart';
 import 'photo_viewer_page.dart';
 
 class PhotoSetPage extends ConsumerStatefulWidget {
@@ -34,7 +34,6 @@ class PhotoSetPage extends ConsumerStatefulWidget {
 }
 
 class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
-  OcrMode _mode = OcrMode.auto;
   String? _fingerprint;
   String? _error;
   String _stage = '';
@@ -52,6 +51,8 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
   bool _unidicConfigured = false;
   double _photoHeight = AppSizes.capturePhotoHeight;
   StreamSubscription<OcrProgress>? _progressSubscription;
+
+  OcrMode get _mode => ref.read(captureSessionProvider).mode;
 
   @override
   void initState() {
@@ -99,6 +100,42 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     if (photo == null) return;
     final token = ++_runToken;
     _analysisToken++;
+    final mode = _mode;
+    final ocr = ref.read(ocrServiceProvider);
+
+    // The OCR service keeps the model fingerprint for the whole app session.
+    // Use it to render a cached photo immediately when returning from another
+    // page, without re-checking or re-running OCR.
+    if (!force) {
+      final knownFingerprint = ocr.fingerprint;
+      if (knownFingerprint != null) {
+        final key = photoOcrCacheKey(mode: mode, fingerprint: knownFingerprint);
+        final cached = photo.ocrCache[key];
+        if (cached != null) {
+          try {
+            await ocr.cancel();
+          } catch (_) {
+            // No active task or already finished; the cache is authoritative.
+          }
+          if (token != _runToken || _disposed || !mounted) return;
+          setState(() {
+            _fingerprint = knownFingerprint;
+            _busy = false;
+            _stage = '';
+            _progress = 1;
+            _error = null;
+            _tokens = const [];
+            _analysedText = null;
+            _mecabError = null;
+            _analysisError = null;
+            _analysisBusy = false;
+          });
+          await _startAnalysis(photo.id, cached.text);
+          return;
+        }
+      }
+    }
+
     if (mounted) {
       setState(() {
         _error = null;
@@ -113,14 +150,12 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       });
     }
     try {
-      await ref.read(ocrServiceProvider).cancel();
+      await ocr.cancel();
       if (token != _runToken || _disposed) return;
       final manifest = await ref.read(ocrModelManifestProvider.future);
-      final fingerprint = await ref
-          .read(ocrServiceProvider)
-          .ensureReady(manifest);
+      final fingerprint = await ocr.ensureReady(manifest);
       if (token != _runToken || _disposed) return;
-      final key = photoOcrCacheKey(mode: _mode, fingerprint: fingerprint);
+      final key = photoOcrCacheKey(mode: mode, fingerprint: fingerprint);
       final cached = photo.ocrCache[key];
       setState(() {
         _fingerprint = fingerprint;
@@ -138,9 +173,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
         await _startAnalysis(photo.id, cached.text);
         return;
       }
-      final result = await ref
-          .read(ocrServiceProvider)
-          .recognize(imagePath: photo.filePath, mode: _mode);
+      final result = await ocr.recognize(imagePath: photo.filePath, mode: mode);
       if (token != _runToken || _disposed) return;
       final text = composeOcrText(result.blocks);
       ref
@@ -266,10 +299,8 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
   Future<void> _changeMode(OcrMode mode) async {
     if (mode == _mode) return;
     await _cancelRecognition();
-    setState(() {
-      _mode = mode;
-      _error = null;
-    });
+    ref.read(captureSessionProvider.notifier).setMode(mode);
+    if (mounted) setState(() => _error = null);
     await _refreshCurrent();
   }
 
@@ -355,18 +386,20 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     if (!mounted) return;
     await context.push('/models');
     if (!mounted) return;
+    var changed = false;
     try {
       final manifest = await ref.read(ocrModelManifestProvider.future);
       final fingerprint = await ref
           .read(ocrServiceProvider)
           .ensureReady(manifest);
-      if (previous != null && fingerprint != previous) {
+      changed = previous != null && fingerprint != previous;
+      if (changed) {
         ref.read(captureSessionProvider.notifier).clearOcrCache();
       }
     } catch (_) {
       // The refresh below surfaces the model error in the page.
     }
-    await _refreshCurrent(force: true);
+    await _refreshCurrent(force: changed);
   }
 
   Future<void> _deleteCurrent() async {
@@ -414,7 +447,8 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => PhotoMultiSelectPage(mode: _mode),
+        builder: (context) =>
+            PhotoMultiSelectPage(mode: _mode, initialFingerprint: _fingerprint),
       ),
     );
     if (!mounted) return;
@@ -445,17 +479,6 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       appBar: AppBar(
         title: const Text('照片集'),
         actions: [
-          TextButton.icon(
-            onPressed: text.isEmpty ? null : () => _copyText(text),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.onHeader,
-              disabledForegroundColor: AppColors.onHeader.withValues(
-                alpha: 0.4,
-              ),
-            ),
-            icon: const Icon(Icons.copy_all_outlined, size: AppSizes.iconSmall),
-            label: const Text('复制'),
-          ),
           const ReaderOptionsMenu(),
           TextButton(
             onPressed: _openMultiSelect,
@@ -469,11 +492,13 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // Keep room for the mode selector, page navigation and the
-            // screen-corner actions; the photo itself can grow into the rest.
-            final maxPhotoHeight = (constraints.maxHeight - 340)
-                .clamp(AppSizes.capturePhotoMin, constraints.maxHeight)
-                .toDouble();
+            // Keep room for the controls; the photo itself can grow into the
+            // rest. The control group sits at the bottom, so the page arrows
+            // and the screen-corner actions share the same centre line.
+            final maxPhotoHeight =
+                (constraints.maxHeight - AppSizes.captureControlsReserve)
+                    .clamp(AppSizes.capturePhotoMin, constraints.maxHeight)
+                    .toDouble();
             final photoHeight = _photoHeight
                 .clamp(AppSizes.capturePhotoMin, maxPhotoHeight)
                 .toDouble();
@@ -481,81 +506,51 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
               children: [
                 Column(
                   children: [
-                    SizedBox(
+                    PhotoPane(
+                      imagePath: photo.filePath,
                       height: photoHeight,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Semantics(
-                            button: true,
-                            label: '查看照片',
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: _openPhotoViewer,
-                              child: ColoredBox(
-                                color: AppColors.surfaceMuted,
-                                child: Image.file(
-                                  File(photo.filePath),
-                                  fit: BoxFit.contain,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      const Center(child: Text('无法显示照片')),
-                                ),
-                              ),
-                            ),
-                          ),
+                      maxHeight: maxPhotoHeight,
+                      onTap: _openPhotoViewer,
+                      onHeightChanged: (value) =>
+                          setState(() => _photoHeight = value),
+                      overlays: [
+                        if (_analysisErrorText().isNotEmpty)
                           Positioned(
                             left: 0,
                             right: 0,
-                            bottom: 0,
-                            height: AppSizes.captureResizeHandle,
-                            child: Semantics(
-                              label: '调整照片显示范围',
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onVerticalDragUpdate: (details) {
-                                  setState(() {
-                                    _photoHeight =
-                                        (_photoHeight + details.delta.dy)
-                                            .clamp(
-                                              AppSizes.capturePhotoMin,
-                                              maxPhotoHeight,
-                                            )
-                                            .toDouble();
-                                  });
-                                },
-                                child: Align(
-                                  alignment: Alignment.bottomCenter,
-                                  child: Container(
-                                    margin: const EdgeInsets.only(
-                                      bottom: AppSpacing.xs,
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: AppSpacing.sm,
-                                      vertical: AppSpacing.xxs,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.cameraScrim,
-                                      borderRadius: BorderRadius.circular(
-                                        AppRadius.pill,
-                                      ),
-                                    ),
-                                    child: Container(
-                                      width: AppSizes.captureResizeBarWidth,
-                                      height: AppSizes.captureResizeBarHeight,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.cameraControl,
-                                        borderRadius: BorderRadius.circular(
-                                          AppRadius.pill,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+                            top: 0,
+                            child: _buildAnalysisErrorBanner(theme),
+                          ),
+                        Positioned(
+                          right: AppSpacing.md,
+                          bottom: AppSpacing.md,
+                          child: FilledButton.icon(
+                            onPressed: text.isEmpty
+                                ? null
+                                : () => _copyText(text),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppColors.header,
+                              foregroundColor: AppColors.onHeader,
+                              disabledBackgroundColor: AppColors.header
+                                  .withValues(alpha: 0.4),
+                              minimumSize: const Size(0, AppSizes.control),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.md,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
                                 ),
                               ),
                             ),
+                            icon: const Icon(
+                              Icons.copy_all_outlined,
+                              size: AppSizes.iconSmall,
+                            ),
+                            label: const Text('复制'),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                     Expanded(
                       child: SizedBox(
@@ -583,7 +578,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
                             enabled: false,
                           ),
                         ],
-                        selected: {_mode},
+                        selected: {session.mode},
                         onSelectionChanged: _busy
                             ? null
                             : (selection) => _changeMode(selection.first),
@@ -612,13 +607,12 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
                         ],
                       ),
                     ),
-                    _PageNavigation(
+                    CapturePageNavigation(
                       index: session.currentIndex,
                       count: session.length,
                       onPrevious: () => _changePhoto(-1),
                       onNext: () => _changePhoto(1),
                     ),
-                    const SizedBox(height: AppSizes.captureBottomReserve),
                   ],
                 ),
                 Positioned(
@@ -778,7 +772,6 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
   }
 
   Widget _buildRawResult(ThemeData theme, AppSettings settings, String text) {
-    final analysisError = _analysisErrorText();
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
@@ -789,38 +782,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (analysisError.isNotEmpty) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '分词不可用：$analysisError',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontSize: AppTypography.helper,
-                      height: 1.5,
-                      color: AppColors.error,
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: _retryAnalysis,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('重试分词'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-          ] else if (!_unidicConfigured) ...[
+          if (!_unidicConfigured) ...[
             Text(
               '尚未配置 UniDic，当前显示 OCR 原文。',
               style: theme.textTheme.bodySmall?.copyWith(
@@ -875,6 +837,53 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     return _analysisError?.toString() ?? '';
   }
 
+  Widget _buildAnalysisErrorBanner(ThemeData theme) {
+    return Material(
+      color: AppColors.error,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.sm,
+          AppSpacing.sm,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: AppSpacing.xxs),
+              child: Icon(
+                Icons.error_outline,
+                size: AppSizes.icon,
+                color: AppColors.onHeader,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                '分词不可用：${_analysisErrorText()}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: AppTypography.helper,
+                  height: 1.5,
+                  color: AppColors.onHeader,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: _retryAnalysis,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.onHeader,
+                minimumSize: const Size(0, AppSizes.control),
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+              ),
+              child: const Text('重试'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _stageLabel(OcrProgress event) {
     switch (event.stage) {
       case 'detect':
@@ -909,50 +918,5 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     if (error is OcrModelException) return error.message;
     if (error is OcrException) return error.message;
     return error.toString();
-  }
-}
-
-class _PageNavigation extends StatelessWidget {
-  const _PageNavigation({
-    required this.index,
-    required this.count,
-    required this.onPrevious,
-    required this.onNext,
-  });
-
-  final int index;
-  final int count;
-  final VoidCallback onPrevious;
-  final VoidCallback onNext;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        0,
-        AppSpacing.lg,
-        AppSpacing.md,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          IconButton(
-            tooltip: '上一张',
-            onPressed: index > 0 ? onPrevious : null,
-            icon: const Icon(Icons.arrow_back),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: Text('${index + 1}/$count'),
-          ),
-          IconButton(
-            tooltip: '下一张',
-            onPressed: index < count - 1 ? onNext : null,
-            icon: const Icon(Icons.arrow_forward),
-          ),
-        ],
-      ),
-    );
   }
 }

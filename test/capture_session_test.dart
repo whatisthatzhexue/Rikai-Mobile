@@ -19,6 +19,8 @@ void main() {
 
     notifier.addPhotos([_photo('a'), _photo('b')]);
     expect(container.read(captureSessionProvider).currentIndex, 1);
+    notifier.setMode(OcrMode.horizontal);
+    expect(container.read(captureSessionProvider).mode, OcrMode.horizontal);
     notifier.setCurrentIndex(0);
     notifier.setOcrResult(
       'a',
@@ -43,6 +45,7 @@ void main() {
     notifier.removePhotos({'b'});
     expect(container.read(captureSessionProvider).photos, hasLength(1));
     expect(container.read(captureSessionProvider).currentIndex, 0);
+    expect(container.read(captureSessionProvider).mode, OcrMode.horizontal);
     notifier.clearOcrCache();
     expect(
       container.read(captureSessionProvider).photos.first.ocrCache,

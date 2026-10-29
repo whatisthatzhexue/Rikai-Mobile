@@ -69,7 +69,7 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
         content: Text(
           updated.isAvailable
               ? '校验通过：${_formatCount(updated.entryCount)} 条'
-              : updated.lastError,
+              : _displayDictionaryError(updated.lastError),
         ),
       ),
     );
@@ -282,7 +282,7 @@ class _DictionaryCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
                 child: Text(
-                  dictionary.lastError,
+                  _displayDictionaryError(dictionary.lastError),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: AppColors.error,
                   ),
@@ -439,12 +439,12 @@ class _AddDictionaryDialogState extends State<_AddDictionaryDialog> {
       if (!mounted || selected == null) return;
       _controller.text = selected;
       setState(() => _error = '');
-    } on PlatformException catch (error) {
+    } on PlatformException {
       if (!mounted) return;
-      setState(() => _error = '无法打开文件管理器：${error.message ?? error.code}');
-    } catch (error) {
+      setState(() => _error = '无法打开文件管理器，请稍后重试');
+    } catch (_) {
       if (!mounted) return;
-      setState(() => _error = '选择文件夹失败：$error');
+      setState(() => _error = '选择文件夹失败，请确认文件夹可访问');
     }
   }
 
@@ -465,10 +465,10 @@ class _AddDictionaryDialogState extends State<_AddDictionaryDialog> {
       Navigator.of(context).pop(info);
     } on MdictException catch (error) {
       if (!mounted) return;
-      setState(() => _error = error.message);
-    } catch (error) {
+      setState(() => _error = _displayDictionaryError(error.message));
+    } catch (_) {
       if (!mounted) return;
-      setState(() => _error = '添加失败：$error');
+      setState(() => _error = '添加失败，请确认词典文件可读');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -562,4 +562,22 @@ String _formatCount(int value) {
     RegExp(r'\B(?=(\d{3})+(?!\d))'),
     (_) => ',',
   );
+}
+
+String _displayDictionaryError(String raw) {
+  var text = raw.trim();
+  final lower = text.toLowerCase();
+  final debugIndex = lower.indexOf('instance of');
+  if (debugIndex >= 0) text = text.substring(0, debugIndex).trim();
+  while (text.endsWith('：') || text.endsWith(':')) {
+    text = text.substring(0, text.length - 1).trim();
+  }
+  if (text.isEmpty) return '词典操作失败';
+  final lowerText = text.toLowerCase();
+  if (lowerText.startsWith('exception') ||
+      lowerText.startsWith('error') ||
+      lowerText.startsWith('mdictexception')) {
+    return '词典操作失败';
+  }
+  return text;
 }

@@ -85,6 +85,10 @@ abstract final class AppTypography {
   static const double readerDefault = 20;
   static const double furiganaRatio = 0.55;
 
+  /// OCR preview inside the multi-select photo grid. Large enough to read
+  /// without opening each photo.
+  static const double ocrPreview = 20;
+
   /// Home action buttons: 72dp tall, centered content. The label was reduced
   /// by 20% from the first revision (40sp → 32sp) at the user's request.
   static const double homeAction = 32;
@@ -126,15 +130,16 @@ abstract final class AppSizes {
   static const double cameraSideControl = 48;
   static const double cameraSideControlWidth = 82;
   static const double captureAction = 52;
+  static const double corpusAction = 44;
   static const double cameraProgress = 20;
-  static const double corpusThumbnail = 72;
+  static const double corpusPhotoMaxHeight = 420;
   static const double cameraShutterRing = 4;
   static const double capturePhotoHeight = 250;
   static const double capturePhotoMin = 120;
   static const double captureResizeHandle = 28;
   static const double captureResizeBarWidth = 44;
   static const double captureResizeBarHeight = 4;
-  static const double captureBottomReserve = 64;
+  static const double captureControlsReserve = 300;
   static const double captureGridBottomReserve = 96;
   static const double pageMaxWidth = 720;
   static const double borderWidth = 1;

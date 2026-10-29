@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rikai_ocr/rikai_ocr.dart';
 
 import '../core/models/capture_photo.dart';
 import '../services/capture/capture_storage.dart';
@@ -13,6 +14,7 @@ class CaptureSessionNotifier extends Notifier<CaptureSessionState> {
     state = CaptureSessionState(
       photos: next,
       currentIndex: selectLast ? next.length - 1 : state.currentIndex,
+      mode: state.mode,
     );
   }
 
@@ -21,6 +23,11 @@ class CaptureSessionNotifier extends Notifier<CaptureSessionState> {
     state = state.copyWith(
       currentIndex: index.clamp(0, state.photos.length - 1),
     );
+  }
+
+  void setMode(OcrMode mode) {
+    if (state.mode == mode) return;
+    state = state.copyWith(mode: mode);
   }
 
   void removePhotos(Set<String> ids) {
@@ -32,6 +39,7 @@ class CaptureSessionNotifier extends Notifier<CaptureSessionState> {
     state = CaptureSessionState(
       photos: next,
       currentIndex: next.isEmpty ? 0 : current.clamp(0, next.length - 1),
+      mode: state.mode,
     );
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/models/dict_info.dart';
 import '../../core/models/dictionary_scan.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/utils/format_bytes.dart';
@@ -62,9 +63,9 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
       if (!mounted || selected == null) return;
       _pathController.text = selected;
       await _scan(selected);
-    } on PlatformException catch (error) {
+    } on PlatformException {
       if (!mounted) return;
-      setState(() => _error = '无法打开文件管理器：${error.message ?? error.code}');
+      setState(() => _error = '无法打开文件管理器，请稍后重试');
     }
   }
 
@@ -102,12 +103,12 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
       if (entries.isNotEmpty) {
         await _probeEntries(token);
       }
-    } catch (error) {
+    } catch (_) {
       if (!mounted || token != _token) return;
       setState(() {
         _scanning = false;
         _probing = false;
-        _error = '扫描失败：$error';
+        _error = '扫描失败，请确认文件夹可访问';
         _status = '';
       });
     }
@@ -121,14 +122,12 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
       if (!mounted || token != _token) return;
       final entry = entries[index];
       if (entry.status == DictionaryScanStatus.existing) continue;
-      setState(
-        () => _status = '正在读取 ${index + 1}/${entries.length}：$entry.fileName',
-      );
+      setState(() => _status = '正在读取 ${index + 1}/${entries.length}');
       DictionaryScanEntry next;
       try {
         final metadata = await service.probe(entry.path);
         next = entry.copyWith(
-          title: metadata.title.isEmpty ? entry.title : metadata.title,
+          title: displayDictionaryTitle(metadata.title, entry.path),
           status: DictionaryScanStatus.importable,
           message: '',
         );
@@ -196,7 +195,7 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
       if (!mounted) return;
       setState(() {
         _progressCurrent++;
-        _status = '正在导入 $_progressCurrent/$_progressTotal：$entry.fileName';
+        _status = '正在导入 $_progressCurrent/$_progressTotal';
       });
       try {
         await ref

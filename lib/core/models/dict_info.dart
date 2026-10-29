@@ -26,6 +26,22 @@ String dictionaryTitleFallback(String path) {
   return dot <= 0 ? name : name.substring(0, dot);
 }
 
+final RegExp _debugTitlePattern = RegExp(
+  r'^(instance of\b|exception\b|error\b|typeerror\b|nosuchmethoderror\b|'
+  r'mdictexception\b)',
+  caseSensitive: false,
+);
+
+/// Drops Dart error/debug strings that a failing MDX header parser may expose
+/// as its title, and falls back to the file name instead.
+String displayDictionaryTitle(String rawTitle, String path) {
+  final title = rawTitle.trim();
+  if (title.isEmpty || _debugTitlePattern.hasMatch(title)) {
+    return dictionaryTitleFallback(path);
+  }
+  return title;
+}
+
 /// Metadata returned by the MDict worker after opening an MDX header.
 class DictionaryMetadata {
   const DictionaryMetadata({
@@ -141,10 +157,14 @@ class DictionaryInfo {
   };
 
   factory DictionaryInfo.fromJson(Map<String, Object?> json) {
+    final mdxPath = json['mdxPath'] as String? ?? '';
     return DictionaryInfo(
       id: json['id'] as String? ?? '',
-      title: json['title'] as String? ?? '',
-      mdxPath: json['mdxPath'] as String? ?? '',
+      title: displayDictionaryTitle(
+        json['title'] as String? ?? '',
+        mdxPath,
+      ),
+      mdxPath: mdxPath,
       mddPaths: _stringList(json['mddPaths']),
       cssPaths: _stringList(json['cssPaths']),
       entryCount: json['entryCount'] as int? ?? 0,

@@ -6,6 +6,7 @@ import 'core/theme/app_tokens.dart';
 import 'state/providers.dart';
 import 'features/capture/capture_page.dart';
 import 'features/capture/photo_set_page.dart';
+import 'features/corpus/corpus_detail_page.dart';
 import 'features/corpus/corpus_page.dart';
 import 'features/home/home_page.dart';
 import 'features/lookup/search_page.dart';
@@ -40,6 +41,16 @@ GoRouter _createRouter() {
         builder: (context, state) => const PhotoSetPage(),
       ),
       GoRoute(path: '/corpus', builder: (context, state) => const CorpusPage()),
+      GoRoute(
+        path: '/corpus-detail',
+        builder: (context, state) {
+          final extra = state.extra;
+          if (extra is CorpusDetailRouteArgs) {
+            return CorpusDetailPage(initialEntry: extra.entry);
+          }
+          return const CorpusPage();
+        },
+      ),
       GoRoute(path: '/models', builder: (context, state) => const ModelPage()),
       GoRoute(
         path: '/settings',

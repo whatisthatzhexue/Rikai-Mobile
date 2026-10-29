@@ -71,10 +71,18 @@ class CapturePhoto {
 }
 
 class CaptureSessionState {
-  const CaptureSessionState({this.photos = const [], this.currentIndex = 0});
+  const CaptureSessionState({
+    this.photos = const [],
+    this.currentIndex = 0,
+    this.mode = OcrMode.auto,
+  });
 
   final List<CapturePhoto> photos;
   final int currentIndex;
+
+  /// OCR mode is session-level so leaving and reopening the photo set reuses
+  /// the same cache keys instead of silently falling back to auto.
+  final OcrMode mode;
 
   bool get isEmpty => photos.isEmpty;
   int get length => photos.length;
@@ -84,6 +92,7 @@ class CaptureSessionState {
   CaptureSessionState copyWith({
     List<CapturePhoto>? photos,
     int? currentIndex,
+    OcrMode? mode,
   }) {
     final nextPhotos = photos ?? this.photos;
     final index = currentIndex ?? this.currentIndex;
@@ -92,6 +101,7 @@ class CaptureSessionState {
       currentIndex: nextPhotos.isEmpty
           ? 0
           : index.clamp(0, nextPhotos.length - 1),
+      mode: mode ?? this.mode,
     );
   }
 }

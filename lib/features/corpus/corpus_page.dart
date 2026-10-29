@@ -7,7 +7,8 @@ import 'package:go_router/go_router.dart';
 import '../../core/models/corpus_entry.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../state/providers.dart';
-import '../reader/reader_page.dart';
+import '../capture/capture_buttons.dart';
+import 'corpus_detail_page.dart';
 
 class CorpusPage extends ConsumerWidget {
   const CorpusPage({super.key});
@@ -85,8 +86,8 @@ class CorpusPage extends ConsumerWidget {
             itemBuilder: (context, index) => _CorpusCard(
               entry: list[index],
               onOpen: () => context.push(
-                '/reader',
-                extra: ReaderRouteArgs(list[index].text),
+                '/corpus-detail',
+                extra: CorpusDetailRouteArgs(list[index]),
               ),
               onDelete: () => _delete(context, ref, list[index]),
             ),
@@ -151,65 +152,73 @@ class _CorpusCard extends StatelessWidget {
     return Card(
       child: InkWell(
         onTap: onOpen,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                child: SizedBox(
-                  width: AppSizes.corpusThumbnail,
-                  height: AppSizes.corpusThumbnail,
-                  child: entry.imagePath.isEmpty
-                      ? const ColoredBox(
-                          color: AppColors.surfaceMuted,
-                          child: Icon(Icons.broken_image_outlined),
-                        )
-                      : Image.file(
-                          File(entry.imagePath),
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const ColoredBox(
-                                color: AppColors.surfaceMuted,
-                                child: Icon(Icons.broken_image_outlined),
-                              ),
-                        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxHeight: AppSizes.corpusPhotoMaxHeight,
+                  ),
+                  child: ColoredBox(
+                    color: AppColors.surfaceMuted,
+                    child: entry.imagePath.isEmpty
+                        ? const SizedBox(
+                            height: AppSizes.corpusPhotoMaxHeight * 0.5,
+                            child: Center(
+                              child: Icon(Icons.broken_image_outlined),
+                            ),
+                          )
+                        : Image.file(
+                            File(entry.imagePath),
+                            width: double.infinity,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const SizedBox(
+                                  height: AppSizes.corpusPhotoMaxHeight * 0.5,
+                                  child: Center(
+                                    child: Icon(Icons.broken_image_outlined),
+                                  ),
+                                ),
+                          ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: AppSpacing.xxs),
-                    Text(date, style: theme.textTheme.bodySmall),
-                    const SizedBox(height: AppSpacing.xxs),
-                    Text(
-                      entry.text.isEmpty ? '（无 OCR 文本）' : entry.text,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: AppTypography.helper,
-                      ),
-                    ),
-                  ],
+                Positioned(
+                  top: AppSpacing.sm,
+                  right: AppSpacing.sm,
+                  child: CaptureRoundButton(
+                    tooltip: '删除语料',
+                    icon: Icons.delete_outline,
+                    background: AppColors.error,
+                    size: AppSizes.corpusAction,
+                    iconSize: AppSizes.icon,
+                    onPressed: onDelete,
+                  ),
                 ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.text.isEmpty ? '（无 OCR 文本）' : entry.text,
+                    style: theme.textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    date,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: AppTypography.helper,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
-              IconButton(
-                tooltip: '删除语料',
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline),
-                color: AppColors.error,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

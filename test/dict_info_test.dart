@@ -21,6 +21,21 @@ void main() {
     expect(dictionaryFileName(r'C:\dicts\test.mdx'), 'test.mdx');
   });
 
+  test('hides Dart debug strings used as dictionary titles', () {
+    const path = '/sdcard/Download/dict.mdx';
+
+    expect(displayDictionaryTitle("Instance of 'MdictMetadata'", path), 'dict');
+    expect(displayDictionaryTitle('Exception: filename.mdx', path), 'dict');
+    expect(displayDictionaryTitle('講談社 日本語大辞典', path), '講談社 日本語大辞典');
+
+    final restored = DictionaryInfo.fromJson({
+      'id': 'id',
+      'title': "Instance of 'MdictMetadata'",
+      'mdxPath': path,
+    });
+    expect(restored.title, 'dict');
+  });
+
   test('serializes and restores all fields', () {
     final original = DictionaryInfo(
       id: 'abc123',
