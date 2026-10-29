@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_fonts.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/theme/page_route.dart';
 import '../../state/providers.dart';
 import '../settings/copyright_page.dart';
 import '../settings/font_dialog.dart';
@@ -87,6 +88,6 @@ class AppDrawer extends ConsumerWidget {
   void _push(BuildContext context, Widget page) {
     final navigator = Navigator.of(context);
     navigator.pop();
-    navigator.push(MaterialPageRoute<void>(builder: (_) => page));
+    navigator.push(RikaiPageRoute<void>(builder: (_) => page));
   }
 }

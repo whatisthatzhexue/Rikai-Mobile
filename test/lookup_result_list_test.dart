@@ -63,6 +63,37 @@ void main() {
     expect(openedAll, group);
   });
 
+  testWidgets('uses the matched word instead of an internal redirect id', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: LookupHitList(
+            groups: const [
+              DictionaryLookupGroup(
+                dictionary: _dictionary,
+                entries: [
+                  LookupEntry(
+                    matchedKey: '愛',
+                    headword: '00044',
+                    html: '<div>definition</div>',
+                  ),
+                ],
+              ),
+            ],
+            onOpenEntry: (_, _) {},
+            onOpenAll: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('愛'), findsOneWidget);
+    expect(find.text('00044'), findsNothing);
+  });
+
   testWidgets('a single-entry group has no 查看全部 button', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

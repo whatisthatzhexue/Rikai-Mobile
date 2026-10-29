@@ -5,6 +5,7 @@
 # User-supplied / development data. Never commit dictionaries or UniDic.
 /unidic/
 /mdicts/
+/test_images/
 
 # Upstream reference clones (their own .git). Adapted code lives in
 # packages/ and third_party/.
@@ -25,13 +26,16 @@
 **/*.tflite
 **/*.gguf
 **/*.mlmodel
-**/*.bin.part
+**/*.part
 
 # Vendored package build outputs / WASM artifacts.
 /packages/mecab_for_dart/emcc_out/
 **/build/
 **/.dart_tool/
 **/.gradle/
+**/.kotlin/
+**/.cxx/
+**/.externalNativeBuild/
 
 # Signing and local machine configuration.
 local.properties
@@ -41,6 +45,9 @@ key.properties
 *.keystore
 *.p12
 
+# Claude Code per-machine settings (shared .claude/*.json may be committed).
+.claude/settings.local.json
+
 # ---------------------------------------------------------------------------
 # Flutter / Dart defaults
 # ---------------------------------------------------------------------------
@@ -48,6 +55,9 @@ key.properties
 *.log
 *.pyc
 *.swp
+*.orig
+*.rej
+*.tmp
 .DS_Store
 .atom/
 .build/
@@ -73,6 +83,11 @@ migrate_working_dir/
 
 app.*.symbols
 app.*.map.json
+
+# Android packages produced outside build/ (defensive; normal builds stay
+# under build/app/outputs/).
+*.apk
+*.aab
 
 /android/app/debug
 /android/app/profile

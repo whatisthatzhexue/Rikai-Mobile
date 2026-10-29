@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/models/corpus_entry.dart';
 import '../../core/models/token.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/theme/page_route.dart';
 import '../../services/mecab/mecab_service.dart';
 import '../../services/storage/settings_store.dart';
 import '../../state/providers.dart';
@@ -182,7 +183,7 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
   void _openPhoto(CorpusEntry entry) {
     if (entry.imagePath.isEmpty) return;
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      RikaiPageRoute<void>(
         builder: (context) => PhotoViewerPage(imagePath: entry.imagePath),
       ),
     );
@@ -311,20 +312,6 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
         AppSpacing.lg,
       ),
       children: [
-        Text('OCR 原文', style: theme.textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.xs),
-        SelectableText(
-          entry.text.isEmpty ? '（无 OCR 文本）' : entry.text,
-          style: theme.textTheme.bodyLarge?.copyWith(
-            fontSize: settings.readerFontSize,
-            height: 1.7,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(_formatDate(entry.createdAt), style: theme.textTheme.bodySmall),
-        const SizedBox(height: AppSpacing.md),
-        const Divider(),
-        const SizedBox(height: AppSpacing.md),
         Text('分词结果', style: theme.textTheme.titleMedium),
         const SizedBox(height: AppSpacing.sm),
         ..._buildTokenSection(entry, settings, theme),
@@ -403,13 +390,5 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
             ),
           ),
     ];
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.year}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')} '
-        '${date.hour.toString().padLeft(2, '0')}:'
-        '${date.minute.toString().padLeft(2, '0')}';
   }
 }

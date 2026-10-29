@@ -533,13 +533,13 @@ EventChannel: model load/prewarm/OCR stage progress
    下载/导入/迁移，并按文件修订缓存；原生加载做内容兜底。
 3. **方向**：doc orientation 只在“图像长宽比与框布局矛盾”时运行；90/270
    旋转整图并重新 DBNet；textline 180° 只在 auto 横向运行。
-4. **混合排版**：auto 按框方向分区路由（横向框 Paddle、纵向框 Manga），合并
-   阅读顺序；结果 engine 记录为 `paddle_v5+manga_ocr`。
-5. **Manga 质量**：按检测框尺寸自适应气泡 gap/padding；过滤低置信度/控制字符
-   噪声；改进多气泡/多面板顺序。
+4. **auto 单引擎**：只输出 Paddle 或 Manga 之一；Manga 平均置信度不足时回退
+   Paddle；模式切换强制重新 OCR。另加 2°–12° 轻微 deskew。
+5. **Manga 质量**：按检测框尺寸自适应气泡 gap/padding；竖向 crop 最多 3 个
+   text band；过滤低置信度/控制字符噪声。
 6. **交互与缓存**：手动模式复用兼容的 auto 结果；照片集提供“旋转 90° 并重新
    识别”入口；缓存命中时不重新识别。
-7. **验收**：x86_64 设备套件通过；arm64 真机验证横排/竖排/混合/倒置/90°、
+7. **验收**：x86_64 设备套件通过；arm64 真机验证横排/竖排/倒置/90°/270°、
    连续多页内存与耗时；真实漫画页质量。
 
 验收门槛：
@@ -547,7 +547,7 @@ EventChannel: model load/prewarm/OCR stage progress
 - 横向-only 不加载 MangaOCR；首次进入照片集不因模型 SHA 校验卡顿。
 - 2048px 横排页 PaddleOCR < 5s（arm64 中端机）；单页漫画 MangaOCR < 10s，
   无 OOM。
-- 横排、竖排、混合、倒置、90° 旋转均有真实图片回归结果。
+- 横排、竖排、倒置、90°/270° 旋转均有真实图片回归结果；auto 只返回一个引擎。
 - 缓存命中返回照片集不重新 OCR；手动模式不重复生成兼容结果。
 - 现有单元测试、OCR 设备套件和新增真实页回归全部通过。
 
@@ -603,7 +603,7 @@ EventChannel: model load/prewarm/OCR stage progress
 | MangaOCR 模型许可未声明 | 合规风险 | 不随包分发；下载前提示；仅本地使用；支持用户导入 Apache-2.0 转换模型 |
 | 模型下载源不稳定（HF/GitHub 受限） | 无法下载 | hf-mirror 优先；自定义镜像；本地导入；断点续传/重试 |
 | ORT/Paddle 模型算子不兼容 | OCR 失败 | Phase 0 spike；固定 ORT 1.28.0；准备 PP-OCRv5 备用模型/版本 |
-| 竖排/混合排版识别差 | 体验差 | Phase 4.5 已做按块方向路由、90° 纠正、尺寸自适应气泡；arm64 真实页待验 |
+| 竖排/混合排版识别差 | 体验差 | Phase 4.5 已做 90° 纠正、auto 单引擎+置信度回退、deskew、尺寸自适应气泡；arm64 真实页待验 |
 | WebView HTML 安全/兼容 | 安全问题或渲染异常 | 禁 JS/网络、HTML 清洗、仅本地文件；真实词典回归测试 |
 | APK 体积/内存 | 安装门槛 | 模型按需下载；release 仅 arm64；限制图片尺寸；释放 ORT/Bitmap |
 | 中文系统字体导致日文字形错误 | 阅读体验 | 内置 Noto Sans JP（OFL）或 JP 字体回退 |

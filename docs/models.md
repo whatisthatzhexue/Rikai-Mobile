@@ -27,8 +27,14 @@ native ONNX loader is the final content check for existing files.
 
 ## Mirror behavior
 
-- Default order: `https://hf-mirror.com`, then `https://huggingface.co`.
+- Default order: `https://hf-mirror.com`, an equivalent
+  `https://hf-mirror.net` path, then `https://huggingface.co`.
 - A custom mirror prefix can be set in settings.
+- Leaving the model page does not cancel a download by default; the
+  leave-confirmation dialog has an optional “同时停止下载” checkbox (off by
+  default). Cancelled/interrupted downloads keep `.part` files and resume with
+  HTTP Range. Settings → “清除模型缓存” removes only `.part`/`.importing`
+  files.
 - Download is resumable (HTTP Range), writes a `.part` file, verifies size and
   the pinned SHA-256, then renames atomically. A 416 or mismatched
   `Content-Range` resets the partial file.

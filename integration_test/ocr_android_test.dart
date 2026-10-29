@@ -55,51 +55,39 @@ Future<File> _renderSyntheticImage({bool upsideDown = false}) async {
   return file;
 }
 
-/// A mixed page: one horizontal caption on the left and a vertical manga
-/// column on the right. Auto mode must route each region independently.
-Future<File> _renderSyntheticMixedPage() async {
-  const width = 800;
-  const height = 800;
+/// A mildly tilted page, as when a phone is held diagonally.
+Future<File> _renderSyntheticTiltedImage({double degrees = 6}) async {
+  const width = 900;
+  const height = 320;
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder);
   canvas.drawRect(
     Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
     Paint()..color = Colors.white,
   );
-  final horizontal = TextPainter(
+  canvas.save();
+  canvas.translate(width / 2, height / 2);
+  canvas.rotate(degrees * math.pi / 180);
+  canvas.translate(-width / 2, -height / 2);
+  final painter = TextPainter(
     text: const TextSpan(
       text: 'ありがとう',
       style: TextStyle(
         color: Colors.black,
-        fontSize: 56,
+        fontSize: 64,
         fontFamily: 'sans-serif',
         fontFamilyFallback: ['Noto Sans CJK JP', 'Noto Sans JP'],
       ),
     ),
     textDirection: TextDirection.ltr,
   )..layout();
-  horizontal.paint(canvas, const Offset(32, 64));
-  const vertical = ['こ', 'れ', 'は', 'テ', 'ス', 'ト', 'で', 'す'];
-  for (var index = 0; index < vertical.length; index++) {
-    final painter = TextPainter(
-      text: TextSpan(
-        text: vertical[index],
-        style: const TextStyle(
-          color: Colors.black,
-          fontSize: 52,
-          fontFamily: 'sans-serif',
-          fontFamilyFallback: ['Noto Sans CJK JP', 'Noto Sans JP'],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    painter.paint(canvas, Offset(660, 48 + index * 92.0));
-  }
+  painter.paint(canvas, const Offset(80, 120));
+  canvas.restore();
   final picture = recorder.endRecording();
   final image = await picture.toImage(width, height);
   final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
   final directory = await getTemporaryDirectory();
-  final file = File('${directory.path}/rikai-ocr-mixed-page.png');
+  final file = File('${directory.path}/rikai-ocr-tilted.png');
   await file.writeAsBytes(bytes!.buffer.asUint8List(), flush: true);
   return file;
 }
@@ -284,6 +272,29 @@ void main() {
     }
   });
 
+  testWidgets('auto deskews a mildly tilted page', (tester) async {
+    final image = await _renderSyntheticTiltedImage();
+    final ocr = RikaiOcr();
+    try {
+      final readiness = await _initializeMangaAwareOcr(ocr);
+      expect(readiness['engine'], 'paddle_v5');
+      final result = await ocr.recognize(
+        imagePath: image.path,
+        mode: OcrMode.auto,
+      );
+      final text = composeOcrText(result.blocks);
+      // ignore: avoid_print
+      print(
+        'Tilted engine=${result.engine} elapsed=${result.elapsedMs}ms '
+        'blocks=${result.blocks.length} text="$text"',
+      );
+      expect(text, contains('ありがとう'));
+    } finally {
+      await ocr.dispose();
+      if (image.existsSync()) await image.delete();
+    }
+  });
+
   testWidgets('horizontal OCR keeps optional sessions lazy', (tester) async {
     final image = await _renderSyntheticImage();
     final ocr = RikaiOcr();
@@ -367,47 +378,6 @@ void main() {
       );
       expect(verticalResult.engine, 'manga_ocr');
       expect(verticalText, contains('これは'));
-    } finally {
-      await ocr.dispose();
-      if (image.existsSync()) await image.delete();
-    }
-  });
-
-  testWidgets('auto OCR routes horizontal and vertical regions separately', (
-    tester,
-  ) async {
-    final image = await _renderSyntheticMixedPage();
-    final ocr = RikaiOcr();
-    try {
-      final readiness = await _initializeMangaAwareOcr(ocr);
-      if (readiness['mangaAvailable'] != true) {
-        fail(
-          'MangaOCR models are missing. Push build/ocr-models/manga_ocr to '
-          '${(await _installedModelsDirectory()).path}/manga_ocr',
-        );
-      }
-      await ocr.prepare(mode: OcrMode.auto);
-      final result = await ocr.recognize(
-        imagePath: image.path,
-        mode: OcrMode.auto,
-      );
-      final text = composeOcrText(result.blocks);
-      // ignore: avoid_print
-      print(
-        'Mixed engine=${result.engine} elapsed=${result.elapsedMs}ms '
-        'blocks=${result.blocks.length} text="$text"',
-      );
-      for (final block in result.blocks) {
-        // ignore: avoid_print
-        print(
-          'mixed block orientation=${block.orientation} '
-          'rect=(${block.left},${block.top},${block.right},${block.bottom}) '
-          '"${block.text}"',
-        );
-      }
-      expect(result.engine, 'paddle_v5+manga_ocr');
-      expect(text, contains('ありがとう'));
-      expect(text, contains('これは'));
     } finally {
       await ocr.dispose();
       if (image.existsSync()) await image.delete();

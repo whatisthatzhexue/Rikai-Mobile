@@ -59,16 +59,21 @@ not implemented.
   and is cached per file revision, removing repeated full hashes from page
   re-entry
 - Automatic mode routes horizontal/vertical from box geometry and optional
-  PP-LCNet orientation; confident 90/270 pages are rotated and re-detected;
-  mixed pages can route strong horizontal boxes to PaddleOCR and vertical
-  boxes to MangaOCR (`paddle_v5+manga_ocr`)
+  PP-LCNet orientation, returns exactly one engine, and falls back to PaddleOCR
+  when MangaOCR confidence is low; confident 90/270 pages are rotated and
+  re-detected, and mild diagonal photos are deskewed
 - Upside-down horizontal pages get one 180° re-run when the orientation set is
   installed; MangaOCR grouping uses size-aware gaps and filters low-confidence
   noise
 - Manual “旋转” rotates the private photo copy 90° clockwise and re-runs OCR;
   a manual mode reuses a compatible auto result when safe
+- MDict import accepts `Encrypted: 2` dictionaries and recovers same-basename
+  MDD resources; merged lookup/search dictionary chips use deep blue selection,
+  unique short names, wrapping, single/multi mode and a first “全选” option
+- Model downloads survive leaving the page unless stopped, resume from `.part`
+  files, try hf-mirror.net before Hugging Face, and can be cleaned from settings
 - MangaOCR and orientation models can be downloaded or locally imported from
-  the existing model page; the unknown MangaOCR license is confirmed first
+  the existing model page
 - OCR text flows into the same reader and MDict lookup UI
 
 ### Phase 6 planned: dictionary assistant (design only)

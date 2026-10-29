@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:cross_file/cross_file.dart';
+import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/ocr_model.dart';
@@ -220,6 +221,30 @@ void main() {
     expect(file.readAsBytesSync(), payload);
   });
 
+  test('cancelling does not delete an existing .part file', () async {
+    final set = setUpSet(
+      'http://${server.address.address}:${server.port}/det.onnx',
+    );
+    final directory = Directory('${root.path}/models/paddle_v5');
+    await directory.create(recursive: true);
+    final part = File('${directory.path}/det.onnx.part');
+    await part.writeAsBytes(payload.sublist(0, 900), flush: true);
+    final manager = OcrModelManager(rootDirectory: () async => root);
+    final token = CancelToken()..cancel('test');
+
+    await expectLater(
+      manager.downloadSet(set, cancelToken: token),
+      throwsA(isA<OcrModelException>()),
+    );
+    expect(part.existsSync(), isTrue);
+    expect(await part.length(), 900);
+
+    await manager.downloadSet(set);
+    final installed = File('${directory.path}/det.onnx');
+    expect(installed.readAsBytesSync(), payload);
+    expect(rangeRequests, greaterThan(0));
+  });
+
   test('status is read-only and an empty set is never installed', () async {
     final manager = OcrModelManager(
       rootDirectory: () async => root,
@@ -270,6 +295,25 @@ void main() {
     );
     expect((await newManager.status(set)).isInstalled, isTrue);
   });
+
+  test(
+    'clears interrupted .part files without touching installed models',
+    () async {
+      final directory = Directory('${root.path}/models/paddle_v5');
+      await directory.create(recursive: true);
+      final complete = File('${directory.path}/det.onnx');
+      final partial = File('${directory.path}/rec.onnx.part');
+      await complete.writeAsBytes(payload);
+      await partial.writeAsBytes(payload.sublist(0, 120));
+      final manager = OcrModelManager(rootDirectory: () async => root);
+
+      final removed = await manager.clearPartialDownloads();
+
+      expect(removed, 120);
+      expect(partial.existsSync(), isFalse);
+      expect(complete.existsSync(), isTrue);
+    },
+  );
 
   test('a 416 or mismatched Content-Range resets the partial file', () async {
     final set = setUpSet(

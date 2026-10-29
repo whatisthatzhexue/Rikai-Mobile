@@ -21,6 +21,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -337,6 +338,7 @@ internal class PaddleOcrEngine {
             var quads = detectQuads(activeBitmap, det)
             onProgress("detect", 1, 1)
             if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
+            var orientationCorrected = false
 
             // A 90/270 page can look like ordinary vertical text after DBNet.
             // Run the document classifier only when the image aspect and box
@@ -347,6 +349,7 @@ internal class PaddleOcrEngine {
                 if (corrected != null) {
                     if (activeBitmap !== decoded) activeBitmap.recycle()
                     activeBitmap = corrected
+                    orientationCorrected = true
                     onProgress("detect", 0, 1)
                     quads = detectQuads(activeBitmap, det)
                     onProgress("detect", 1, 1)
@@ -358,6 +361,28 @@ internal class PaddleOcrEngine {
                 "vertical" -> true
                 "auto" -> TextLayoutHeuristic.isVertical(quads)
                 else -> false
+            }
+
+            // A phone held diagonally produces a small constant baseline skew.
+            // Correct only a moderate horizontal skew; 90/180° pages are
+            // handled by the document/text-line classifiers above.
+            if (!useVertical && !orientationCorrected) {
+                val skew = horizontalSkewDegrees(quads)
+                if (skew != null && abs(skew) >= MIN_DESKEW_DEGREES &&
+                    abs(skew) <= MAX_DESKEW_DEGREES
+                ) {
+                    val corrected = rotateBitmap(activeBitmap, -skew)
+                    if (corrected != null) {
+                        if (activeBitmap !== decoded) activeBitmap.recycle()
+                        activeBitmap = corrected
+                        onProgress("detect", 0, 1)
+                        quads = detectQuads(activeBitmap, det)
+                        onProgress("detect", 1, 1)
+                        if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
+                        useVertical = mode == "vertical" ||
+                            (mode == "auto" && TextLayoutHeuristic.isVertical(quads))
+                    }
+                }
             }
             if (!useVertical &&
                 mode == "auto" &&
@@ -376,41 +401,33 @@ internal class PaddleOcrEngine {
                 }
             }
             if (useVertical && ensureMangaLoaded()) {
-                // A mostly-vertical page may still contain a horizontal caption
-                // or sound effect. Split obvious horizontal boxes out instead of
-                // feeding them to MangaOCR's bubble model.
-                val horizontalQuads = if (mode == "auto") {
-                    quads.filter { TextLayoutHeuristic.isStrongHorizontal(it) }
-                } else {
-                    emptyList()
-                }
-                if (horizontalQuads.isNotEmpty() && horizontalQuads.size < quads.size) {
-                    val verticalQuads = quads.filterNot { it in horizontalQuads }
-                    return recognizeMixed(
-                        bitmap = activeBitmap,
-                        verticalQuads = verticalQuads,
-                        horizontalQuads = horizontalQuads,
-                        rec = rec,
-                        keys = keys,
-                        started = started,
-                        onProgress = onProgress,
-                        isCancelled = isCancelled,
-                    )
-                }
                 val blocks = manga.recognize(
                     bitmap = activeBitmap,
                     quads = quads,
                     onProgress = onProgress,
                     isCancelled = isCancelled,
                 )
-                onProgress("done", 1, 1)
-                return NativeOcrResult(
-                    engine = "manga_ocr",
-                    elapsedMs = SystemClock.elapsedRealtime() - started,
-                    width = activeBitmap.width,
-                    height = activeBitmap.height,
-                    blocks = blocks,
-                )
+                val averageConfidence = if (blocks.isEmpty()) {
+                    0f
+                } else {
+                    blocks.map { it.confidence }.average().toFloat()
+                }
+                // Dense book pages can look vertical to DBNet while MangaOCR's
+                // fixed crop model produces noisy text. In auto mode, fall
+                // back to Paddle rather than returning low-confidence garbage.
+                val useManga = mode == "vertical" ||
+                    (blocks.isNotEmpty() &&
+                        averageConfidence >= AUTO_MANGA_MIN_CONFIDENCE)
+                if (useManga) {
+                    onProgress("done", 1, 1)
+                    return NativeOcrResult(
+                        engine = "manga_ocr",
+                        elapsedMs = SystemClock.elapsedRealtime() - started,
+                        width = activeBitmap.width,
+                        height = activeBitmap.height,
+                        blocks = blocks,
+                    )
+                }
             }
             if (mode == "vertical" && !manga.isReady()) {
                 throw if (!mangaError.isNullOrBlank()) {
@@ -420,28 +437,6 @@ internal class PaddleOcrEngine {
                         "MODEL_MISSING",
                         "竖向识别需要先在「OCR 模型」中下载 MangaOCR 模型",
                     )
-                }
-            }
-
-            // A mostly-horizontal page can contain a vertical speech bubble.
-            // Require at least two strong vertical boxes so a tall logo or page
-            // number does not switch the whole page to MangaOCR.
-            if (mode == "auto" && !useVertical && mangaAvailable) {
-                val verticalQuads = quads.filter { TextLayoutHeuristic.isStrongVertical(it) }
-                if (verticalQuads.size >= 2 && verticalQuads.size < quads.size) {
-                    if (ensureMangaLoaded()) {
-                        val horizontalQuads = quads.filterNot { it in verticalQuads }
-                        return recognizeMixed(
-                            bitmap = activeBitmap,
-                            verticalQuads = verticalQuads,
-                            horizontalQuads = horizontalQuads,
-                            rec = rec,
-                            keys = keys,
-                            started = started,
-                            onProgress = onProgress,
-                            isCancelled = isCancelled,
-                        )
-                    }
                 }
             }
 
@@ -556,44 +551,6 @@ internal class PaddleOcrEngine {
         }
     }
 
-    private fun recognizeMixed(
-        bitmap: Bitmap,
-        verticalQuads: List<DBPostprocessor.Quad>,
-        horizontalQuads: List<DBPostprocessor.Quad>,
-        rec: OrtSession,
-        keys: CtcDictionary,
-        started: Long,
-        onProgress: (stage: String, current: Int, total: Int) -> Unit,
-        isCancelled: () -> Boolean,
-    ): NativeOcrResult {
-        val verticalBlocks = if (verticalQuads.isEmpty()) {
-            emptyList()
-        } else {
-            manga.recognize(
-                bitmap = bitmap,
-                quads = verticalQuads,
-                onProgress = onProgress,
-                isCancelled = isCancelled,
-            )
-        }
-        val horizontalBlocks = recognizePaddleQuads(
-            bitmap = bitmap,
-            quads = horizontalQuads,
-            rec = rec,
-            keys = keys,
-            onProgress = onProgress,
-            isCancelled = isCancelled,
-        )
-        onProgress("done", 1, 1)
-        return NativeOcrResult(
-            engine = "paddle_v5+manga_ocr",
-            elapsedMs = SystemClock.elapsedRealtime() - started,
-            width = bitmap.width,
-            height = bitmap.height,
-            blocks = mergeMixedBlocks(verticalBlocks + horizontalBlocks),
-        )
-    }
-
     private fun recognizePaddleQuads(
         bitmap: Bitmap,
         quads: List<DBPostprocessor.Quad>,
@@ -611,41 +568,6 @@ internal class PaddleOcrEngine {
             onProgress("recognize", index + 1, ordered.size)
         }
         return orderBlocks(blocks)
-    }
-
-    /**
-     * Mixed pages are sorted in top-to-bottom bands. Horizontal blocks within a
-     * band read left-to-right; vertical blocks read right-to-left. This is a
-     * heuristic for captions/SFX on an otherwise vertical page, not a full
-     * panel-layout engine.
-     */
-    private fun mergeMixedBlocks(blocks: List<NativeOcrBlock>): List<NativeOcrBlock> {
-        if (blocks.size <= 1) return blocks
-        val averageHeight = blocks.map { (it.bottom - it.top).coerceAtLeast(1) }
-            .average().toFloat()
-        val lineThreshold = max(8f, averageHeight * 0.65f)
-        val lines = mutableListOf<MutableList<NativeOcrBlock>>()
-        for (block in blocks.sortedWith(compareBy({ it.top }, { it.left }))) {
-            val centerY = (block.top + block.bottom) / 2f
-            val line = lines.firstOrNull { existing ->
-                abs(existing.map { (it.top + it.bottom) / 2f }.average() - centerY) <= lineThreshold
-            }
-            if (line == null) {
-                lines.add(mutableListOf(block))
-            } else {
-                line.add(block)
-            }
-        }
-        return lines
-            .sortedBy { line -> line.minOf { it.top } }
-            .flatMap { line ->
-                line.sortedWith(
-                    compareBy(
-                        { if (it.orientation == "vertical") -it.right else it.left },
-                        { it.top },
-                    ),
-                )
-            }
     }
 
     private fun recognizeQuad(
@@ -774,6 +696,37 @@ internal class PaddleOcrEngine {
         if (!docOrientation.isConfident(orientation)) return null
         if (orientation.angle != 90 && orientation.angle != 270) return null
         return rotateBitmap(bitmap, -orientation.angle.toFloat())
+    }
+
+    /**
+     * Median baseline angle of clearly horizontal DBNet boxes. Returns null
+     * when there are too few reliable boxes or the angle is an upright/
+     * upside-down page rather than a small skew.
+     */
+    private fun horizontalSkewDegrees(quads: List<DBPostprocessor.Quad>): Float? {
+        val angles = quads.mapNotNull { quad ->
+            val width = quad.width
+            val height = quad.height
+            if (width < 20f || width < height * 1.2f) return@mapNotNull null
+            val raw = Math.toDegrees(
+                atan2(
+                    (quad.p1.y - quad.p0.y).toDouble(),
+                    (quad.p1.x - quad.p0.x).toDouble(),
+                ),
+            ).toFloat()
+            val normalized = when {
+                raw > 90f -> raw - 180f
+                raw < -90f -> raw + 180f
+                else -> raw
+            }
+            if (abs(normalized) <= 45f) normalized else null
+        }.sorted()
+        if (angles.size < 2) return null
+        return if (angles.size % 2 == 1) {
+            angles[angles.size / 2]
+        } else {
+            (angles[angles.size / 2 - 1] + angles[angles.size / 2]) / 2f
+        }
     }
 
     private fun decodeBitmap(path: String): Bitmap {
@@ -955,6 +908,9 @@ internal class PaddleOcrEngine {
         private const val RECOGNITION_BASE_WIDTH = 320
         private const val RECOGNITION_MAX_WIDTH = 3200
         private const val MIN_RECOGNITION_SCORE = 0.15f
+        private const val MIN_DESKEW_DEGREES = 2f
+        private const val MAX_DESKEW_DEGREES = 12f
+        private const val AUTO_MANGA_MIN_CONFIDENCE = 0.75f
         private val DET_MEAN = floatArrayOf(0.485f, 0.456f, 0.406f)
         private val DET_STD = floatArrayOf(0.229f, 0.224f, 0.225f)
         private val REC_MEAN = floatArrayOf(0.5f, 0.5f, 0.5f)

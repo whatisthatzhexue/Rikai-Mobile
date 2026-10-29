@@ -10,6 +10,7 @@ import '../../services/mecab/unidic_validator.dart';
 import '../../services/storage/permission_service.dart';
 import '../../services/storage/settings_store.dart';
 import '../../state/providers.dart';
+import 'storage_permission_prompt.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -35,6 +36,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
       text: ref.read(appSettingsProvider).unidicPath,
     );
     _refreshPermissions();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final path = ref.read(appSettingsProvider).unidicPath;
+      if (path.trim().isNotEmpty) {
+        ensurePathAccess(context, ref, path);
+      }
+    });
   }
 
   @override
@@ -81,6 +89,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
 
   Future<void> _validateAndSave() async {
     final path = UnidicValidator.normalizePath(_pathController.text);
+    if (!await ensurePathAccess(context, ref, path)) return;
+    if (!mounted) return;
     _pathController.text = path;
     ref.read(appSettingsProvider.notifier).setUnidicPath(path);
     setState(() {
@@ -149,7 +159,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           ListTile(
             leading: const Icon(Icons.document_scanner_outlined),
             title: const Text('管理 OCR 模型'),
-            subtitle: const Text('PaddleOCR 横向 / MangaOCR 竖向；模型按需下载，不随包分发'),
+            subtitle: const Text('PaddleOCR 横向 / MangaOCR 竖向'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/models'),
           ),
@@ -164,9 +174,52 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           _buildPermissionSection(theme),
           const Divider(height: AppSpacing.xl),
           _buildPrivateDirectoryInfo(theme),
+          const Divider(height: AppSpacing.xl),
+          ListTile(
+            leading: const Icon(Icons.cleaning_services_outlined),
+            title: const Text('清除模型缓存'),
+            subtitle: const Text('删除未完成的下载临时文件；已安装模型不受影响'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _clearModelCache,
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _clearModelCache() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('清除模型缓存？'),
+        content: const Text('将删除下载中断留下的临时文件。已安装完成的模型不会被删除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('清除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final bytes = await ref
+          .read(ocrModelManagerProvider)
+          .clearPartialDownloads();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已清除 ${formatBytes(bytes)} 临时文件')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('清除失败：$error')));
+    }
   }
 
   Widget _sectionTitle(ThemeData theme, String text) {

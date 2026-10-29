@@ -22,6 +22,12 @@ void main() {
     expect(candidates, contains(r'\JC_Z24Z\A471.png'));
   });
 
+  test('strips relative parent prefixes from nested CSS/HTML', () {
+    final candidates = mddKeyCandidates('../gaiji/参照.svg');
+
+    expect(candidates, contains(r'\gaiji\参照.svg'));
+  });
+
   test('decodes percent-encoded keys', () {
     final candidates = mddKeyCandidates('%5CJC_Z24Z%5CA471.png');
 

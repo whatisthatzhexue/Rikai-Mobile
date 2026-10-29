@@ -5,9 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../core/models/dict_info.dart';
 import '../../core/models/lookup_models.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/theme/page_route.dart';
 import '../../core/utils/text_normalizer.dart';
 import '../../services/mdict/mdict_worker.dart';
 import '../../state/providers.dart';
+import 'dictionary_filter_bar.dart';
 import 'entry_page.dart';
 import 'lookup_actions.dart';
 import 'lookup_result_list.dart';
@@ -26,6 +28,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   Object? _error;
   bool _busy = false;
   Set<String>? _selectedIds;
+  DictionarySelectionMode _selectionMode = DictionarySelectionMode.multi;
   String _lastQuery = '';
 
   @override
@@ -91,15 +94,28 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   void _toggleDictionary(DictionaryInfo dictionary) {
     final enabled = ref.read(enabledDictionariesProvider);
     final current = _selectedIds ?? enabled.map((entry) => entry.id).toSet();
-    final next = {...current};
-    if (!next.add(dictionary.id)) next.remove(dictionary.id);
+    final Set<String> next;
+    if (_selectionMode == DictionarySelectionMode.single) {
+      next = current.length == 1 && current.contains(dictionary.id)
+          ? <String>{}
+          : <String>{dictionary.id};
+    } else {
+      next = {...current};
+      if (!next.add(dictionary.id)) next.remove(dictionary.id);
+    }
     setState(() => _selectedIds = next);
+    if (_lastQuery.isNotEmpty) _search(_lastQuery);
+  }
+
+  void _selectAllDictionaries() {
+    final enabled = ref.read(enabledDictionariesProvider);
+    setState(() => _selectedIds = enabled.map((entry) => entry.id).toSet());
     if (_lastQuery.isNotEmpty) _search(_lastQuery);
   }
 
   void _openEntry(DictionaryLookupGroup group, LookupEntry entry) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      RikaiPageRoute<void>(
         builder: (context) => EntryPage(
           word: _lastQuery,
           groups: [
@@ -116,7 +132,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   void _openAll(DictionaryLookupGroup group) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      RikaiPageRoute<void>(
         builder: (context) => EntryPage(
           word: _lastQuery,
           groups: [group],
@@ -179,24 +195,26 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               ),
             ),
             if (enabled.length > 1)
-              SizedBox(
-                height: 40,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                  ),
-                  itemCount: enabled.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(width: AppSpacing.sm),
-                  itemBuilder: (context, index) {
-                    final dictionary = enabled[index];
-                    return FilterChip(
-                      label: Text(dictionary.title),
-                      selected: selectedIds.contains(dictionary.id),
-                      onSelected: (_) => _toggleDictionary(dictionary),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  0,
+                  AppSpacing.lg,
+                  AppSpacing.xs,
+                ),
+                child: DictionaryFilterBar(
+                  dictionaries: enabled,
+                  selectedIds: selectedIds,
+                  mode: _selectionMode,
+                  onToggle: (id) {
+                    final dictionary = enabled.firstWhere(
+                      (entry) => entry.id == id,
                     );
+                    _toggleDictionary(dictionary);
                   },
+                  onSelectAll: _selectAllDictionaries,
+                  onModeChanged: (mode) =>
+                      setState(() => _selectionMode = mode),
                 ),
               ),
             const SizedBox(height: AppSpacing.xs),

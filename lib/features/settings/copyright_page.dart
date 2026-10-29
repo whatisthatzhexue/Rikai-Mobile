@@ -15,13 +15,12 @@ class CopyrightPage extends StatelessWidget {
     ('ONNX Runtime', 'MIT License，Copyright Microsoft Corporation。OCR 推理运行时。'),
     (
       'PaddleOCR PP-OCRv5 / PP-LCNet 模型',
-      'Apache License 2.0，Copyright PaddlePaddle Authors。'
-          '模型在应用内按需下载，不随本项目分发。',
+      'Apache License 2.0，Copyright PaddlePaddle Authors。用于横排文字识别。',
     ),
     (
       'MangaOCR 2025 ONNX',
-      '上游模型卡未声明许可证；应用只从上游下载、不随包分发，'
-          '也支持用户导入自行转换的模型。',
+      '用于竖排文字识别。上游模型卡未声明许可证时，请在使用前确认上游条款；'
+          '也可以导入自行转换的模型。',
     ),
     (
       'overlay-translator',
@@ -35,7 +34,7 @@ class CopyrightPage extends StatelessWidget {
     (
       'HarmonyOS Sans SC',
       'HarmonyOS Sans Fonts License Agreement，Copyright Huawei Device Co., Ltd.。'
-          '字体由用户自行下载，不随本项目分发。',
+          '字体由用户自行取得并遵守其许可。',
     ),
     ('UniDic', '用户自备；GPL v2 / LGPL v2.1 / 修正 BSD 三选一，Copyright NINJAL。'),
     ('MDict 词典', '用户自备；词条内容的原始许可由词典提供方决定，本项目不再分发。'),

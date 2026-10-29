@@ -79,16 +79,20 @@ class CorpusPage extends ConsumerWidget {
               ),
             );
           }
-          return ListView.separated(
+          return GridView.builder(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,
               AppSpacing.lg,
               AppSpacing.lg,
               AppSpacing.xxl,
             ),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: AppSpacing.md,
+              mainAxisSpacing: AppSpacing.md,
+              childAspectRatio: 0.78,
+            ),
             itemCount: list.length,
-            separatorBuilder: (context, index) =>
-                const SizedBox(height: AppSpacing.md),
             itemBuilder: (context, index) => _CorpusCard(
               entry: list[index],
               fontSize: settings.readerFontSize,
@@ -169,73 +173,68 @@ class _CorpusCard extends StatelessWidget {
     final date =
         '${entry.createdAt.year}-'
         '${entry.createdAt.month.toString().padLeft(2, '0')}-'
-        '${entry.createdAt.day.toString().padLeft(2, '0')} '
-        '${entry.createdAt.hour.toString().padLeft(2, '0')}:'
-        '${entry.createdAt.minute.toString().padLeft(2, '0')}';
+        '${entry.createdAt.day.toString().padLeft(2, '0')}';
     return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onOpen,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Stack(
-              children: [
-                ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxHeight: AppSizes.corpusPhotoMaxHeight,
-                  ),
-                  child: ColoredBox(
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(
                     color: AppColors.surfaceMuted,
                     child: entry.imagePath.isEmpty
-                        ? const SizedBox(
-                            height: AppSizes.corpusPhotoMaxHeight * 0.5,
-                            child: Center(
-                              child: Icon(Icons.broken_image_outlined),
-                            ),
-                          )
+                        ? const Center(child: Icon(Icons.broken_image_outlined))
                         : Image.file(
                             File(entry.imagePath),
-                            width: double.infinity,
                             fit: BoxFit.contain,
                             errorBuilder: (context, error, stackTrace) =>
-                                const SizedBox(
-                                  height: AppSizes.corpusPhotoMaxHeight * 0.5,
-                                  child: Center(
-                                    child: Icon(Icons.broken_image_outlined),
-                                  ),
+                                const Center(
+                                  child: Icon(Icons.broken_image_outlined),
                                 ),
                           ),
                   ),
-                ),
-                Positioned(
-                  top: AppSpacing.sm,
-                  right: AppSpacing.sm,
-                  child: CaptureRoundButton(
-                    tooltip: '删除语料',
-                    icon: Icons.delete_outline,
-                    background: AppColors.error,
-                    size: AppSizes.corpusAction,
-                    iconSize: AppSizes.icon,
-                    onPressed: onDelete,
+                  Positioned(
+                    top: AppSpacing.xs,
+                    right: AppSpacing.xs,
+                    child: CaptureRoundButton(
+                      tooltip: '删除语料',
+                      icon: Icons.delete_outline,
+                      background: AppColors.error,
+                      size: AppSizes.corpusAction,
+                      iconSize: AppSizes.icon,
+                      onPressed: onDelete,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sm,
+                AppSpacing.sm,
+                AppSpacing.sm,
+                AppSpacing.xs,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     entry.text.isEmpty ? '（无 OCR 文本）' : entry.text,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontSize: fontSize,
-                      height: 1.7,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontSize: fontSize.clamp(14, 18),
+                      height: 1.4,
                     ),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
+                  const SizedBox(height: AppSpacing.xs),
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(
                         child: Text(
@@ -246,7 +245,6 @@ class _CorpusCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(width: AppSpacing.sm),
                       PhotoCopyButton(onPressed: onCopy, label: '复制'),
                     ],
                   ),

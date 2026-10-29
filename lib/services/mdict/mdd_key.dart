@@ -27,6 +27,12 @@ List<String> mddKeyCandidates(String raw) {
   while (value.startsWith('/') || value.startsWith(r'\')) {
     value = value.substring(1);
   }
+  // Entries in nested CSS/HTML often use ../ or ./ relative paths even though
+  // MDD keys are rooted at the archive root.
+  while (value.startsWith('./') || value.startsWith('../')) {
+    value = value.substring(value.startsWith('../') ? 3 : 2);
+  }
+  value = value.replaceAll(RegExp(r'^(\.\.?/)'), '');
 
   final windowsForm = '\\${value.replaceAll('/', r'\')}';
   final slashForm = value.replaceAll(r'\', '/');

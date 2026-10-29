@@ -252,10 +252,26 @@ flutter test integration_test/ocr_android_test.dart -d emulator-5554 \
 ```
 
 Use the same app-op grant loop as the MeCab test. The Phase 4.5 suite (8 cases)
-renders horizontal/vertical/mixed/90°/270°/upside-down PNGs, verifies automatic,
-manual and mixed routing, lazy optional sessions, the 90°/270°/180° corrections,
-progress events, cancellation, and prints timing/blocks. Results are recorded in
-`docs/phase4.5-status.md`.
+renders horizontal/vertical/tilted/90°/270°/upside-down PNGs, verifies
+automatic/manual routing, lazy optional sessions, the 90°/270°/180° corrections,
+deskew, progress events, cancellation, and prints timing/blocks. Results are
+recorded in `docs/phase4.5-status.md`.
+
+Push the seven user-provided regression images to
+`/sdcard/Download/rikai-test-images/` and run:
+
+```bash
+export MSYS_NO_PATHCONV=1
+flutter test integration_test/ocr_real_images_android_test.dart -d emulator-5554
+```
+
+MDict compatibility (Encrypted=2 and MDD resources) uses
+`/sdcard/Download/rikai-mdict-compat/{kanjigen,meikyo}/` with ASCII
+`dict.mdx`/`dict.mdd`/`dict.css` names:
+
+```bash
+flutter test integration_test/mdict_compat_android_test.dart -d emulator-5554
+```
 
 For manual app runs without a working model download, a debug build can point
 the model manager at a public folder:

@@ -5,9 +5,11 @@ import '../../core/models/dict_info.dart';
 import '../../core/models/lookup_models.dart';
 import '../../core/models/token.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/theme/page_route.dart';
 import '../../services/mdict/mdict_worker.dart';
 import '../../state/providers.dart';
 import '../settings/dictionary_page.dart';
+import 'dictionary_filter_bar.dart';
 import 'entry_page.dart';
 import 'lookup_result_list.dart';
 
@@ -38,6 +40,7 @@ class LookupSheet extends ConsumerStatefulWidget {
 class _LookupSheetState extends ConsumerState<LookupSheet> {
   late List<DictionaryInfo> _enabled;
   late Set<String> _selectedIds;
+  DictionarySelectionMode _selectionMode = DictionarySelectionMode.multi;
   late String _query;
 
   LookupResult? _result;
@@ -100,9 +103,21 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
 
   void _toggleDictionary(DictionaryInfo dictionary) {
     setState(() {
-      if (!_selectedIds.add(dictionary.id)) {
+      if (_selectionMode == DictionarySelectionMode.single) {
+        _selectedIds =
+            _selectedIds.length == 1 && _selectedIds.contains(dictionary.id)
+            ? <String>{}
+            : <String>{dictionary.id};
+      } else if (!_selectedIds.add(dictionary.id)) {
         _selectedIds.remove(dictionary.id);
       }
+    });
+    _load(_token.lookupCandidates);
+  }
+
+  void _selectAllDictionaries() {
+    setState(() {
+      _selectedIds = _enabled.map((dictionary) => dictionary.id).toSet();
     });
     _load(_token.lookupCandidates);
   }
@@ -113,10 +128,10 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
   }
 
   void _openEntry(DictionaryLookupGroup group, LookupEntry entry) {
-    final navigator = Navigator.of(context);
-    navigator.pop();
-    navigator.push(
-      MaterialPageRoute<void>(
+    // Keep the lookup sheet below the entry page. Closing it here made users
+    // lose the result list and forced another word lookup after returning.
+    Navigator.of(context).push(
+      RikaiPageRoute<void>(
         builder: (context) => EntryPage(
           word: _query,
           groups: [
@@ -132,10 +147,8 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
   }
 
   void _openAll(DictionaryLookupGroup group) {
-    final navigator = Navigator.of(context);
-    navigator.pop();
-    navigator.push(
-      MaterialPageRoute<void>(
+    Navigator.of(context).push(
+      RikaiPageRoute<void>(
         builder: (context) => EntryPage(
           word: _query,
           groups: [group],
@@ -149,7 +162,7 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
     final navigator = Navigator.of(context);
     navigator.pop();
     navigator.push(
-      MaterialPageRoute<void>(builder: (context) => const DictionaryPage()),
+      RikaiPageRoute<void>(builder: (context) => const DictionaryPage()),
     );
   }
 
@@ -193,22 +206,25 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
             ),
           ),
           if (_enabled.length > 1)
-            SizedBox(
-              height: 40,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                itemCount: _enabled.length,
-                separatorBuilder: (context, index) =>
-                    const SizedBox(width: AppSpacing.sm),
-                itemBuilder: (context, index) {
-                  final dictionary = _enabled[index];
-                  return FilterChip(
-                    label: Text(dictionary.title),
-                    selected: _selectedIds.contains(dictionary.id),
-                    onSelected: (_) => _toggleDictionary(dictionary),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                0,
+                AppSpacing.lg,
+                AppSpacing.xs,
+              ),
+              child: DictionaryFilterBar(
+                dictionaries: _enabled,
+                selectedIds: _selectedIds,
+                mode: _selectionMode,
+                onToggle: (id) {
+                  final dictionary = _enabled.firstWhere(
+                    (entry) => entry.id == id,
                   );
+                  _toggleDictionary(dictionary);
                 },
+                onSelectAll: _selectAllDictionaries,
+                onModeChanged: (mode) => setState(() => _selectionMode = mode),
               ),
             ),
           const Divider(height: 1),
@@ -234,12 +250,7 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
         title: '请选择至少一本词典',
         message: '使用上方的词典标签选择本次查询使用的词典。',
         actionLabel: '全选',
-        onAction: () {
-          setState(() {
-            _selectedIds = _enabled.map((dictionary) => dictionary.id).toSet();
-          });
-          _load(_token.lookupCandidates);
-        },
+        onAction: _selectAllDictionaries,
       );
     }
 

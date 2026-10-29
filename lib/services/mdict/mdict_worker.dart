@@ -9,6 +9,7 @@ import '../../core/models/dict_info.dart';
 import '../../core/models/lookup_models.dart';
 import '../../core/utils/text_normalizer.dart';
 import 'mdd_key.dart';
+import 'mdict_header.dart';
 
 enum MdictErrorCode {
   fileNotFound,
@@ -453,7 +454,7 @@ Future<DictReader> _openDictReader(String path) async {
   final reader = DictReader(normalized);
   try {
     await reader.initDict();
-    _validateHeader(reader.header);
+    validateMdictHeader(reader.header);
     return reader;
   } on MdictException {
     await _safeClose(reader);
@@ -467,25 +468,6 @@ Future<DictReader> _openDictReader(String path) async {
       MdictErrorCode.invalidDictionary,
       '无法读取词典：$error',
       cause: error,
-    );
-  }
-}
-
-void _validateHeader(Map<String, String> header) {
-  final versionText = header['GeneratedByEngineVersion'] ?? '';
-  final version = double.tryParse(versionText);
-  if (version != null && version >= 3.0) {
-    throw MdictException(
-      MdictErrorCode.unsupportedFormat,
-      '暂不支持 MDict $versionText 词典',
-    );
-  }
-
-  final encrypted = (header['Encrypted'] ?? 'No').trim().toLowerCase();
-  if (encrypted.isNotEmpty && encrypted != 'no' && encrypted != '0') {
-    throw MdictException(
-      MdictErrorCode.encrypted,
-      '暂不支持加密词典（Encrypted=${header['Encrypted']}）',
     );
   }
 }
@@ -508,9 +490,15 @@ Future<_OpenDictionary> _ensureOpen(
       ? descriptor['title'].toString()
       : dictionaryTitleFallback(mdxPath);
   final rawMddPaths = descriptor['mddPaths'];
-  final mddPaths = rawMddPaths is List
+  final registeredMddPaths = rawMddPaths is List
       ? rawMddPaths.whereType<String>().toList(growable: false)
       : const <String>[];
+  // Merge disk discovery even when an old registry has paths: the recorded
+  // path may be stale while the same-basename sibling is still readable.
+  final mddPaths = <String>{
+    ...registeredMddPaths,
+    ..._discoverMddPaths(mdxPath),
+  }.toList(growable: false);
 
   final cached = openDictionaries[id];
   if (cached != null && cached.mdxPath == mdxPath) return cached;
@@ -529,6 +517,32 @@ Future<_OpenDictionary> _ensureOpen(
   );
   openDictionaries[id] = dictionary;
   return dictionary;
+}
+
+/// Old registries may predate MDD discovery. The worker is allowed to recover
+/// a same-basename sibling from disk without copying or modifying anything.
+List<String> _discoverMddPaths(String mdxPath) {
+  try {
+    final directory = File(mdxPath).parent;
+    final fileName = mdxPath.split(Platform.pathSeparator).last;
+    final dot = fileName.lastIndexOf('.');
+    final base = (dot <= 0 ? fileName : fileName.substring(0, dot))
+        .toLowerCase();
+    final result = <String>[];
+    for (final entity in directory.listSync(followLinks: false)) {
+      if (entity is! File) continue;
+      final name = entity.path.split(Platform.pathSeparator).last;
+      final nameDot = name.lastIndexOf('.');
+      if (nameDot <= 0) continue;
+      if (name.substring(nameDot).toLowerCase() != '.mdd') continue;
+      if (name.substring(0, nameDot).toLowerCase() != base) continue;
+      result.add(entity.path);
+    }
+    result.sort();
+    return result;
+  } catch (_) {
+    return const [];
+  }
 }
 
 Future<Map<String, Object?>> _lookup(

@@ -19,6 +19,7 @@ class PhotoPane extends StatefulWidget {
     required this.onTap,
     this.onHeightChanged,
     this.overlays = const [],
+    this.imageRevision,
   });
 
   final String imagePath;
@@ -27,6 +28,11 @@ class PhotoPane extends StatefulWidget {
   final VoidCallback onTap;
   final ValueChanged<double>? onHeightChanged;
   final List<Widget> overlays;
+
+  /// Changes when the file at [imagePath] is overwritten (for example after
+  /// an in-place 90° rotation). Using it as the Image key bypasses Flutter's
+  /// path-based image cache immediately.
+  final Object? imageRevision;
 
   @override
   State<PhotoPane> createState() => _PhotoPaneState();
@@ -82,6 +88,7 @@ class _PhotoPaneState extends State<PhotoPane> {
                 color: AppColors.surfaceMuted,
                 child: Image.file(
                   File(widget.imagePath),
+                  key: ValueKey('${widget.imagePath}-${widget.imageRevision}'),
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) =>
                       const Center(child: Text('无法显示照片')),

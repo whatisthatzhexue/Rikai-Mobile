@@ -525,18 +525,17 @@ class _PhotoGridTile extends StatelessWidget {
             Positioned(
               left: AppSpacing.xs,
               top: AppSpacing.xs,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: AppColors.cameraScrim,
-                  shape: BoxShape.circle,
-                ),
-                child: Checkbox(
-                  value: selected,
-                  onChanged: (_) => onTap(),
-                  side: const BorderSide(color: AppColors.onHeader),
-                  checkColor: AppColors.onHeader,
-                  activeColor: AppColors.primary,
-                ),
+              child: Checkbox(
+                value: selected,
+                onChanged: (_) => onTap(),
+                side: const BorderSide(color: AppColors.onHeader),
+                checkColor: AppColors.onHeader,
+                activeColor: AppColors.primary,
+                fillColor: WidgetStateProperty.resolveWith((states) {
+                  return states.contains(WidgetState.selected)
+                      ? AppColors.primary
+                      : AppColors.transparent;
+                }),
               ),
             ),
           ],

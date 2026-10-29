@@ -379,7 +379,11 @@ class OcrModelManager {
           final valid = await _hasExpectedSize(local, file);
           if (valid) {
             installedFiles++;
-            installedBytes += file.size;
+            try {
+              installedBytes += await local.length();
+            } on FileSystemException {
+              installedBytes += file.size;
+            }
           } else {
             missing.add(file.name);
           }
@@ -629,12 +633,28 @@ class OcrModelManager {
   }
 
   List<String> _candidateUrls(List<String> urls, String customMirror) {
-    final trimmed = customMirror.trim();
-    if (trimmed.isEmpty) return urls;
-    final base = Uri.tryParse(trimmed.endsWith('/') ? trimmed : '$trimmed/');
-    if (base == null || !base.hasScheme || base.host.isEmpty) return urls;
-    final mirrored = <String>[];
+    final expanded = <String>[];
     for (final raw in urls) {
+      // Keep a second China-accessible mirror ahead of the Hugging Face
+      // fallback. hf-mirror.net serves the same repository layout when the
+      // primary hf-mirror.com is slow or temporarily unavailable.
+      if (raw.contains('hf-mirror.com')) {
+        expanded.add(raw.replaceFirst('hf-mirror.com', 'hf-mirror.net'));
+      }
+      expanded.add(raw);
+    }
+    final deduped = <String>[];
+    final seen = <String>{};
+    for (final url in expanded) {
+      if (seen.add(url)) deduped.add(url);
+    }
+
+    final trimmed = customMirror.trim();
+    if (trimmed.isEmpty) return deduped;
+    final base = Uri.tryParse(trimmed.endsWith('/') ? trimmed : '$trimmed/');
+    if (base == null || !base.hasScheme || base.host.isEmpty) return deduped;
+    final mirrored = <String>[];
+    for (final raw in deduped) {
       final source = Uri.tryParse(raw);
       if (source == null) continue;
       final path = source.path.startsWith('/')
@@ -647,7 +667,7 @@ class OcrModelManager {
             : candidate.toString(),
       );
     }
-    return [...mirrored, ...urls];
+    return [...mirrored, ...deduped];
   }
 
   String _friendlyDownloadError(Object? error) {
@@ -935,6 +955,32 @@ class OcrModelManager {
           candidateExtension == '.txt';
     }
     return candidateExtension == expectedExtension;
+  }
+
+  /// Removes unfinished `.part`/`.importing` files left by cancelled or
+  /// interrupted downloads. Completed models are never touched.
+  Future<int> clearPartialDownloads() async {
+    final root = await modelsRoot();
+    if (!root.existsSync()) return 0;
+    var removedBytes = 0;
+    try {
+      await for (final entity in root.list(recursive: true)) {
+        if (entity is! File) continue;
+        final name = p.basename(entity.path).toLowerCase();
+        if (!name.endsWith('.part') && !name.endsWith('.importing')) {
+          continue;
+        }
+        try {
+          removedBytes += await entity.length();
+          await entity.delete();
+        } on FileSystemException {
+          // Best effort; another cleanup can retry.
+        }
+      }
+    } on FileSystemException {
+      // The model directory may be unavailable; report what was removed.
+    }
+    return removedBytes;
   }
 
   Future<void> deleteSet(OcrModelSet set) async {

@@ -30,7 +30,7 @@ void main() {
           if (call.method == 'getStorageAccessStatus') {
             return <String, Object?>{
               'sdkInt': 33,
-              'allFilesAccess': false,
+              'allFilesAccess': true,
               'legacyRead': false,
             };
           }
@@ -197,6 +197,8 @@ void main() {
   testWidgets('search page shows the empty dictionary state', (tester) async {
     await _pumpApp(tester);
 
+    await tester.ensureVisible(find.text('查词'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('查词'));
     await tester.pumpAndSettle();
 

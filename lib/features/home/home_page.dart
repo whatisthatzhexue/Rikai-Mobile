@@ -33,29 +33,58 @@ class HomePage extends StatelessWidget {
               AppSpacing.lg,
               AppSpacing.sm,
             ),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('使用前须知', style: theme.textTheme.titleMedium),
-                    const SizedBox(height: AppSpacing.sm),
-                    const _ChecklistItem(
-                      icon: Icons.menu_book_outlined,
-                      text: '在设置中填写分词词典（UniDic）目录',
+            child: Column(
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('使用前须知', style: theme.textTheme.titleMedium),
+                        const SizedBox(height: AppSpacing.sm),
+                        const _ChecklistItem(
+                          icon: Icons.menu_book_outlined,
+                          text: '在设置中填写分词词典（UniDic）目录',
+                        ),
+                        const _ChecklistItem(
+                          icon: Icons.library_books_outlined,
+                          text: '添加 MDict 词典（.mdx；同目录的 .mdd/.css 会自动发现）',
+                        ),
+                        const _ChecklistItem(
+                          icon: Icons.download_outlined,
+                          text: '下载 OCR 模型后可拍照识别',
+                        ),
+                      ],
                     ),
-                    const _ChecklistItem(
-                      icon: Icons.library_books_outlined,
-                      text: '添加 MDict 词典（.mdx；同目录的 .mdd/.css 会自动发现）',
-                    ),
-                    const _ChecklistItem(
-                      icon: Icons.download_outlined,
-                      text: '下载 OCR 模型后可拍照识别',
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                const SizedBox(height: AppSpacing.sm),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('边界说明', style: theme.textTheme.titleMedium),
+                        const SizedBox(height: AppSpacing.sm),
+                        const _ChecklistItem(
+                          icon: Icons.info_outline,
+                          text: 'OCR 可能漏字或认错字，模糊、反光、手写和倾斜的照片更容易出错。',
+                        ),
+                        const _ChecklistItem(
+                          icon: Icons.account_tree_outlined,
+                          text: '分词按日语的短单位切分，复合词可能被拆开，读音和分词结果不一定完全准确。',
+                        ),
+                        const _ChecklistItem(
+                          icon: Icons.lightbulb_outline,
+                          text: '单个词的读音通常比复杂复合词更可靠；不确定时可以点开词典确认。',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(

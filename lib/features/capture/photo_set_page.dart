@@ -11,6 +11,7 @@ import 'package:rikai_ocr/rikai_ocr.dart';
 import '../../core/models/capture_photo.dart';
 import '../../core/models/token.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/theme/page_route.dart';
 import '../../services/mecab/mecab_service.dart';
 import '../../services/ocr/model_manager.dart';
 import '../../services/ocr/ocr_text_composer.dart';
@@ -52,6 +53,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
   bool _unidicConfigured = false;
   bool _verticalReady = false;
   double _photoHeight = AppSizes.capturePhotoHeight;
+  int _imageRevision = 0;
   StreamSubscription<OcrProgress>? _progressSubscription;
 
   OcrMode get _mode => ref.read(captureSessionProvider).mode;
@@ -325,7 +327,9 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     await _cancelRecognition();
     ref.read(captureSessionProvider.notifier).setMode(mode);
     if (mounted) setState(() => _error = null);
-    await _refreshCurrent();
+    // A mode change is an explicit orientation request, so re-run instead of
+    // showing an old auto/manual cache entry.
+    await _refreshCurrent(force: true);
   }
 
   Future<void> _rotateCurrent() async {
@@ -345,6 +349,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       await FileImage(File(photo.filePath)).evict();
       ref.read(captureSessionProvider.notifier).clearPhotoOcr(photo.id);
       if (!mounted) return;
+      setState(() => _imageRevision++);
       await _refreshCurrent(force: true);
     } catch (error) {
       if (!mounted) return;
@@ -486,7 +491,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     final photo = ref.read(captureSessionProvider).current;
     if (photo == null) return;
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      RikaiPageRoute<void>(
         builder: (context) => PhotoViewerPage(imagePath: photo.filePath),
       ),
     );
@@ -496,7 +501,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     await _cancelRecognition();
     if (!mounted) return;
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      RikaiPageRoute<void>(
         builder: (context) =>
             PhotoMultiSelectPage(mode: _mode, initialFingerprint: _fingerprint),
       ),
@@ -560,6 +565,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
                       imagePath: photo.filePath,
                       height: photoHeight,
                       maxHeight: maxPhotoHeight,
+                      imageRevision: _imageRevision,
                       onTap: _openPhotoViewer,
                       onHeightChanged: (value) =>
                           setState(() => _photoHeight = value),

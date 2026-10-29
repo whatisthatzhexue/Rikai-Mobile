@@ -1,0 +1,166 @@
+import 'package:flutter/material.dart';
+
+import '../../core/models/dict_info.dart';
+import '../../core/theme/app_tokens.dart';
+
+enum DictionarySelectionMode { multi, single }
+
+/// Compact, wrapping dictionary selector shared by the search page and the
+/// reader lookup sheet. Names are shortened to the shortest unique prefix so
+/// several Japanese dictionary titles fit in one row (or wrap naturally).
+class DictionaryFilterBar extends StatelessWidget {
+  const DictionaryFilterBar({
+    super.key,
+    required this.dictionaries,
+    required this.selectedIds,
+    required this.mode,
+    required this.onToggle,
+    required this.onSelectAll,
+    required this.onModeChanged,
+  });
+
+  final List<DictionaryInfo> dictionaries;
+  final Set<String> selectedIds;
+  final DictionarySelectionMode mode;
+  final ValueChanged<String> onToggle;
+  final VoidCallback onSelectAll;
+  final ValueChanged<DictionarySelectionMode> onModeChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    if (dictionaries.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final titles = dictionaries.map((dictionary) => dictionary.title).toList();
+    final selectedAll = dictionaries.every(
+      (dictionary) => selectedIds.contains(dictionary.id),
+    );
+    final singleSelection =
+        mode == DictionarySelectionMode.single && selectedIds.length == 1;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '查询词典',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            SegmentedButton<DictionarySelectionMode>(
+              segments: const [
+                ButtonSegment(
+                  value: DictionarySelectionMode.multi,
+                  label: Text('多选'),
+                ),
+                ButtonSegment(
+                  value: DictionarySelectionMode.single,
+                  label: Text('单选'),
+                ),
+              ],
+              selected: {mode},
+              showSelectedIcon: false,
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                textStyle: WidgetStatePropertyAll(theme.textTheme.bodySmall),
+              ),
+              onSelectionChanged: (selection) => onModeChanged(selection.first),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: [
+            _DictionaryChip(
+              label: '全选',
+              selected: selectedAll,
+              onTap: onSelectAll,
+              icon: Icons.select_all,
+            ),
+            for (var index = 0; index < dictionaries.length; index++)
+              _DictionaryChip(
+                label: _shortTitle(titles[index], titles),
+                selected: selectedIds.contains(dictionaries[index].id),
+                dimmed:
+                    singleSelection &&
+                    !selectedIds.contains(dictionaries[index].id),
+                onTap: () => onToggle(dictionaries[index].id),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static String _shortTitle(String title, List<String> titles) {
+    final trimmed = title.trim();
+    if (trimmed.isEmpty) return '词典';
+    if (titles.length <= 1) return trimmed;
+    final runes = trimmed.runes.toList(growable: false);
+    for (var length = 1; length <= runes.length; length++) {
+      final prefix = String.fromCharCodes(runes.take(length));
+      var unique = true;
+      for (final other in titles) {
+        if (other == title) continue;
+        if (other.trim().startsWith(prefix)) {
+          unique = false;
+          break;
+        }
+      }
+      if (unique) return prefix;
+    }
+    return trimmed;
+  }
+}
+
+class _DictionaryChip extends StatelessWidget {
+  const _DictionaryChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.dimmed = false,
+    this.icon,
+  });
+
+  final String label;
+  final bool selected;
+  final bool dimmed;
+  final IconData? icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: dimmed ? 0.35 : 1,
+      child: FilterChip(
+        selected: selected,
+        showCheckmark: false,
+        onSelected: (_) => onTap(),
+        backgroundColor: AppColors.surface,
+        selectedColor: AppColors.header,
+        side: BorderSide(color: selected ? AppColors.header : AppColors.border),
+        shape: const StadiumBorder(),
+        visualDensity: VisualDensity.compact,
+        avatar: icon == null
+            ? null
+            : Icon(
+                icon,
+                size: AppSizes.iconSmall,
+                color: selected ? AppColors.onHeader : AppColors.textSecondary,
+              ),
+        label: Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: selected ? AppColors.onHeader : AppColors.textPrimary,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+}

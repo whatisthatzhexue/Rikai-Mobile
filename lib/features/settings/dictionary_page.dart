@@ -11,6 +11,7 @@ import '../../core/theme/app_tokens.dart';
 import '../../services/mdict/mdict_worker.dart';
 import '../../state/providers.dart';
 import 'dictionary_import_page.dart';
+import 'storage_permission_prompt.dart';
 
 class DictionaryPage extends ConsumerStatefulWidget {
   const DictionaryPage({super.key});
@@ -22,12 +23,31 @@ class DictionaryPage extends ConsumerStatefulWidget {
 enum _DictionaryAction { moveUp, moveDown, revalidate, delete }
 
 class _DictionaryPageState extends ConsumerState<DictionaryPage> {
+  bool _permissionPrompted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _permissionPrompted) return;
+      final paths = ref
+          .read(dictionaryRepositoryProvider)
+          .map((dictionary) => dictionary.mdxPath)
+          .where((path) => path.trim().isNotEmpty)
+          .toList(growable: false);
+      if (paths.isEmpty) return;
+      _permissionPrompted = true;
+      ensurePathAccess(context, ref, paths.first);
+    });
+  }
+
   Future<void> _addDictionary() async {
     final info = await showDialog<DictionaryInfo>(
       context: context,
       builder: (context) => _AddDictionaryDialog(
         onSubmit: (path) =>
             ref.read(dictionaryRepositoryProvider.notifier).addDictionary(path),
+        ensureAccess: (path) => ensurePathAccess(context, ref, path),
       ),
     );
     if (!mounted || info == null) return;
@@ -375,9 +395,13 @@ class _DictionaryEmpty extends StatelessWidget {
 }
 
 class _AddDictionaryDialog extends StatefulWidget {
-  const _AddDictionaryDialog({required this.onSubmit});
+  const _AddDictionaryDialog({
+    required this.onSubmit,
+    required this.ensureAccess,
+  });
 
   final Future<DictionaryInfo> Function(String path) onSubmit;
+  final Future<bool> Function(String path) ensureAccess;
 
   @override
   State<_AddDictionaryDialog> createState() => _AddDictionaryDialogState();
@@ -454,6 +478,8 @@ class _AddDictionaryDialogState extends State<_AddDictionaryDialog> {
       setState(() => _error = '请输入 .mdx 文件路径');
       return;
     }
+    if (!await widget.ensureAccess(path)) return;
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _error = '';

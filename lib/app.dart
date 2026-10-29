@@ -16,54 +16,87 @@ import 'features/settings/dictionary_page.dart';
 import 'features/settings/model_page.dart';
 import 'features/settings/settings_page.dart';
 
+Page<void> _page(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 220),
+    reverseTransitionDuration: const Duration(milliseconds: 180),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return SlideTransition(
+        position: animation.drive(
+          Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).chain(CurveTween(curve: Curves.easeOutCubic)),
+        ),
+        child: child,
+      );
+    },
+  );
+}
+
 GoRouter _createRouter() {
   return GoRouter(
     routes: [
-      GoRoute(path: '/', builder: (context, state) => const HomePage()),
+      GoRoute(
+        path: '/',
+        pageBuilder: (context, state) => _page(state, const HomePage()),
+      ),
       GoRoute(
         path: '/reader',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final extra = state.extra;
-          if (extra is ReaderRouteArgs) {
-            return ReaderPage(initialText: extra.text, replaceDraft: true);
-          }
-          return ReaderPage(
-            initialText: state.uri.queryParameters['text'] ?? '',
-          );
+          final page = extra is ReaderRouteArgs
+              ? ReaderPage(initialText: extra.text, replaceDraft: true)
+              : ReaderPage(
+                  initialText: state.uri.queryParameters['text'] ?? '',
+                );
+          return _page(state, page);
         },
       ),
       GoRoute(
         path: '/capture',
-        builder: (context, state) => const CapturePage(),
+        pageBuilder: (context, state) => _page(state, const CapturePage()),
       ),
       GoRoute(
         path: '/photos',
-        builder: (context, state) => const PhotoSetPage(),
+        pageBuilder: (context, state) => _page(state, const PhotoSetPage()),
       ),
-      GoRoute(path: '/corpus', builder: (context, state) => const CorpusPage()),
+      GoRoute(
+        path: '/corpus',
+        pageBuilder: (context, state) => _page(state, const CorpusPage()),
+      ),
       GoRoute(
         path: '/corpus-detail',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final extra = state.extra;
-          if (extra is CorpusDetailRouteArgs) {
-            return CorpusDetailPage(initialEntry: extra.entry);
-          }
-          return const CorpusPage();
+          final page = extra is CorpusDetailRouteArgs
+              ? CorpusDetailPage(initialEntry: extra.entry)
+              : const CorpusPage();
+          return _page(state, page);
         },
       ),
-      GoRoute(path: '/models', builder: (context, state) => const ModelPage()),
+      GoRoute(
+        path: '/models',
+        pageBuilder: (context, state) => _page(state, const ModelPage()),
+      ),
       GoRoute(
         path: '/settings',
-        builder: (context, state) => const SettingsPage(),
+        pageBuilder: (context, state) => _page(state, const SettingsPage()),
       ),
-      GoRoute(path: '/search', builder: (context, state) => const SearchPage()),
+      GoRoute(
+        path: '/search',
+        pageBuilder: (context, state) => _page(state, const SearchPage()),
+      ),
       GoRoute(
         path: '/dictionaries',
-        builder: (context, state) => const DictionaryPage(),
+        pageBuilder: (context, state) => _page(state, const DictionaryPage()),
       ),
       GoRoute(
         path: '/dictionary-import',
-        builder: (context, state) => const DictionaryImportPage(),
+        pageBuilder: (context, state) =>
+            _page(state, const DictionaryImportPage()),
       ),
     ],
   );

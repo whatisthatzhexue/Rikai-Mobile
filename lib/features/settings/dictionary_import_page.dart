@@ -10,6 +10,7 @@ import '../../core/utils/format_bytes.dart';
 import '../../services/mdict/dictionary_scanner.dart';
 import '../../services/mdict/mdict_worker.dart';
 import '../../state/providers.dart';
+import 'storage_permission_prompt.dart';
 
 /// Result handed back to the dictionary management page. The import page
 /// closes immediately so the refreshed dictionary list is the result screen.
@@ -75,6 +76,8 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
       setState(() => _error = '请选择词典所在文件夹');
       return;
     }
+    if (!await ensurePathAccess(context, ref, path)) return;
+    if (!mounted) return;
     final token = ++_token;
     setState(() {
       _scanning = true;
@@ -186,7 +189,7 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
       _error = null;
       _progressCurrent = 0;
       _progressTotal = selected.length;
-      _status = '正在导入…';
+      _status = '正在导入 0/$_progressTotal';
     });
     var success = 0;
     var failed = 0;
@@ -194,8 +197,7 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
       if (_importCancelRequested) break;
       if (!mounted) return;
       setState(() {
-        _progressCurrent++;
-        _status = '正在导入 $_progressCurrent/$_progressTotal';
+        _status = '正在导入 $success/$_progressTotal';
       });
       try {
         await ref
@@ -206,6 +208,14 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
         failed++;
       } catch (_) {
         failed++;
+      }
+      if (mounted) {
+        setState(() {
+          _progressCurrent = success;
+          _status =
+              '已导入 $success/$_progressTotal'
+              '${failed == 0 ? '' : '（失败 $failed）'}';
+        });
       }
     }
     if (!mounted) return;

@@ -21,18 +21,6 @@ internal object TextLayoutHeuristic {
     private const val STRONG_VERTICAL_RATIO = 5.0f
     private const val STRONG_VERTICAL_MIN_COUNT = 3
 
-    fun isStrongHorizontal(quad: DBPostprocessor.Quad): Boolean {
-        val width = quad.width.coerceAtLeast(1f)
-        val height = quad.height.coerceAtLeast(1f)
-        return width > height * PORTRAIT_RATIO
-    }
-
-    fun isStrongVertical(quad: DBPostprocessor.Quad): Boolean {
-        val width = quad.width.coerceAtLeast(1f)
-        val height = quad.height.coerceAtLeast(1f)
-        return height > width * PORTRAIT_RATIO
-    }
-
     fun isVertical(quads: List<DBPostprocessor.Quad>): Boolean {
         if (quads.isEmpty()) return false
         if (quads.size == 1) {

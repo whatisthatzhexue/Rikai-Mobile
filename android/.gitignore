@@ -12,3 +12,9 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Keep the Gradle wrapper in the repository so a fresh clone can run
+# ./gradlew (and Android Studio can sync) before Flutter re-injects it.
+!/gradlew
+!/gradlew.bat
+!gradle/wrapper/gradle-wrapper.jar

@@ -35,6 +35,8 @@ class _EntryPageState extends ConsumerState<EntryPage>
   late final List<DictionaryLookupGroup> _groups;
   late final TabController _tabController;
   final Map<String, Future<RenderedEntry>> _renders = {};
+  Animation<double>? _routeAnimation;
+  bool _leaving = false;
 
   @override
   void initState() {
@@ -58,7 +60,30 @@ class _EntryPageState extends ConsumerState<EntryPage>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final animation = ModalRoute.of(context)?.animation;
+    if (identical(animation, _routeAnimation)) return;
+    _routeAnimation?.removeListener(_onRouteAnimation);
+    _routeAnimation = animation;
+    _routeAnimation?.addListener(_onRouteAnimation);
+  }
+
+  void _onRouteAnimation() {
+    final status = _routeAnimation?.status;
+    if (!mounted || status == null) return;
+    if (status == AnimationStatus.reverse && !_leaving) {
+      // Remove the platform WebView before the pop animation paints another
+      // frame. Otherwise Android can briefly show the just-dismissed HTML.
+      setState(() => _leaving = true);
+    } else if (status == AnimationStatus.completed && _leaving) {
+      setState(() => _leaving = false);
+    }
+  }
+
+  @override
   void dispose() {
+    _routeAnimation?.removeListener(_onRouteAnimation);
     _tabController.dispose();
     super.dispose();
   }
@@ -147,6 +172,9 @@ class _EntryPageState extends ConsumerState<EntryPage>
   }
 
   Widget _buildEntryTab(DictionaryLookupGroup group) {
+    if (_leaving) {
+      return const ColoredBox(color: AppColors.surface);
+    }
     final future = _renders[group.dictionary.id]!;
     return FutureBuilder<RenderedEntry>(
       future: future,

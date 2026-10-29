@@ -12,7 +12,7 @@ Android 单端的 Flutter 日语阅读/查词应用。**核心离线**：拍照�
 用户自备的 MDict 词典；另有搜索查词、词典偏好、语料保存。
 
 **当前处于 Phase 4.5（OCR 质量与性能收敛），Phase 5 暂停。** 4.5 已完成
-按需加载模型、stat 优先指纹、90°/270° 整图纠正、混合排版分区路由、Manga 置信度
+按需加载模型、stat 优先指纹、90°/270° 整图纠正、auto 单引擎置信度回退、Manga 置信度
 过滤和照片旋转入口；但尚未做 arm64 真机/真实漫画页验收。验收通过前不要推进
 Phase 5，也不要开始 Phase 6。
 
@@ -56,21 +56,22 @@ Phase 6（`docs/phase6-agent-design.md`，**设计草案，未实现**）计划�
   复制按钮在照片显示区右下角，为深蓝长条，文案「复制文本」；语料预览卡片
   右下角的复制按钮仍为「复制」。识别方向、旋转、模型设置、页码导航贴近页面
   底部，页码箭头中心与左下/右下角按钮中心同高。
-  主页把「使用前须知」放在上方，当前四个功能按钮在剩余空间垂直居中；
-  Phase 6 计划五个按钮时必须先更新设计 token/小屏滚动规则，不能直接硬编码。
-  语料列表为大照片（完整 contain）+ 右上角红色圆形删除 + OCR 结果 + 日期，
-  复制在**卡片右下角**；点开后进入「语料」详情：照片/OCR/分词、照片右下复制、
-  语料间页码、左下删除，无多选/方向/模型设置/保存。列表与详情标题栏右上角
-  都有字号/注音菜单，OCR/分词字号随之变化。
+  主页把「使用前须知」和「边界说明」两张卡片放在上方，当前四个功能按钮在
+  剩余空间垂直居中；Phase 6 计划五个按钮时必须先更新设计 token/小屏滚动规则，
+  不能直接硬编码。语料列表为两列紧凑卡片（完整 contain 照片 + 最多 3 行 OCR +
+  日期 + 右上删除 + 右下复制）；点开后进入「语料」详情：照片/分词、照片右下
+  复制、语料间页码、左下删除，不显示 OCR 原文/日期，无多选/方向/模型设置/保存。
+  列表与详情标题栏右上角都有字号/注音菜单，分词字号随之变化。
 - **字体**：HarmonyOS Sans SC Regular，路径
   `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`。字体文件**不入库**（`.gitignore`
   已忽略）；用户自行从华为 HarmonyOS 设计资源下载，见 `assets/fonts/README.md`。
   构建前必须存在，否则 Flutter 报缺失资产。应用图标源 `assets/Rikai_Icon.jpg`
   由 `flutter_launcher_icons` 生成 Android 图标（配置在 `pubspec.yaml`）。
 - 仓库已有多次提交（`d0d94a3`、`dc70cee`、`91dc386`、`deb6484`、
-  `b12d24f`、`95f90e0`、`9e17984`、`f287603`、`c2ae03d`）。Phase 4 已提交为
-  `f287603`，Phase 6 文档为 `c2ae03d`；Phase 4.5 代码/文档当前未提交。
-  Phase 6 只有文档设计，尚未实现。不要擅自 `reset`/`commit`，除非用户明确要求。
+  `b12d24f`、`95f90e0`、`9e17984`、`f287603`、`c2ae03d`、`4d0100f`）。
+  Phase 4 为 `f287603`，Phase 6 文档为 `c2ae03d`，Phase 4.5 初版为 `4d0100f`；
+  arm64 反馈修复当前未提交。Phase 6 只有文档设计，尚未实现。不要擅自
+  `reset`/`commit`，除非用户明确要求。
 
 ## 2. 已确认的架构决策（不要随意改；第 9 项为 Phase 6 设计边界）
 
@@ -125,8 +126,8 @@ Phase 6（`docs/phase6-agent-design.md`，**设计草案，未实现**）计划�
    - 运行时指纹/路径校验先 stat（路径、大小、mtime），不要每次 ready 都全量
      SHA-256；下载/导入/迁移仍需 SHA-256。
    - doc orientation 只在长宽比与框布局矛盾时运行；90/270 旋转后必须重新 DBNet。
-   - auto 混合页可按框方向分区：横向框 Paddle、纵向框 Manga，engine 记录
-     `paddle_v5+manga_ocr`。不要把它扩展成无置信度的任意分割。
+   - auto 只能返回一个引擎（`paddle_v5` 或 `manga_ocr`）；Manga 平均置信度低于
+     0.75 时自动回退 Paddle。不要恢复按区域混合输出的旧实验。
    - 照片集“旋转”只改私有会话副本 90°，清该照片 OCR 缓存后重新识别；不要改
      设备原图。
 
@@ -273,22 +274,21 @@ Phase 6（`docs/phase6-agent-design.md`，**设计草案，未实现**）计划�
   - **方向**：doc orientation 返回 angle/probability/margin；仅在
     landscape+vertical 或 portrait+horizontal 时运行；高置信 90/270 旋转整图并
     重新 DBNet。textline 180° 只在 auto 横向运行。
-  - **混合排版**：auto 把强横向框交 Paddle、其余交 Manga；或横向页中 ≥2 个
-    强纵向框交 Manga。engine=`paddle_v5+manga_ocr`，按 top band 合并。
-  - **Manga 质量**：气泡 gap/padding 按中位框尺寸自适应；清除控制/替换字符，
-    丢弃低置信度气泡。
+  - **auto 单引擎**：几何/方向选择后只跑 Paddle 或 Manga；Manga 平均置信度
+    <0.75 时自动回退 Paddle；模式切换 `force` 重新 OCR，不复用旧缓存。
+  - **Manga 质量**：气泡 gap/padding 按中位框尺寸自适应；竖向 crop 最多 3 个
+    text band；清除控制/替换字符，丢弃低置信度气泡。
   - **缓存/交互**：手动横向可复用 auto 的 `paddle_v5` 结果，手动竖向可复用
-    `manga_ocr` 结果，mixed 不复用；照片集新增“旋转”按钮，旋转私有副本 90°、
-    清该照片 OCR 缓存并重新识别。
-  - 设备 OCR 套件扩为 8 项：横向、lazy、Manga、混合、90°、270°、倒置 180°、
-    取消；x86_64 全部通过。冷 auto ~1308ms（含 Manga 加载），热 vertical
-    149ms；混合 338ms；90° 675ms、270° 550ms。arm64/真实漫画页验收未完成。
+    `manga_ocr` 结果；照片集“旋转”旋转私有副本 90°、清该照片 OCR 缓存。
+  - 设备 OCR 套件 8 项：横向、6° 倾斜、lazy、Manga、90°、270°、倒置 180°、
+    取消；x86_64 全部通过。冷 auto ~1.1s，热 vertical ~180ms；7 张真实图片
+    auto/h/v 扫描通过。arm64 仍待验收。
 
 已验证：
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 112 tests passed
+flutter test     -> 120 tests passed
 flutter build apk --debug -> success
 ```
 
@@ -325,20 +325,25 @@ search page opens a dictionary entry with the real MDict
 463,312 条、`@@@LINK` 重定向、前缀搜索正常。
 
 OCR 设备集成测试（`integration_test/ocr_android_test.dart`，Phase 4.5 后 8/8
-通过；合成横向/纵向/混合/90°/270°/倒置 PNG，真实 PaddleOCR + MangaOCR +
+通过；合成横向/6° 倾斜/纵向/90°/270°/倒置 PNG，真实 PaddleOCR + MangaOCR +
 orientation 模型）：
 
 ```text
-PaddleOCR horizontal      291ms   1 block   "ありがとう"
+PaddleOCR horizontal      299ms   1 block   "ありがとう"
+Tilted-page deskew        201ms   1 block   "ありがとう"
 horizontal lazy sessions  passed  mangaLoaded=false
-MangaOCR auto (cold)     1308ms   1 block   "これはテストです"
-MangaOCR vertical (warm)  149ms   1 block   "これはテストです"
-Mixed routing             338ms   3 blocks  "これはテスト / ありがとう / です"
-Sideways 90° correction   675ms   8 blocks  "ありがとう" x8
-Sideways 270° correction  550ms   8 blocks  "ありがとう" x8
-Upside-down 180°          144ms   1 block   "ありがとう"
+MangaOCR auto (cold)     1175ms   1 block   "これはテストです"
+MangaOCR vertical (warm)  146ms   1 block   "これはテストです"
+Sideways 90° correction   757ms   8 blocks  "ありがとう" x8
+Sideways 270° correction  906ms   8 blocks  "ありがとう" x8
+Upside-down 180°          246ms   1 block   "ありがとう"
 Cancellation              passed
 ```
+
+MDict 兼容测试（`integration_test/mdict_compat_android_test.dart`，2/2）验证
+`Encrypted: 2` 导入与 MDD 图片读取；真实图片扫描
+（`integration_test/ocr_real_images_android_test.dart`）覆盖 `test_images/` 的
+7 张图片 × auto/横向/竖向。
 
 取消测试在检测阶段触发 `cancel()`，断言返回 `CANCELLED` 且不崩溃。
 
@@ -356,11 +361,12 @@ Cancellation              passed
 
 **尚未完成 / 下一步：**
 
-- Phase 4.5：arm64 真机回归（横排/竖排/混合/倒置/90°、连续多页内存/耗时）、
+- Phase 4.5：arm64 真机回归（横排/竖排/倒置/90°/270°、连续多页内存/耗时）、
   真实漫画页质量、缓存命中和按需加载性能验收；必要时继续调 Manga 聚类/顺序。
 - Phase 5（4.5 验收后）：完整识别历史/语料管理、首次启动引导、设置与发布打磨。
-- 没有 arm64 真机；只有 x86_64 模拟器 `Medium_Phone_API_36.1`。
-  x86_64 仅验证功能，性能/真实漫画质量需 arm64 真机。
+- 本开发环境只有 x86_64 模拟器 `Medium_Phone_API_36.1`；用户已在 arm64
+  真机反馈问题，但当前机器不能直接连接该设备。x86_64 仅验证功能，修复后仍需
+  arm64 复测性能/真实漫画质量。
 - 本机模拟器 DNS 无法解析 hf-mirror/Hugging Face，因此“应用内实网下载模型”
   尚未在设备验证；主机 curl 成功，Dart 本地 HTTP 测试已覆盖 Range 续传/校验。
 - Release APK 尚未构建（不要在没有必要时重复跑长构建）。
@@ -425,14 +431,19 @@ MDD 缓存未清理、无模糊搜索。
 - 可选模型懒加载、`prepare` 预热、readiness available/loaded 拆分；
 - stat 优先指纹/校验，SHA-256 按文件修订缓存；
 - 90/270 整图旋转 + 重新 DBNet；doc 模型只在长宽比与布局矛盾时运行；
-- auto 混合排版按框方向分区路由；
-- Manga 尺寸自适应 gap/padding + 低置信度过滤；
-- 手动模式安全复用 auto 缓存；照片集“旋转”入口。
+- auto 单引擎（Paddle 或 Manga），Manga 低置信度自动回退 Paddle；模式切换
+  强制重新 OCR；
+- 2°–12° 轻微 deskew；Manga 尺寸自适应 gap/padding、竖向 3 band 上限和低置信
+  度过滤；
+- 手动模式安全复用 auto 缓存；照片集“旋转”入口；
+- 设备反馈修复：MDict Encrypted=2/MDD、词典搜索单选多选与简称、词条标题、
+  权限引导、拍照提示、语料卡片、下载后台/断点/清理、WebView 退出闪帧等，
+  详见 `docs/phase4.5-status.md` 的 Device-feedback 小节。
 
 仍需：
 
 - arm64 真机：横排 2048px <5s、单页漫画 <10s、无 OOM；
-- 真实横排/竖排/混合/倒置/90° 页面回归；
+- 真实横排/竖排/倒置/90°/270° 页面回归（7 张 test_images 已跑 x86_64）；
 - 真实漫画多气泡/多面板顺序、振假名噪声、低置信度垃圾文本验收；
 - 首次 auto/vertical 冷启动仍有 Manga session 创建成本（x86_64 约 1.1s）；
 - 视情况继续做 panel grouping、cross-bubble batching、密集页 tiling。
@@ -909,20 +920,17 @@ Phase 6 只能在 Phase 5 完成并经用户确认后实施。
     - 正确做法：使用前须知卡片在上方；四个功能按钮在剩余空间垂直居中
       （小屏可滚动）。保持深蓝 `header`、32sp、整体居中。
 69. **误区：语料页沿用 72dp 缩略图和右侧小删除按钮；点击语料仍跳文本阅读页。**
-    - 正确做法：语料列表与详情标题栏右上角都提供 `ReaderOptionsMenu`；列表 OCR
-      与详情 OCR/分词都按 `readerFontSize` 渲染。语料卡片展示完整大照片
-      （`BoxFit.contain`，最大 `corpusPhotoMaxHeight`），右上角叠放与照片集同款的
-      错误色圆形删除按钮（`corpusAction` 44dp，可适当缩小）；照片下是完整
-      OCR 文本，再下是日期与 **卡片右下角**的深蓝 `PhotoCopyButton`（不要压在
-      照片右下角，这是预览列表与查看页的区别）。
-      点击卡片进入 `/corpus-detail`（`CorpusDetailPage`）：照片/OCR/分词结果，
-      照片右下同样有「复制文本」按钮，语料间页码，标题「语料」，左下角删除；
-      无多选/方向/模型设置/保存。该页只使用本机图片、`HistoryStore`、
-      MeCab/MDict，不得联网。
-70. **误区：语料详情把 OCR 原文和分词结果只显示其中一种。**
-    - 正确做法：两者都显示：OCR 原文（`SelectableText`）+ 分词结果
-      （`ReaderBlock`，可点词查词）；未配置 UniDic/失败时保留 OCR 原文并给出
-      中文说明/重试。翻页/删除后重新分析当前语料，旧分析用 token 丢弃。
+    - 正确做法：语料列表与详情标题栏右上角都提供 `ReaderOptionsMenu`；分词
+      按 `readerFontSize` 渲染。语料列表用与照片集多选页一致的两列紧凑卡片：
+      完整 contain 照片 + 最多 3 行 OCR + 日期 + 右上错误色圆形删除 + 右下
+      「复制」。点击进入 `/corpus-detail`（`CorpusDetailPage`）：照片/分词，
+      照片右下「复制文本」，语料间页码，标题「语料」，左下删除；不重复显示
+      OCR 原文和日期；无多选/方向/模型设置/保存。该页只使用本机图片、
+      `HistoryStore`、MeCab/MDict，不得联网。
+70. **误区：语料详情把 OCR 原文和分词结果都堆在长页面里。**
+    - 正确做法：详情只显示分词结果（`ReaderBlock`，可点词查词）；未配置
+      UniDic/失败时给中文说明/重试。翻页/删除后重新分析当前语料，旧分析用
+      token 丢弃。
 71. **误区：加入 MangaOCR 后仍只按 PaddleOCR 文件计算照片集缓存指纹。**
     - 正确做法：使用 `OcrRuntimePaths` + `fingerprintForPaths`，指纹包含
       Paddle、已安装的 MangaOCR（encoder/decoder/vocab）和 orientation 文件；
@@ -978,16 +986,29 @@ Phase 6 只能在 Phase 5 完成并经用户确认后实施。
 83. **误区：每次 auto 都跑 doc orientation，或在正方形/正常竖排页上旋转整图。**
     - 正确做法：只在图像长宽比与 DBNet 布局矛盾时运行；高置信 90/270 才旋转；
       旋转后必须重新 DBNet；textline 180° 只在 auto 横向。
-84. **误区：按整页单路由处理混合排版。**
-    - 正确做法：auto 下强横向框交 Paddle、其余交 Manga；横向页中至少两个强
-      纵向框才交 Manga。合并结果的 engine 为 `paddle_v5+manga_ocr`，mixed 结果
-      不得被手动模式缓存复用。
+84. **误区：auto 同时跑两个引擎/输出 mixed 结果，或让低置信度 Manga 直接返回。**
+    - 正确做法：auto 只返回 `paddle_v5` 或 `manga_ocr` 之一；Manga 平均置信度
+      低于 0.75 时回退 Paddle。模式切换必须强制重新识别，不能复用旧模式缓存。
 85. **误区：MangaOCR 固定 gap/padding，且不过滤低置信度噪声。**
     - 正确做法：gap/padding 按检测框中位尺寸缩放；清除控制/替换字符；低于保守
       阈值的 bubble 丢弃。不要为了提高召回保留明显乱码。
 86. **误区：照片旋转直接改设备原图，或旋转后仍用旧 OCR 缓存。**
     - 正确做法：只旋转 `CaptureStorage` 私有会话副本 90°；清该照片 OCR 缓存、
       evict `FileImage`、重新识别；设备原图不变。
+87. **误区：把 MDX/MDD 的 `Encrypted: 2` 当成加密词典直接拒绝。**
+    - 正确做法：`Encrypted: 2` 是 dict_reader 可读的 record-block 布局；只有
+      `Encrypted: 1` 和 v3 仍拒绝。MDD 缺失时 worker 可发现同目录同名 `.mdd`，
+      `../`/`./` 资源前缀由 `mddKeyCandidates` 归一化。
+88. **误区：外部路径直接校验/扫描，失败后才让用户找设置。**
+    - 正确做法：选择或使用 `/sdcard`、`/storage` 等沙盒外路径前调用
+      `ensurePathAccess`；未授权时弹窗并跳到系统“所有文件访问”页面。应用专属
+      外部目录不需要该权限。
+89. **误区：退出模型下载页就取消下载；或取消时删除 `.part`。**
+    - 正确做法：默认后台继续，退出弹窗提供“同时停止下载”（默认不勾选）；
+      `.part` 保留并用 HTTP Range 续传；设置页“清除模型缓存”只删临时文件。
+90. **误区：EntryPage 退出时让 platform WebView 参与整个 pop 动画。**
+    - 正确做法：监听 route reverse，把 WebView 换成页面底色；转场 220ms/180ms。
+      WebView 退出闪帧和大部分卡顿来自 platform view 参与长动画。
 
 ## 6. 关键文件
 
@@ -1010,7 +1031,7 @@ lib/services/ocr/ocr_text_composer.dart                       # 原生行块 →
 lib/services/capture/capture_storage.dart                     # 会话副本/旋转/删除
 lib/features/capture/                                         # 相机/照片集/多选/保存/缩放查看
 lib/features/capture/photo_pane.dart                          # 共用照片区/白色拖拽条
-lib/features/corpus/corpus_page.dart                          # 语料大照片列表/删除
+lib/features/corpus/corpus_page.dart                          # 语料两列卡片/删除/复制
 lib/features/corpus/corpus_detail_page.dart                   # 语料详情/OCR/分词/翻页
 lib/services/storage/history_store.dart                       # 语料 SQLite + 图片副本
 lib/features/settings/model_page.dart                         # OCR 模型/目录/迁移
@@ -1028,7 +1049,11 @@ lib/services/mecab/mecab_output_parser.dart                   # 引号感知 CSV
 lib/services/mecab/mecab_service.dart                         # 私有 rc + 长生命周期 isolate
 lib/services/mdict/mdict_worker.dart                          # MDict isolate / lookup / MDD
 lib/services/mdict/mdd_key.dart                               # MDD key 变体
+lib/services/mdict/mdict_header.dart                          # MDX 版本/Encrypted=2 校验
 lib/services/mdict/entry_renderer.dart                        # HTML 清洗/CSS/MDD 重写
+lib/features/lookup/dictionary_filter_bar.dart                # 简称/单选多选/全选
+lib/features/settings/storage_permission_prompt.dart          # 沙盒外路径授权引导
+lib/core/theme/page_route.dart                                # 220ms 滑入路由
 lib/services/storage/settings_store.dart                      # SharedPreferences 设置
 lib/services/storage/dictionary_store.dart                    # 词典注册表持久化
 lib/services/storage/permission_service.dart                  # 权限 MethodChannel Dart 侧
@@ -1043,7 +1068,7 @@ packages/mecab_for_dart/                                      # vendored MeCab�
 packages/rikai_ocr/                                           # OCR 插件 + ORT 原生实现
 assets/models/manifest.json                                   # 模型清单（不含模型本体）
 build/ocr-models/                                             # 本地模型测试下载（已忽略）
-integration_test/ocr_android_test.dart                        # 横向/竖向/混合/90°/270°/180° OCR 设备测试
+integration_test/ocr_android_test.dart                        # 横向/倾斜/竖向/90°/270°/180° OCR 设备测试
 android/app/src/main/kotlin/com/rikai/mobile/MainActivity.kt  # 权限 MethodChannel 原生侧
 android/app/src/main/AndroidManifest.xml                      # 文件权限
 android/app/build.gradle.kts                                  # minSdk 26 / NDK 28
@@ -1060,6 +1085,8 @@ docs/adr/                                                     # 三个架构决�
 tool/spike_mdict.dart                                         # MDict 主机 spike
 integration_test/mecab_android_test.dart                      # 设备端 MeCab/权限/UI 测试
 integration_test/mdict_android_test.dart                      # 设备端 MDict/渲染/UI 测试
+integration_test/mdict_compat_android_test.dart               # Encrypted=2/MDD 兼容测试
+integration_test/ocr_real_images_android_test.dart            # test_images 真实图片扫描
 third_party/overlay-translator/                               # Apache 许可/修改说明
 third_party/paddleocr4android/                                # MIT 许可/可选后端说明
 ```
@@ -1132,8 +1159,8 @@ flutter test integration_test/ocr_android_test.dart -d emulator-5554 \
   --dart-define=RIKAI_OCR_MODEL_DIR=/sdcard/Download/rikai-models/paddle_v5
 ```
 
-  同样需要 appops 授权循环。当前套件 8 项：横向、横向懒加载、MangaOCR
-  （自动+手动）、混合排版、90°、270°、倒置横向 180°、取消。应用内模型默认目录是
+  同样需要 appops 授权循环。当前套件 8 项：横向、6° 倾斜、横向懒加载、
+  MangaOCR（自动+手动）、90°、270°、倒置横向 180°、取消。应用内模型默认目录是
   `getExternalFilesDir()/models/`；模型不入库，下载/导入见
   `docs/phase4-status.md`。开发验证可用
   `--dart-define=RIKAI_OCR_MODELS_DIR=/sdcard/Download/rikai-models`。
@@ -1175,11 +1202,11 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
 
 ## 8. 建议的下一个动作
 
-1. 运行 `git status`；Phase 4 已提交为 `f287603`，Phase 6 文档已提交为
-   `c2ae03d`；本次 Phase 4.5 改动默认未提交。不要覆盖或擅自 commit，除非用户
-   明确要求。
+1. 运行 `git status`；Phase 4 为 `f287603`，Phase 6 文档为 `c2ae03d`，
+   Phase 4.5 初版为 `4d0100f`；arm64 反馈修复当前未提交。不要覆盖或擅自
+   commit，除非用户明确要求。
 2. 先完成 Phase 4.5 验收：arm64 真机横排 2048px <5s、单页漫画 <10s、无 OOM；
-   横排/竖排/混合/倒置/90° 真实页回归；真实多气泡顺序/噪声质量。验收通过前
+   横排/竖排/倒置/90°/270° 真实页回归；真实多气泡顺序/噪声质量。验收通过前
    不要开始 Phase 5。
 3. 4.5 验收后进入 Phase 5：完整识别历史/语料管理、首次启动引导、设置/错误态/
    许可证页与 release 打磨。不要重写已验证的 Paddle 横向路径或 MangaOCR 基础
@@ -1196,6 +1223,6 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
 7. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
    颜色/字号，字体与模型文件不入库；**所有页面**统一深蓝顶栏和右滑覆盖转场。
    Phase 6 的五按钮/Agent UI 也必须先补 token，不能直接改现有四按钮。
-8. 每个阶段结束运行 analyze/test/debug build（当前 112 unit tests / OCR 设备
-   8 项；另有 MeCab 4、MDict 6），并记录到新的阶段状态文档；设备端测试按 §7
-   的命令运行。
+8. 每个阶段结束运行 analyze/test/debug build（当前 120 unit tests / OCR 设备
+   8 项；另有 MeCab 4、MDict 6、MDict 兼容 2、真实图片扫描 1），并记录到新的
+   阶段状态文档；设备端测试按 §7 的命令运行。

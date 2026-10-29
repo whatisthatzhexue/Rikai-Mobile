@@ -167,6 +167,7 @@ internal object MangaBubbleClusterer {
  */
 internal object MangaCropPlanner {
     const val MAX_TEXT_BANDS_PER_CROP: Int = 6
+    const val MAX_VERTICAL_BANDS_PER_CROP: Int = 3
 
     fun plan(
         bubbles: List<MangaBubble>,
@@ -188,12 +189,17 @@ internal object MangaCropPlanner {
             blockBounds = bubble.contentRect,
         )
         val bands = groupIntoBands(members, vertical)
-        if (bands.size <= MAX_TEXT_BANDS_PER_CROP) {
+        val maxBands = if (vertical) {
+            MAX_VERTICAL_BANDS_PER_CROP
+        } else {
+            MAX_TEXT_BANDS_PER_CROP
+        }
+        if (bands.size <= maxBands) {
             return@flatMapIndexed listOf(
                 MangaCropPlan(bubbleIndex, cropIndex = 0, cropCount = 1, bubble = bubble),
             )
         }
-        val chunks = bands.chunked(MAX_TEXT_BANDS_PER_CROP)
+        val chunks = bands.chunked(maxBands)
         chunks.mapIndexed { cropIndex, chunk ->
             MangaCropPlan(
                 sourceBubbleIndex = bubbleIndex,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/dict_info.dart';
 import '../../core/models/lookup_models.dart';
+import '../../core/theme/page_route.dart';
 import '../../services/mdict/mdict_worker.dart';
 import '../../state/providers.dart';
 import 'entry_page.dart';
@@ -93,7 +94,7 @@ Future<void> lookupAndOpenEntry(
   // when a dictionary has several homographs.
   final firstGroup = hitGroups.first;
   navigator.push(
-    MaterialPageRoute<void>(
+    RikaiPageRoute<void>(
       builder: (context) => EntryPage(
         word: word,
         groups: [

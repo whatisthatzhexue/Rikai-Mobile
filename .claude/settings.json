@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./unidic/**)",
+      "Read(./mdicts/**)",
+      "Read(./test_images/**)",
+      "Read(./overlay-translator/**)",
+      "Read(./PaddleOCR4Android/**)",
+      "Read(./.idea/**)",
+      "Read(**/*.iml)",
+      "Read(**/build/**)",
+      "Read(**/.dart_tool/**)",
+      "Read(**/.gradle/**)",
+      "Read(**/.kotlin/**)",
+      "Read(**/.cxx/**)",
+      "Read(**/.externalNativeBuild/**)",
+      "Read(./assets/fonts/*.ttf)",
+      "Read(./assets/fonts/*.otf)",
+      "Read(./assets/fonts/*.ttc)",
+      "Read(**/*.onnx)",
+      "Read(**/*.nb)",
+      "Read(**/*.pdmodel)",
+      "Read(**/*.pdiparams)",
+      "Read(**/*.tflite)",
+      "Read(**/*.gguf)",
+      "Read(**/*.mlmodel)",
+      "Read(**/*.part)",
+      "Read(**/*.apk)",
+      "Read(**/*.aab)",
+      "Read(**/*.jar)",
+      "Read(**/*.so)",
+      "Read(**/*.dll)",
+      "Read(**/*.dylib)",
+      "Read(**/*.mdx)",
+      "Read(**/*.mdd)",
+      "Read(./android/local.properties)",
+      "Read(**/GeneratedPluginRegistrant.java)",
+      "Read(./packages/mecab_for_dart/src/unix/ucstable.h)",
+      "Read(./packages/mecab_for_dart/src/windows/ucstable.h)",
+      "Read(./android/app/src/main/res/**/*.png)"
+    ]
+  }
+}

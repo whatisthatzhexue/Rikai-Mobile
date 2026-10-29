@@ -85,9 +85,13 @@ class LookupHitList extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              entry.headword.isNotEmpty
-                                  ? entry.headword
-                                  : entry.matchedKey,
+                              // Some dictionaries redirect to internal ids
+                              // such as `00044` or `@daijirin2-...`; the
+                              // matched key is the human-readable title shown
+                              // by the entry page.
+                              entry.matchedKey.isNotEmpty
+                                  ? entry.matchedKey
+                                  : entry.headword,
                               style: theme.textTheme.headlineSmall,
                             ),
                             const SizedBox(height: AppSpacing.xs),

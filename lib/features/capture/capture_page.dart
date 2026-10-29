@@ -30,6 +30,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
   bool _cameraUnavailable = false;
   bool _childPageOpen = false;
   String? _error;
+  String? _toast;
+  Timer? _toastTimer;
 
   @override
   void initState() {
@@ -48,8 +50,18 @@ class _CapturePageState extends ConsumerState<CapturePage>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    _toastTimer?.cancel();
     unawaited(_disposeCamera());
     super.dispose();
+  }
+
+  void _showToast(String message) {
+    _toastTimer?.cancel();
+    if (!mounted) return;
+    setState(() => _toast = message);
+    _toastTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _toast = null);
+    });
   }
 
   @override
@@ -166,6 +178,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
           createdAt: DateTime.now(),
         ),
       ]);
+      _showToast('照片已加入照片集，请在照片集中查看');
     } on CameraException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.description ?? error.code);
@@ -203,6 +216,7 @@ class _CapturePageState extends ConsumerState<CapturePage>
       }
       if (!mounted) return;
       ref.read(captureSessionProvider.notifier).addPhotos(photos);
+      _showToast('已导入 ${photos.length} 张照片，请在照片集中查看');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = '导入照片失败：$error');
@@ -241,6 +255,31 @@ class _CapturePageState extends ConsumerState<CapturePage>
         children: [
           _buildPreview(),
           if (_error != null) _buildStatusBanner(_error!),
+          if (_toast != null)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Center(
+                  child: Material(
+                    color: AppColors.cameraScrim,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.sm,
+                      ),
+                      child: Text(
+                        _toast!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: AppColors.cameraControl,
+                          fontSize: AppTypography.helper,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           if (_permissionDenied)
             _CameraUnavailable(
               title: '相机权限未授予',
@@ -248,6 +287,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
               actionLabel: '去授权',
               onSettings: _openSettings,
               onGallery: _importPhotos,
+              onPhotoSet: count == 0 ? null : _openPhotoSet,
+              photoCount: count,
             )
           else if (_cameraUnavailable)
             _CameraUnavailable(
@@ -256,6 +297,8 @@ class _CapturePageState extends ConsumerState<CapturePage>
               actionLabel: '重试',
               onSettings: _initializeCamera,
               onGallery: _importPhotos,
+              onPhotoSet: count == 0 ? null : _openPhotoSet,
+              photoCount: count,
             ),
           if (!_permissionDenied && !_cameraUnavailable)
             Align(
@@ -503,6 +546,8 @@ class _CameraUnavailable extends StatelessWidget {
     required this.actionLabel,
     required this.onSettings,
     required this.onGallery,
+    required this.onPhotoSet,
+    required this.photoCount,
   });
 
   final String title;
@@ -510,6 +555,8 @@ class _CameraUnavailable extends StatelessWidget {
   final String actionLabel;
   final VoidCallback onSettings;
   final VoidCallback onGallery;
+  final VoidCallback? onPhotoSet;
+  final int photoCount;
 
   @override
   Widget build(BuildContext context) {
@@ -565,6 +612,15 @@ class _CameraUnavailable extends StatelessWidget {
                     ),
                     icon: const Icon(Icons.photo_library_outlined),
                     label: const Text('从相册导入'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onPhotoSet,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.cameraControl,
+                      side: const BorderSide(color: AppColors.cameraControl),
+                    ),
+                    icon: const Icon(Icons.collections_outlined),
+                    label: Text(photoCount == 0 ? '照片集' : '照片集（$photoCount）'),
                   ),
                 ],
               ),

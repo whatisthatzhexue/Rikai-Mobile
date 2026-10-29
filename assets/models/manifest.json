@@ -3,6 +3,7 @@
   "description": "Rikai-Mobile OCR model catalog. Model binaries are downloaded at runtime and are not part of the repository.",
   "defaultMirrors": [
     "https://hf-mirror.com",
+    "https://hf-mirror.net",
     "https://huggingface.co"
   ],
   "sets": {
@@ -45,7 +46,7 @@
       "displayName": "MangaOCR 2025 竖排模型（编码器 + 解码器 + 词表）",
       "license": "UNKNOWN",
       "licenseUrl": "https://huggingface.co/l0wgear/manga-ocr-2025-onnx",
-      "licenseNote": "模型卡未声明许可证。应用只从上游下载，不随包分发；也可导入自行转换的 ONNX 模型。",
+      "licenseNote": "上游模型卡未声明许可证，请在使用前确认上游条款；也可导入自行转换的 ONNX 模型。",
       "requiresAcceptance": true,
       "files": [
         {
