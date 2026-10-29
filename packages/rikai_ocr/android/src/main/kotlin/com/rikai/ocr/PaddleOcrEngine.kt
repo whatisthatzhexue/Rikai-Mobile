@@ -58,6 +58,9 @@ internal class PaddleOcrEngine {
     private var dictionary: CtcDictionary? = null
     private var detInputName: String = ""
     private var recInputName: String = ""
+    private var loadedDetPath: String? = null
+    private var loadedRecPath: String? = null
+    private var loadedKeysPath: String? = null
 
     @Synchronized
     fun initialize(detPath: String, recPath: String, keysPath: String): Map<String, Any> {
@@ -69,33 +72,64 @@ internal class PaddleOcrEngine {
                 throw OcrFailure("MODEL_MISSING", "OCR 模型文件不存在：${file.name}")
             }
         }
-        val parsedKeys = CtcDictionary.load(keysFile)
-        closeSessions()
+        val absoluteDet = detFile.absolutePath
+        val absoluteRec = recFile.absolutePath
+        val absoluteKeys = keysFile.absolutePath
         val threads = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
-        try {
-            val options = OrtSession.SessionOptions().apply {
-                setIntraOpNumThreads(threads)
-                setInterOpNumThreads(1)
-            }
-            val det = OcrRuntime.environment.createSession(detFile.absolutePath, options)
-            val rec = try {
-                OcrRuntime.environment.createSession(recFile.absolutePath, options)
-            } catch (error: Exception) {
-                det.close()
-                throw error
-            }
-            detSession = det
-            recSession = rec
-            dictionary = parsedKeys
-            detInputName = det.inputNames.first()
-            recInputName = rec.inputNames.first()
+        val det = detSession
+        val rec = recSession
+        val keys = dictionary
+        if (det != null && rec != null && keys != null &&
+            loadedDetPath == absoluteDet &&
+            loadedRecPath == absoluteRec &&
+            loadedKeysPath == absoluteKeys
+        ) {
             return mapOf(
                 "engine" to "paddle_v5",
                 "detInput" to detInputName,
                 "recInput" to recInputName,
-                "keys" to parsedKeys.keys.size,
+                "keys" to keys.keys.size,
                 "threads" to threads,
+                "reused" to true,
             )
+        }
+
+        val parsedKeys = CtcDictionary.load(keysFile)
+        closeSessions()
+        try {
+            val options = OrtSession.SessionOptions()
+            try {
+                options.setIntraOpNumThreads(threads)
+                options.setInterOpNumThreads(1)
+                val newDet = OcrRuntime.environment.createSession(absoluteDet, options)
+                val newRec = try {
+                    OcrRuntime.environment.createSession(absoluteRec, options)
+                } catch (error: Throwable) {
+                    newDet.close()
+                    throw error
+                }
+                detSession = newDet
+                recSession = newRec
+                dictionary = parsedKeys
+                detInputName = newDet.inputNames.first()
+                recInputName = newRec.inputNames.first()
+                loadedDetPath = absoluteDet
+                loadedRecPath = absoluteRec
+                loadedKeysPath = absoluteKeys
+                return mapOf(
+                    "engine" to "paddle_v5",
+                    "detInput" to detInputName,
+                    "recInput" to recInputName,
+                    "keys" to parsedKeys.keys.size,
+                    "threads" to threads,
+                    "reused" to false,
+                )
+            } finally {
+                options.close()
+            }
+        } catch (error: OutOfMemoryError) {
+            closeSessions()
+            throw OcrFailure("OOM", "加载 OCR 模型时内存不足")
         } catch (error: Throwable) {
             closeSessions()
             throw OcrFailure("MODEL_INVALID", "无法加载 OCR 模型：${error.message}")
@@ -137,7 +171,6 @@ internal class PaddleOcrEngine {
             val blocks = mutableListOf<NativeOcrBlock>()
             ordered.forEachIndexed { index, quad ->
                 if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
-                onProgress("recognize", index, ordered.size)
                 recognizeQuad(bitmap, quad, rec, keys)?.let { blocks.add(it) }
                 onProgress("recognize", index + 1, ordered.size)
             }
@@ -166,6 +199,9 @@ internal class PaddleOcrEngine {
         detSession = null
         recSession = null
         dictionary = null
+        loadedDetPath = null
+        loadedRecPath = null
+        loadedKeysPath = null
     }
 
     private fun detectQuads(bitmap: Bitmap, session: OrtSession): List<DBPostprocessor.Quad> {
@@ -393,10 +429,12 @@ internal class PaddleOcrEngine {
         }
     }
 
-    private fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap? = runCatching {
+    private fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap? = try {
         val matrix = Matrix().apply { postRotate(degrees) }
         Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-    }.getOrNull()
+    } catch (_: Exception) {
+        null
+    }
 
     private fun bitmapToNchw(
         bitmap: Bitmap,

@@ -15,6 +15,12 @@
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- CameraX declares RECORD_AUDIO for video; Rikai only takes stills. -->
+    <uses-permission
+        android:name="android.permission.RECORD_AUDIO"
+        tools:node="remove" />
+
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />

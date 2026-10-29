@@ -9,6 +9,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -53,7 +54,9 @@ class RikaiOcrPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
         recognizeJob?.cancel()
         recognizeJob = null
         scope.cancel()
-        engine.close()
+        // Close off the platform thread; an in-flight recognition may hold the
+        // engine monitor until it observes cancellation.
+        Thread { engine.close() }.start()
     }
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -97,16 +100,26 @@ class RikaiOcrPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
             result.error("MODEL_MISSING", "缺少 PaddleOCR 模型路径", null)
             return
         }
+        val replied = AtomicBoolean(false)
         scope.launch {
             try {
                 val readiness = operationMutex.withLock {
                     engine.initialize(detPath, recPath, keysPath)
                 }
-                replySuccess(result, readiness)
+                replySuccess(result, readiness, replied)
             } catch (error: OcrFailure) {
-                replyError(result, error.code, error.message)
+                replyError(result, error.code, error.message, replied)
             } catch (error: Throwable) {
-                replyError(result, "MODEL_INVALID", error.message ?: "OCR 初始化失败")
+                replyError(
+                    result,
+                    "MODEL_INVALID",
+                    error.message ?: "OCR 初始化失败",
+                    replied,
+                )
+            } finally {
+                if (!replied.get()) {
+                    replyError(result, "ENGINE_ERROR", "OCR 初始化未返回结果", replied)
+                }
             }
         }
     }
@@ -124,7 +137,8 @@ class RikaiOcrPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
         }
         val mode = args?.get("mode") as? String ?: "auto"
         cancelRequested.set(false)
-        val job = scope.launch {
+        val replied = AtomicBoolean(false)
+        val job = scope.launch(start = CoroutineStart.ATOMIC) {
             try {
                 operationMutex.withLock {
                     val nativeResult = engine.recognize(
@@ -135,21 +149,35 @@ class RikaiOcrPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                         },
                         isCancelled = { cancelRequested.get() || !isActive },
                     )
-                    replySuccess(result, nativeResult.toMap())
+                    replySuccess(result, nativeResult.toMap(), replied)
                 }
             } catch (error: OcrFailure) {
                 if (error.code == "CANCELLED") {
                     emitProgress("cancelled", 0, 0)
                 }
-                replyError(result, error.code, error.message)
+                replyError(result, error.code, error.message, replied)
             } catch (error: CancellationException) {
                 emitProgress("cancelled", 0, 0)
-                replyError(result, "CANCELLED", "已取消识别")
+                replyError(result, "CANCELLED", "已取消识别", replied)
             } catch (error: OutOfMemoryError) {
-                replyError(result, "OOM", "识别时内存不足")
+                replyError(result, "OOM", "识别时内存不足", replied)
             } catch (error: Throwable) {
-                replyError(result, "ENGINE_ERROR", error.message ?: "OCR 识别失败")
+                replyError(
+                    result,
+                    "ENGINE_ERROR",
+                    error.message ?: "OCR 识别失败",
+                    replied,
+                )
             } finally {
+                if (!replied.get()) {
+                    val cancelled = cancelRequested.get()
+                    replyError(
+                        result,
+                        if (cancelled) "CANCELLED" else "ENGINE_ERROR",
+                        if (cancelled) "已取消识别" else "OCR 识别未返回结果",
+                        replied,
+                    )
+                }
                 if (recognizeJob === coroutineContext[Job]) {
                     recognizeJob = null
                 }
@@ -174,11 +202,22 @@ class RikaiOcrPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
         }
     }
 
-    private fun replySuccess(result: MethodChannel.Result, value: Any?) {
+    private fun replySuccess(
+        result: MethodChannel.Result,
+        value: Any?,
+        replied: AtomicBoolean,
+    ) {
+        if (!replied.compareAndSet(false, true)) return
         handler.post { result.success(value) }
     }
 
-    private fun replyError(result: MethodChannel.Result, code: String, message: String) {
+    private fun replyError(
+        result: MethodChannel.Result,
+        code: String,
+        message: String,
+        replied: AtomicBoolean,
+    ) {
+        if (!replied.compareAndSet(false, true)) return
         handler.post { result.error(code, message, null) }
     }
 

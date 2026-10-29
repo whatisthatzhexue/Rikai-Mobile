@@ -211,6 +211,7 @@ void main() {
 
     expect(find.text('MDict 词典'), findsOneWidget);
     expect(find.text('尚未添加词典'), findsOneWidget);
-    expect(find.text('添加词典'), findsOneWidget);
+    expect(find.text('从文件夹导入'), findsOneWidget);
+    expect(find.text('手动添加词典'), findsOneWidget);
   });
 }

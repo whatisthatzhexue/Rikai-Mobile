@@ -19,7 +19,7 @@
             "https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_det_onnx/resolve/e6f4fa85f00e168c862bc462aebca69eef9b3d3d/inference.onnx"
           ],
           "size": 4826518,
-          "sha256": null
+          "sha256": "a431985659dc921974177a95adcfbb90fd9e51989a5e04d70d0b75f597b6e61d"
         },
         {
           "name": "rec.onnx",
@@ -28,7 +28,7 @@
             "https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_rec_onnx/resolve/ed152b8b495f84de93cda5709d768548a9127622/inference.onnx"
           ],
           "size": 16534782,
-          "sha256": null
+          "sha256": "da72dc72ca4dc220df0dfde68c1dedc31c58d3e76a25871122e5056227d50092"
         },
         {
           "name": "keys.yml",
@@ -37,7 +37,7 @@
             "https://huggingface.co/PaddlePaddle/PP-OCRv5_mobile_rec_onnx/resolve/ed152b8b495f84de93cda5709d768548a9127622/inference.yml"
           ],
           "size": 148345,
-          "sha256": null
+          "sha256": "5dfeb2777f6d0db8177d8128a8acfcf6e6276dc4ac73ea3bf0dc06d6a5e85d8e"
         }
       ]
     },
@@ -55,7 +55,7 @@
             "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/encoder_model.onnx"
           ],
           "size": 22356885,
-          "sha256": null
+          "sha256": "f87668ae0f62d6f032dac6b213e8c0fea84cd15895ac8cab624cc9a2f49d4a27"
         },
         {
           "name": "decoder_model.onnx",
@@ -64,7 +64,7 @@
             "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/decoder_model.onnx"
           ],
           "size": 118053454,
-          "sha256": null
+          "sha256": "6b1fb216d542c4b2a4fa5b9d7ae3522081eb85fb959d2cecd28055af956a8a5e"
         },
         {
           "name": "vocab.txt",
@@ -73,7 +73,7 @@
             "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/vocab.txt"
           ],
           "size": 24072,
-          "sha256": null
+          "sha256": "344fbb6b8bf18c57839e924e2c9365434697e0227fac00b88bb4899b78aa594d"
         },
         {
           "name": "config.json",
@@ -82,7 +82,7 @@
             "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/config.json"
           ],
           "size": 74852,
-          "sha256": null
+          "sha256": "cb53957d90b8469961b3a64f9b2ebe472d803bf1308e3505b51916aa4341c547"
         },
         {
           "name": "generation_config.json",
@@ -91,7 +91,7 @@
             "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/generation_config.json"
           ],
           "size": 231,
-          "sha256": null
+          "sha256": "394166c379c675a6b044ee391bfdf7acbb58b7de68541e66e50607cf56576979"
         },
         {
           "name": "preprocessor_config.json",
@@ -100,7 +100,7 @@
             "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/preprocessor_config.json"
           ],
           "size": 351,
-          "sha256": null
+          "sha256": "445c77049d082004aa07593344d5e1f521f1198228bf586196f70ce7ae021414"
         },
         {
           "name": "special_tokens_map.json",
@@ -109,7 +109,7 @@
             "https://huggingface.co/l0wgear/manga-ocr-2025-onnx/resolve/main/special_tokens_map.json"
           ],
           "size": 695,
-          "sha256": null
+          "sha256": "5d5b662e421ea9fac075174bb0688ee0d9431699900b90662acd44b2a350503a"
         }
       ]
     },

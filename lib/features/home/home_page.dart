@@ -53,7 +53,7 @@ class HomePage extends StatelessWidget {
           _HomeActionButton(
             icon: Icons.history,
             label: '语料',
-            onTap: () => _comingSoon(context, '语料'),
+            onTap: () => context.push('/corpus'),
           ),
           const SizedBox(height: AppSpacing.xl),
           Card(
@@ -83,12 +83,6 @@ class HomePage extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  void _comingSoon(BuildContext context, String feature) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$feature 将在后续阶段接入')));
   }
 }
 

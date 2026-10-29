@@ -13,7 +13,6 @@ String composeOcrText(List<OcrBlock> blocks) {
         .replaceAll(RegExp(r' {2,}'), ' ')
         .trim();
     if (line.isEmpty) continue;
-    if (lines.isNotEmpty && lines.last == line) continue;
     lines.add(line);
   }
   return lines.join('\n').trim();

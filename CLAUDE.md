@@ -34,13 +34,20 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
   阅读页查词弹层不设关闭叉，读音与词形相同时不显示蓝色读音。
   **所有页面转场**使用全局 `SlideOverPageTransitionsBuilder`：新页面从右侧
   滑入覆盖静止的旧页面，禁止淡入淡出，避免深蓝顶栏出现白色残影。
+  拍照页使用实时相机预览 + 半透明底部控制遮罩；照片集的删除/保存是**整个画面**
+  左下/右下角的 52dp 圆形图标（删除错误色、保存深蓝 `header` + 白图标），
+  保存/删除均二次确认；照片区可拖拽下边缘调整高度，点击进入黑底全屏缩放查看；
+  照片集标题栏只保留一个「多选」入口，多选页沿用同一套图标。
+  照片集不再有“分析句子”：拍照 OCR 后若已配置 UniDic，直接按文本阅读页
+  TokenChip 显示并点词查词；未配置/失败时显示 OCR 原文。任何情况下都保留
+  标题栏复制，并与文本阅读页共用字号/注音菜单。
 - **字体**：HarmonyOS Sans SC Regular，路径
   `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`。字体文件**不入库**（`.gitignore`
   已忽略）；用户自行从华为 HarmonyOS 设计资源下载，见 `assets/fonts/README.md`。
   构建前必须存在，否则 Flutter 报缺失资产。应用图标源 `assets/Rikai_Icon.jpg`
   由 `flutter_launcher_icons` 生成 Android 图标（配置在 `pubspec.yaml`）。
 - 仓库已有多次提交（`d0d94a3`、`dc70cee`、`91dc386`、`deb6484`、
-  `b12d24f`、`95f90e0`）。Phase 3 与最新 UI 打磨当前仍在工作树中未提交；
+  `b12d24f`、`95f90e0`）。Phase 3.5、相机/照片集/导入重构与最新 UI 打磨当前仍在工作树中未提交；
   不要擅自 `reset`/`commit`，除非用户明确要求。
 
 ## 2. 已确认的架构决策（不要随意改）
@@ -79,7 +86,7 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
    **不得随包分发/不得提交**，下载前显示提示，支持本地导入。原项目 kha-white 是
    Apache-2.0，但当前下载源不是。INT8 draft 解码器 MVP 不做。
 
-## 3. 当前进展（Phase 0–3 已完成）
+## 3. 当前进展（Phase 0–3 + Phase 3.5 已完成）
 
 已完成：
 
@@ -165,19 +172,31 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
     模型清单、`getExternalFilesDir()/models`、hf-mirror → HF、HTTP Range
     续传、大小/SHA-256 校验、本地导入/删除；`--dart-define=
     RIKAI_OCR_MODELS_DIR` 仅用于开发验证。
-  - `lib/features/capture/capture_page.dart`：相机/相册、预览、自动/横向、
-    模型下载状态、OCR 进度与取消；结果经 `ReaderRouteArgs` 进入阅读器。
+  - `lib/features/capture/*`：实时相机、连续拍摄/相册多选、照片集、
+    OCR 缓存、多选批量操作；结果经 `ReaderRouteArgs` 进入阅读器。
   - `lib/features/settings/model_page.dart`：PaddleOCR/MangaOCR/方向模型
-    状态、下载、本地导入、删除；MangaOCR 仍未接入，显示 Phase 4 说明。
+    状态、下载、本地导入、删除、模型目录/迁移；MangaOCR 仍未接入。
   - 主页「拍照识别」已接入 `/capture`；设置新增「OCR 模型」入口。
   - OCR 结果已验证进入真实 UniDic 分词与点击查词流程；横向阶段不实现纵向
     方向识别（`vertical` 返回 `UNSUPPORTED_MODE`）。
+- Phase 3.5（2026-10-29，本次完成，详见 `docs/phase3.5-status.md`）：
+  - 修复 `docs/phase3-review.md` 的 H1–H3、M1–M7、L1–L10（P1 留 Phase 4）：
+    本地模型导入按角色/大小匹配、取消 exactly-once、全量 SHA-256、会话复用、
+    416/Content-Range 续传安全、OOM、只读状态、旧模型状态、离开页面取消等。
+  - 实时相机 `camera` 插件、照片集/多选、照片+模式+模型指纹缓存、
+    屏幕左下/右下角删除/保存、语料保存与语料页。
+  - MDict 文件夹递归导入（isolate 扫描、预检、可导入/已存在/不支持、
+    进度/取消）；扫描行不再显示 MDD/CSS 英文尾注，导入完成直接回词典管理页
+    且不弹结果对话框。模型目录可配置、校验、默认迁移、仅切换。
+  - 照片集 OCR 后自动分词（已配置 UniDic 时按阅读器 TokenChip 展示）、
+    标题栏复制/字号/注音、照片区下边缘拖拽调高、全屏缩放查看。
+  - 阅读页查词键盘行为修复；OCR 阅读页使用本地草稿控制器。
 
 已验证：
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 97 tests passed
+flutter test     -> 106 tests passed
 flutter build apk --debug -> success
 ```
 
@@ -490,6 +509,14 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
 | file_picker 报 `platform` getter 不存在 | v13 静态 API；`FilePicker.pickFiles()` 返回 `List<PlatformFile>`（§5.9 #54） |
 | PP-OCR 字符表解析为空/首字丢失 | 不要 trim U+3000；CtcDictionary 只去 CR/LF（§5.9 #55） |
 | OCR 全错/输出乱码 | 检查 BGR 通道、检测/识别 mean/std、EXIF 方向、模型 keys 索引（§5.9 #58） |
+| 相机页黑屏/无预览 | 确认 `CAMERA` 权限、`availableCameras` 非空、预览宽高交换与 `BoxFit.cover`（§5.10 #59） |
+| 照片集删除/保存按钮位置不对 | 按钮固定在**整个画面**左下/右下角；不要放回照片区 Stack（§5.10 #60） |
+| 照片集/多选页出现重复“多选/全选/保存” | 标题栏只保留一个“多选”；多选页标题用“选择照片”，删除/保存只保留图标（§5.10 #61） |
+| 照片集仍有“分析句子”/不显示分词 | 删除分析按钮；配置 UniDic 后自动分词并用 ReaderBlock 渲染，未配置显示原文（§5.10 #62） |
+| 照片区不能放大/不能查看细节 | 下边缘拖拽调整高度；点击照片打开 InteractiveViewer 全屏查看（§5.10 #63） |
+| MDict 导入弹结果框/列表尾部有英文 | 扫描行只显示中文状态；导入完成直接返回，失败只用 SnackBar（§5.10 #64） |
+| 本地导入仍提示缺少 det.onnx/rec.onnx | 上游文件名为 inference.onnx/inference.yml；按大小+角色匹配（§5.10 #65） |
+| 模型目录切换后仍读旧文件 | 保存设置后 manager 回调读取新路径；默认迁移校验后再保存（§5.10 #66） |
 
 ### 5.7 Phase 1 设备实测经验（2026-10-27）
 
@@ -658,6 +685,47 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
       `bitmapToNchw` 中按 B/G/R 写三个通道，并按 0.485/0.456/0.406、
       0.229/0.224/0.225 归一化检测输入；识别输入用 0.5/0.5。
 
+### 5.10 2026-10-29 Phase 3.5 采集/导入/语料经验
+
+59. **误区：继续用 `image_picker` 的系统相机 Intent 冒充实时拍照页。**
+    - 正确做法：实时预览必须引入 `camera` 插件并声明 CAMERA 权限；预览用
+      `FittedBox` + 交换 `previewSize` 的宽高 + `BoxFit.cover`。应用进入后台
+      或打开照片集/阅读页时 dispose 相机，返回时重建；不要用
+      `permission_handler`。
+60. **误区：把照片集的删除/保存按钮放在照片区域内部，或把保存做成白底。**
+    - 正确做法：用户要求它们固定在**整个画面**左下/右下角；照片区只放照片。
+      页面底部预留 `AppSizes.captureBottomReserve`，避免遮住分页/操作区。
+      两者统一使用 `CaptureRoundButton`（52dp、24dp 图标），删除为错误色、
+      保存为深蓝 `header` + 白图标；白底按钮在照片背景下对比不足。
+      均二次确认；保存写入 `HistoryStore`（照片副本 + OCR 文本 + blocks + 模式/时间）。
+61. **误区：在照片集正文再放一个“多选”或“全选”，或再加一行保存文字按钮。**
+    - 正确做法：照片集标题栏只保留一个「多选」；多选页标题改为「选择照片」，
+      正文只显示已选数量，全选放标题栏；删除/保存沿用同一
+      `CaptureRoundButton` 图标，不再放“保存到语料库（后续支持）”等重复文字。
+62. **误区：照片集保留“分析句子”按钮，或只把 OCR 原文塞进文本框。**
+    - 正确做法：用户要求删除分析按钮；已配置 UniDic 时 OCR 完成后自动分词，
+      直接使用 `ReaderBlock`/`buildReaderLines` 按文本阅读页渲染，点词打开查词弹层。
+      未配置或分词失败时显示 OCR 原文和原因。标题栏始终提供复制；字号/注音
+      使用与阅读页同一个 `ReaderOptionsMenu`（16/20/24/28 + 显示注音）。
+      不要把照片集再跳转到 `/reader` 作为唯一分析入口。
+63. **误区：照片区高度写死，或只能看缩略图。**
+    - 正确做法：照片区下边缘提供 28dp 拖拽热区和指示条，向下拖动扩大照片区
+      （默认 250、最小 120，给结果/操作区留空间）；点击照片进入黑底全屏
+      `InteractiveViewer`，支持双指缩放与平移，参考系统画册。
+64. **误区：MDict 批量导入完成弹结果对话框，或在扫描行尾部显示 MDD/CSS 英文。**
+    - 正确做法：扫描行只显示路径、大小和中文状态（可导入/已存在/不支持），
+      不追加 `MDD n · CSS n` 等英文尾注，也不显示原始英文异常。词典管理的
+      资源标签使用“资源/样式/无资源”。导入结束后直接返回词典管理页；
+      仅在失败/取消时用非阻塞 SnackBar 报告数量，不要弹“导入结果”对话框。
+65. **误区：本地导入模型按 manifest 的 det.onnx/rec.onnx 精确文件名匹配。**
+    - 正确做法：上游下载常为两个 `inference.onnx` + `inference.yml`；按
+      文件大小、扩展名和角色映射，命中已安装文件时只补缺失项；先写
+      `.importing` 校验再替换，失败清理临时文件。
+66. **误区：改模型目录只改 UI 文本，或先保存路径再迁移失败。**
+    - 正确做法：先校验新目录读写/空间；默认复制并逐文件校验后再保存设置
+      和删除旧文件，支持“仅切换”；目录失效时保留设置并提供重新选择，
+      不崩溃、不清空其他设置。
+
 ## 6. 关键文件
 
 ```text
@@ -675,8 +743,12 @@ lib/core/models/lookup_models.dart                            # lookup 结果分
 lib/core/models/ocr_model.dart                                # OCR 模型清单/状态模型
 lib/services/ocr/model_manager.dart                           # 下载/续传/校验/导入
 lib/services/ocr/ocr_text_composer.dart                       # 原生行块 → 阅读文本
-lib/features/capture/capture_page.dart                        # 拍照/相册/预览/进度
-lib/features/settings/model_page.dart                         # OCR 模型管理
+lib/features/capture/                                         # 相机/照片集/多选/保存/缩放查看
+lib/features/corpus/corpus_page.dart                          # 语料列表/打开/删除
+lib/services/storage/history_store.dart                       # 语料 SQLite + 图片副本
+lib/features/settings/model_page.dart                         # OCR 模型/目录/迁移
+lib/features/settings/dictionary_import_page.dart             # MDict 文件夹导入
+lib/services/mdict/dictionary_scanner.dart                    # 递归扫描 isolate
 packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/     # PaddleOCR 原生实现
 lib/core/utils/kana.dart                                      # 假名转换
 lib/core/utils/text_normalizer.dart                           # NFKC/假名/stripkey 候选
@@ -689,7 +761,7 @@ lib/services/mdict/entry_renderer.dart                        # HTML 清洗/CSS/
 lib/services/storage/settings_store.dart                      # SharedPreferences 设置
 lib/services/storage/dictionary_store.dart                    # 词典注册表持久化
 lib/services/storage/permission_service.dart                  # 权限 MethodChannel Dart 侧
-lib/features/reader/                                          # 文本阅读区
+lib/features/reader/                                          # 文本阅读区/共享字号注音菜单/分行
 lib/features/lookup/                                          # 查词弹层/搜索/词条/WebView
 lib/features/settings/settings_page.dart                      # UniDic/权限/显示设置
 lib/features/settings/dictionary_page.dart                    # 词典管理
@@ -706,7 +778,8 @@ docs/DEVELOPMENT_PLAN.md                                      # 已批准计划
 docs/design-tokens.md                                         # UI 强制规范
 assets/fonts/README.md                                        # 字体下载说明（字体不入库）
 docs/phase0-status.md, docs/phase1-status.md,
-docs/phase2-status.md, docs/phase3-status.md                  # 阶段验证结果
+docs/phase2-status.md, docs/phase3-status.md,
+docs/phase3.5-status.md                                     # 阶段验证结果
 docs/dev-setup.md                                             # 构建/数据/缓存/集成测试
 docs/adr/                                                     # 三个架构决策
 tool/spike_mdict.dart                                         # MDict 主机 spike
@@ -807,13 +880,14 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
 
 ## 8. 建议的下一个动作
 
-1. 运行 `git status`；Phase 3 与 UI 打磨改动尚未提交，不要覆盖或擅自 commit。
+1. 运行 `git status`；Phase 3.5 与 UI/采集改动尚未提交，不要覆盖或擅自 commit。
 2. 进行实网模型下载验证（本机模拟器 DNS 不可用）：在可访问 hf-mirror 的
    设备上验证下载、断点续传、镜像回退、本地导入；确认模型目录与删除流程。
-3. 进入 Phase 4：MangaOCR encoder/decoder、竖排 RTL、气泡/裁剪规划、
-   自动方向（可选 doc/textline orientation）。不要修改已验收的 Phase 3
-   Paddle 横向路径；把纵向作为独立 recognizer 接入同一检测器。
+3. 进行相机/照片集/多选/语料的 arm64 真机回归；若继续功能开发，进入
+   Phase 4：MangaOCR encoder/decoder、竖排 RTL、气泡/裁剪规划、自动方向。
+   不要修改已验收的 Phase 3 Paddle 横向路径；把纵向作为独立 recognizer
+   接入同一检测器。
 4. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
    颜色/字号，字体与模型文件不入库；**所有页面**统一深蓝顶栏和右滑覆盖转场。
-5. 每个阶段结束运行 analyze/test/debug build（当前 97 tests / 12 项设备测试），
+5. 每个阶段结束运行 analyze/test/debug build（当前 106 tests / 12 项设备测试），
    并记录到新的阶段状态文档；设备端测试按 §7 的命令运行。

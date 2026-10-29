@@ -61,6 +61,13 @@ class OcrModelSet {
     if (rawFiles is! List || rawFiles.isEmpty) {
       throw FormatException('OCR model set "$id" has no files');
     }
+    final files = rawFiles
+        .whereType<Map>()
+        .map((file) => OcrModelFile.fromJson(Map<String, dynamic>.from(file)))
+        .toList(growable: false);
+    if (files.isEmpty) {
+      throw FormatException('OCR model set "$id" has no valid files');
+    }
     return OcrModelSet(
       id: id,
       displayName: (json['displayName'] as String?) ?? id,
@@ -68,10 +75,7 @@ class OcrModelSet {
       licenseUrl: (json['licenseUrl'] as String?) ?? '',
       licenseNote: (json['licenseNote'] as String?) ?? '',
       requiresAcceptance: (json['requiresAcceptance'] as bool?) ?? false,
-      files: rawFiles
-          .whereType<Map>()
-          .map((file) => OcrModelFile.fromJson(Map<String, dynamic>.from(file)))
-          .toList(growable: false),
+      files: files,
     );
   }
 }

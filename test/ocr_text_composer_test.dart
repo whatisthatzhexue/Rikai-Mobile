@@ -14,7 +14,8 @@ void main() {
       _block('ございます'),
     ]);
 
-    expect(text, 'ありがとう\nございます');
+    // Repeated lines (lyrics, dialogue, table cells) are content, not noise.
+    expect(text, 'ありがとう\nありがとう\nございます');
   });
 
   test('empty input produces empty text', () {

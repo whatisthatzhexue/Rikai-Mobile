@@ -1,19 +1,17 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:dio/dio.dart';
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:rikai_ocr/rikai_ocr.dart';
 
-import '../../core/models/ocr_model.dart';
+import '../../core/models/capture_photo.dart';
 import '../../core/theme/app_tokens.dart';
-import '../../services/ocr/model_manager.dart';
-import '../../services/ocr/ocr_text_composer.dart';
+import '../../state/capture_session.dart';
 import '../../state/providers.dart';
-import '../reader/reader_page.dart';
 
 class CapturePage extends ConsumerStatefulWidget {
   const CapturePage({super.key});
@@ -22,508 +20,557 @@ class CapturePage extends ConsumerStatefulWidget {
   ConsumerState<CapturePage> createState() => _CapturePageState();
 }
 
-class _CapturePageState extends ConsumerState<CapturePage> {
+class _CapturePageState extends ConsumerState<CapturePage>
+    with WidgetsBindingObserver {
   final ImagePicker _picker = ImagePicker();
-  final RikaiOcr _ocr = RikaiOcr();
-  StreamSubscription<OcrProgress>? _progressSubscription;
-
-  File? _image;
-  OcrMode _mode = OcrMode.auto;
-  OcrModelManifest? _manifest;
-  OcrModelSet? _paddleSet;
-  OcrModelStatus? _paddleStatus;
-  OcrModelDownloadProgress? _downloadProgress;
-  CancelToken? _downloadCancel;
-
-  bool _loadingModels = true;
-  bool _downloading = false;
-  bool _recognizing = false;
+  CameraController? _controller;
+  bool _initializing = false;
+  bool _capturing = false;
+  bool _permissionDenied = false;
+  bool _cameraUnavailable = false;
+  bool _childPageOpen = false;
   String? _error;
-  String _stage = '';
-  double _progress = 0;
 
   @override
   void initState() {
     super.initState();
-    _progressSubscription = _ocr.progress.listen((event) {
-      if (!mounted) return;
-      setState(() {
-        _stage = _stageLabel(event);
-        _progress = event.progress;
-      });
+    WidgetsBinding.instance.addObserver(this);
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (ref.read(captureSessionProvider).isEmpty) {
+        await ref.read(captureStorageProvider).clearSessionDirectory();
+      }
+      await _initializeCamera();
     });
-    _loadModels();
   }
 
   @override
   void dispose() {
-    _progressSubscription?.cancel();
-    _downloadCancel?.cancel();
-    unawaited(_ocr.dispose());
+    WidgetsBinding.instance.removeObserver(this);
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    unawaited(_disposeCamera());
     super.dispose();
   }
 
-  Future<void> _loadModels() async {
-    try {
-      final manifest = await ref.read(ocrModelManifestProvider.future);
-      final set = manifest.sets['paddle_v5'];
-      if (set == null) {
-        throw const OcrModelException('MANIFEST_INVALID', '模型清单缺少 PaddleOCR');
-      }
-      final status = await ref.read(ocrModelManagerProvider).status(set);
-      if (!mounted) return;
-      setState(() {
-        _manifest = manifest;
-        _paddleSet = set;
-        _paddleStatus = status;
-        _loadingModels = false;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _loadingModels = false;
-        _error = _errorText(error);
-      });
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      unawaited(_disposeCamera());
+    } else if (state == AppLifecycleState.resumed &&
+        !_childPageOpen &&
+        _controller == null &&
+        !_initializing) {
+      unawaited(_initializeCamera());
     }
   }
 
-  Future<void> _pick(ImageSource source) async {
+  Future<void> _initializeCamera() async {
+    if (_initializing || _childPageOpen) return;
+    _initializing = true;
+    if (mounted) {
+      setState(() {
+        _error = null;
+        _permissionDenied = false;
+        _cameraUnavailable = false;
+      });
+    }
     try {
-      final picked = await _picker.pickImage(
-        source: source,
-        preferredCameraDevice: CameraDevice.rear,
+      final cameras = await availableCameras();
+      if (!mounted) return;
+      if (cameras.isEmpty) {
+        setState(() => _cameraUnavailable = true);
+        return;
+      }
+      final camera = cameras.firstWhere(
+        (item) => item.lensDirection == CameraLensDirection.back,
+        orElse: () => cameras.first,
+      );
+      final controller = CameraController(
+        camera,
+        ResolutionPreset.high,
+        enableAudio: false,
+      );
+      try {
+        await controller.initialize();
+      } catch (error) {
+        await controller.dispose();
+        rethrow;
+      }
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      _controller = controller;
+      setState(() {});
+    } on CameraException catch (error) {
+      final denied =
+          error.code == 'CameraAccessDenied' ||
+          error.code == 'CameraAccessDeniedWithoutPrompt' ||
+          error.code == 'CameraAccessRestricted';
+      if (mounted) {
+        setState(() {
+          _permissionDenied = denied;
+          if (!denied) _cameraUnavailable = true;
+          _error = denied ? null : (error.description ?? error.code);
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _cameraUnavailable = true;
+          _error = error.toString();
+        });
+      }
+    } finally {
+      _initializing = false;
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _disposeCamera() async {
+    final controller = _controller;
+    _controller = null;
+    if (controller != null) {
+      try {
+        await controller.dispose();
+      } catch (_) {
+        // Camera teardown races with lifecycle transitions; best effort.
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _takePhoto() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized || _capturing) {
+      return;
+    }
+    setState(() => _capturing = true);
+    try {
+      final shot = await controller.takePicture();
+      final stored = await ref
+          .read(captureStorageProvider)
+          .importPhoto(shot.path);
+      try {
+        await File(shot.path).delete();
+      } catch (_) {
+        // The session copy is authoritative.
+      }
+      if (!mounted) return;
+      ref.read(captureSessionProvider.notifier).addPhotos([
+        CapturePhoto(
+          id: '${DateTime.now().microsecondsSinceEpoch}',
+          filePath: stored,
+          source: CapturePhotoSource.camera,
+          createdAt: DateTime.now(),
+        ),
+      ]);
+    } on CameraException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.description ?? error.code);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = '拍照失败：$error');
+    } finally {
+      if (mounted) setState(() => _capturing = false);
+    }
+  }
+
+  Future<void> _importPhotos() async {
+    if (_capturing) return;
+    setState(() => _capturing = true);
+    try {
+      final picked = await _picker.pickMultiImage(
         maxWidth: 4096,
         maxHeight: 4096,
         imageQuality: 95,
       );
-      if (picked == null || !mounted) return;
-      setState(() {
-        _image = File(picked.path);
-        _error = null;
-        _progress = 0;
-        _stage = '';
-      });
+      if (picked.isEmpty || !mounted) return;
+      final storage = ref.read(captureStorageProvider);
+      final photos = <CapturePhoto>[];
+      for (final file in picked) {
+        final stored = await storage.importPhoto(file.path);
+        photos.add(
+          CapturePhoto(
+            id: '${DateTime.now().microsecondsSinceEpoch}_${photos.length}',
+            filePath: stored,
+            originalPath: file.path,
+            source: CapturePhotoSource.gallery,
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
+      if (!mounted) return;
+      ref.read(captureSessionProvider.notifier).addPhotos(photos);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _error = '无法打开图片选择器：$error');
-    }
-  }
-
-  Future<void> _downloadModels() async {
-    final set = _paddleSet;
-    if (set == null || _downloading) return;
-    final cancel = CancelToken();
-    setState(() {
-      _downloading = true;
-      _downloadCancel = cancel;
-      _downloadProgress = null;
-      _error = null;
-    });
-    try {
-      await ref
-          .read(ocrModelManagerProvider)
-          .downloadSet(
-            set,
-            cancelToken: cancel,
-            customMirror: ref.read(appSettingsProvider).ocrMirror,
-            onProgress: (progress) {
-              if (!mounted) return;
-              setState(() => _downloadProgress = progress);
-            },
-          );
-      await _loadModels();
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('PaddleOCR 模型已下载并校验完成')));
-    } on OcrModelException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _error = error.code == 'CANCELLED' ? '已取消下载' : error.message;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = '模型下载失败：$error');
+      setState(() => _error = '导入照片失败：$error');
     } finally {
-      if (mounted) {
-        setState(() {
-          _downloading = false;
-          _downloadCancel = null;
-          _downloadProgress = null;
-        });
+      if (mounted) setState(() => _capturing = false);
+      if (!_childPageOpen && _controller == null) {
+        unawaited(_initializeCamera());
       }
     }
   }
 
-  void _cancelDownload() {
-    _downloadCancel?.cancel('用户取消下载');
-  }
-
-  Future<void> _recognize() async {
-    final image = _image;
-    final manifest = _manifest;
-    final status = _paddleStatus;
-    if (image == null || _recognizing) return;
-    if (manifest == null || status == null || !status.isInstalled) {
-      setState(() => _error = '请先下载 PaddleOCR 模型');
-      return;
-    }
-
-    setState(() {
-      _recognizing = true;
-      _error = null;
-      _stage = '准备 OCR 模型…';
-      _progress = 0;
-    });
-    try {
-      final paths = await ref
-          .read(ocrModelManagerProvider)
-          .paddlePaths(manifest);
-      await _ocr.initialize(
-        detModelPath: paths.det,
-        recModelPath: paths.rec,
-        keysPath: paths.keys,
-      );
-      final result = await _ocr.recognize(imagePath: image.path, mode: _mode);
-      final text = composeOcrText(result.blocks);
-      if (!mounted) return;
-      if (text.trim().isEmpty) {
-        setState(() => _error = '没有识别到文字，请换一张更清晰、方向正确的图片');
-        return;
-      }
-      await context.push('/reader', extra: ReaderRouteArgs(text));
-    } on OcrException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _error = error.code == 'CANCELLED' ? '已取消识别' : error.message;
-      });
-    } on OcrModelException catch (error) {
-      if (!mounted) return;
-      setState(() => _error = error.message);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = '识别失败：$error');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _recognizing = false;
-          _stage = '';
-          _progress = 0;
-        });
-      }
-    }
-  }
-
-  Future<void> _cancelRecognize() async {
-    setState(() => _stage = '正在取消…');
-    await _ocr.cancel();
-  }
-
-  Future<void> _openModelManager() async {
-    await context.push('/models');
+  Future<void> _openPhotoSet() async {
+    if (ref.read(captureSessionProvider).isEmpty) return;
+    _childPageOpen = true;
+    ref.read(captureSessionProvider.notifier).setCurrentIndex(0);
+    await _disposeCamera();
     if (!mounted) return;
-    await _loadModels();
+    await context.push('/photos');
+    if (!mounted) return;
+    _childPageOpen = false;
+    await _initializeCamera();
+  }
+
+  Future<void> _openSettings() async {
+    await ref.read(permissionServiceProvider).openAppSettings();
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final image = _image;
-    final status = _paddleStatus;
-
+    final count = ref.watch(captureSessionProvider).length;
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.cameraBackground,
       appBar: AppBar(title: const Text('拍照识别')),
-      body: SafeArea(
-        child: ListView(
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          _buildPreview(),
+          if (_error != null) _buildStatusBanner(_error!),
+          if (_permissionDenied)
+            _CameraUnavailable(
+              title: '相机权限未授予',
+              message: '请在系统设置中允许相机权限，或先从相册导入照片。',
+              actionLabel: '去授权',
+              onSettings: _openSettings,
+              onGallery: _importPhotos,
+            )
+          else if (_cameraUnavailable)
+            _CameraUnavailable(
+              title: '相机不可用',
+              message: _error ?? '没有可用的相机硬件。',
+              actionLabel: '重试',
+              onSettings: _initializeCamera,
+              onGallery: _importPhotos,
+            ),
+          if (!_permissionDenied && !_cameraUnavailable)
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: _buildControls(count),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreview() {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      return const ColoredBox(color: AppColors.cameraBackground);
+    }
+    final size = controller.value.previewSize;
+    if (size == null) {
+      return CameraPreview(controller);
+    }
+    // Camera previewSize is sensor-oriented; swap for portrait fill.
+    return FittedBox(
+      fit: BoxFit.cover,
+      clipBehavior: Clip.hardEdge,
+      child: SizedBox(
+        width: size.height,
+        height: size.width,
+        child: CameraPreview(controller),
+      ),
+    );
+  }
+
+  Widget _buildControls(int count) {
+    final enabled = _controller != null && !_capturing;
+    return Container(
+      decoration: const BoxDecoration(color: AppColors.cameraScrim),
+      child: SafeArea(
+        top: false,
+        child: Padding(
           padding: const EdgeInsets.fromLTRB(
+            AppSpacing.xl,
+            AppSpacing.md,
+            AppSpacing.xl,
             AppSpacing.lg,
-            AppSpacing.lg,
-            AppSpacing.lg,
-            AppSpacing.xxl,
           ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _CameraSideButton(
+                icon: Icons.photo_library_outlined,
+                label: '导入照片',
+                onPressed: _capturing ? null : _importPhotos,
+              ),
+              _ShutterButton(
+                enabled: enabled,
+                capturing: _capturing,
+                onPressed: _takePhoto,
+              ),
+              _PhotoCountButton(
+                count: count,
+                onPressed: count == 0 ? null : _openPhotoSet,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBanner(String message) {
+    return Positioned(
+      top: AppSpacing.md,
+      left: AppSpacing.lg,
+      right: AppSpacing.lg,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: AppColors.error.withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: AppColors.cameraControl),
+        ),
+      ),
+    );
+  }
+}
+
+class _ShutterButton extends StatelessWidget {
+  const _ShutterButton({
+    required this.enabled,
+    required this.capturing,
+    required this.onPressed,
+  });
+
+  final bool enabled;
+  final bool capturing;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: AppSizes.cameraShutter,
+      height: AppSizes.cameraShutter,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: enabled ? onPressed : null,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.cameraControl, width: 4),
+            ),
+            padding: const EdgeInsets.all(4),
+            child: Container(
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.cameraControl,
+              ),
+              child: capturing
+                  ? const Center(
+                      child: SizedBox(
+                        width: AppSizes.cameraProgress,
+                        height: AppSizes.cameraProgress,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CameraSideButton extends StatelessWidget {
+  const _CameraSideButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: AppSizes.cameraSideControlWidth,
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.cameraControl,
+          disabledForegroundColor: AppColors.cameraControl.withValues(
+            alpha: 0.4,
+          ),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            if (image == null)
-              _CapturePrompt(
-                onCamera: () => _pick(ImageSource.camera),
-                onGallery: () => _pick(ImageSource.gallery),
-              )
-            else ...[
-              _ImagePreview(file: image),
-              const SizedBox(height: AppSpacing.sm),
-              Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: _recognizing
-                        ? null
-                        : () => _pick(ImageSource.camera),
-                    icon: const Icon(Icons.photo_camera_outlined),
-                    label: const Text('重新拍照'),
-                  ),
-                  TextButton.icon(
-                    onPressed: _recognizing
-                        ? null
-                        : () => _pick(ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('从相册选择'),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: AppSpacing.xl),
-            Text('识别方向', style: theme.textTheme.titleMedium),
-            const SizedBox(height: AppSpacing.sm),
-            SegmentedButton<OcrMode>(
-              segments: const [
-                ButtonSegment(
-                  value: OcrMode.auto,
-                  icon: Icon(Icons.auto_awesome),
-                  label: Text('自动'),
-                ),
-                ButtonSegment(
-                  value: OcrMode.horizontal,
-                  icon: Icon(Icons.format_align_left),
-                  label: Text('横向'),
-                ),
-              ],
-              selected: {_mode},
-              onSelectionChanged: _recognizing
-                  ? null
-                  : (selection) => setState(() => _mode = selection.first),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text('当前版本支持横排文字；竖排识别将在后续版本加入。', style: theme.textTheme.bodySmall),
-            const SizedBox(height: AppSpacing.xl),
-            _buildModelSection(theme, status),
-            if (_error != null) ...[
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                _error!,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: AppColors.error,
-                ),
-              ),
-            ],
-            if (_recognizing) ...[
-              const SizedBox(height: AppSpacing.xl),
-              Text(_stage.isEmpty ? '正在识别…' : _stage),
-              const SizedBox(height: AppSpacing.sm),
-              LinearProgressIndicator(value: _progress > 0 ? _progress : null),
-              const SizedBox(height: AppSpacing.sm),
-              OutlinedButton.icon(
-                onPressed: _cancelRecognize,
-                icon: const Icon(Icons.stop_circle_outlined),
-                label: const Text('取消识别'),
-              ),
-            ],
-            const SizedBox(height: AppSpacing.xl),
-            FilledButton.icon(
-              onPressed: image == null || _recognizing || _downloading
-                  ? null
-                  : _recognize,
-              icon: const Icon(Icons.document_scanner_outlined),
-              label: const Text('开始识别'),
-            ),
+            Icon(icon, size: AppSizes.iconLarge),
+            const SizedBox(height: AppSpacing.xxs),
+            Text(label, style: const TextStyle(fontSize: AppTypography.title)),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildModelSection(ThemeData theme, OcrModelStatus? status) {
-    if (_loadingModels) {
-      return const Row(
+class _PhotoCountButton extends StatelessWidget {
+  const _PhotoCountButton({required this.count, required this.onPressed});
+
+  final int count;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: AppSizes.cameraSideControlWidth,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          SizedBox(width: AppSpacing.sm),
-          Text('正在检查 OCR 模型…'),
-        ],
-      );
-    }
-    final set = _paddleSet;
-    if (set == null || status == null) {
-      return Text(
-        '无法读取 OCR 模型清单',
-        style: theme.textTheme.bodyMedium?.copyWith(color: AppColors.error),
-      );
-    }
-    if (status.isInstalled) {
-      return Row(
-        children: [
-          const Icon(
-            Icons.check_circle,
-            color: AppColors.success,
-            size: AppSizes.icon,
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              'PaddleOCR 已就绪（${_formatBytes(status.totalBytes)}）',
-              style: theme.textTheme.bodyMedium,
+          TextButton(
+            onPressed: onPressed,
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.cameraControl,
+              disabledForegroundColor: AppColors.cameraControl.withValues(
+                alpha: 0.4,
+              ),
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+            ),
+            child: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.collections_outlined, size: AppSizes.iconLarge),
+                SizedBox(height: AppSpacing.xxs),
+                Text('照片集', style: TextStyle(fontSize: AppTypography.title)),
+              ],
             ),
           ),
-          TextButton(onPressed: _openModelManager, child: const Text('管理模型')),
+          if (count > 0)
+            Positioned(
+              top: 0,
+              right: 2,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 18),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xxs,
+                  vertical: 1,
+                ),
+                decoration: const BoxDecoration(
+                  color: AppColors.error,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    color: AppColors.cameraControl,
+                    fontSize: AppTypography.title,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
         ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '需要下载 PaddleOCR 模型（${_formatBytes(set.totalSize)}，${set.license}）',
-          style: theme.textTheme.bodyMedium,
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text('模型由应用在本地校验，下载后可完全离线使用。', style: theme.textTheme.bodySmall),
-        if (_downloading) ...[
-          const SizedBox(height: AppSpacing.md),
-          LinearProgressIndicator(value: _downloadProgress?.overallProgress),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            _downloadProgress == null
-                ? '正在连接模型服务器…'
-                : '正在下载 ${_downloadProgress!.fileName} '
-                      '（${_downloadProgress!.fileIndex + 1}/${_downloadProgress!.fileCount}）'
-                      ' ${(_downloadProgress!.overallProgress * 100).round()}%',
-            style: theme.textTheme.bodySmall,
-          ),
-          TextButton.icon(
-            onPressed: _cancelDownload,
-            icon: const Icon(Icons.stop_circle_outlined),
-            label: const Text('取消下载'),
-          ),
-        ] else
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              FilledButton.icon(
-                onPressed: _downloading ? null : _downloadModels,
-                icon: const Icon(Icons.download_outlined),
-                label: const Text('下载模型'),
-              ),
-              OutlinedButton(
-                onPressed: _downloading ? null : _openModelManager,
-                child: const Text('管理模型'),
-              ),
-            ],
-          ),
-      ],
+      ),
     );
-  }
-
-  String _stageLabel(OcrProgress event) {
-    switch (event.stage) {
-      case 'detect':
-        return '正在检测文本行…';
-      case 'recognize':
-        final current = event.total > 0 ? event.current + 1 : event.current;
-        return event.total > 0 ? '正在识别第 $current/${event.total} 行…' : '正在识别文字…';
-      case 'done':
-        return '识别完成';
-      case 'cancelled':
-        return '已取消识别';
-      default:
-        return '正在识别…';
-    }
-  }
-
-  String _errorText(Object error) {
-    if (error is OcrModelException) return error.message;
-    return error.toString();
-  }
-
-  String _formatBytes(int bytes) {
-    if (bytes >= 1024 * 1024) {
-      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-    }
-    return '${(bytes / 1024).toStringAsFixed(0)} KB';
   }
 }
 
-class _CapturePrompt extends StatelessWidget {
-  const _CapturePrompt({required this.onCamera, required this.onGallery});
+class _CameraUnavailable extends StatelessWidget {
+  const _CameraUnavailable({
+    required this.title,
+    required this.message,
+    required this.actionLabel,
+    required this.onSettings,
+    required this.onGallery,
+  });
 
-  final VoidCallback onCamera;
+  final String title;
+  final String message;
+  final String actionLabel;
+  final VoidCallback onSettings;
   final VoidCallback onGallery;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.xxl,
-      ),
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      child: Column(
-        children: [
-          const Icon(
-            Icons.document_scanner_outlined,
-            size: AppSizes.heroIcon,
-            color: AppColors.primary,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text('拍摄或选择一张日文图片', style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            '支持相机拍照和相册图片；图片会在设备本地处理，不会上传。',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.sm,
-            alignment: WrapAlignment.center,
+    return ColoredBox(
+      color: AppColors.cameraScrim,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              FilledButton.icon(
-                onPressed: onCamera,
-                icon: const Icon(Icons.photo_camera_outlined),
-                label: const Text('拍照'),
+              const Icon(
+                Icons.no_photography_outlined,
+                color: AppColors.cameraControl,
+                size: AppSizes.heroIcon,
               ),
-              OutlinedButton.icon(
-                onPressed: onGallery,
-                icon: const Icon(Icons.photo_library_outlined),
-                label: const Text('从相册选择'),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: AppColors.cameraControl,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.cameraControl,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Wrap(
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.sm,
+                alignment: WrapAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: onSettings,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.cameraControl,
+                      side: const BorderSide(color: AppColors.cameraControl),
+                    ),
+                    icon: const Icon(Icons.settings_outlined),
+                    label: Text(actionLabel),
+                  ),
+                  FilledButton.icon(
+                    onPressed: onGallery,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.cameraControl,
+                      foregroundColor: AppColors.textPrimary,
+                    ),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('从相册导入'),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ImagePreview extends StatelessWidget {
-  const _ImagePreview({required this.file});
-
-  final File file;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 240,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: AppColors.surfaceMuted,
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Image.file(
-        file,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) =>
-            const Center(child: Text('无法显示图片预览')),
+        ),
       ),
     );
   }

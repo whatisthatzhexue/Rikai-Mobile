@@ -15,6 +15,7 @@ void main() {
     expect(settings.showFurigana, isTrue);
     expect(settings.readerFontSize, 20);
     expect(settings.ocrMirror, '');
+    expect(settings.ocrModelsDirectory, '');
   });
 
   test('persists font family and entry limit', () async {
@@ -27,6 +28,7 @@ void main() {
         fontFamily: AppFonts.system,
         maxEntriesPerDictionary: 5,
         ocrMirror: 'https://mirror.example',
+        ocrModelsDirectory: '/storage/emulated/0/rikai-models',
       ),
     );
     final restored = SettingsStore(preferences).load();
@@ -34,6 +36,7 @@ void main() {
     expect(restored.fontFamily, AppFonts.system);
     expect(restored.maxEntriesPerDictionary, 5);
     expect(restored.ocrMirror, 'https://mirror.example');
+    expect(restored.ocrModelsDirectory, '/storage/emulated/0/rikai-models');
   });
 
   test('sanitizes unknown font and negative limits', () async {

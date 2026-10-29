@@ -7,15 +7,19 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/models/dict_info.dart';
+import '../core/models/corpus_entry.dart';
 import '../core/models/ocr_model.dart';
 import '../core/theme/app_fonts.dart';
 import '../services/mdict/entry_cache.dart';
 import '../services/mdict/mdict_worker.dart';
 import '../services/mecab/mecab_service.dart';
 import '../services/ocr/model_manager.dart';
+import '../services/ocr/ocr_service.dart';
 import '../services/storage/dictionary_store.dart';
+import '../services/storage/history_store.dart';
 import '../services/storage/permission_service.dart';
 import '../services/storage/settings_store.dart';
+import '../services/storage/storage_space_service.dart';
 
 /// Overridden in `main()` after SharedPreferences is loaded.
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
@@ -35,6 +39,21 @@ final appSettingsProvider = NotifierProvider<AppSettingsNotifier, AppSettings>(
 final permissionServiceProvider = Provider<PermissionService>((ref) {
   return const PermissionService();
 });
+
+final storageSpaceServiceProvider = Provider<StorageSpaceService>((ref) {
+  return const StorageSpaceService();
+});
+
+final historyStoreProvider = Provider<HistoryStore>((ref) {
+  final store = HistoryStore();
+  ref.onDispose(store.close);
+  return store;
+});
+
+final corpusEntriesProvider = FutureProvider<List<CorpusEntry>>(
+  (ref) => ref.watch(historyStoreProvider).list(),
+  retry: (retryCount, error) => null,
+);
 
 /// Reader input draft that survives navigation for the app's lifetime.
 final readerDraftControllerProvider = Provider<TextEditingController>((ref) {
@@ -84,10 +103,21 @@ final entryRenderCacheProvider = Provider<EntryRenderCache>((ref) {
 /// downloaded into getExternalFilesDir()/models/ at runtime.
 final ocrModelManifestProvider = FutureProvider<OcrModelManifest>((ref) {
   return OcrModelManager().loadManifest();
-});
+}, retry: (retryCount, error) => null);
 
 final ocrModelManagerProvider = Provider<OcrModelManager>((ref) {
-  return OcrModelManager();
+  final space = ref.watch(storageSpaceServiceProvider);
+  return OcrModelManager(
+    modelsDirectory: () async =>
+        ref.read(appSettingsProvider).ocrModelsDirectory,
+    availableSpace: space.availableBytes,
+  );
+});
+
+final ocrServiceProvider = Provider<OcrService>((ref) {
+  final service = OcrService(ref.watch(ocrModelManagerProvider));
+  ref.onDispose(service.dispose);
+  return service;
 });
 
 class AppSettingsNotifier extends Notifier<AppSettings> {
@@ -121,6 +151,10 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
 
   void setOcrMirror(String value) {
     _update(state.copyWith(ocrMirror: value.trim()));
+  }
+
+  void setOcrModelsDirectory(String value) {
+    _update(state.copyWith(ocrModelsDirectory: value.trim()));
   }
 
   void _update(AppSettings next) {

@@ -203,6 +203,28 @@ prefix suggestions, MDD image bytes, HTML sanitization/CSS injection, the
 dictionary registry, and the full search → entry WebView flow. Results are
 recorded in `docs/phase2-status.md`.
 
+## Camera and capture session
+
+The capture page uses the `camera` plugin (CameraX) and the app declares
+`android.permission.CAMERA`; image_picker is used only for gallery import.
+The emulator's virtual camera is sufficient for a functional smoke test. When
+opening the photo set or backgrounding the app, the controller is disposed and
+recreated on return; a denied permission shows settings/gallery fallbacks.
+
+Captured/imported photos are copied into the app's temporary
+`rikai_capture/` session directory. The photo set survives leaving the capture
+page, and the directory is cleared when the app starts with an empty session.
+The local corpus database and photo copies live under the app support directory
+(`rikai_history.db`, `corpus/images/`).
+
+## OCR model directory
+
+The model page can use the default
+`getExternalFilesDir()/models/` or a user-selected directory. Changing the
+directory validates read/write/free space and defaults to migrating the models;
+“仅切换” leaves the old files in place. The custom mirror field requires a
+full `http(s)://host` prefix.
+
 ## OCR integration test
 
 The Phase 3 suite runs the real PaddleOCR det/rec models from public storage and

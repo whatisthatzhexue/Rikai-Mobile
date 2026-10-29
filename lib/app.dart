@@ -5,9 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'core/theme/app_tokens.dart';
 import 'state/providers.dart';
 import 'features/capture/capture_page.dart';
+import 'features/capture/photo_set_page.dart';
+import 'features/corpus/corpus_page.dart';
 import 'features/home/home_page.dart';
 import 'features/lookup/search_page.dart';
 import 'features/reader/reader_page.dart';
+import 'features/settings/dictionary_import_page.dart';
 import 'features/settings/dictionary_page.dart';
 import 'features/settings/model_page.dart';
 import 'features/settings/settings_page.dart';
@@ -32,6 +35,11 @@ GoRouter _createRouter() {
         path: '/capture',
         builder: (context, state) => const CapturePage(),
       ),
+      GoRoute(
+        path: '/photos',
+        builder: (context, state) => const PhotoSetPage(),
+      ),
+      GoRoute(path: '/corpus', builder: (context, state) => const CorpusPage()),
       GoRoute(path: '/models', builder: (context, state) => const ModelPage()),
       GoRoute(
         path: '/settings',
@@ -41,6 +49,10 @@ GoRouter _createRouter() {
       GoRoute(
         path: '/dictionaries',
         builder: (context, state) => const DictionaryPage(),
+      ),
+      GoRoute(
+        path: '/dictionary-import',
+        builder: (context, state) => const DictionaryImportPage(),
       ),
     ],
   );

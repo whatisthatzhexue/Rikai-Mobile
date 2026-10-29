@@ -10,6 +10,8 @@ import '../../services/storage/settings_store.dart';
 import '../../state/providers.dart';
 import '../lookup/lookup_sheet.dart';
 import 'reader_block.dart';
+import 'reader_lines.dart';
+import 'reader_options.dart';
 
 /// Arguments used by go_router when another feature opens the reader with new
 /// text (for example after OCR).
@@ -38,6 +40,7 @@ class ReaderPage extends ConsumerStatefulWidget {
 
 class _ReaderPageState extends ConsumerState<ReaderPage> {
   late final TextEditingController _textController;
+  late final bool _ownsTextController;
   final ScrollController _scrollController = ScrollController();
 
   List<Token> _tokens = const [];
@@ -49,15 +52,21 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   @override
   void initState() {
     super.initState();
-    // The controller is owned by a provider so the draft survives navigation
-    // for the whole app lifetime.
-    _textController = ref.read(readerDraftControllerProvider);
-    if (widget.initialText.trim().isNotEmpty &&
-        (widget.replaceDraft || _textController.text.trim().isEmpty)) {
-      _textController.value = TextEditingValue(
-        text: widget.initialText,
-        selection: TextSelection.collapsed(offset: widget.initialText.length),
-      );
+    // OCR text uses a page-local controller so it cannot overwrite the global
+    // input draft or a lower ReaderPage in the navigation stack. The normal
+    // text-entry route keeps the app-lifetime draft provider.
+    _ownsTextController = widget.replaceDraft;
+    if (_ownsTextController) {
+      _textController = TextEditingController(text: widget.initialText);
+    } else {
+      _textController = ref.read(readerDraftControllerProvider);
+      if (widget.initialText.trim().isNotEmpty &&
+          _textController.text.trim().isEmpty) {
+        _textController.value = TextEditingValue(
+          text: widget.initialText,
+          selection: TextSelection.collapsed(offset: widget.initialText.length),
+        );
+      }
     }
     if (_textController.text.trim().isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _analyze());
@@ -67,6 +76,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   @override
   void dispose() {
     _scrollController.dispose();
+    if (_ownsTextController) _textController.dispose();
     super.dispose();
   }
 
@@ -127,6 +137,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   }
 
   void _showTokenLookup(Token token) {
+    // Opening a lookup must not leave the IME attached to the editor. The
+    // sheet also clears focus after dismissal so tapping the scrim cannot
+    // bounce the keyboard back.
+    FocusManager.instance.primaryFocus?.unfocus();
     showTokenLookupSheet(context, token);
   }
 
@@ -142,34 +156,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       appBar: AppBar(
         title: const Text('文本阅读'),
         actions: [
-          PopupMenuButton<String>(
-            tooltip: '阅读选项',
-            icon: const Icon(Icons.tune),
-            onSelected: (value) {
-              final notifier = ref.read(appSettingsProvider.notifier);
-              if (value == 'furigana') {
-                notifier.setShowFurigana(!settings.showFurigana);
-              } else if (value.startsWith('size:')) {
-                notifier.setReaderFontSize(
-                  double.parse(value.substring('size:'.length)),
-                );
-              }
-            },
-            itemBuilder: (context) => [
-              CheckedPopupMenuItem<String>(
-                value: 'furigana',
-                checked: settings.showFurigana,
-                child: const Text('显示注音'),
-              ),
-              const PopupMenuDivider(),
-              for (final size in const [16.0, 20.0, 24.0, 28.0])
-                CheckedPopupMenuItem<String>(
-                  value: 'size:$size',
-                  checked: settings.readerFontSize == size,
-                  child: Text('字号 ${size.toInt()}'),
-                ),
-            ],
-          ),
+          const ReaderOptionsMenu(),
           IconButton(
             onPressed: () => context.push('/settings'),
             tooltip: '设置',
@@ -323,7 +310,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       );
     }
 
-    final lines = _buildLines(analysedText, _tokens);
+    final lines = buildReaderLines(analysedText, _tokens);
     return ListView.builder(
       controller: _scrollController,
       padding: const EdgeInsets.fromLTRB(
@@ -350,30 +337,6 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       },
     );
   }
-
-  static List<_ReaderLine> _buildLines(String text, List<Token> tokens) {
-    final lines = <_ReaderLine>[];
-    var offset = 0;
-    var tokenIndex = 0;
-    for (final rawLine in text.split('\n')) {
-      final lineEnd = offset + rawLine.length;
-      final lineTokens = <Token>[];
-      while (tokenIndex < tokens.length && tokens[tokenIndex].start < lineEnd) {
-        final token = tokens[tokenIndex];
-        if (token.start >= offset) lineTokens.add(token);
-        tokenIndex++;
-      }
-      lines.add(_ReaderLine(tokens: lineTokens));
-      offset = lineEnd + 1;
-    }
-    return lines;
-  }
-}
-
-class _ReaderLine {
-  const _ReaderLine({required this.tokens});
-
-  final List<Token> tokens;
 }
 
 class _EmptyState extends StatelessWidget {

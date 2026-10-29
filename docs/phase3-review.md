@@ -8,6 +8,8 @@
   `docs/phase3-status.md`、`docs/models.md`。
 - 基线验证：`flutter analyze` -> No issues found；`flutter test` -> 97 tests passed。
 - 说明：本次审查**没有修改任何代码**，以下问题全部待修复；行号以当前工作树为准。
+- **Implementation status (2026-10-29)**: H1–H3, M1–M7 and L1–L10 have been
+  addressed in `docs/phase3.5-status.md`; P1 remains a Phase 4 item.
 
 ## 摘要
 

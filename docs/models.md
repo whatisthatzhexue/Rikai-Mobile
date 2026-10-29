@@ -1,8 +1,9 @@
 # OCR models
 
 Models are **not** committed. `assets/models/manifest.json` is the source of
-truth for URLs, sizes, licenses, and mirror order. The app downloads to
-`getExternalFilesDir()/models/` and supports local import.
+truth for URLs, sizes, SHA-256 hashes, licenses, and mirror order. The app
+downloads to `getExternalFilesDir()/models/` by default; the model page can
+switch to a user-selected directory (migrating existing models by default).
 
 Phase 3 uses only `paddle_v5` (det + rec + keys). MangaOCR and orientation
 models are listed for Phase 4; they are not routed to the native pipeline yet.
@@ -20,8 +21,11 @@ never downloads anything itself.
 - Default order: `https://hf-mirror.com`, then `https://huggingface.co`.
 - A custom mirror prefix can be set in settings.
 - Download is resumable (HTTP Range), writes a `.part` file, verifies size and
-  optional SHA-256, then renames atomically.
-- If all sources fail, the user can pick local files in the model manager.
+  the pinned SHA-256, then renames atomically. A 416 or mismatched
+  `Content-Range` resets the partial file.
+- If all sources fail, the user can import local files. Upstream
+  `inference.onnx`/`inference.yml` names are matched to det/rec/keys by role,
+  pinned size and extension; already valid files are reused.
 
 ## Verified PaddleOCR build (2026-10-28)
 
@@ -30,10 +34,14 @@ The checked-in manifest pins `PP-OCRv5_mobile_det_onnx` revision
 `keys.yml` has 18,383 characters; the recognizer emits 18,385 classes
 (blank + 18,383 keys + space). The first key is U+3000 and must not be trimmed.
 Host ORT smoke: det `(1,1,64,480)`, rec `(1,40,18385)`, synthetic
-`ありがとう` decoded at score 0.9983. Android plugin test: 266 ms, 1 block,
+`ありがとう` decoded at score 0.9983. Android plugin test: 320 ms, 1 block,
 confidence 1.000. See `docs/phase3-status.md`.
 
 ## MangaOCR license
+
+All seven MangaOCR file hashes are pinned in the manifest (2026-10-29) even
+though the runtime pipeline is Phase 4. The model card still has no declared
+license; hashes do not change the redistribution policy.
 
 The upstream `kha-white/manga-ocr-base` project is Apache-2.0, but the
 `l0wgear/manga-ocr-2025-onnx` model card does not declare a license. Rikai-Mobile

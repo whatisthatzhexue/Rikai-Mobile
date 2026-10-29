@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/models/ocr_model.dart';
+import '../../core/utils/format_bytes.dart';
 
 class OcrModelException implements Exception {
   const OcrModelException(this.code, this.message);
@@ -29,6 +30,9 @@ class OcrModelStatus {
     required this.installedBytes,
     required this.totalBytes,
     required this.missingFiles,
+    this.directoryPath = '',
+    this.directoryAvailable = true,
+    this.directoryError = '',
   });
 
   final String setId;
@@ -37,9 +41,39 @@ class OcrModelStatus {
   final int installedBytes;
   final int totalBytes;
   final List<String> missingFiles;
+  final String directoryPath;
+  final bool directoryAvailable;
+  final String directoryError;
 
-  bool get isInstalled => installedFiles == fileCount;
+  bool get isInstalled =>
+      directoryAvailable && fileCount > 0 && installedFiles == fileCount;
   double get progress => totalBytes == 0 ? 0 : installedBytes / totalBytes;
+}
+
+class OcrModelDirectoryCheck {
+  const OcrModelDirectoryCheck({
+    required this.ok,
+    this.message = '',
+    this.availableBytes,
+  });
+
+  final bool ok;
+  final String message;
+  final int? availableBytes;
+}
+
+class OcrModelMigrationProgress {
+  const OcrModelMigrationProgress({
+    required this.fileName,
+    required this.copiedBytes,
+    required this.totalBytes,
+  });
+
+  final String fileName;
+  final int copiedBytes;
+  final int totalBytes;
+
+  double get progress => totalBytes <= 0 ? 0 : copiedBytes / totalBytes;
 }
 
 class OcrModelDownloadProgress {
@@ -85,6 +119,8 @@ class OcrModelManager {
     AssetBundle? bundle,
     Dio? dio,
     Future<Directory> Function()? rootDirectory,
+    Future<String> Function()? modelsDirectory,
+    Future<int?> Function(String path)? availableSpace,
   }) : _bundle = bundle ?? rootBundle,
        _dio =
            dio ??
@@ -95,11 +131,15 @@ class OcrModelManager {
                followRedirects: true,
              ),
            ),
-       _rootDirectory = rootDirectory ?? _defaultRootDirectory;
+       _rootDirectory = rootDirectory ?? _defaultRootDirectory,
+       _modelsDirectory = modelsDirectory,
+       _availableSpace = availableSpace;
 
   final AssetBundle _bundle;
   final Dio _dio;
   final Future<Directory> Function() _rootDirectory;
+  final Future<String> Function()? _modelsDirectory;
+  final Future<int?> Function(String path)? _availableSpace;
 
   /// Development/test escape hatch:
   /// `--dart-define=RIKAI_OCR_MODELS_DIR=/sdcard/Download/rikai-models`.
@@ -127,39 +167,205 @@ class OcrModelManager {
     }
   }
 
-  Future<Directory> modelsRoot() async {
-    final directory = _modelsRootOverride.isNotEmpty
-        ? Directory(_modelsRootOverride)
-        : Directory(p.join((await _rootDirectory()).path, 'models'));
-    if (!directory.existsSync()) {
+  /// Absolute path of the model directory currently configured.
+  ///
+  /// This is a pure path resolution (no directory creation, no IO side effect),
+  /// so it is safe to call for UI display and status checks.
+  Future<OcrModelDirectoryCheck> validateModelsDirectory(
+    String path, {
+    int requiredBytes = 0,
+  }) async {
+    final trimmed = path.trim();
+    if (trimmed.isEmpty) {
+      return const OcrModelDirectoryCheck(ok: false, message: '目录路径为空');
+    }
+    final directory = Directory(trimmed);
+    try {
+      if (!directory.existsSync()) {
+        await directory.create(recursive: true);
+      }
+      final probe = File(
+        p.join(
+          directory.path,
+          '.rikai_write_test_${DateTime.now().microsecondsSinceEpoch}',
+        ),
+      );
+      await probe.writeAsBytes(const [0], flush: true);
+      await probe.delete();
+      final available = _availableSpace == null
+          ? null
+          : await _availableSpace(trimmed);
+      if (requiredBytes > 0 && available != null && available < requiredBytes) {
+        return OcrModelDirectoryCheck(
+          ok: false,
+          message: '目录剩余空间不足（需要 ${formatBytes(requiredBytes)}）',
+          availableBytes: available,
+        );
+      }
+      return OcrModelDirectoryCheck(ok: true, availableBytes: available);
+    } on FileSystemException catch (error) {
+      return OcrModelDirectoryCheck(
+        ok: false,
+        message: '目录不可读写：${error.message}',
+      );
+    }
+  }
+
+  Future<void> migrateModels({
+    required List<OcrModelSet> sets,
+    required String destinationPath,
+    bool move = false,
+    void Function(OcrModelMigrationProgress progress)? onProgress,
+    bool Function()? isCancelled,
+  }) async {
+    final sourcePath = await modelsDirectoryPath();
+    if (p.normalize(sourcePath) == p.normalize(destinationPath)) return;
+    final totalBytes = sets.fold<int>(0, (sum, set) => sum + set.totalSize);
+    var copiedBytes = 0;
+    for (final set in sets) {
+      final sourceDirectory = Directory(p.join(sourcePath, set.id));
+      final destinationDirectory = Directory(p.join(destinationPath, set.id));
+      if (!destinationDirectory.existsSync()) {
+        await destinationDirectory.create(recursive: true);
+      }
+      for (final file in set.files) {
+        if (isCancelled?.call() ?? false) {
+          throw const OcrModelException('CANCELLED', '已取消模型迁移');
+        }
+        final source = File(p.join(sourceDirectory.path, file.name));
+        final destination = File(p.join(destinationDirectory.path, file.name));
+        if (!source.existsSync()) {
+          copiedBytes += file.size;
+          continue;
+        }
+        if (await _isValidFile(destination, file)) {
+          copiedBytes += file.size;
+          onProgress?.call(
+            OcrModelMigrationProgress(
+              fileName: file.name,
+              copiedBytes: copiedBytes,
+              totalBytes: totalBytes,
+            ),
+          );
+          continue;
+        }
+        if (destination.existsSync()) await destination.delete();
+        final temp = File('${destination.path}.migrating');
+        if (temp.existsSync()) await temp.delete();
+        final input = source.openRead();
+        final output = temp.openWrite();
+        var fileCopied = 0;
+        try {
+          await for (final chunk in input) {
+            if (isCancelled?.call() ?? false) {
+              throw const OcrModelException('CANCELLED', '已取消模型迁移');
+            }
+            output.add(chunk);
+            fileCopied += chunk.length;
+            onProgress?.call(
+              OcrModelMigrationProgress(
+                fileName: file.name,
+                copiedBytes: copiedBytes + fileCopied,
+                totalBytes: totalBytes,
+              ),
+            );
+          }
+          await output.flush();
+        } finally {
+          await output.close();
+        }
+        if (!await _isValidFile(temp, file)) {
+          if (temp.existsSync()) await temp.delete();
+          throw OcrModelException('MIGRATION_INVALID', '${file.name} 迁移后校验失败');
+        }
+        await temp.rename(destination.path);
+        copiedBytes += file.size;
+        onProgress?.call(
+          OcrModelMigrationProgress(
+            fileName: file.name,
+            copiedBytes: copiedBytes,
+            totalBytes: totalBytes,
+          ),
+        );
+      }
+    }
+    if (move) {
+      for (final set in sets) {
+        final sourceDirectory = Directory(p.join(sourcePath, set.id));
+        for (final file in set.files) {
+          final source = File(p.join(sourceDirectory.path, file.name));
+          if (source.existsSync()) {
+            try {
+              await source.delete();
+            } on FileSystemException {
+              // Keep the source if removal is not permitted; the destination
+              // copy is already complete.
+            }
+          }
+        }
+      }
+    }
+  }
+
+  Future<String> modelsDirectoryPath() async {
+    final custom = _modelsDirectory == null ? '' : await _modelsDirectory();
+    if (custom.trim().isNotEmpty) return Directory(custom.trim()).path;
+    if (_modelsRootOverride.isNotEmpty) {
+      return Directory(_modelsRootOverride).path;
+    }
+    return p.join((await _rootDirectory()).path, 'models');
+  }
+
+  Future<Directory> modelsRoot({bool create = false}) async {
+    final directory = Directory(await modelsDirectoryPath());
+    if (create && !directory.existsSync()) {
       await directory.create(recursive: true);
     }
     return directory;
   }
 
-  Future<Directory> setDirectory(OcrModelSet set) async {
-    final root = await modelsRoot();
+  Future<Directory> setDirectory(OcrModelSet set, {bool create = false}) async {
+    final root = await modelsRoot(create: create);
     final directory = Directory(p.join(root.path, set.id));
-    if (!directory.existsSync()) {
+    if (create && !directory.existsSync()) {
       await directory.create(recursive: true);
     }
     return directory;
   }
 
   Future<OcrModelStatus> status(OcrModelSet set) async {
-    final directory = await setDirectory(set);
+    final path = await modelsDirectoryPath();
     var installedBytes = 0;
     var installedFiles = 0;
     final missing = <String>[];
-    for (final file in set.files) {
-      final local = File(p.join(directory.path, file.name));
-      final valid = await _isValidFile(local, file);
-      if (valid) {
-        installedFiles++;
-        installedBytes += file.size;
+    try {
+      final directory = await setDirectory(set);
+      if (directory.existsSync()) {
+        for (final file in set.files) {
+          final local = File(p.join(directory.path, file.name));
+          final valid = await _isValidFile(local, file);
+          if (valid) {
+            installedFiles++;
+            installedBytes += file.size;
+          } else {
+            missing.add(file.name);
+          }
+        }
       } else {
-        missing.add(file.name);
+        missing.addAll(set.files.map((file) => file.name));
       }
+    } on FileSystemException catch (error) {
+      return OcrModelStatus(
+        setId: set.id,
+        installedFiles: 0,
+        fileCount: set.files.length,
+        installedBytes: 0,
+        totalBytes: set.totalSize,
+        missingFiles: set.files.map((file) => file.name).toList(),
+        directoryPath: path,
+        directoryAvailable: false,
+        directoryError: error.message,
+      );
     }
     return OcrModelStatus(
       setId: set.id,
@@ -168,7 +374,22 @@ class OcrModelManager {
       installedBytes: installedBytes,
       totalBytes: set.totalSize,
       missingFiles: missing,
+      directoryPath: path,
     );
+  }
+
+  Future<String> paddleFingerprint(OcrModelManifest manifest) async {
+    final paths = await paddlePaths(manifest);
+    final parts = <String>[];
+    for (final path in [paths.det, paths.rec, paths.keys]) {
+      try {
+        final stat = await File(path).stat();
+        parts.add('$path:${stat.size}:${stat.modified.millisecondsSinceEpoch}');
+      } catch (_) {
+        parts.add('$path:unknown');
+      }
+    }
+    return parts.join('|');
   }
 
   Future<PaddleModelPaths> paddlePaths(OcrModelManifest manifest) async {
@@ -203,7 +424,7 @@ class OcrModelManager {
     void Function(OcrModelDownloadProgress progress)? onProgress,
     CancelToken? cancelToken,
   }) async {
-    final directory = await setDirectory(set);
+    final directory = await setDirectory(set, create: true);
     var completedBytes = 0;
     for (var index = 0; index < set.files.length; index++) {
       final file = set.files[index];
@@ -360,7 +581,33 @@ class OcrModelManager {
       ),
       cancelToken: cancelToken,
     );
-    if (response.statusCode == 416 && existing == file.size) return;
+    if (response.statusCode == 416) {
+      // The server no longer considers the partial file a valid range (for
+      // example the upstream file changed). Never append the error body.
+      if (part.existsSync()) await part.delete();
+      throw const OcrModelException(
+        'DOWNLOAD_INCOMPLETE',
+        '续传位置失效，正在从其他镜像重新下载',
+      );
+    }
+    if (response.statusCode == 206) {
+      final contentRange = response.headers.value(
+        HttpHeaders.contentRangeHeader,
+      );
+      final match = contentRange == null
+          ? null
+          : RegExp(r'bytes\s+(\d+)-').firstMatch(contentRange);
+      final responseStart = match == null
+          ? null
+          : int.tryParse(match.group(1)!);
+      if (responseStart != null && responseStart != existing) {
+        if (part.existsSync()) await part.delete();
+        throw const OcrModelException(
+          'DOWNLOAD_INCOMPLETE',
+          '续传响应与本地进度不一致，已重新开始下载',
+        );
+      }
+    }
     final body = response.data;
     if (body == null) {
       throw const OcrModelException('DOWNLOAD_FAILED', '下载响应为空');
@@ -430,44 +677,121 @@ class OcrModelManager {
   }
 
   Future<void> importSet(OcrModelSet set, List<PlatformFile> selected) async {
-    final directory = await setDirectory(set);
-    final byName = {
-      for (final file in selected)
-        if (file.path != null) file.name: file,
-    };
-    final missing = <String>[];
-    for (final expected in set.files) {
-      final sourcePath = byName[expected.name]?.path;
-      if (sourcePath == null) {
-        missing.add(expected.name);
-        continue;
-      }
-      final source = File(sourcePath);
-      if (!source.existsSync() || await source.length() != expected.size) {
-        throw OcrModelException(
-          'IMPORT_INVALID',
-          '${expected.name} 大小不匹配，可能选择了错误的文件',
-        );
-      }
-      final target = File(p.join(directory.path, expected.name));
-      if (target.path != source.path) {
-        if (target.existsSync()) await target.delete();
-        await source.copy(target.path);
-      }
-      if (!await _isValidFile(target, expected)) {
-        if (target.existsSync()) await target.delete();
-        throw OcrModelException(
-          'IMPORT_INVALID',
-          '${expected.name} 校验失败，请确认文件未被修改',
-        );
-      }
+    if (selected.isEmpty) {
+      throw const OcrModelException('IMPORT_INCOMPLETE', '没有选择文件');
     }
-    if (missing.isNotEmpty) {
-      throw OcrModelException(
-        'IMPORT_INCOMPLETE',
-        '仍缺少文件：${missing.join('、')}',
+    final directory = await setDirectory(set, create: true);
+    final missing = <OcrModelFile>[];
+    for (final expected in set.files) {
+      final target = File(p.join(directory.path, expected.name));
+      if (!await _isValidFile(target, expected)) missing.add(expected);
+    }
+    if (missing.isEmpty) return;
+
+    // Upstream Paddle downloads are named inference.onnx/inference.yml for
+    // both roles. Match exact manifest names first, then disambiguate by the
+    // pinned file size and extension. Det and rec have different sizes.
+    final candidates = <_ImportCandidate>[];
+    for (final file in selected) {
+      final path = file.path;
+      if (path == null) continue;
+      final source = File(path);
+      if (!source.existsSync()) continue;
+      final length = await file.length() ?? await source.length();
+      if (length <= 0) continue;
+      candidates.add(
+        _ImportCandidate(name: file.name, path: path, length: length),
       );
     }
+    final used = <String>{};
+    final assignments = <OcrModelFile, _ImportCandidate>{};
+    for (final expected in missing) {
+      _ImportCandidate? match;
+      for (final candidate in candidates) {
+        if (used.contains(candidate.path)) continue;
+        if (candidate.name.toLowerCase() == expected.name.toLowerCase()) {
+          match = candidate;
+          break;
+        }
+      }
+      if (match == null) {
+        for (final candidate in candidates) {
+          if (used.contains(candidate.path)) continue;
+          if (candidate.length == expected.size &&
+              _compatibleExtension(candidate.name, expected.name)) {
+            match = candidate;
+            break;
+          }
+        }
+      }
+      if (match == null) continue;
+      assignments[expected] = match;
+      used.add(match.path);
+    }
+    final unresolved = missing
+        .where((file) => !assignments.containsKey(file))
+        .map((file) => file.name)
+        .toList();
+    if (unresolved.isNotEmpty) {
+      throw OcrModelException(
+        'IMPORT_INCOMPLETE',
+        '仍缺少文件：${unresolved.join('、')}。'
+            '请选择 det.onnx（inference.onnx，约 4.8MB）、'
+            'rec.onnx（inference.onnx，约 16.5MB）和 keys.yml（inference.yml）。',
+      );
+    }
+
+    // Validate all copies before replacing any live file, so a bad selection
+    // cannot leave the model directory in a half-imported state.
+    final staged = <OcrModelFile, File>{};
+    try {
+      for (final entry in assignments.entries) {
+        final expected = entry.key;
+        final candidate = entry.value;
+        final target = File(p.join(directory.path, expected.name));
+        final temp = File('${target.path}.importing');
+        if (temp.existsSync()) await temp.delete();
+        if (candidate.path == target.path) {
+          // Should be unreachable because the target was invalid, but keep a
+          // safe copy path for an exotic picker result.
+          final backup = File('${target.path}.import-source');
+          if (backup.existsSync()) await backup.delete();
+          await target.rename(backup.path);
+          await backup.rename(temp.path);
+        } else {
+          await File(candidate.path).copy(temp.path);
+        }
+        if (!await _isValidFile(temp, expected)) {
+          throw OcrModelException(
+            'IMPORT_INVALID',
+            '${candidate.name} 校验失败，可能不是 ${expected.name}',
+          );
+        }
+        staged[expected] = temp;
+      }
+      for (final entry in staged.entries) {
+        final target = File(p.join(directory.path, entry.key.name));
+        if (target.existsSync()) await target.delete();
+        await entry.value.rename(target.path);
+      }
+      staged.clear();
+    } finally {
+      for (final temp in staged.values) {
+        if (temp.existsSync()) await temp.delete();
+      }
+    }
+  }
+
+  bool _compatibleExtension(String candidate, String expected) {
+    final candidateExtension = p.extension(candidate).toLowerCase();
+    final expectedExtension = p.extension(expected).toLowerCase();
+    if (expectedExtension == '.onnx') return candidateExtension == '.onnx';
+    if (expectedExtension == '.yml' || expectedExtension == '.yaml') {
+      return candidateExtension == '.yml' ||
+          candidateExtension == '.yaml' ||
+          candidateExtension == '.txt';
+    }
+    return candidateExtension == expectedExtension;
   }
 
   Future<void> deleteSet(OcrModelSet set) async {
@@ -510,4 +834,16 @@ class OcrModelManager {
       ),
     );
   }
+}
+
+class _ImportCandidate {
+  const _ImportCandidate({
+    required this.name,
+    required this.path,
+    required this.length,
+  });
+
+  final String name;
+  final String path;
+  final int length;
 }

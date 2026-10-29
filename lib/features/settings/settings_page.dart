@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../core/utils/format_bytes.dart';
 import '../../services/mecab/unidic_validator.dart';
 import '../../services/storage/permission_service.dart';
 import '../../services/storage/settings_store.dart';
@@ -264,7 +265,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           enableSuggestions: false,
           decoration: const InputDecoration(
             labelText: 'UniDic 目录',
-            hintText: '/sdcard/Download/unidic-cwj-202512',
+            hintText: '请选择 UniDic 词典文件夹',
             border: OutlineInputBorder(),
             prefixIcon: Icon(Icons.folder_open_outlined),
           ),
@@ -479,7 +480,7 @@ class _ValidationCard extends StatelessWidget {
                   Chip(
                     visualDensity: VisualDensity.compact,
                     label: Text(
-                      '${entry.key} ${_formatBytes(entry.value)}',
+                      '${entry.key} ${formatBytes(entry.value)}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         fontSize: AppTypography.helper,
                       ),
@@ -518,17 +519,5 @@ class _ValidationCard extends StatelessWidget {
       RegExp(r'\B(?=(\d{3})+(?!\d))'),
       (_) => ',',
     );
-  }
-
-  static String _formatBytes(int bytes) {
-    const units = ['B', 'KB', 'MB', 'GB'];
-    var value = bytes.toDouble();
-    var unit = 0;
-    while (value >= 1024 && unit < units.length - 1) {
-      value /= 1024;
-      unit++;
-    }
-    final digits = value >= 100 ? 0 : 1;
-    return '${value.toStringAsFixed(digits)} ${units[unit]}';
   }
 }

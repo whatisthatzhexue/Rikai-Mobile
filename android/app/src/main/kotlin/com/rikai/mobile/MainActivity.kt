@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.StatFs
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -42,6 +43,24 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     else -> result.notImplemented()
+                }
+            }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rikai/storage_space")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "getAvailableBytes") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                val path = call.argument<String>("path")
+                if (path.isNullOrBlank()) {
+                    result.error("INVALID_PATH", "缺少目录路径", null)
+                    return@setMethodCallHandler
+                }
+                try {
+                    result.success(StatFs(path).availableBytes)
+                } catch (error: Exception) {
+                    result.error("STAT_FAILED", error.message ?: "无法读取存储空间", null)
                 }
             }
     }

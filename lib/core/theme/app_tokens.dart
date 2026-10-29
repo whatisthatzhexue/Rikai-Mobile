@@ -39,6 +39,12 @@ abstract final class AppColors {
   static const Color warning = Color(0xFFE37318);
   static const Color success = Color(0xFF2BA471);
 
+  /// Camera preview controls sit on this scrim so they stay readable over
+  /// arbitrary photo content.
+  static const Color cameraScrim = Color(0x99000000);
+  static const Color cameraControl = Colors.white;
+  static const Color cameraBackground = Colors.black;
+
   static const Color transparent = Colors.transparent;
 }
 
@@ -115,6 +121,21 @@ abstract final class AppSizes {
   static const double heroIcon = 48;
   static const double homeActionHeight = 72;
   static const double homeActionIcon = 28;
+  static const double cameraShutter = 72;
+  static const double cameraShutterInner = 58;
+  static const double cameraSideControl = 48;
+  static const double cameraSideControlWidth = 82;
+  static const double captureAction = 52;
+  static const double cameraProgress = 20;
+  static const double corpusThumbnail = 72;
+  static const double cameraShutterRing = 4;
+  static const double capturePhotoHeight = 250;
+  static const double capturePhotoMin = 120;
+  static const double captureResizeHandle = 28;
+  static const double captureResizeBarWidth = 44;
+  static const double captureResizeBarHeight = 4;
+  static const double captureBottomReserve = 64;
+  static const double captureGridBottomReserve = 96;
   static const double pageMaxWidth = 720;
   static const double borderWidth = 1;
 }

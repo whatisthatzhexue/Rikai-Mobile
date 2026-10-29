@@ -1,5 +1,8 @@
 # Phase 3 status
 
+> Capture/photo-set/model/import refinements are tracked in
+> `docs/phase3.5-status.md`; the horizontal OCR core remains this baseline.
+
 Date: 2026-10-28
 Project root: `C:\Projects\Rikai-Mobile`
 Device: `Medium_Phone_API_36.1` (x86_64 emulator, API 36). No arm64 device.

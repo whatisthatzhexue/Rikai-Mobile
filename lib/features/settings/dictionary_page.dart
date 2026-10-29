@@ -4,11 +4,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/models/dict_info.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../services/mdict/mdict_worker.dart';
 import '../../state/providers.dart';
+import 'dictionary_import_page.dart';
 
 class DictionaryPage extends ConsumerStatefulWidget {
   const DictionaryPage({super.key});
@@ -34,6 +36,27 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
         content: Text('已添加 ${info.title}（${_formatCount(info.entryCount)} 条）'),
       ),
     );
+  }
+
+  Future<void> _importFromFolder() async {
+    final summary = await context.push<DictionaryImportSummary>(
+      '/dictionary-import',
+    );
+    if (!mounted || summary == null) return;
+    setState(() {});
+    if (summary.failed == 0 && !summary.cancelled) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final String message;
+    if (summary.failed > 0 && summary.imported > 0) {
+      message = '已导入 ${summary.imported} 本，${summary.failed} 本失败';
+    } else if (summary.failed > 0) {
+      message = '导入失败 ${summary.failed} 本';
+    } else if (summary.imported > 0) {
+      message = '已导入 ${summary.imported} 本（已取消剩余）';
+    } else {
+      message = '已取消导入';
+    }
+    messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _revalidate(DictionaryInfo dictionary) async {
@@ -94,6 +117,11 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
         title: const Text('MDict 词典'),
         actions: [
           IconButton(
+            tooltip: '从文件夹导入',
+            onPressed: _importFromFolder,
+            icon: const Icon(Icons.folder_open_outlined),
+          ),
+          IconButton(
             tooltip: '添加词典',
             onPressed: _addDictionary,
             icon: const Icon(Icons.add),
@@ -101,7 +129,7 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
         ],
       ),
       body: dictionaries.isEmpty
-          ? _DictionaryEmpty(onAdd: _addDictionary)
+          ? _DictionaryEmpty(onAdd: _addDictionary, onImport: _importFromFolder)
           : ListView(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg,
@@ -236,10 +264,10 @@ class _DictionaryCard extends StatelessWidget {
               children: [
                 _MetaTag(
                   label: dictionary.hasResources
-                      ? 'MDD ${dictionary.mddPaths.length}'
-                      : '无 MDD',
+                      ? '资源 ${dictionary.mddPaths.length}'
+                      : '无资源',
                 ),
-                _MetaTag(label: 'CSS ${dictionary.cssPaths.length}'),
+                _MetaTag(label: '样式 ${dictionary.cssPaths.length}'),
                 if (!dictionary.isAvailable)
                   const _MetaTag(label: '路径不可用', isError: true),
               ],
@@ -299,9 +327,10 @@ class _MetaTag extends StatelessWidget {
 }
 
 class _DictionaryEmpty extends StatelessWidget {
-  const _DictionaryEmpty({required this.onAdd});
+  const _DictionaryEmpty({required this.onAdd, required this.onImport});
 
   final VoidCallback onAdd;
+  final VoidCallback onImport;
 
   @override
   Widget build(BuildContext context) {
@@ -328,9 +357,15 @@ class _DictionaryEmpty extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.lg),
             FilledButton.icon(
+              onPressed: onImport,
+              icon: const Icon(Icons.folder_open_outlined, size: AppSizes.icon),
+              label: const Text('从文件夹导入'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            OutlinedButton.icon(
               onPressed: onAdd,
               icon: const Icon(Icons.add, size: AppSizes.icon),
-              label: const Text('添加词典'),
+              label: const Text('手动添加词典'),
             ),
           ],
         ),
@@ -458,7 +493,7 @@ class _AddDictionaryDialogState extends State<_AddDictionaryDialog> {
               onSubmitted: (_) => _busy ? null : _submit(),
               decoration: InputDecoration(
                 labelText: 'MDX 文件路径',
-                hintText: '/sdcard/Download/dict/dict.mdx',
+                hintText: '请选择或填写 .mdx 文件路径',
                 prefixIcon: const Icon(Icons.description_outlined),
                 suffixIcon: IconButton(
                   tooltip: '选择词典文件夹',

@@ -122,6 +122,8 @@ class RikaiOcr {
 
   final MethodChannel _channel;
   final EventChannel _progressChannel;
+  String? _initializedKey;
+  Map<String, Object?>? _readiness;
 
   /// Native pipeline stage events. Subscribe before calling [recognize].
   Stream<OcrProgress> get progress => _progressChannel
@@ -139,7 +141,7 @@ class RikaiOcr {
     String? docOrientationPath,
     String? textLineOrientationPath,
   }) async {
-    final raw = await _invoke('initialize', {
+    final args = <String, dynamic>{
       'detModelPath': detModelPath,
       'recModelPath': recModelPath,
       'keysPath': keysPath,
@@ -148,14 +150,25 @@ class RikaiOcr {
       'mangaVocabPath': ?mangaVocabPath,
       'docOrientationPath': ?docOrientationPath,
       'textLineOrientationPath': ?textLineOrientationPath,
-    });
+    };
+    final key = args.entries
+        .map((entry) => '${entry.key}=${entry.value}')
+        .join('\u0000');
+    final cached = _readiness;
+    if (cached != null && _initializedKey == key) return cached;
+    final raw = await _invoke('initialize', args);
     if (raw is! Map) {
       throw const OcrException(
         'bad_result',
         'Native OCR returned no readiness',
       );
     }
-    return raw.map((key, value) => MapEntry(key.toString(), value));
+    final readiness = raw.map(
+      (key, value) => MapEntry(key.toString(), value),
+    );
+    _initializedKey = key;
+    _readiness = readiness;
+    return readiness;
   }
 
   Future<OcrResult> recognize({
@@ -173,11 +186,16 @@ class RikaiOcr {
   }
 
   Future<void> cancel() async {
-    await _channel.invokeMethod<void>('cancel');
+    await _invoke('cancel');
   }
 
   Future<void> dispose() async {
-    await _channel.invokeMethod<void>('dispose');
+    try {
+      await _invoke('dispose');
+    } finally {
+      _initializedKey = null;
+      _readiness = null;
+    }
   }
 
   Future<dynamic> _invoke(String method, [Map<String, dynamic>? args]) async {

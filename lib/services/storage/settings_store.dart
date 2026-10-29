@@ -11,6 +11,7 @@ class AppSettings {
     this.fontFamily = AppFonts.harmony,
     this.maxEntriesPerDictionary = 0,
     this.ocrMirror = '',
+    this.ocrModelsDirectory = '',
   });
 
   final String unidicPath;
@@ -27,6 +28,10 @@ class AppSettings {
   /// (hf-mirror first, then huggingface.co).
   final String ocrMirror;
 
+  /// User-selected OCR model directory. Empty uses the app's external files
+  /// directory (`<external>/models`).
+  final String ocrModelsDirectory;
+
   AppSettings copyWith({
     String? unidicPath,
     bool? showFurigana,
@@ -34,6 +39,7 @@ class AppSettings {
     String? fontFamily,
     int? maxEntriesPerDictionary,
     String? ocrMirror,
+    String? ocrModelsDirectory,
   }) {
     return AppSettings(
       unidicPath: unidicPath ?? this.unidicPath,
@@ -43,6 +49,7 @@ class AppSettings {
       maxEntriesPerDictionary:
           maxEntriesPerDictionary ?? this.maxEntriesPerDictionary,
       ocrMirror: ocrMirror ?? this.ocrMirror,
+      ocrModelsDirectory: ocrModelsDirectory ?? this.ocrModelsDirectory,
     );
   }
 }
@@ -57,6 +64,7 @@ class SettingsStore {
   static const _fontFamilyKey = 'app_font_family';
   static const _maxEntriesKey = 'mdict_max_entries_per_dictionary';
   static const _ocrMirrorKey = 'ocr_model_mirror';
+  static const _ocrModelsDirectoryKey = 'ocr_models_directory';
 
   final SharedPreferences _preferences;
 
@@ -72,6 +80,7 @@ class SettingsStore {
           : AppFonts.sanitize(storedFont),
       maxEntriesPerDictionary: maxEntries < 0 ? 0 : maxEntries,
       ocrMirror: _preferences.getString(_ocrMirrorKey) ?? '',
+      ocrModelsDirectory: _preferences.getString(_ocrModelsDirectoryKey) ?? '',
     );
   }
 
@@ -82,5 +91,9 @@ class SettingsStore {
     await _preferences.setString(_fontFamilyKey, settings.fontFamily);
     await _preferences.setInt(_maxEntriesKey, settings.maxEntriesPerDictionary);
     await _preferences.setString(_ocrMirrorKey, settings.ocrMirror);
+    await _preferences.setString(
+      _ocrModelsDirectoryKey,
+      settings.ocrModelsDirectory,
+    );
   }
 }

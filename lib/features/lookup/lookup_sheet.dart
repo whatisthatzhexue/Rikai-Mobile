@@ -13,12 +13,17 @@ import 'lookup_result_list.dart';
 
 /// Opens the token lookup sheet from the reader.
 Future<void> showTokenLookupSheet(BuildContext context, Token token) {
+  FocusManager.instance.primaryFocus?.unfocus();
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (context) => LookupSheet(token: token),
-  );
+    builder: (context) =>
+        FocusScope(autofocus: true, child: LookupSheet(token: token)),
+  ).whenComplete(() {
+    // Dismissing via drag or scrim must not restore focus to the editor.
+    FocusManager.instance.primaryFocus?.unfocus();
+  });
 }
 
 class LookupSheet extends ConsumerStatefulWidget {
