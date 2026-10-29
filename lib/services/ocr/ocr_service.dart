@@ -21,8 +21,12 @@ class OcrService {
   RikaiOcr _ocr = RikaiOcr();
   StreamSubscription<OcrProgress>? _progressSubscription;
   String? _fingerprint;
+  Map<String, Object?>? _readiness;
 
   String? get fingerprint => _fingerprint;
+  Map<String, Object?>? get readiness => _readiness;
+  bool get mangaReady => _readiness?['mangaReady'] == true;
+  bool get docOrientationReady => _readiness?['docOrientationReady'] == true;
   Stream<OcrProgress> get progress => _progress.stream;
 
   void _attachProgress() {
@@ -34,8 +38,8 @@ class OcrService {
   }
 
   Future<String> ensureReady(OcrModelManifest manifest) async {
-    final paths = await _manager.paddlePaths(manifest);
-    final nextFingerprint = await _manager.paddleFingerprint(manifest);
+    final paths = await _manager.runtimePaths(manifest);
+    final nextFingerprint = await _manager.fingerprintForPaths(paths);
     if (_fingerprint == nextFingerprint) return nextFingerprint;
 
     // Dispose the previous sessions so a file replaced at the same path is
@@ -43,10 +47,15 @@ class OcrService {
     await _ocr.dispose();
     _ocr = RikaiOcr();
     _attachProgress();
-    await _ocr.initialize(
-      detModelPath: paths.det,
-      recModelPath: paths.rec,
-      keysPath: paths.keys,
+    _readiness = await _ocr.initialize(
+      detModelPath: paths.paddle.det,
+      recModelPath: paths.paddle.rec,
+      keysPath: paths.paddle.keys,
+      mangaEncoderPath: paths.mangaEncoderPath,
+      mangaDecoderPath: paths.mangaDecoderPath,
+      mangaVocabPath: paths.mangaVocabPath,
+      docOrientationPath: paths.docOrientationPath,
+      textLineOrientationPath: paths.textLineOrientationPath,
     );
     _fingerprint = nextFingerprint;
     return nextFingerprint;
@@ -66,5 +75,7 @@ class OcrService {
     _progressSubscription = null;
     await _progress.close();
     await _ocr.dispose();
+    _readiness = null;
+    _fingerprint = null;
   }
 }

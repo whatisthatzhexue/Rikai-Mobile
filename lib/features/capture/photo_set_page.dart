@@ -49,6 +49,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
   Object? _analysisError;
   bool _analysisBusy = false;
   bool _unidicConfigured = false;
+  bool _verticalReady = false;
   double _photoHeight = AppSizes.capturePhotoHeight;
   StreamSubscription<OcrProgress>? _progressSubscription;
 
@@ -129,6 +130,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
             _mecabError = null;
             _analysisError = null;
             _analysisBusy = false;
+            _verticalReady = ocr.mangaReady;
           });
           await _startAnalysis(photo.id, cached.text);
           return;
@@ -159,6 +161,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       final cached = photo.ocrCache[key];
       setState(() {
         _fingerprint = fingerprint;
+        _verticalReady = ocr.mangaReady;
         if (cached != null && !force) {
           _busy = false;
           _stage = '';
@@ -555,7 +558,6 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
                           ButtonSegment(
                             value: OcrMode.vertical,
                             label: Text('竖向'),
-                            enabled: false,
                           ),
                         ],
                         selected: {session.mode},
@@ -572,7 +574,11 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '竖向识别将在后续版本支持。',
+                            _verticalReady
+                                ? '自动模式会根据文字方向选择横向或竖向识别。'
+                                : _busy && _fingerprint == null
+                                ? '正在检查 MangaOCR 模型…'
+                                : '竖向识别需先在「模型设置」下载 MangaOCR 模型。',
                             style: theme.textTheme.bodySmall?.copyWith(
                               fontSize: AppTypography.helper,
                             ),

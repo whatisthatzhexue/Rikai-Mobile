@@ -108,6 +108,33 @@ class PaddleModelPaths {
   final String keys;
 }
 
+/// Local paths for the optional Phase 4 models.
+///
+/// Paddle files are mandatory. MangaOCR/orientation are null when that model
+/// set is not fully installed; horizontal OCR must keep working in that case.
+class OcrRuntimePaths {
+  const OcrRuntimePaths({
+    required this.paddle,
+    this.mangaEncoderPath,
+    this.mangaDecoderPath,
+    this.mangaVocabPath,
+    this.docOrientationPath,
+    this.textLineOrientationPath,
+  });
+
+  final PaddleModelPaths paddle;
+  final String? mangaEncoderPath;
+  final String? mangaDecoderPath;
+  final String? mangaVocabPath;
+  final String? docOrientationPath;
+  final String? textLineOrientationPath;
+
+  bool get hasManga =>
+      mangaEncoderPath != null &&
+      mangaDecoderPath != null &&
+      mangaVocabPath != null;
+}
+
 /// Downloads and verifies user-installed OCR models.
 ///
 /// Model binaries are never bundled with the app. The manifest's file URLs are
@@ -380,16 +407,57 @@ class OcrModelManager {
 
   Future<String> paddleFingerprint(OcrModelManifest manifest) async {
     final paths = await paddlePaths(manifest);
-    final parts = <String>[];
-    for (final path in [paths.det, paths.rec, paths.keys]) {
-      try {
-        final stat = await File(path).stat();
-        parts.add('$path:${stat.size}:${stat.modified.millisecondsSinceEpoch}');
-      } catch (_) {
-        parts.add('$path:unknown');
-      }
+    return _fingerprintPaths([paths.det, paths.rec, paths.keys]);
+  }
+
+  /// Fingerprint of every model that the native OCR session will load.
+  ///
+  /// The absent optional sets are represented explicitly, so installing or
+  /// deleting MangaOCR/orientation invalidates the photo-set OCR cache.
+  Future<String> runtimeFingerprint(OcrModelManifest manifest) async {
+    return fingerprintForPaths(await runtimePaths(manifest));
+  }
+
+  Future<String> fingerprintForPaths(OcrRuntimePaths paths) async {
+    final files = <String>[
+      paths.paddle.det,
+      paths.paddle.rec,
+      paths.paddle.keys,
+    ];
+    if (paths.mangaEncoderPath != null) {
+      files.addAll([
+        paths.mangaEncoderPath!,
+        paths.mangaDecoderPath!,
+        paths.mangaVocabPath!,
+      ]);
     }
-    return parts.join('|');
+    if (paths.docOrientationPath != null) {
+      files.addAll([paths.docOrientationPath!, paths.textLineOrientationPath!]);
+    }
+    return 'manga=${paths.hasManga ? 'on' : 'off'}|'
+        'orientation=${paths.docOrientationPath != null ? 'on' : 'off'}|'
+        '${await _fingerprintPaths(files)}';
+  }
+
+  Future<OcrRuntimePaths> runtimePaths(OcrModelManifest manifest) async {
+    final paddle = await paddlePaths(manifest);
+    final manga = await _optionalSetPaths(manifest, 'manga_ocr', const [
+      'encoder_model.onnx',
+      'decoder_model.onnx',
+      'vocab.txt',
+    ]);
+    final orientation = await _optionalSetPaths(manifest, 'orientation', const [
+      'doc_ori.onnx',
+      'textline_ori.onnx',
+    ]);
+    return OcrRuntimePaths(
+      paddle: paddle,
+      mangaEncoderPath: manga?['encoder_model.onnx'],
+      mangaDecoderPath: manga?['decoder_model.onnx'],
+      mangaVocabPath: manga?['vocab.txt'],
+      docOrientationPath: orientation?['doc_ori.onnx'],
+      textLineOrientationPath: orientation?['textline_ori.onnx'],
+    );
   }
 
   Future<PaddleModelPaths> paddlePaths(OcrModelManifest manifest) async {
@@ -416,6 +484,48 @@ class OcrModelManager {
       throw const OcrModelException('MODEL_MISSING', 'PaddleOCR 模型文件不完整');
     }
     return PaddleModelPaths(det: det, rec: rec, keys: keys);
+  }
+
+  Future<Map<String, String>?> _optionalSetPaths(
+    OcrModelManifest manifest,
+    String setId,
+    List<String> requiredNames,
+  ) async {
+    final set = manifest.sets[setId];
+    if (set == null) return null;
+    try {
+      final directory = await setDirectory(set);
+      final paths = <String, String>{};
+      for (final name in requiredNames) {
+        OcrModelFile? matched;
+        for (final file in set.files) {
+          if (file.name == name) {
+            matched = file;
+            break;
+          }
+        }
+        if (matched == null) return null;
+        final local = File(p.join(directory.path, matched.name));
+        if (!await _isValidFile(local, matched)) return null;
+        paths[name] = local.path;
+      }
+      return paths;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<String> _fingerprintPaths(List<String> paths) async {
+    final parts = <String>[];
+    for (final path in paths) {
+      try {
+        final stat = await File(path).stat();
+        parts.add('$path:${stat.size}:${stat.modified.millisecondsSinceEpoch}');
+      } catch (_) {
+        parts.add('$path:unknown');
+      }
+    }
+    return parts.join('|');
   }
 
   Future<void> downloadSet(

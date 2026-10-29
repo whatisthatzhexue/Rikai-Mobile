@@ -103,6 +103,86 @@ void main() {
     ],
   );
 
+  OcrModelManifest phaseFourManifest() {
+    final digest = sha256.convert(payload).toString();
+    OcrModelFile file(String name) => OcrModelFile(
+      name: name,
+      urls: const ['https://example.invalid/model'],
+      size: payload.length,
+      sha256: digest,
+    );
+    return OcrModelManifest(
+      version: 1,
+      defaultMirrors: const [],
+      sets: {
+        'paddle_v5': OcrModelSet(
+          id: 'paddle_v5',
+          displayName: 'PaddleOCR',
+          license: 'Apache-2.0',
+          files: [file('det.onnx'), file('rec.onnx'), file('keys.yml')],
+        ),
+        'manga_ocr': OcrModelSet(
+          id: 'manga_ocr',
+          displayName: 'MangaOCR',
+          license: 'UNKNOWN',
+          files: [
+            file('encoder_model.onnx'),
+            file('decoder_model.onnx'),
+            file('vocab.txt'),
+          ],
+        ),
+        'orientation': OcrModelSet(
+          id: 'orientation',
+          displayName: 'Orientation',
+          license: 'Apache-2.0',
+          files: [file('doc_ori.onnx'), file('textline_ori.onnx')],
+        ),
+      },
+    );
+  }
+
+  Future<void> writeModel(String setId, String name) async {
+    final directory = Directory('${root.path}/models/$setId');
+    await directory.create(recursive: true);
+    await File('${directory.path}/$name').writeAsBytes(payload, flush: true);
+  }
+
+  test(
+    'optional MangaOCR and orientation invalidate the runtime cache',
+    () async {
+      final manifest = phaseFourManifest();
+      for (final name in ['det.onnx', 'rec.onnx', 'keys.yml']) {
+        await writeModel('paddle_v5', name);
+      }
+      final manager = OcrModelManager(rootDirectory: () async => root);
+      final before = await manager.runtimeFingerprint(manifest);
+      final withoutManga = await manager.runtimePaths(manifest);
+      expect(withoutManga.hasManga, isFalse);
+      expect(withoutManga.docOrientationPath, isNull);
+      expect(before, contains('manga=off'));
+      expect(before, contains('orientation=off'));
+
+      for (final name in [
+        'encoder_model.onnx',
+        'decoder_model.onnx',
+        'vocab.txt',
+      ]) {
+        await writeModel('manga_ocr', name);
+      }
+      for (final name in ['doc_ori.onnx', 'textline_ori.onnx']) {
+        await writeModel('orientation', name);
+      }
+      final after = await manager.runtimeFingerprint(manifest);
+      final withManga = await manager.runtimePaths(manifest);
+      expect(withManga.hasManga, isTrue);
+      expect(withManga.mangaEncoderPath, isNotNull);
+      expect(withManga.docOrientationPath, isNotNull);
+      expect(after, contains('manga=on'));
+      expect(after, contains('orientation=on'));
+      expect(after, isNot(before));
+    },
+  );
+
   test('downloads, verifies and installs a model file', () async {
     final set = setUpSet(
       'http://${server.address.address}:${server.port}/det.onnx',

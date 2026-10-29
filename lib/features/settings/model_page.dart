@@ -115,6 +115,30 @@ class _ModelPageState extends ConsumerState<ModelPage> {
 
   Future<void> _download(OcrModelSet set) async {
     if (_busySetId != null || !_persistMirror()) return;
+    if (set.requiresAcceptance) {
+      final accepted = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('下载前确认'),
+          content: Text(
+            '${set.displayName} 的许可未在上游明确声明。'
+            '应用只从上游下载模型到本机，不随应用分发、不上传图片或文本。'
+            '是否继续下载？',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('继续下载'),
+            ),
+          ],
+        ),
+      );
+      if (accepted != true || !mounted) return;
+    }
     final cancel = CancelToken();
     setState(() {
       _busySetId = set.id;
@@ -513,7 +537,6 @@ class _ModelPageState extends ConsumerState<ModelPage> {
   Widget _buildSetSection(ThemeData theme, OcrModelSet set) {
     final status = _statuses[set.id];
     final busy = _busySetId != null;
-    final phaseFour = set.id == 'manga_ocr';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -555,11 +578,10 @@ class _ModelPageState extends ConsumerState<ModelPage> {
                 : '未安装：缺少 ${status.missingFiles.length} 个文件',
             style: theme.textTheme.bodyMedium,
           ),
-        if (phaseFour) ...[
+        if (set.id == 'manga_ocr') ...[
           const SizedBox(height: AppSpacing.xs),
           Text(
-            '竖排识别将在 Phase 4 接入；当前阶段只需 PaddleOCR 横向模型。'
-            '可提前本地导入，但尚不可用于识别。',
+            '安装后可在照片集中选择「竖向」；自动模式也会按检测到的文字方向路由。',
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: AppTypography.helper,
               height: 1.5,
@@ -571,7 +593,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
           children: [
-            if (!phaseFour && (status?.isInstalled != true))
+            if (status?.isInstalled != true)
               OutlinedButton.icon(
                 onPressed: busy ? null : () => _download(set),
                 icon: const Icon(Icons.download_outlined),

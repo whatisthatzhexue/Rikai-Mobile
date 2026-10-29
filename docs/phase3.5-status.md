@@ -4,6 +4,9 @@ Date: 2026-10-29
 Base: Phase 3 (`docs/phase3-status.md`)
 Scope: `docs/phase3-review.md`, `docs/capture-redesign-requirements.md`
 
+> Historical Phase 3.5 record. Vertical MangaOCR, automatic orientation and the
+> enabled 竖向 mode are implemented in Phase 4; see `docs/phase4-status.md`.
+
 ## Confirmed assumptions
 
 - One `.mdx` = one dictionary; same-directory `.mdd`/`.css` auto-associated.
@@ -14,8 +17,8 @@ Scope: `docs/phase3-review.md`, `docs/capture-redesign-requirements.md`
   expose a deletable original, only the session copy is removed with a notice.
 - Changing the model directory defaults to migrating existing models; “switch
   only” remains available.
-- Vertical recognition and full corpus/history management stay phase-gated;
-  the vertical option is disabled with a note.
+- Vertical recognition was phase-gated in Phase 3.5; it is implemented in
+  Phase 4. Full corpus/history management remains phase-gated.
 
 ## Review fixes
 
@@ -72,8 +75,8 @@ Scope: `docs/phase3-review.md`, `docs/capture-redesign-requirements.md`
   or a lower ReaderPage.
 - Empty model manifests are rejected and `isInstalled` requires a non-empty set.
 
-P1 (vertical ordering) remains a Phase 4 requirement; current vertical mode is
-disabled in the UI.
+P1 (vertical ordering) is delivered in Phase 4 (`MangaOcrRecognizer`); the UI
+vertical mode is enabled when MangaOCR is installed.
 
 ## Feature work
 
@@ -211,7 +214,8 @@ download is still pending a network-capable device.
   copy, not a MediaStore delete handle; the UI falls back to session removal.
 - Corpus saves photo + OCR text + blocks + mode/time and re-tokenizes on detail
   open; full history management remains Phase 5.
-- Vertical OCR and orientation routing remain Phase 4.
+- Vertical OCR and orientation routing were completed in Phase 4; see
+  `docs/phase4-status.md`.
 - Batch corpus save was verified on the emulator for a single selected photo;
   a multi-photo/large-set pass remains desirable.
 - The corpus detail photo/token sections are read-only apart from delete and

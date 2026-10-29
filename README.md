@@ -7,7 +7,7 @@ dictionaries — all in one app, without network access.
 
 ## Status
 
-Phases 1–3 are working end to end on the Android emulator with a real
+Phases 1–4 are working end to end on the Android emulator with a real
 UniDic and MDict dictionary:
 
 - In-place MeCab/UniDic tokenization in a long-lived worker isolate, private
@@ -44,10 +44,17 @@ UniDic and MDict dictionary:
   unsupported dictionaries, and imports selected entries with progress, then
   returns directly to dictionary management
 - Reader lookup keeps the keyboard closed before/after the token sheet
-- OCR text flows into the same reader and MDict lookup UI; vertical MangaOCR
-  is Phase 4
+- Phase 4 vertical MangaOCR: one shared DBNet pass, bubble clustering/crop
+  planning, RTL reading order, and a Chinese prompt when the model is missing
+- Automatic mode routes horizontal/vertical from box geometry and optional
+  PP-LCNet document/text-line orientation; upside-down horizontal pages get
+  one 180° re-run when the orientation set is installed
+- MangaOCR and orientation models can be downloaded or locally imported from
+  the existing model page; the unknown MangaOCR license is confirmed first
+- OCR text flows into the same reader and MDict lookup UI
 
-Next: Phase 4 (vertical MangaOCR and automatic orientation). See
+Next: Phase 5 (full corpus/history management, onboarding, release polish). See
+[docs/phase4-status.md](docs/phase4-status.md),
 [docs/phase3-status.md](docs/phase3-status.md),
 [docs/phase2-status.md](docs/phase2-status.md),
 [docs/phase1-status.md](docs/phase1-status.md) and
@@ -86,6 +93,7 @@ UI work must follow [docs/design-tokens.md](docs/design-tokens.md).
 - [Phase 2 status](docs/phase2-status.md)
 - [Phase 3 status](docs/phase3-status.md)
 - [Phase 3.5 capture/import status](docs/phase3.5-status.md)
+- [Phase 4 vertical OCR status](docs/phase4-status.md)
 - [Development setup](docs/dev-setup.md)
 - [Models](docs/models.md)
 - [Architecture decisions](docs/adr/)

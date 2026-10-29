@@ -5,10 +5,11 @@ truth for URLs, sizes, SHA-256 hashes, licenses, and mirror order. The app
 downloads to `getExternalFilesDir()/models/` by default; the model page can
 switch to a user-selected directory (migrating existing models by default).
 
-Phase 3 uses only `paddle_v5` (det + rec + keys). MangaOCR and orientation
-models are listed for Phase 4; they are not routed to the native pipeline yet.
-The native plugin receives local paths from the Dart `OcrModelManager` and
-never downloads anything itself.
+Phase 3 uses `paddle_v5` (det + rec + keys). Phase 4 adds the optional
+`manga_ocr` vertical recognizer and the optional `orientation` doc/text-line
+models; all local paths are resolved by the Dart `OcrModelManager`. A missing
+optional set keeps horizontal OCR working. The native plugin never downloads
+anything itself.
 
 | Set | Files | Approx. size | License | Source |
 |---|---|---:|---|---|
@@ -39,9 +40,10 @@ confidence 1.000. See `docs/phase3-status.md`.
 
 ## MangaOCR license
 
-All seven MangaOCR file hashes are pinned in the manifest (2026-10-29) even
-though the runtime pipeline is Phase 4. The model card still has no declared
-license; hashes do not change the redistribution policy.
+All seven MangaOCR file hashes are pinned in the manifest (2026-10-29). Phase 4
+routes the encoder/decoder/vocab into the native vertical pipeline. The model
+card still has no declared license; hashes do not change the redistribution
+policy.
 
 The upstream `kha-white/manga-ocr-base` project is Apache-2.0, but the
 `l0wgear/manga-ocr-2025-onnx` model card does not declare a license. Rikai-Mobile

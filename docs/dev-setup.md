@@ -227,15 +227,21 @@ full `http(s)://host` prefix.
 
 ## OCR integration test
 
-The Phase 3 suite runs the real PaddleOCR det/rec models from public storage and
-needs All Files Access just like the MeCab suite. Push models once:
+The Phase 4 suite runs the real PaddleOCR, MangaOCR and orientation models from
+public storage and needs All Files Access just like the MeCab suite. Push models
+once; `_modelDir` points at the Paddle folder and the test finds the sibling
+`manga_ocr/` and `orientation/` folders:
 
 ```bash
 export MSYS_NO_PATHCONV=1
-adb shell mkdir -p /sdcard/Download/rikai-models/paddle_v5
+adb shell mkdir -p /sdcard/Download/rikai-models/paddle_v5 \
+  /sdcard/Download/rikai-models/manga_ocr \
+  /sdcard/Download/rikai-models/orientation
 adb push build/ocr-models/paddle_v5/det.onnx  /sdcard/Download/rikai-models/paddle_v5/
 adb push build/ocr-models/paddle_v5/rec.onnx  /sdcard/Download/rikai-models/paddle_v5/
 adb push build/ocr-models/paddle_v5/keys.yml  /sdcard/Download/rikai-models/paddle_v5/
+adb push build/ocr-models/manga_ocr/.  /sdcard/Download/rikai-models/manga_ocr/
+adb push build/ocr-models/orientation/. /sdcard/Download/rikai-models/orientation/
 ```
 
 ```bash
@@ -245,10 +251,10 @@ flutter test integration_test/ocr_android_test.dart -d emulator-5554 \
   --dart-define=RIKAI_OCR_MODEL_DIR=/sdcard/Download/rikai-models/paddle_v5
 ```
 
-Use the same app-op grant loop as the MeCab test. The test renders
-`ありがとう` on a PNG, runs the native detector/recognizer, verifies progress
-events, and prints timing/blocks. Results are recorded in
-`docs/phase3-status.md`.
+Use the same app-op grant loop as the MeCab test. The suite (4 cases) renders
+horizontal/vertical/upside-down PNGs, verifies automatic and manual vertical
+routing, the 180° re-run, progress events, cancellation, and prints timing/blocks.
+Results are recorded in `docs/phase4-status.md`.
 
 For manual app runs without a working model download, a debug build can point
 the model manager at a public folder:

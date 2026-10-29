@@ -149,7 +149,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           ListTile(
             leading: const Icon(Icons.document_scanner_outlined),
             title: const Text('管理 OCR 模型'),
-            subtitle: const Text('PaddleOCR 横向识别；模型按需下载，不随包分发'),
+            subtitle: const Text('PaddleOCR 横向 / MangaOCR 竖向；模型按需下载，不随包分发'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/models'),
           ),

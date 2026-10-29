@@ -55,8 +55,9 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
   构建前必须存在，否则 Flutter 报缺失资产。应用图标源 `assets/Rikai_Icon.jpg`
   由 `flutter_launcher_icons` 生成 Android 图标（配置在 `pubspec.yaml`）。
 - 仓库已有多次提交（`d0d94a3`、`dc70cee`、`91dc386`、`deb6484`、
-  `b12d24f`、`95f90e0`）。Phase 3.5、相机/照片集/导入重构与最新 UI 打磨当前仍在工作树中未提交；
-  不要擅自 `reset`/`commit`，除非用户明确要求。
+  `b12d24f`、`95f90e0`、`9e17984`）。Phase 4 的竖向 MangaOCR、自动方向与
+  模型/照片集接入当前仍在工作树中未提交；不要擅自 `reset`/`commit`，除非用户
+  明确要求。
 
 ## 2. 已确认的架构决策（不要随意改）
 
@@ -183,10 +184,11 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
   - `lib/features/capture/*`：实时相机、连续拍摄/相册多选、照片集、
     OCR 缓存、多选批量操作；结果经 `ReaderRouteArgs` 进入阅读器。
   - `lib/features/settings/model_page.dart`：PaddleOCR/MangaOCR/方向模型
-    状态、下载、本地导入、删除、模型目录/迁移；MangaOCR 仍未接入。
+    状态、下载、本地导入、删除、模型目录/迁移（Phase 4 已把 MangaOCR 接入
+    识别流水线）。
   - 主页「拍照识别」已接入 `/capture`；设置新增「OCR 模型」入口。
-  - OCR 结果已验证进入真实 UniDic 分词与点击查词流程；横向阶段不实现纵向
-    方向识别（`vertical` 返回 `UNSUPPORTED_MODE`）。
+  - OCR 结果已验证进入真实 UniDic 分词与点击查词流程；Phase 3 阶段仅横向，
+    纵向在 Phase 4 接入。
 - Phase 3.5（2026-10-29，本次完成，详见 `docs/phase3.5-status.md`）：
   - 修复 `docs/phase3-review.md` 的 H1–H3、M1–M7、L1–L10（P1 留 Phase 4）：
     本地模型导入按角色/大小匹配、取消 exactly-once、全量 SHA-256、会话复用、
@@ -206,12 +208,29 @@ Android 单端、完全离线的 Flutter 日语阅读/查词应用：
   - MDict 扫描/导入不再显示 `Instance of ...` 等调试英文；词典标题也会过滤
     此类字符串。
   - 阅读页查词键盘行为修复；OCR 阅读页使用本地草稿控制器。
+- Phase 4（2026-10-29，本次完成，详见 `docs/phase4-status.md`）：
+  - 新增 `MangaOcrRecognizer.kt`：复用 DBNet quads，按边缘距离聚成漫画气泡，
+    crop planner 每 224×224 最多 6 个文本 band；encoder 一次、FP32 decoder
+    贪心最多 48 token；输出气泡级 block，按“上→下、右→左”排序。
+  - `PaddleOcrEngine` 独立加载可选 MangaOCR/orientation 模型；横向始终可用。
+    `vertical` 缺少 MangaOCR 返回 `MODEL_MISSING`（中文下载提示），`auto`
+    在模型缺失时回退横向。
+  - 自动方向：`TextLayoutHeuristic` 按框几何/堆叠列路由；可选
+    `DocOrientationRecognizer` 提供高置信 90/270 竖向提示；可选
+    `TextLineOrientationRecognizer` 对横向行投票，单行高置信或两行多数
+    180° 时旋转图片并重新检测，修复倒置照片。
+  - Dart：`OcrRuntimePaths`、`runtimePaths`、`fingerprintForPaths` 把可选模型
+    纳入照片集缓存指纹；`OcrService` 透传可选路径并暴露 `mangaReady`。
+  - 模型页允许下载 MangaOCR，下载前确认许可未声明；照片集「竖向」启用，
+    helper 根据 MangaOCR 是否就绪显示自动路由或下载提示。
+  - 设备合成测试：自动竖向 253ms、手动竖向 251ms，均输出
+    `これはテストです`；倒置横向页 180° 重跑后输出 `ありがとう`。
 
 已验证：
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 107 tests passed
+flutter test     -> 108 tests passed
 flutter build apk --debug -> success
 ```
 
@@ -247,29 +266,31 @@ search page opens a dictionary entry with the real MDict
 主机 MDict spike（`tool/spike_mdict.dart`，在隔离 Dart 包中运行）仍然有效：
 463,312 条、`@@@LINK` 重定向、前缀搜索正常。
 
-Phase 3 OCR 设备集成测试（`integration_test/ocr_android_test.dart`，2 项通过；
-合成 `ありがとう` PNG，真实 PaddleOCR 模型）：
+OCR 设备集成测试（`integration_test/ocr_android_test.dart`，Phase 4 后 4/4
+通过；合成横向/纵向/倒置 PNG，真实 PaddleOCR + MangaOCR + orientation 模型）：
 
 ```text
-OCR readiness={engine: paddle_v5, detInput: x, recInput: x, keys: 18383, threads: 4}
-PaddleOCR engine=paddle_v5 elapsed=320ms blocks=1 text="ありがとう"
-block conf=1.000 rect=(25.0,78.0,351.0,164.0) "ありがとう"
+PaddleOCR engine=paddle_v5 elapsed=329ms blocks=1 text="ありがとう"
+MangaOCR auto engine=manga_ocr elapsed=253ms blocks=1 text="これはテストです"
+MangaOCR vertical engine=manga_ocr elapsed=251ms blocks=1 text="これはテストです"
+Upside-down engine=paddle_v5 elapsed=270ms blocks=1 text="ありがとう"
 ```
 
-第二个设备测试在检测阶段取消，断言返回 `CANCELLED` 且不崩溃。
+取消测试在检测阶段触发 `cancel()`，断言返回 `CANCELLED` 且不崩溃。
 
 同时已手工走通：拍照识别 → 相册选择 → 开始识别 → 文本阅读 → 真实 UniDic
 分词 → 点击词条弹层。识别文本为 `ありがとう\n東京で食べた。`。
 
 **尚未完成 / 下一步：**
 
-- Phase 4：纵向 MangaOCR、自动方向（orientation 模型）。
-- 识别历史、语料保存、引导页未实现（Phase 5）。
-- Release APK 尚未构建（不要在没有必要时重复跑长构建）。
+- Phase 5：完整识别历史/语料管理、首次启动引导、设置与发布打磨。
 - 没有 arm64 真机；只有 x86_64 模拟器 `Medium_Phone_API_36.1`。
-  x86_64 仅验证功能，性能/竖排质量需 arm64 真机。
+  x86_64 仅验证功能，性能/真实漫画质量需 arm64 真机。
 - 本机模拟器 DNS 无法解析 hf-mirror/Hugging Face，因此“应用内实网下载模型”
   尚未在设备验证；主机 curl 成功，Dart 本地 HTTP 测试已覆盖 Range 续传/校验。
+- Release APK 尚未构建（不要在没有必要时重复跑长构建）。
+- MangaOCR 使用简化的气泡聚类/crop planner，未移植上游 mask/panel/free-text
+  全流水线；90/270 文档方向目前只作为竖向提示，不旋转整图。
 
 ## 4. 未尽事宜（按优先级）
 
@@ -288,8 +309,8 @@ block conf=1.000 rect=(25.0,78.0,351.0,164.0) "ありがとう"
   合成 `ありがとう` 解码分数 0.9983。
 - Android x86_64：插件 readiness keys=18383，合成图片 OCR 320ms，
   `ありがとう` 置信度 1.000。
-- MangaOCR encoder/decoder 的 ORT 冒烟留给 Phase 4；模型许可未声明，
-  不随包分发。
+- MangaOCR encoder/decoder 已在 Phase 4 完成设备冒烟（合成竖排气泡
+  `これはテストです`，自动 253ms / 手动 251ms）；模型许可未声明，不随包分发。
 
 ### 已完成：Phase 2
 
@@ -304,18 +325,22 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
 - 原生 OCR 代码在 `packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/`；
   已由真实 PP-OCRv5 det/rec 和合成图片设备测试验证。
 - 模型是运行时下载/本地导入，不入库；native 只接收本地路径。
-- 当前 `vertical` 模式显式返回 `UNSUPPORTED_MODE`，不要假装支持；Phase 4
-  接入 MangaOCR 时再改。
+- `vertical` 模式已由 Phase 4 接入；不要把它改回 `UNSUPPORTED_MODE`，也不要在
+  缺少 MangaOCR 时静默走横向（手动竖向必须明确提示下载模型）。
 - 采集页和模型页属于已验收 UI；不要把模型二进制放回 assets 或提交。
 - 已知限制：模拟器 DNS 导致实网下载未验证；无 arm64 真机。
 
-### Phase 4：纵向 MangaOCR + 自动方向
+### 已完成：Phase 4 纵向 MangaOCR + 自动方向
 
-- 抽取 `MangaOcrEngine` 的 encoder/decoder、气泡聚类、crop planner、tiling、
-  碎片合并、振假名噪声过滤；与 PaddleDetector 共用 DBNet。
-- 自动方向：框几何 + 可选 doc/textline orientation；手动覆盖；90/180° 重跑。
-- 纵向 RTL 阅读顺序；FP32 decoder；INT8 draft 为 P2。
-- 目标 <10s/页（中端 arm64），注意内存。
+实现与验收见 §3、§6 和 `docs/phase4-status.md`。当前实现：
+
+- `MangaOcrRecognizer.kt`：复用 DBNet quads、气泡聚类、crop planner、
+  ViT encoder + FP32 greedy decoder、纵向 RTL 排序；
+- 自动模式：框几何 + 可选 doc/textline orientation；手动竖向/横向覆盖；
+  可选 textline 180° 重跑；
+- 模型缺失时横向仍可用；手动竖向给出下载提示；
+- 已知限制：未移植上游 mask/panel/free-text 完整流水线、无 INT8 draft、
+  90/270 文档方向未做整图旋转、无 arm64 真机。
 
 ### Phase 5：语料保存/打磨/发布
 
@@ -693,8 +718,9 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
 56. **误区：每个 OCR 引擎 close 时关闭 `OrtEnvironment`，或把竖排请求静默
     当横排处理。**
     - 正确做法：`OcrRuntime.environment` 应用级单例，不随引擎关闭；
-      Phase 3 的 `vertical` 模式明确返回 `UNSUPPORTED_MODE`，UI 只展示
-      自动/横向，不伪装支持。
+      Phase 4 的 `vertical` 使用独立的 MangaOCR 引擎，手动竖向缺模型时必须
+      返回 `MODEL_MISSING`，不得静默伪装成横向；只有 `auto` 允许在 MangaOCR
+      缺失时回退 Paddle 横向。
 57. **误区：以为 image_picker 需要 Android CAMERA 权限。**
     - 正确做法：它通过系统相机 Intent 取图，Manifest 只需已有
       `<uses-feature camera required=false>`；不要额外申请 CAMERA，
@@ -780,6 +806,23 @@ lookup/`@@@LINK`、EntryRenderer、搜索/词条/词典管理页。已知限制�
     - 正确做法：两者都显示：OCR 原文（`SelectableText`）+ 分词结果
       （`ReaderBlock`，可点词查词）；未配置 UniDic/失败时保留 OCR 原文并给出
       中文说明/重试。翻页/删除后重新分析当前语料，旧分析用 token 丢弃。
+71. **误区：加入 MangaOCR 后仍只按 PaddleOCR 文件计算照片集缓存指纹。**
+    - 正确做法：使用 `OcrRuntimePaths` + `fingerprintForPaths`，指纹包含
+      Paddle、已安装的 MangaOCR（encoder/decoder/vocab）和 orientation 文件；
+      可选模型缺失时写入 `manga=off` / `orientation=off`，安装/删除后必须使
+      照片集缓存失效，否则 auto/vertical 会复用旧横向结果。
+72. **误区：可选 MangaOCR/orientation 加载失败就让整个 OCR 初始化失败。**
+    - 正确做法：Paddle 为必需；MangaOCR/orientation 独立加载，失败只记录
+      `mangaError`/能力状态。横向 OCR 必须继续可用；只有手动 `vertical` 才
+      返回 `MODEL_MISSING`/`MODEL_INVALID`，`auto` 在缺少 Manga 时回退横向。
+73. **误区：用框高宽比单独判断竖向，方形字框组成的单列会误判为横排。**
+    - 正确做法：`TextLayoutHeuristic` 额外识别“x 中心接近、y 连续堆叠”的
+      方形框列（≥3 个、纵向跨度 ≥2.5 倍框高），作为竖向候选；仍由 MangaOCR
+      处理。不要把它误当成横排 logo。
+74. **误区：textline 180° 模型在只有一条文本行时永远不触发。**
+    - 正确做法：两行以上要求 ≥2 个 180° 投票且占比 ≥0.6；只有一条高置信
+      （≥0.99）180° 行时允许单独触发。旋转 180° 后必须重新跑 DBNet，不能只
+      旋转识别用的 crop；坐标仍以旋转后的图像为准。
 
 ## 6. 关键文件
 
@@ -806,7 +849,11 @@ lib/services/storage/history_store.dart                       # 语料 SQLite + 
 lib/features/settings/model_page.dart                         # OCR 模型/目录/迁移
 lib/features/settings/dictionary_import_page.dart             # MDict 文件夹导入
 lib/services/mdict/dictionary_scanner.dart                    # 递归扫描 isolate
-packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/     # PaddleOCR 原生实现
+packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/     # Paddle/MangaOCR 原生实现
+packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/MangaOcrRecognizer.kt
+packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/TextLayoutHeuristic.kt
+packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/DocOrientationRecognizer.kt
+packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/TextLineOrientationRecognizer.kt
 lib/core/utils/kana.dart                                      # 假名转换
 lib/core/utils/text_normalizer.dart                           # NFKC/假名/stripkey 候选
 lib/services/mecab/unidic_validator.dart                      # UniDic 目录/头部校验
@@ -829,7 +876,7 @@ packages/mecab_for_dart/                                      # vendored MeCab�
 packages/rikai_ocr/                                           # OCR 插件 + ORT 原生实现
 assets/models/manifest.json                                   # 模型清单（不含模型本体）
 build/ocr-models/                                             # 本地模型测试下载（已忽略）
-integration_test/ocr_android_test.dart                        # 合成图片 OCR 设备测试
+integration_test/ocr_android_test.dart                        # 横向/竖向/180° OCR 设备测试
 android/app/src/main/kotlin/com/rikai/mobile/MainActivity.kt  # 权限 MethodChannel 原生侧
 android/app/src/main/AndroidManifest.xml                      # 文件权限
 android/app/build.gradle.kts                                  # minSdk 26 / NDK 28
@@ -838,7 +885,7 @@ docs/design-tokens.md                                         # UI 强制规范
 assets/fonts/README.md                                        # 字体下载说明（字体不入库）
 docs/phase0-status.md, docs/phase1-status.md,
 docs/phase2-status.md, docs/phase3-status.md,
-docs/phase3.5-status.md                                     # 阶段验证结果
+docs/phase3.5-status.md, docs/phase4-status.md               # 阶段验证结果
 docs/dev-setup.md                                             # 构建/数据/缓存/集成测试
 docs/adr/                                                     # 三个架构决策
 tool/spike_mdict.dart                                         # MDict 主机 spike
@@ -892,8 +939,9 @@ flutter test integration_test/mdict_android_test.dart -d emulator-5554 \
 ```
 
   同样需要 appops 授权循环；MDX/MDD 必须同 basename 才会自动发现。
-- 设备端 OCR 测试（真实 PaddleOCR 模型放在
-  `/sdcard/Download/rikai-models/paddle_v5/{det.onnx,rec.onnx,keys.yml}`）：
+- 设备端 OCR 测试（真实模型按 `paddle_v5/`、`manga_ocr/`、`orientation/`
+  放在 `/sdcard/Download/rikai-models/` 下；测试脚本会自动寻找
+  `paddle_v5` 的父目录中的可选模型）：
 
 ```bash
 export MSYS_NO_PATHCONV=1
@@ -901,9 +949,10 @@ flutter test integration_test/ocr_android_test.dart -d emulator-5554 \
   --dart-define=RIKAI_OCR_MODEL_DIR=/sdcard/Download/rikai-models/paddle_v5
 ```
 
-  同样需要 appops 授权循环。应用内模型默认目录是
-  `getExternalFilesDir()/models/paddle_v5/`；模型不入库，下载/导入见
-  `docs/phase3-status.md`。开发验证可用
+  同样需要 appops 授权循环。当前套件 4 项：横向、MangaOCR（自动+手动）、
+  倒置横向 180° 重跑、取消。应用内模型默认目录是
+  `getExternalFilesDir()/models/`；模型不入库，下载/导入见
+  `docs/phase4-status.md`。开发验证可用
   `--dart-define=RIKAI_OCR_MODELS_DIR=/sdcard/Download/rikai-models`。
 - 字体：构建前按 `assets/fonts/README.md` 下载 HarmonyOS Sans SC 到
   `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`（不入库）。
@@ -939,14 +988,18 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
 
 ## 8. 建议的下一个动作
 
-1. 运行 `git status`；Phase 3.5 与 UI/采集改动尚未提交，不要覆盖或擅自 commit。
+1. 运行 `git status`；Phase 4 改动尚未提交，不要覆盖或擅自 commit。
 2. 进行实网模型下载验证（本机模拟器 DNS 不可用）：在可访问 hf-mirror 的
-   设备上验证下载、断点续传、镜像回退、本地导入；确认模型目录与删除流程。
-3. 进行相机/照片集/多选/语料的 arm64 真机回归；若继续功能开发，进入
-   Phase 4：MangaOCR encoder/decoder、竖排 RTL、气泡/裁剪规划、自动方向。
-   不要修改已验收的 Phase 3 Paddle 横向路径；把纵向作为独立 recognizer
-   接入同一检测器。
-4. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
+   设备上验证 PaddleOCR/MangaOCR/orientation 下载、断点续传、镜像回退、
+   本地导入与许可确认；确认模型目录与删除流程。
+3. 进行相机/照片集/多选/语料的 arm64 真机回归，重点验证 MangaOCR 竖排质量、
+   连续多气泡页性能/内存，以及真实的 180°/90° 旋转照片；本机仅 x86_64。
+4. 若继续功能开发，进入 Phase 5：完整识别历史/语料管理、首次启动引导、
+   设置/错误态/许可证页与 release 打磨。不要重写已验证的 Paddle 横向路径或
+   MangaOCR 基础流水线；新增优化（mask/panel、INT8 draft、90° 整图旋转）
+   应作为独立增强。
+5. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
    颜色/字号，字体与模型文件不入库；**所有页面**统一深蓝顶栏和右滑覆盖转场。
-5. 每个阶段结束运行 analyze/test/debug build（当前 107 tests / 12 项设备测试），
-   并记录到新的阶段状态文档；设备端测试按 §7 的命令运行。
+6. 每个阶段结束运行 analyze/test/debug build（当前 108 unit tests / OCR 设备
+   4 项；另有 MeCab 4、MDict 6），并记录到新的阶段状态文档；设备端测试按 §7
+   的命令运行。

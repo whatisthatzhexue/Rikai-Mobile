@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -13,7 +14,11 @@ const String _modelDir = String.fromEnvironment(
   defaultValue: '/sdcard/Download/rikai-models/paddle_v5',
 );
 
-Future<File> _renderSyntheticImage() async {
+Future<Directory> _installedModelsDirectory() async {
+  return Directory(_modelDir).parent;
+}
+
+Future<File> _renderSyntheticImage({bool upsideDown = false}) async {
   const width = 800;
   const height = 240;
   final recorder = ui.PictureRecorder();
@@ -22,6 +27,10 @@ Future<File> _renderSyntheticImage() async {
     Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
     Paint()..color = Colors.white,
   );
+  if (upsideDown) {
+    canvas.translate(width.toDouble(), height.toDouble());
+    canvas.rotate(math.pi);
+  }
   final painter = TextPainter(
     text: const TextSpan(
       text: 'ありがとう',
@@ -39,9 +48,73 @@ Future<File> _renderSyntheticImage() async {
   final image = await picture.toImage(width, height);
   final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
   final directory = await getTemporaryDirectory();
-  final file = File('${directory.path}/rikai-ocr-smoke.png');
+  final file = File(
+    '${directory.path}/rikai-ocr-smoke${upsideDown ? '-180' : ''}.png',
+  );
   await file.writeAsBytes(bytes!.buffer.asUint8List(), flush: true);
   return file;
+}
+
+/// A single vertical Japanese column, similar to a manga speech bubble crop.
+Future<File> _renderSyntheticVerticalImage() async {
+  const width = 180;
+  const height = 620;
+  const chars = ['こ', 'れ', 'は', 'テ', 'ス', 'ト', 'で', 'す'];
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  canvas.drawRect(
+    Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+    Paint()..color = Colors.white,
+  );
+  for (var index = 0; index < chars.length; index++) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: chars[index],
+        style: const TextStyle(
+          color: Colors.black,
+          fontSize: 56,
+          fontFamily: 'sans-serif',
+          fontFamilyFallback: ['Noto Sans CJK JP', 'Noto Sans JP'],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    painter.paint(
+      canvas,
+      Offset((width - painter.width) / 2, 24 + index * 70.0),
+    );
+  }
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(width, height);
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  final directory = await getTemporaryDirectory();
+  final file = File('${directory.path}/rikai-ocr-vertical.png');
+  await file.writeAsBytes(bytes!.buffer.asUint8List(), flush: true);
+  return file;
+}
+
+Future<Map<String, Object?>> _initializeMangaAwareOcr(RikaiOcr ocr) async {
+  final models = await _installedModelsDirectory();
+  final paddle = Directory('${models.path}/paddle_v5');
+  final manga = Directory('${models.path}/manga_ocr');
+  final orientation = Directory('${models.path}/orientation');
+  File? optional(String path) {
+    final file = File(path);
+    return file.existsSync() ? file : null;
+  }
+
+  return ocr.initialize(
+    detModelPath: File('${paddle.path}/det.onnx').path,
+    recModelPath: File('${paddle.path}/rec.onnx').path,
+    keysPath: File('${paddle.path}/keys.yml').path,
+    mangaEncoderPath: optional('${manga.path}/encoder_model.onnx')?.path,
+    mangaDecoderPath: optional('${manga.path}/decoder_model.onnx')?.path,
+    mangaVocabPath: optional('${manga.path}/vocab.txt')?.path,
+    docOrientationPath: optional('${orientation.path}/doc_ori.onnx')?.path,
+    textLineOrientationPath: optional(
+      '${orientation.path}/textline_ori.onnx',
+    )?.path,
+  );
 }
 
 void main() {
@@ -112,6 +185,101 @@ void main() {
       expect(events.any((event) => event.stage == 'done'), isTrue);
     } finally {
       await subscription.cancel();
+      await ocr.dispose();
+      if (image.existsSync()) await image.delete();
+    }
+  });
+
+  testWidgets('MangaOCR recognizes a synthetic vertical bubble on Android', (
+    tester,
+  ) async {
+    final models = await _installedModelsDirectory();
+    final manga = Directory('${models.path}/manga_ocr');
+    for (final name in [
+      'encoder_model.onnx',
+      'decoder_model.onnx',
+      'vocab.txt',
+    ]) {
+      if (!File('${manga.path}/$name').existsSync()) {
+        fail(
+          'MangaOCR models are missing. Push them to ${manga.path}/ with:\n'
+          'adb push build/ocr-models/manga_ocr/. ${manga.path}/',
+        );
+      }
+    }
+
+    final image = await _renderSyntheticVerticalImage();
+    final ocr = RikaiOcr();
+    try {
+      final readiness = await _initializeMangaAwareOcr(ocr);
+      // ignore: avoid_print
+      print('MangaOCR readiness=$readiness');
+      expect(readiness['mangaReady'], isTrue);
+
+      final autoResult = await ocr.recognize(
+        imagePath: image.path,
+        mode: OcrMode.auto,
+      );
+      final autoText = composeOcrText(autoResult.blocks);
+      // ignore: avoid_print
+      print(
+        'MangaOCR auto engine=${autoResult.engine} '
+        'elapsed=${autoResult.elapsedMs}ms blocks=${autoResult.blocks.length} '
+        'text="$autoText"',
+      );
+      expect(autoResult.engine, 'manga_ocr');
+      expect(autoResult.blocks, isNotEmpty);
+      expect(autoText, isNotEmpty);
+      expect(autoText, contains('これは'));
+
+      final verticalResult = await ocr.recognize(
+        imagePath: image.path,
+        mode: OcrMode.vertical,
+      );
+      final verticalText = composeOcrText(verticalResult.blocks);
+      // ignore: avoid_print
+      print(
+        'MangaOCR vertical engine=${verticalResult.engine} '
+        'elapsed=${verticalResult.elapsedMs}ms blocks=${verticalResult.blocks.length} '
+        'text="$verticalText"',
+      );
+      expect(verticalResult.engine, 'manga_ocr');
+      expect(verticalText, contains('これは'));
+    } finally {
+      await ocr.dispose();
+      if (image.existsSync()) await image.delete();
+    }
+  });
+
+  testWidgets('auto OCR corrects an upside-down horizontal page', (
+    tester,
+  ) async {
+    final image = await _renderSyntheticImage(upsideDown: true);
+    final ocr = RikaiOcr();
+    try {
+      final readiness = await _initializeMangaAwareOcr(ocr);
+      // ignore: avoid_print
+      print('Orientation readiness=$readiness');
+      if (readiness['textLineOrientationReady'] != true) {
+        fail(
+          'Text-line orientation model is missing. Push build/ocr-models/'
+          'orientation to ${(await _installedModelsDirectory()).path}/orientation',
+        );
+      }
+      final result = await ocr.recognize(
+        imagePath: image.path,
+        mode: OcrMode.auto,
+      );
+      final text = composeOcrText(result.blocks);
+      // ignore: avoid_print
+      print(
+        'Upside-down engine=${result.engine} '
+        'elapsed=${result.elapsedMs}ms blocks=${result.blocks.length} '
+        'text="$text"',
+      );
+      expect(result.engine, 'paddle_v5');
+      expect(text, contains('ありがとう'));
+    } finally {
       await ocr.dispose();
       if (image.existsSync()) await image.delete();
     }

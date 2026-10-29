@@ -96,6 +96,11 @@ class RikaiOcrPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
         val detPath = args?.get("detModelPath") as? String
         val recPath = args?.get("recModelPath") as? String
         val keysPath = args?.get("keysPath") as? String
+        val mangaEncoderPath = args?.get("mangaEncoderPath") as? String
+        val mangaDecoderPath = args?.get("mangaDecoderPath") as? String
+        val mangaVocabPath = args?.get("mangaVocabPath") as? String
+        val docOrientationPath = args?.get("docOrientationPath") as? String
+        val textLineOrientationPath = args?.get("textLineOrientationPath") as? String
         if (detPath.isNullOrBlank() || recPath.isNullOrBlank() || keysPath.isNullOrBlank()) {
             result.error("MODEL_MISSING", "缺少 PaddleOCR 模型路径", null)
             return
@@ -104,7 +109,16 @@ class RikaiOcrPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
         scope.launch {
             try {
                 val readiness = operationMutex.withLock {
-                    engine.initialize(detPath, recPath, keysPath)
+                    engine.initialize(
+                        detPath = detPath,
+                        recPath = recPath,
+                        keysPath = keysPath,
+                        mangaEncoderPath = mangaEncoderPath,
+                        mangaDecoderPath = mangaDecoderPath,
+                        mangaVocabPath = mangaVocabPath,
+                        docOrientationPath = docOrientationPath,
+                        textLineOrientationPath = textLineOrientationPath,
+                    )
                 }
                 replySuccess(result, readiness, replied)
             } catch (error: OcrFailure) {

@@ -2,9 +2,9 @@
  * Adapted from Screen Translator (overlay-translator), Copyright 2026 ciddwd.
  * Licensed under the Apache License, Version 2.0.
  *
- * Modified for Rikai-Mobile: trimmed to the Phase 3 PP-OCRv5 horizontal
- * pipeline, owned sessions instead of Hilt singletons, no overlay or bubble
- * support, and image decoding/EXIF scaling is done in this plugin.
+ * Modified for Rikai-Mobile: PP-OCRv5 horizontal recognition plus optional
+ * MangaOCR vertical routing, owned sessions instead of Hilt singletons, no
+ * overlay support, and image decoding/EXIF scaling is done in this plugin.
  */
 package com.rikai.ocr
 
@@ -61,9 +61,22 @@ internal class PaddleOcrEngine {
     private var loadedDetPath: String? = null
     private var loadedRecPath: String? = null
     private var loadedKeysPath: String? = null
+    private val manga = MangaOcrRecognizer()
+    private val docOrientation = DocOrientationRecognizer()
+    private val textLineOrientation = TextLineOrientationRecognizer()
+    private var mangaError: String? = null
 
     @Synchronized
-    fun initialize(detPath: String, recPath: String, keysPath: String): Map<String, Any> {
+    fun initialize(
+        detPath: String,
+        recPath: String,
+        keysPath: String,
+        mangaEncoderPath: String? = null,
+        mangaDecoderPath: String? = null,
+        mangaVocabPath: String? = null,
+        docOrientationPath: String? = null,
+        textLineOrientationPath: String? = null,
+    ): Map<String, Any> {
         val detFile = File(detPath)
         val recFile = File(recPath)
         val keysFile = File(keysPath)
@@ -76,65 +89,107 @@ internal class PaddleOcrEngine {
         val absoluteRec = recFile.absolutePath
         val absoluteKeys = keysFile.absolutePath
         val threads = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
+
+        val parsedKeys = CtcDictionary.load(keysFile)
         val det = detSession
         val rec = recSession
         val keys = dictionary
-        if (det != null && rec != null && keys != null &&
+        val paddleReused = det != null && rec != null && keys != null &&
             loadedDetPath == absoluteDet &&
             loadedRecPath == absoluteRec &&
             loadedKeysPath == absoluteKeys
-        ) {
-            return mapOf(
-                "engine" to "paddle_v5",
-                "detInput" to detInputName,
-                "recInput" to recInputName,
-                "keys" to keys.keys.size,
-                "threads" to threads,
-                "reused" to true,
-            )
+        if (!paddleReused) {
+            closePaddleSessions()
+            try {
+                val options = OrtSession.SessionOptions()
+                try {
+                    options.setIntraOpNumThreads(threads)
+                    options.setInterOpNumThreads(1)
+                    val newDet = OcrRuntime.environment.createSession(absoluteDet, options)
+                    val newRec = try {
+                        OcrRuntime.environment.createSession(absoluteRec, options)
+                    } catch (error: Throwable) {
+                        newDet.close()
+                        throw error
+                    }
+                    detSession = newDet
+                    recSession = newRec
+                    dictionary = parsedKeys
+                    detInputName = newDet.inputNames.first()
+                    recInputName = newRec.inputNames.first()
+                    loadedDetPath = absoluteDet
+                    loadedRecPath = absoluteRec
+                    loadedKeysPath = absoluteKeys
+                } finally {
+                    options.close()
+                }
+            } catch (error: OutOfMemoryError) {
+                closePaddleSessions()
+                throw OcrFailure("OOM", "加载 OCR 模型时内存不足")
+            } catch (error: Throwable) {
+                closePaddleSessions()
+                throw OcrFailure("MODEL_INVALID", "无法加载 OCR 模型：${error.message}")
+            }
         }
 
-        val parsedKeys = CtcDictionary.load(keysFile)
-        closeSessions()
-        try {
-            val options = OrtSession.SessionOptions()
+        // Optional vertical models are loaded independently. A missing or
+        // broken MangaOCR file must never disable the working horizontal OCR;
+        // vertical mode reports the specific error when the user selects it.
+        var mangaConfigured = false
+        var mangaReused = false
+        mangaError = if (
+            mangaEncoderPath.isNullOrBlank() ||
+            mangaDecoderPath.isNullOrBlank() ||
+            mangaVocabPath.isNullOrBlank()
+        ) {
+            manga.close()
+            null
+        } else {
+            mangaConfigured = true
             try {
-                options.setIntraOpNumThreads(threads)
-                options.setInterOpNumThreads(1)
-                val newDet = OcrRuntime.environment.createSession(absoluteDet, options)
-                val newRec = try {
-                    OcrRuntime.environment.createSession(absoluteRec, options)
-                } catch (error: Throwable) {
-                    newDet.close()
-                    throw error
-                }
-                detSession = newDet
-                recSession = newRec
-                dictionary = parsedKeys
-                detInputName = newDet.inputNames.first()
-                recInputName = newRec.inputNames.first()
-                loadedDetPath = absoluteDet
-                loadedRecPath = absoluteRec
-                loadedKeysPath = absoluteKeys
-                return mapOf(
-                    "engine" to "paddle_v5",
-                    "detInput" to detInputName,
-                    "recInput" to recInputName,
-                    "keys" to parsedKeys.keys.size,
-                    "threads" to threads,
-                    "reused" to false,
-                )
-            } finally {
-                options.close()
+                val info = manga.initialize(mangaEncoderPath, mangaDecoderPath, mangaVocabPath)
+                mangaReused = info?.get("reused") == true
+                if (!manga.isReady()) "MangaOCR 模型文件不完整" else null
+            } catch (error: OcrFailure) {
+                error.message
+            } catch (error: Throwable) {
+                error.message ?: "MangaOCR 模型加载失败"
             }
-        } catch (error: OutOfMemoryError) {
-            closeSessions()
-            throw OcrFailure("OOM", "加载 OCR 模型时内存不足")
-        } catch (error: Throwable) {
-            closeSessions()
-            throw OcrFailure("MODEL_INVALID", "无法加载 OCR 模型：${error.message}")
         }
+        docOrientation.initialize(docOrientationPath)
+        textLineOrientation.initialize(textLineOrientationPath)
+
+        val activeDet = detSession ?: throw OcrFailure("ENGINE_ERROR", "OCR 模型尚未初始化")
+        val activeRec = recSession ?: throw OcrFailure("ENGINE_ERROR", "OCR 模型尚未初始化")
+        val activeKeys = dictionary ?: throw OcrFailure("ENGINE_ERROR", "OCR 字符表尚未加载")
+        return readiness(
+            det = activeDet,
+            rec = activeRec,
+            keys = activeKeys,
+            threads = threads,
+            reused = paddleReused && (!mangaConfigured || mangaReused),
+        )
     }
+
+    private fun readiness(
+        det: OrtSession,
+        rec: OrtSession,
+        keys: CtcDictionary,
+        threads: Int,
+        reused: Boolean,
+    ): Map<String, Any> = mapOf(
+        "engine" to "paddle_v5",
+        "detInput" to det.inputNames.first(),
+        "recInput" to rec.inputNames.first(),
+        "keys" to keys.keys.size,
+        "threads" to threads,
+        "reused" to reused,
+        "mangaReady" to manga.isReady(),
+        "mangaError" to (mangaError ?: ""),
+        "docOrientationReady" to docOrientation.isReady(),
+        "textLineOrientationReady" to textLineOrientation.isReady(),
+        "manga" to manga.readiness(),
+    )
 
     @Synchronized
     fun recognize(
@@ -143,26 +198,78 @@ internal class PaddleOcrEngine {
         onProgress: (stage: String, current: Int, total: Int) -> Unit,
         isCancelled: () -> Boolean,
     ): NativeOcrResult {
-        if (mode == "vertical") {
-            throw OcrFailure("UNSUPPORTED_MODE", "纵向 OCR 将在后续版本支持，请选择横向或自动")
+        if (mode != "auto" && mode != "horizontal" && mode != "vertical") {
+            throw OcrFailure("UNSUPPORTED_MODE", "不支持的识别模式：$mode")
+        }
+        if (mode == "vertical" && !manga.isReady()) {
+            throw if (!mangaError.isNullOrBlank()) {
+                OcrFailure("MODEL_INVALID", "MangaOCR 模型无法使用：$mangaError")
+            } else {
+                OcrFailure(
+                    "MODEL_MISSING",
+                    "竖向识别需要先在「OCR 模型」中下载 MangaOCR 模型",
+                )
+            }
         }
         val det = detSession ?: throw OcrFailure("ENGINE_ERROR", "OCR 模型尚未初始化")
         val rec = recSession ?: throw OcrFailure("ENGINE_ERROR", "OCR 模型尚未初始化")
         val keys = dictionary ?: throw OcrFailure("ENGINE_ERROR", "OCR 字符表尚未加载")
         val started = SystemClock.elapsedRealtime()
-        val bitmap = decodeBitmap(imagePath)
+        val decoded = decodeBitmap(imagePath)
+        var activeBitmap = decoded
         try {
             if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
+            val docVerticalHint = mode != "horizontal" && docOrientation.isVerticalHint(activeBitmap)
             onProgress("detect", 0, 1)
-            val quads = detectQuads(bitmap, det)
+            var quads = detectQuads(activeBitmap, det)
             onProgress("detect", 1, 1)
             if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
+            val useVertical = when (mode) {
+                "vertical" -> true
+                "auto" -> docVerticalHint || TextLayoutHeuristic.isVertical(quads)
+                else -> false
+            }
+            if (!useVertical &&
+                textLineOrientation.isReady() &&
+                textLineOrientation.shouldRotate180(activeBitmap, quads)
+            ) {
+                val rotated = rotate180(activeBitmap)
+                if (rotated != null) {
+                    activeBitmap = rotated
+                    onProgress("detect", 0, 1)
+                    quads = detectQuads(activeBitmap, det)
+                    onProgress("detect", 1, 1)
+                    if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
+                }
+            }
+            if (useVertical && manga.isReady()) {
+                val blocks = manga.recognize(
+                    bitmap = activeBitmap,
+                    quads = quads,
+                    onProgress = onProgress,
+                    isCancelled = isCancelled,
+                )
+                onProgress("done", 1, 1)
+                return NativeOcrResult(
+                    engine = "manga_ocr",
+                    elapsedMs = SystemClock.elapsedRealtime() - started,
+                    width = activeBitmap.width,
+                    height = activeBitmap.height,
+                    blocks = blocks,
+                )
+            }
+            if (mode == "vertical" && !manga.isReady()) {
+                throw OcrFailure(
+                    "MODEL_MISSING",
+                    "竖向识别需要先在「OCR 模型」中下载 MangaOCR 模型",
+                )
+            }
             if (quads.isEmpty()) {
                 return NativeOcrResult(
                     engine = "paddle_v5",
                     elapsedMs = SystemClock.elapsedRealtime() - started,
-                    width = bitmap.width,
-                    height = bitmap.height,
+                    width = activeBitmap.width,
+                    height = activeBitmap.height,
                     blocks = emptyList(),
                 )
             }
@@ -171,7 +278,7 @@ internal class PaddleOcrEngine {
             val blocks = mutableListOf<NativeOcrBlock>()
             ordered.forEachIndexed { index, quad ->
                 if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
-                recognizeQuad(bitmap, quad, rec, keys)?.let { blocks.add(it) }
+                recognizeQuad(activeBitmap, quad, rec, keys)?.let { blocks.add(it) }
                 onProgress("recognize", index + 1, ordered.size)
             }
             val orderedBlocks = orderBlocks(blocks)
@@ -179,21 +286,27 @@ internal class PaddleOcrEngine {
             return NativeOcrResult(
                 engine = "paddle_v5",
                 elapsedMs = SystemClock.elapsedRealtime() - started,
-                width = bitmap.width,
-                height = bitmap.height,
+                width = activeBitmap.width,
+                height = activeBitmap.height,
                 blocks = orderedBlocks,
             )
         } finally {
-            if (!bitmap.isRecycled) bitmap.recycle()
+            if (activeBitmap !== decoded && !activeBitmap.isRecycled) {
+                activeBitmap.recycle()
+            }
+            if (!decoded.isRecycled) decoded.recycle()
         }
     }
 
     @Synchronized
     fun close() {
-        closeSessions()
+        closePaddleSessions()
+        manga.close()
+        docOrientation.close()
+        textLineOrientation.close()
     }
 
-    private fun closeSessions() {
+    private fun closePaddleSessions() {
         runCatching { detSession?.close() }
         runCatching { recSession?.close() }
         detSession = null
@@ -427,6 +540,15 @@ internal class PaddleOcrEngine {
         } catch (_: OutOfMemoryError) {
             throw OcrFailure("OOM", "图片旋转时内存不足")
         }
+    }
+
+    private fun rotate180(bitmap: Bitmap): Bitmap? = try {
+        val matrix = Matrix().apply { postRotate(180f) }
+        Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    } catch (_: OutOfMemoryError) {
+        throw OcrFailure("OOM", "图片旋转时内存不足")
+    } catch (_: Exception) {
+        null
     }
 
     private fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap? = try {
