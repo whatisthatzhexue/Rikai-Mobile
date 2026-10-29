@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -16,6 +17,7 @@ import '../capture/photo_viewer_page.dart';
 import '../lookup/lookup_sheet.dart';
 import '../reader/reader_block.dart';
 import '../reader/reader_lines.dart';
+import '../reader/reader_options.dart';
 
 class CorpusDetailRouteArgs {
   const CorpusDetailRouteArgs(this.entry);
@@ -186,13 +188,25 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
     );
   }
 
+  Future<void> _copyText(String text) async {
+    if (text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已复制全文')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final entriesAsync = ref.watch(corpusEntriesProvider);
     final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(title: const Text('语料')),
+      appBar: AppBar(
+        title: const Text('语料'),
+        actions: const [ReaderOptionsMenu()],
+      ),
       body: entriesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Center(
@@ -241,6 +255,17 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
                           onTap: () => _openPhoto(entry),
                           onHeightChanged: (value) =>
                               setState(() => _photoHeight = value),
+                          overlays: [
+                            Positioned(
+                              right: AppSpacing.md,
+                              bottom: AppSpacing.md,
+                              child: PhotoCopyButton(
+                                onPressed: entry.text.isEmpty
+                                    ? null
+                                    : () => _copyText(entry.text),
+                              ),
+                            ),
+                          ],
                         ),
                         Expanded(child: _buildContent(entry, settings, theme)),
                         CapturePageNavigation(

@@ -53,6 +53,38 @@ class CaptureRoundButton extends StatelessWidget {
   }
 }
 
+/// Deep-blue photo overlay copy action shared by the photo set and corpus
+/// detail pages.
+class PhotoCopyButton extends StatelessWidget {
+  const PhotoCopyButton({
+    super.key,
+    required this.onPressed,
+    this.label = '复制文本',
+  });
+
+  final VoidCallback? onPressed;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: AppColors.header,
+        foregroundColor: AppColors.onHeader,
+        disabledBackgroundColor: AppColors.header.withValues(alpha: 0.4),
+        minimumSize: const Size(0, AppSizes.control),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+      ),
+      icon: const Icon(Icons.copy_all_outlined, size: AppSizes.iconSmall),
+      label: Text(label),
+    );
+  }
+}
+
 /// Bottom page navigation shared by the photo set and the corpus detail page.
 ///
 /// The fixed [AppSizes.captureAction] height puts the arrow centre at the same

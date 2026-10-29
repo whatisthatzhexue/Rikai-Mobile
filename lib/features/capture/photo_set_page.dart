@@ -524,30 +524,10 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
                         Positioned(
                           right: AppSpacing.md,
                           bottom: AppSpacing.md,
-                          child: FilledButton.icon(
+                          child: PhotoCopyButton(
                             onPressed: text.isEmpty
                                 ? null
                                 : () => _copyText(text),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.header,
-                              foregroundColor: AppColors.onHeader,
-                              disabledBackgroundColor: AppColors.header
-                                  .withValues(alpha: 0.4),
-                              minimumSize: const Size(0, AppSizes.control),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.md,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.md,
-                                ),
-                              ),
-                            ),
-                            icon: const Icon(
-                              Icons.copy_all_outlined,
-                              size: AppSizes.iconSmall,
-                            ),
-                            label: const Text('复制'),
                           ),
                         ),
                       ],

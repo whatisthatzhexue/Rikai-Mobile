@@ -176,10 +176,11 @@ Manual emulator checks:
 - live camera preview, shutter, gallery multi-select, photo-set OCR and
   text-to-reader flow;
 - photo set automatically tokenized `ありがとう / 東京で食べた。` with UniDic and
-  rendered ReaderBlocks; copy (bottom-right deep-blue bar) and the 16/20/24/28
-  font menu worked;
+  rendered ReaderBlocks; copy (bottom-right deep-blue “复制文本” bar) and the
+  16/20/24/28 font menu worked;
 - photo-area resize with the single white handle and full-screen pinch viewer
-  opening from a photo tap;
+  opening from a photo tap; the 40dp handle uses direct pointer tracking and
+  follows a 100ms swipe immediately;
 - tokenization failure showed the red retry banner over the top of the photo
   without covering the OCR result area;
 - returning from model settings and from multi-select reused cached OCR with
@@ -188,8 +189,10 @@ Manual emulator checks:
 - photo-set screen-corner delete/save actions (52 dp each, save deep blue);
   page-arrow centres aligned with the action centres;
 - save confirmation; corpus list showed the full photo, top-right red delete,
-  OCR text and date; corpus detail showed photo/OCR/tokens, corpus-to-corpus
-  navigation, bottom-left delete and no save/multi/orientation/model controls;
+  OCR text, date and the deep-blue copy action at the **card** bottom-right;
+  its title-bar menu changed the OCR font size (16/20/24/28). Corpus detail showed photo/OCR/tokens,
+  photo copy, corpus-to-corpus navigation, bottom-left delete and no
+  save/multi/orientation/model controls; its menu also changed OCR/token size;
 - model page directory/space/mirror/installed state;
 - MDict folder scan of `/sdcard/Download/rikai-mdict` showing title, size and
   “已在词典库中” without the English MDD/CSS suffix; importing a second MDX

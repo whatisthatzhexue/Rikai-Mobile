@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,6 +9,7 @@ import '../../core/models/corpus_entry.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../state/providers.dart';
 import '../capture/capture_buttons.dart';
+import '../reader/reader_options.dart';
 import 'corpus_detail_page.dart';
 
 class CorpusPage extends ConsumerWidget {
@@ -16,10 +18,14 @@ class CorpusPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final entries = ref.watch(corpusEntriesProvider);
+    final settings = ref.watch(appSettingsProvider);
     final theme = Theme.of(context);
     return Scaffold(
       backgroundColor: AppColors.surface,
-      appBar: AppBar(title: const Text('语料')),
+      appBar: AppBar(
+        title: const Text('语料'),
+        actions: const [ReaderOptionsMenu()],
+      ),
       body: entries.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Center(
@@ -85,16 +91,29 @@ class CorpusPage extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.md),
             itemBuilder: (context, index) => _CorpusCard(
               entry: list[index],
+              fontSize: settings.readerFontSize,
               onOpen: () => context.push(
                 '/corpus-detail',
                 extra: CorpusDetailRouteArgs(list[index]),
               ),
+              onCopy: list[index].text.isEmpty
+                  ? null
+                  : () => _copyText(context, list[index].text),
               onDelete: () => _delete(context, ref, list[index]),
             ),
           );
         },
       ),
     );
+  }
+
+  Future<void> _copyText(BuildContext context, String text) async {
+    if (text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已复制全文')));
   }
 
   Future<void> _delete(
@@ -132,12 +151,16 @@ class CorpusPage extends ConsumerWidget {
 class _CorpusCard extends StatelessWidget {
   const _CorpusCard({
     required this.entry,
+    required this.fontSize,
     required this.onOpen,
+    required this.onCopy,
     required this.onDelete,
   });
 
   final CorpusEntry entry;
+  final double fontSize;
   final VoidCallback onOpen;
+  final VoidCallback? onCopy;
   final VoidCallback onDelete;
 
   @override
@@ -205,15 +228,27 @@ class _CorpusCard extends StatelessWidget {
                 children: [
                   Text(
                     entry.text.isEmpty ? '（无 OCR 文本）' : entry.text,
-                    style: theme.textTheme.bodyLarge,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontSize: fontSize,
+                      height: 1.7,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    date,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontSize: AppTypography.helper,
-                      color: AppColors.textSecondary,
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          date,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: AppTypography.helper,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      PhotoCopyButton(onPressed: onCopy, label: '复制'),
+                    ],
                   ),
                 ],
               ),

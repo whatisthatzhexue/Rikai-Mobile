@@ -136,7 +136,7 @@ abstract final class AppSizes {
   static const double cameraShutterRing = 4;
   static const double capturePhotoHeight = 250;
   static const double capturePhotoMin = 120;
-  static const double captureResizeHandle = 28;
+  static const double captureResizeHandle = 40;
   static const double captureResizeBarWidth = 44;
   static const double captureResizeBarHeight = 4;
   static const double captureControlsReserve = 300;

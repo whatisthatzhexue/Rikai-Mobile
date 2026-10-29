@@ -7,8 +7,10 @@ import '../../core/theme/app_tokens.dart';
 /// Full-photo canvas shared by the photo set and corpus detail pages.
 ///
 /// When [onHeightChanged] is supplied, the bottom edge becomes draggable and
-/// the handle is a single-colour white bar (no pill/outline).
-class PhotoPane extends StatelessWidget {
+/// the handle is a single-colour white bar (no pill/outline). Pointer events
+/// are used directly instead of a vertical-drag recognizer so the photo edge
+/// follows the finger from the first pixel rather than after the drag slop.
+class PhotoPane extends StatefulWidget {
   const PhotoPane({
     super.key,
     required this.imagePath,
@@ -27,9 +29,46 @@ class PhotoPane extends StatelessWidget {
   final List<Widget> overlays;
 
   @override
+  State<PhotoPane> createState() => _PhotoPaneState();
+}
+
+class _PhotoPaneState extends State<PhotoPane> {
+  int? _pointer;
+  double? _pointerStartY;
+  double? _dragStartHeight;
+
+  void _onPointerDown(PointerDownEvent event) {
+    if (_pointer != null) return;
+    _pointer = event.pointer;
+    _pointerStartY = event.position.dy;
+    _dragStartHeight = widget.height;
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    if (event.pointer != _pointer) return;
+    final startY = _pointerStartY;
+    final startHeight = _dragStartHeight;
+    final onHeightChanged = widget.onHeightChanged;
+    if (startY == null || startHeight == null || onHeightChanged == null) {
+      return;
+    }
+    final next = startHeight + event.position.dy - startY;
+    onHeightChanged(
+      next.clamp(AppSizes.capturePhotoMin, widget.maxHeight).toDouble(),
+    );
+  }
+
+  void _endDrag(PointerEvent event) {
+    if (event.pointer != _pointer) return;
+    _pointer = null;
+    _pointerStartY = null;
+    _dragStartHeight = null;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: height,
+      height: widget.height,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -38,11 +77,11 @@ class PhotoPane extends StatelessWidget {
             label: '查看照片',
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: onTap,
+              onTap: widget.onTap,
               child: ColoredBox(
                 color: AppColors.surfaceMuted,
                 child: Image.file(
-                  File(imagePath),
+                  File(widget.imagePath),
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) =>
                       const Center(child: Text('无法显示照片')),
@@ -50,7 +89,7 @@ class PhotoPane extends StatelessWidget {
               ),
             ),
           ),
-          if (onHeightChanged != null)
+          if (widget.onHeightChanged != null)
             Positioned(
               left: 0,
               right: 0,
@@ -58,15 +97,12 @@ class PhotoPane extends StatelessWidget {
               height: AppSizes.captureResizeHandle,
               child: Semantics(
                 label: '调整照片显示范围',
-                child: GestureDetector(
+                child: Listener(
                   behavior: HitTestBehavior.opaque,
-                  onVerticalDragUpdate: (details) {
-                    onHeightChanged!(
-                      (height + details.delta.dy)
-                          .clamp(AppSizes.capturePhotoMin, maxHeight)
-                          .toDouble(),
-                    );
-                  },
+                  onPointerDown: _onPointerDown,
+                  onPointerMove: _onPointerMove,
+                  onPointerUp: _endDrag,
+                  onPointerCancel: _endDrag,
                   child: Align(
                     alignment: Alignment.bottomCenter,
                     child: Container(
@@ -82,7 +118,7 @@ class PhotoPane extends StatelessWidget {
                 ),
               ),
             ),
-          ...overlays,
+          ...widget.overlays,
         ],
       ),
     );

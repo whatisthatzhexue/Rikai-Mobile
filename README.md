@@ -36,9 +36,10 @@ UniDic and MDict dictionary:
   photo viewer; OCR/session caches survive page navigation
 - Model manager with configurable directory/migration, hf-mirror → Hugging Face
   → custom mirror, resumable SHA-256-verified downloads, and local import
-- Photo-set save action stores the photo + OCR text in the local corpus; the
-  corpus list shows full photos + OCR + date, and a detail page shows the photo,
-  OCR and tokenization with corpus-to-corpus navigation
+- Photo-set save action stores the photo + OCR text in the local corpus; both
+  the corpus list and detail page show full photos, font/furigana controls and
+  copy (card bottom-right in the list, photo bottom-right in the detail), and
+  the detail page shows OCR + tokenization with corpus-to-corpus navigation
 - MDict folder import recursively scans subfolders, previews importable/existing/
   unsupported dictionaries, and imports selected entries with progress, then
   returns directly to dictionary management
