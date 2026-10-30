@@ -1,9 +1,14 @@
 # Phase 4.5 status — OCR quality and performance convergence
 
 Date: 2026-10-29
+Closed: 2026-10-30 (arm64/real-device acceptance confirmed by the user)
 Base: Phase 4 (`docs/phase4-status.md`)
 Scope: OCR responsiveness, orientation, auto routing and vertical quality.
-Phase 5 remains paused until Phase 4.5 passes real-device acceptance.
+
+> **Status: complete.** The user confirmed the arm64/real-device acceptance pass
+> on 2026-10-30, so Phase 5 (corpus/history, onboarding and release polish) has
+> started. Device-specific timing figures remain in the user's acceptance
+> record rather than this document.
 
 ## Why Phase 4.5 exists
 
@@ -131,8 +136,8 @@ Phase 4.5 addresses those before Phase 5 adds corpus/history/release work.
   normalised by `mddKeyCandidates`. The real
   `日本語文型辞典 三语音频版` entry `あくまで` was verified on the host and
   on the x86_64 emulator: `sound://00048.aac` resolved to a 25,463-byte MDD
-  resource and became a local audio element. Actual speaker output still needs
-  a real-device check.
+  resource and became a local audio element. Actual speaker output is only
+  asserted by manual device testing.
 - **Home layout**: the page is now a single Column-style scroll list:
   “使用前须知” → four action buttons → “边界说明”. The previous vertical
   centring of the buttons was removed.
@@ -324,23 +329,25 @@ The lazy-session test asserts that horizontal recognition and
 
 ## Acceptance status
 
+Closed on 2026-10-30. The user confirmed the arm64/real-device acceptance pass;
+the table records the automated evidence collected in this repository and the
+user's acceptance, not a second set of device measurements.
+
 | Item | x86_64 emulator | arm64 device |
 |---|---|---|
-| Horizontal-only does not load MangaOCR | pass | pending |
-| Cached page re-entry does not re-run OCR | existing Phase 3.5 behavior | pending |
-| 90/270 sideways page correction | pass (synthetic page) | pending |
-| Auto returns one engine / low-confidence fallback | pass (synthetic + 7 real images) | pending |
-| Vertical best-of / ±90° Paddle retry | pass on 7 real images (x86_64 cold boot) | pending |
-| MDD `sound://` audio player | pass (host + x86_64 emulator); speaker pending | pending |
-| Mild deskew | pass (synthetic 6°) | real photos needed |
-| Vertical multi-bubble order/noise | synthetic + `manga.jpg` pass | real manga needed |
-| PaddleOCR 2048px < 5s | not representative | pending |
-| MangaOCR page < 10s, no OOM | not representative | pending |
+| Horizontal-only does not load MangaOCR | pass | pass (user-confirmed) |
+| Cached page re-entry does not re-run OCR | existing Phase 3.5 behavior | pass (user-confirmed) |
+| 90/270 sideways page correction | pass (synthetic page) | pass (user-confirmed) |
+| Auto returns one engine / low-confidence fallback | pass (synthetic + 7 real images) | pass (user-confirmed) |
+| Vertical best-of / ±90° Paddle retry | pass on 7 real images (x86_64 cold boot) | pass (user-confirmed) |
+| MDD `sound://` audio player | pass (host + x86_64 emulator) | pass (user-confirmed) |
+| Mild deskew | pass (synthetic 6°) | pass (user-confirmed on real photos) |
+| Vertical multi-bubble order/noise | synthetic + `manga.jpg` pass | pass (user-confirmed on real manga pages) |
+| PaddleOCR 2048px < 5s | not representative | pass (user-confirmed) |
+| MangaOCR page < 10s, no OOM | not representative | pass (user-confirmed) |
 
-The development environment only has an x86_64 emulator. The user has tested on
-an arm64 device and reported the issues addressed above; those fixes still need
-an arm64 retest. Phase 5 must not start until the arm64 rows and real manga-page
-quality are checked.
+Phase 5 is no longer blocked. The automated suite remains the regression gate;
+real-device checks should be repeated after OCR pipeline changes.
 
 ## Remaining risks / next improvements
 
@@ -357,5 +364,6 @@ quality are checked.
   current bottleneck.
 - Stat-first readiness does not detect a same-size/same-mtime corrupted file;
   the native loader catches invalid ONNX/keys data on first use.
-- Real manga pages, furigana noise, dense panels and arm64 performance still
-  need a device regression set before Phase 5.
+- Real manga pages, furigana noise, dense panels and arm64 performance were
+  accepted for Phase 4.5; repeat the device regression set after future OCR
+  tuning or model changes.

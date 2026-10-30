@@ -34,7 +34,9 @@ void main() {
   });
 
   testWidgets('bootstrap transitions from splash to home', (tester) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({
+      'flutter.app_onboarding_completed': true,
+    });
 
     await tester.pumpWidget(const BootstrapApp());
     await tester.pumpAndSettle();

@@ -9,8 +9,9 @@
 > 引入用户自备 API Key 的可选在线 LLM。Phase 6 开工前需 Phase 5 完成并经用户批准。
 >
 > **Phase 4.5（OCR 质量与性能收敛）已插入 Phase 4 与 Phase 5 之间。** 记录见
-> `docs/phase4.5-status.md`。在 Phase 4.5 的 arm64/真实页面验收通过前，不推进
-> Phase 5。
+> `docs/phase4.5-status.md`。该阶段已于 2026-10-30 通过 arm64/真实设备验收并关闭；
+> **Phase 5（语料/历史、首次引导与发布打磨）也已于 2026-10-30 完成并由用户确认。**
+> 下一步是 Phase 6 设计评审与用户批准，未批准前不实施。
 
 ---
 
@@ -519,7 +520,7 @@ EventChannel: model load/prewarm/OCR stage progress
 - MangaOCR 目标 < 10s/页（中端真机）；内存不 OOM。
 - 无 MangaOCR 模型时，纵向模式给出下载提示，横向仍可用。
 
-### Phase 4.5 — OCR 质量与性能收敛（插入阶段，进行中）
+### Phase 4.5 — OCR 质量与性能收敛（已完成，2026-10-30）
 
 目标：先把“能用的 MVP”收敛到可接受的实际体验，再进入 Phase 5。详细记录见
 `docs/phase4.5-status.md`。
@@ -551,12 +552,12 @@ EventChannel: model load/prewarm/OCR stage progress
 - 缓存命中返回照片集不重新 OCR；手动模式不重复生成兼容结果。
 - 现有单元测试、OCR 设备套件和新增真实页回归全部通过。
 
-> 状态：4.5-A/B/C 的主要代码与 x86_64 合成测试已完成；arm64/真实页面验收
-> 未完成。Phase 5 暂缓。
+> 状态：4.5-A/B/C 已完成；2026-10-30 通过 arm64/真实设备验收，Phase 5 已启动。
 
-### Phase 5 — 语料保存、打磨与发布（3–4 天）
+### Phase 5 — 语料保存、打磨与发布（已完成，2026-10-30）
 
-> 前置条件：Phase 4.5 的 arm64/真实页面验收通过。此前不开始 Phase 5。
+> 前置条件已满足：Phase 4.5 的 arm64/真实页面验收于 2026-10-30 通过。
+> Phase 5 已完成并由用户在模拟器上确认测试通过；记录见 `docs/phase5-status.md`。
 
 任务：
 
@@ -583,8 +584,8 @@ EventChannel: model load/prewarm/OCR stage progress
 | 2 | MDict/查词/搜索/渲染 | 3–4 天 |
 | 3 | 横向 PaddleOCR + 拍照 | 3–4 天 |
 | 4 | 纵向 MangaOCR + 自动方向 | 3–4 天 |
-| 4.5 | OCR 质量与性能收敛 | 进行中（未计入原估算） |
-| 5 | 语料保存 + 打磨 + 发布 | 3–4 天 |
+| 4.5 | OCR 质量与性能收敛 | 已完成（2026-10-30） |
+| 5 | 语料保存 + 打磨 + 发布 | 已完成（2026-10-30） |
 | **合计** | | **17–23 天（不含 4.5）** |
 
 > Phase 6（Mdict Agent）是 post-MVP 设计扩展，不计入上表的工期和 MVP 范围；

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -26,6 +25,7 @@ import '../reader/reader_block.dart';
 import '../reader/reader_lines.dart';
 import '../reader/reader_options.dart';
 import 'capture_buttons.dart';
+import 'capture_corpus.dart';
 import 'capture_dialogs.dart';
 import 'photo_multi_select_page.dart';
 import 'photo_pane.dart';
@@ -59,6 +59,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
   bool _verticalReady = false;
   double _photoHeight = AppSizes.capturePhotoHeight;
   int _imageRevision = 0;
+  final Set<String> _autoSaved = {};
   StreamSubscription<OcrProgress>? _progressSubscription;
 
   OcrMode get _mode {
@@ -196,13 +197,10 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       final result = await ocr.recognize(imagePath: photo.filePath, mode: mode);
       if (token != _runToken || _disposed) return;
       final text = composeOcrText(result.blocks);
+      final photoResult = PhotoOcrResult.fromOcrResult(result, text);
       ref
           .read(captureSessionProvider.notifier)
-          .setOcrResult(
-            photo.id,
-            key,
-            PhotoOcrResult.fromOcrResult(result, text),
-          );
+          .setOcrResult(photo.id, key, photoResult);
       if (!mounted) return;
       setState(() {
         _busy = false;
@@ -211,6 +209,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
         _error = null;
         _modelMissing = false;
       });
+      unawaited(_autoSave(photo, photoResult));
       await _startAnalysis(photo.id, text);
       unawaited(_prewarmModels());
     } on OcrException catch (error) {
@@ -401,6 +400,25 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     await _refreshCurrent();
   }
 
+  Future<void> _autoSave(CapturePhoto photo, PhotoOcrResult result) async {
+    if (!ref.read(appSettingsProvider).autoSaveOcr) return;
+    if (result.text.trim().isEmpty) return;
+    final key = '${photo.id}|${photo.mode.name}|${result.text}';
+    if (!_autoSaved.add(key)) return;
+    try {
+      await saveCapturePhotoToCorpus(
+        history: ref.read(historyStoreProvider),
+        photo: photo,
+        result: result,
+      );
+      if (!mounted || _disposed) return;
+      ref.invalidate(corpusEntriesProvider);
+    } catch (_) {
+      // Automatic saving is a convenience; manual save still reports errors.
+      _autoSaved.remove(key);
+    }
+  }
+
   Future<void> _saveCurrent() async {
     if (_saving) return;
     final photo = ref.read(captureSessionProvider).current;
@@ -426,36 +444,15 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     final cached = _fingerprint == null
         ? null
         : photo.findOcrResult(mode: _mode, fingerprint: _fingerprint!);
-    final blocksJson = jsonEncode(
-      (cached?.blocks ?? const []).map((block) {
-        return {
-          'text': block.text,
-          'left': block.left,
-          'top': block.top,
-          'right': block.right,
-          'bottom': block.bottom,
-          'confidence': block.confidence,
-          'orientation': block.orientation,
-          'points': block.points,
-        };
-      }).toList(),
-    );
     setState(() => _saving = true);
     try {
-      await ref
-          .read(historyStoreProvider)
-          .savePhoto(
-            sourceImagePath: photo.filePath,
-            text: cached?.text ?? '',
-            engine: cached?.engine ?? 'paddle_v5',
-            mode: _mode.name,
-            orientation: cached?.blocks.isNotEmpty == true
-                ? cached!.blocks.first.orientation
-                : 'unknown',
-            blocksJson: blocksJson,
-          );
-      ref.invalidate(corpusEntriesProvider);
+      await saveCapturePhotoToCorpus(
+        history: ref.read(historyStoreProvider),
+        photo: photo,
+        result: cached,
+      );
       if (!mounted) return;
+      ref.invalidate(corpusEntriesProvider);
       RikaiToast.show(context, '已保存到语料库');
     } catch (error) {
       if (!mounted) return;

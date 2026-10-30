@@ -18,6 +18,8 @@ void main() {
     expect(settings.readerFontSize, 20);
     expect(settings.ocrMirror, '');
     expect(settings.ocrModelsDirectory, '');
+    expect(settings.onboardingCompleted, isFalse);
+    expect(settings.autoSaveOcr, isFalse);
   });
 
   test('persists font family and entry limit', () async {
@@ -32,6 +34,8 @@ void main() {
         lookupMatchMode: LookupMatchMode.prefix,
         ocrMirror: 'https://mirror.example',
         ocrModelsDirectory: '/storage/emulated/0/rikai-models',
+        onboardingCompleted: true,
+        autoSaveOcr: true,
       ),
     );
     final restored = SettingsStore(preferences).load();
@@ -41,6 +45,19 @@ void main() {
     expect(restored.lookupMatchMode, LookupMatchMode.prefix);
     expect(restored.ocrMirror, 'https://mirror.example');
     expect(restored.ocrModelsDirectory, '/storage/emulated/0/rikai-models');
+    expect(restored.onboardingCompleted, isTrue);
+    expect(restored.autoSaveOcr, isTrue);
+  });
+
+  test('an existing UniDic path counts as completed onboarding', () async {
+    SharedPreferences.setMockInitialValues({
+      'flutter.unidic_path': '/sdcard/Download/unidic-cwj-202512',
+    });
+    final preferences = await SharedPreferences.getInstance();
+
+    final settings = SettingsStore(preferences).load();
+
+    expect(settings.onboardingCompleted, isTrue);
   });
 
   test('sanitizes unknown font and negative limits', () async {

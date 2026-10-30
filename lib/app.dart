@@ -11,9 +11,12 @@ import 'features/corpus/corpus_detail_page.dart';
 import 'features/corpus/corpus_page.dart';
 import 'features/home/home_page.dart';
 import 'features/lookup/search_page.dart';
+import 'features/onboarding/onboarding_page.dart';
 import 'features/reader/reader_page.dart';
+import 'features/settings/copyright_page.dart';
 import 'features/settings/dictionary_import_page.dart';
 import 'features/settings/dictionary_page.dart';
+import 'features/settings/help_page.dart';
 import 'features/settings/model_page.dart';
 import 'features/settings/settings_page.dart';
 
@@ -37,13 +40,18 @@ Page<void> _page(GoRouterState state, Widget child) {
   );
 }
 
-GoRouter _createRouter() {
+GoRouter _createRouter({String initialLocation = '/'}) {
   return GoRouter(
+    initialLocation: initialLocation,
     observers: [UnfocusRouteObserver()],
     routes: [
       GoRoute(
         path: '/',
         pageBuilder: (context, state) => _page(state, const HomePage()),
+      ),
+      GoRoute(
+        path: '/onboarding',
+        pageBuilder: (context, state) => _page(state, const OnboardingPage()),
       ),
       GoRoute(
         path: '/reader',
@@ -100,6 +108,14 @@ GoRouter _createRouter() {
         pageBuilder: (context, state) =>
             _page(state, const DictionaryImportPage()),
       ),
+      GoRoute(
+        path: '/help',
+        pageBuilder: (context, state) => _page(state, const HelpPage()),
+      ),
+      GoRoute(
+        path: '/copyright',
+        pageBuilder: (context, state) => _page(state, const CopyrightPage()),
+      ),
     ],
   );
 }
@@ -112,7 +128,14 @@ class RikaiApp extends ConsumerStatefulWidget {
 }
 
 class _RikaiAppState extends ConsumerState<RikaiApp> {
-  late final GoRouter _router = _createRouter();
+  late final GoRouter _router;
+
+  @override
+  void initState() {
+    super.initState();
+    final completed = ref.read(appSettingsProvider).onboardingCompleted;
+    _router = _createRouter(initialLocation: completed ? '/' : '/onboarding');
+  }
 
   @override
   void dispose() {

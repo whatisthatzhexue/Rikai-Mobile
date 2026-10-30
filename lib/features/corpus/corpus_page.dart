@@ -23,11 +23,25 @@ class CorpusPage extends ConsumerWidget {
     final entries = ref.watch(corpusEntriesProvider);
     final settings = ref.watch(appSettingsProvider);
     final theme = Theme.of(context);
+    final hasEntries = entries.asData?.value.isNotEmpty ?? false;
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: const Text('语料'),
-        actions: const [ReaderOptionsMenu(), LookupModeMenu()],
+        actions: [
+          const ReaderOptionsMenu(),
+          const LookupModeMenu(),
+          if (hasEntries)
+            PopupMenuButton<String>(
+              tooltip: '语料管理',
+              onSelected: (value) {
+                if (value == 'clear') _clearAll(context, ref);
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'clear', child: Text('清空语料')),
+              ],
+            ),
+        ],
       ),
       body: entries.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -39,7 +53,11 @@ class CorpusPage extends ConsumerWidget {
               children: [
                 Text('语料读取失败', style: theme.textTheme.titleMedium),
                 const SizedBox(height: AppSpacing.xs),
-                Text(error.toString(), textAlign: TextAlign.center),
+                Text(
+                  '请重试。如果问题持续，请重新打开应用。',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall,
+                ),
                 const SizedBox(height: AppSpacing.md),
                 OutlinedButton.icon(
                   onPressed: () => ref.invalidate(corpusEntriesProvider),
@@ -151,6 +169,35 @@ class CorpusPage extends ConsumerWidget {
     await ref.read(historyStoreProvider).delete(entry);
     ref.invalidate(corpusEntriesProvider);
   }
+
+  Future<void> _clearAll(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('清空全部语料？'),
+        content: const Text('所有语料的照片副本和 OCR 文本都会从本机删除，无法恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: AppColors.onHeader,
+            ),
+            child: const Text('清空'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final removed = await ref.read(historyStoreProvider).clear();
+    if (!context.mounted) return;
+    ref.invalidate(corpusEntriesProvider);
+    RikaiToast.show(context, '已清空 $removed 条语料');
+  }
 }
 
 class _CorpusCard extends StatelessWidget {
@@ -187,7 +234,26 @@ class _CorpusCard extends StatelessWidget {
                   ColoredBox(
                     color: AppColors.surfaceMuted,
                     child: entry.imagePath.isEmpty
-                        ? const Center(child: Icon(Icons.broken_image_outlined))
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.subject_outlined,
+                                  size: AppSizes.emptyIcon,
+                                  color: AppColors.textTertiary,
+                                ),
+                                const SizedBox(height: AppSpacing.xs),
+                                Text(
+                                  '文本语料',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontSize: AppTypography.helper,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
                         : Image.file(
                             File(entry.imagePath),
                             fit: BoxFit.contain,

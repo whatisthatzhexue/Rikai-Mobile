@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 
+import '../../core/models/corpus_entry.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/ui/rikai_toast.dart';
 import '../../core/utils/format_bytes.dart';
@@ -233,9 +237,155 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
             trailing: const Icon(Icons.chevron_right),
             onTap: _clearModelCache,
           ),
+          const Divider(height: AppSpacing.xxl),
+          _sectionTitle(theme, '语料与存储'),
+          SwitchListTile(
+            title: const Text('自动保存识别结果'),
+            subtitle: const Text('识别完成后自动把照片和 OCR 文本写入语料'),
+            value: settings.autoSaveOcr,
+            onChanged: (value) {
+              ref.read(appSettingsProvider.notifier).setAutoSaveOcr(value);
+            },
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.delete_sweep_outlined),
+            title: const Text('清空语料'),
+            subtitle: Text(
+              '${_corpusCountLabel(ref.watch(corpusEntriesProvider))} · '
+              '删除全部照片副本和文本',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _clearCorpus,
+          ),
+          ListTile(
+            leading: const Icon(Icons.cleaning_services_outlined),
+            title: const Text('清除词典资源缓存'),
+            subtitle: const Text('删除已提取的 MDD 图片/音频缓存，不影响词典文件'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _clearDictionaryCache,
+          ),
+          const Divider(height: AppSpacing.xxl),
+          _sectionTitle(theme, '关于与帮助'),
+          ListTile(
+            leading: const Icon(Icons.help_outline),
+            title: const Text('帮助'),
+            subtitle: const Text('UniDic、MDict、OCR 和语料的用法说明'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/help'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.copyright_outlined),
+            title: const Text('著作权与开源许可'),
+            subtitle: const Text('第三方组件、模型许可和用户自备数据说明'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/copyright'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.restart_alt_outlined),
+            title: const Text('重新查看新手引导'),
+            subtitle: const Text('检查存储权限、UniDic、词典与模型设置'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _restartOnboarding,
+          ),
         ],
       ),
     );
+  }
+
+  String _corpusCountLabel(AsyncValue<List<CorpusEntry>> entries) {
+    final list = entries.asData?.value;
+    if (list == null) return '正在读取…';
+    return list.isEmpty ? '暂无语料' : '共 ${list.length} 条';
+  }
+
+  Future<void> _clearCorpus() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('清空全部语料？'),
+        content: const Text('所有语料的照片副本和 OCR 文本都会从本机删除，无法恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: AppColors.onHeader,
+            ),
+            child: const Text('清空'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final history = ref.read(historyStoreProvider);
+    final bytes = await history.imageBytes();
+    final removed = await history.clear();
+    if (!mounted) return;
+    ref.invalidate(corpusEntriesProvider);
+    RikaiToast.show(
+      context,
+      bytes > 0
+          ? '已清空 $removed 条语料，释放 ${formatBytes(bytes)}'
+          : '已清空 $removed 条语料',
+    );
+  }
+
+  Future<void> _clearDictionaryCache() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('清除词典资源缓存？'),
+        content: const Text('已提取的 MDD 图片和音频会重新生成；词典原文件不会被修改。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('清除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final cacheRoot = await getApplicationCacheDirectory();
+      final directory = Directory('${cacheRoot.path}/mdict');
+      final bytes = await _directoryBytes(directory);
+      if (directory.existsSync()) {
+        await directory.delete(recursive: true);
+      }
+      if (!mounted) return;
+      ref.invalidate(entryRenderCacheProvider);
+      RikaiToast.show(context, '已清除 ${formatBytes(bytes)} 词典资源缓存');
+    } catch (error) {
+      if (!mounted) return;
+      RikaiToast.show(context, '清除失败：$error');
+    }
+  }
+
+  Future<int> _directoryBytes(Directory directory) async {
+    if (!directory.existsSync()) return 0;
+    var total = 0;
+    try {
+      await for (final entity in directory.list(recursive: true)) {
+        if (entity is File) total += await entity.length();
+      }
+    } on FileSystemException {
+      // Report the portion we could measure.
+    }
+    return total;
+  }
+
+  void _restartOnboarding() {
+    ref.read(appSettingsProvider.notifier).setOnboardingCompleted(false);
+    context.push('/onboarding');
   }
 
   Future<void> _clearModelCache() async {

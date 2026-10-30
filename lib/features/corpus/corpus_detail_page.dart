@@ -218,6 +218,12 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text('语料读取失败', style: theme.textTheme.titleMedium),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '请重试。如果问题持续，请重新打开应用。',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall,
+                ),
                 const SizedBox(height: AppSpacing.sm),
                 OutlinedButton.icon(
                   onPressed: () => ref.invalidate(corpusEntriesProvider),
@@ -246,29 +252,61 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
                 final photoHeight = _photoHeight
                     .clamp(0.0, maxPhotoHeight)
                     .toDouble();
+                final hasPhoto = entry.imagePath.isNotEmpty;
                 return Stack(
                   children: [
                     Column(
                       children: [
-                        PhotoPane(
-                          imagePath: entry.imagePath,
-                          height: photoHeight,
-                          maxHeight: maxPhotoHeight,
-                          onTap: () => _openPhoto(entry),
-                          onHeightChanged: (value) =>
-                              setState(() => _photoHeight = value),
-                          overlays: [
-                            Positioned(
-                              right: AppSpacing.md,
-                              bottom: AppSpacing.md,
-                              child: PhotoCopyButton(
-                                onPressed: entry.text.isEmpty
-                                    ? null
-                                    : () => _copyText(entry.text),
+                        if (hasPhoto)
+                          PhotoPane(
+                            imagePath: entry.imagePath,
+                            height: photoHeight,
+                            maxHeight: maxPhotoHeight,
+                            onTap: () => _openPhoto(entry),
+                            onHeightChanged: (value) =>
+                                setState(() => _photoHeight = value),
+                            overlays: [
+                              Positioned(
+                                right: AppSpacing.md,
+                                bottom: AppSpacing.md,
+                                child: PhotoCopyButton(
+                                  onPressed: entry.text.isEmpty
+                                      ? null
+                                      : () => _copyText(entry.text),
+                                ),
                               ),
+                            ],
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.lg,
+                              AppSpacing.sm,
+                              AppSpacing.md,
+                              0,
                             ),
-                          ],
-                        ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.subject_outlined,
+                                  size: AppSizes.icon,
+                                  color: AppColors.textSecondary,
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    '文本语料',
+                                    style: theme.textTheme.titleSmall,
+                                  ),
+                                ),
+                                PhotoCopyButton(
+                                  onPressed: entry.text.isEmpty
+                                      ? null
+                                      : () => _copyText(entry.text),
+                                ),
+                              ],
+                            ),
+                          ),
                         Expanded(child: _buildContent(entry, settings, theme)),
                         CapturePageNavigation(
                           index: index,

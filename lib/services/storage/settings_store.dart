@@ -14,6 +14,8 @@ class AppSettings {
     this.lookupMatchMode = LookupMatchMode.exact,
     this.ocrMirror = '',
     this.ocrModelsDirectory = '',
+    this.onboardingCompleted = false,
+    this.autoSaveOcr = false,
   });
 
   final String unidicPath;
@@ -37,6 +39,13 @@ class AppSettings {
   /// directory (`<external>/models`).
   final String ocrModelsDirectory;
 
+  /// Whether the first-run setup guide has been completed or skipped.
+  final bool onboardingCompleted;
+
+  /// When true, a freshly recognized photo is also written to the corpus.
+  /// Manual saving remains available either way.
+  final bool autoSaveOcr;
+
   AppSettings copyWith({
     String? unidicPath,
     bool? showFurigana,
@@ -46,6 +55,8 @@ class AppSettings {
     LookupMatchMode? lookupMatchMode,
     String? ocrMirror,
     String? ocrModelsDirectory,
+    bool? onboardingCompleted,
+    bool? autoSaveOcr,
   }) {
     return AppSettings(
       unidicPath: unidicPath ?? this.unidicPath,
@@ -57,6 +68,8 @@ class AppSettings {
       lookupMatchMode: lookupMatchMode ?? this.lookupMatchMode,
       ocrMirror: ocrMirror ?? this.ocrMirror,
       ocrModelsDirectory: ocrModelsDirectory ?? this.ocrModelsDirectory,
+      onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
+      autoSaveOcr: autoSaveOcr ?? this.autoSaveOcr,
     );
   }
 }
@@ -73,14 +86,23 @@ class SettingsStore {
   static const _lookupMatchModeKey = 'mdict_lookup_match_mode';
   static const _ocrMirrorKey = 'ocr_model_mirror';
   static const _ocrModelsDirectoryKey = 'ocr_models_directory';
+  static const _onboardingCompletedKey = 'app_onboarding_completed';
+  static const _autoSaveOcrKey = 'corpus_auto_save_ocr';
 
   final SharedPreferences _preferences;
 
   AppSettings load() {
     final storedFont = _preferences.getString(_fontFamilyKey);
     final maxEntries = _preferences.getInt(_maxEntriesKey) ?? 0;
+    final storedUnidicPath = _preferences.getString(_unidicPathKey) ?? '';
+    // Existing installs predate the onboarding flag. Treat an already
+    // configured UniDic path as proof that setup has been done, so an update
+    // does not show the welcome guide to current users.
+    final onboardingCompleted =
+        _preferences.getBool(_onboardingCompletedKey) ??
+        storedUnidicPath.trim().isNotEmpty;
     return AppSettings(
-      unidicPath: _preferences.getString(_unidicPathKey) ?? '',
+      unidicPath: storedUnidicPath,
       showFurigana: _preferences.getBool(_showFuriganaKey) ?? true,
       readerFontSize: _preferences.getDouble(_readerFontSizeKey) ?? 20,
       fontFamily: storedFont == null
@@ -92,6 +114,8 @@ class SettingsStore {
       ),
       ocrMirror: _preferences.getString(_ocrMirrorKey) ?? '',
       ocrModelsDirectory: _preferences.getString(_ocrModelsDirectoryKey) ?? '',
+      onboardingCompleted: onboardingCompleted,
+      autoSaveOcr: _preferences.getBool(_autoSaveOcrKey) ?? false,
     );
   }
 
@@ -110,6 +134,11 @@ class SettingsStore {
       _ocrModelsDirectoryKey,
       settings.ocrModelsDirectory,
     );
+    await _preferences.setBool(
+      _onboardingCompletedKey,
+      settings.onboardingCompleted,
+    );
+    await _preferences.setBool(_autoSaveOcrKey, settings.autoSaveOcr);
   }
 
   static LookupMatchMode _lookupModeFromName(String? value) {

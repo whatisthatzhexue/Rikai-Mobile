@@ -162,6 +162,14 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
     _update(state.copyWith(ocrModelsDirectory: value.trim()));
   }
 
+  void setOnboardingCompleted(bool value) {
+    _update(state.copyWith(onboardingCompleted: value));
+  }
+
+  void setAutoSaveOcr(bool value) {
+    _update(state.copyWith(autoSaveOcr: value));
+  }
+
   void _update(AppSettings next) {
     state = next;
     unawaited(_store.save(next));

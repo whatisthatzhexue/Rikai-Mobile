@@ -10,7 +10,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 const MethodChannel _storageChannel = MethodChannel('rikai/storage_permission');
 
 Future<void> _pumpApp(WidgetTester tester) async {
-  SharedPreferences.setMockInitialValues({});
+  SharedPreferences.setMockInitialValues({
+    'flutter.app_onboarding_completed': true,
+  });
   final preferences = await SharedPreferences.getInstance();
   await tester.pumpWidget(
     ProviderScope(

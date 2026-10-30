@@ -1,8 +1,9 @@
 # CLAUDE.md — Rikai-Mobile handoff
 
 > 给下一个 agent 的工作交接。先读本文件，再读 `docs/DEVELOPMENT_PLAN.md`（MVP 计划）、
-> `docs/phase4.5-status.md`（当前 OCR 收敛结果）、`docs/phase4-status.md`
-> （Phase 4 基线）、`docs/phase6-agent-design.md`（Phase 6 设计 v2，未实现）和
+> `docs/phase5-status.md`（Phase 5 完成记录）、`docs/phase4.5-status.md`
+> （OCR 收敛结果，已关闭）、`docs/phase4-status.md`（Phase 4 基线）、
+> `docs/phase6-agent-design.md`（Phase 6 设计 v2，未实现）和
 > `docs/phase6-agent-contracts.md`（Phase 6 工具/schema 契约，未实现）。
 > 用户使用中文沟通；代码/标识符用英文。
 
@@ -12,10 +13,11 @@ Android 单端的 Flutter 日语阅读/查词应用。**核心离线**：拍照�
 横向 PaddleOCR / 纵向 MangaOCR → UniDic（用户自备）分词与注音 → 点击单词查询
 用户自备的 MDict 词典；另有搜索查词、词典偏好、语料保存。
 
-**当前处于 Phase 4.5（OCR 质量与性能收敛），Phase 5 暂停。** 4.5 已完成
-按需加载模型、stat 优先指纹、90°/270° 整图纠正、auto 单引擎置信度回退、Manga 置信度
-过滤和照片旋转入口；但尚未做 arm64 真机/真实漫画页验收。验收通过前不要推进
-Phase 5，也不要开始 Phase 6。
+**Phase 4.5（OCR 质量与性能收敛）已于 2026-10-30 通过 arm64/真实设备验收并关闭；
+Phase 5（语料/历史、首次引导与发布打磨）也已于 2026-10-30 完成并由用户在冷启动
+模拟器上确认测试通过。** Phase 5 包含首次引导、文本/照片语料保存、自动保存开关、
+语料清空/删除、图片压缩、设置页存储/许可入口和 arm64 release APK。下一步是
+Phase 6 设计评审与用户批准，未批准前不要实施 Phase 6。
 
 Phase 6（`docs/phase6-agent-design.md`，**设计 v2，未实现**；契约见
 `docs/phase6-agent-contracts.md`）计划增加「词典助手」：可选地调用用户配置的远程
@@ -72,6 +74,12 @@ Phase 6（`docs/phase6-agent-design.md`，**设计 v2，未实现**；契约见
   日期 + 右上删除 + 右下复制）；点开后进入「语料」详情：照片/分词、照片右下
   复制、语料间页码、左下删除，不显示 OCR 原文/日期，无多选/方向/模型设置/保存。
   列表与详情标题栏右上角都有字号/注音菜单，分词字号随之变化。
+  首次启动进入 `/onboarding`：深蓝顶栏、欢迎区、本地边界说明、准备清单
+  （权限/UniDic/MDict/OCR 模型）、许可确认 Checkbox 与「开始使用/跳过」；
+  已有 UniDic 路径的旧安装视为已完成。文本阅读保存的语料没有照片时，卡片和
+  详情显示「文本语料」占位及复制按钮，不显示损坏图片。设置页新增「语料与存储」
+  （自动保存识别结果、清空语料、清除词典资源缓存）与「关于与帮助」（帮助、
+  著作权与许可、重新查看新手引导）分区；继续白底扁平、无卡片。
 - **字体**：HarmonyOS Sans SC Regular，路径
   `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`。字体文件**不入库**（`.gitignore`
   已忽略）；用户自行从华为 HarmonyOS 设计资源下载，见 `assets/fonts/README.md`。
@@ -79,9 +87,10 @@ Phase 6（`docs/phase6-agent-design.md`，**设计 v2，未实现**；契约见
   由 `flutter_launcher_icons` 生成 Android 图标（配置在 `pubspec.yaml`）。
 - 仓库已有多次提交（`d0d94a3`、`dc70cee`、`91dc386`、`deb6484`、
   `b12d24f`、`95f90e0`、`9e17984`、`f287603`、`c2ae03d`、`4d0100f`、`1e25750`、
-  `b2ed785`）。Phase 4 为 `f287603`，Phase 6 文档为 `c2ae03d`，Phase 4.5 初版
-  为 `4d0100f`；第二轮设备反馈修复已提交为 `b2ed785`，当前横屏布局、
-  搜索模式、路径模糊查找和采集交互改动未提交。Phase 6 只有设计与契约文档，尚未实现。不要擅自
+  `b2ed785`、`1c7096b`、`979d1de`）。Phase 4 为 `f287603`，Phase 6 文档为
+  `c2ae03d`，Phase 4.5 初版为 `4d0100f`；第二轮设备反馈修复为 `b2ed785`，
+  横屏/搜索/采集改动为 `979d1de`。当前 Phase 5（首次引导、语料生命周期、
+  设置 polish）改动未提交。Phase 6 只有设计与契约文档，尚未实现。不要擅自
   `reset`/`commit`，除非用户明确要求。
 
 ## 2. 已确认的架构决策（不要随意改；第 9 项为 Phase 6 设计边界）
@@ -140,7 +149,7 @@ Phase 6（`docs/phase6-agent-design.md`，**设计 v2，未实现**；契约见
      SharedPreferences/日志/导出；Phase 6 不得破坏未配置 Agent 时的离线核心。
      工具/schema/状态机细节见 `docs/phase6-agent-contracts.md`，产品细节见
      `docs/phase6-agent-design.md`。
-10. **Phase 4.5 OCR 运行时（已实现）**：
+10. **Phase 4.5 OCR 运行时（已完成）**：
    - PaddleOCR 必需；MangaOCR/orientation 只在 auto/vertical 需要时懒加载，
      横向模式不得创建 Manga session。`prepare(mode)` 只做后台预热。
    - readiness 区分 `mangaAvailable`/`mangaLoaded` 等；UI 的“已安装”看 available。
@@ -285,7 +294,8 @@ Phase 6（`docs/phase6-agent-design.md`，**设计 v2，未实现**；契约见
     helper 根据 MangaOCR 是否就绪显示自动路由或下载提示。
   - 设备合成测试：自动竖向 253ms、手动竖向 251ms，均输出
     `これはテストです`；倒置横向页 180° 重跑后输出 `ありがとう`。
-- Phase 4.5（2026-10-29，进行中，详见 `docs/phase4.5-status.md`）：
+- Phase 4.5（2026-10-29 实现，2026-10-30 arm64 验收通过，详见
+  `docs/phase4.5-status.md`）：
   - **按需加载**：`PaddleOcrEngine.initialize` 只加载 Paddle；MangaOCR/
     orientation 路径注册但不建 session；`prepare(mode)` 后台预热。照片集
     `OcrService.prewarm` 在缓存/识别完成后预加载；横向模式不加载 Manga。
@@ -306,7 +316,7 @@ Phase 6（`docs/phase6-agent-design.md`，**设计 v2，未实现**；契约见
     `manga_ocr` 结果；照片集“旋转”旋转私有副本 90°、清该照片 OCR 缓存。
   - 设备 OCR 套件 8 项：横向、6° 倾斜、lazy、Manga、90°、270°、倒置 180°、
     取消；x86_64 全部通过。冷 auto ~1.0s，热 vertical ~0.3s；7 张真实图片
-    auto/h/v 扫描通过。arm64 仍待验收。
+    auto/h/v 扫描通过。2026-10-30 用户确认 arm64/真实设备验收通过。
   - 第二轮设备反馈（2026-10-29）：MDD `sound://` 转为本地 `<audio>`；
     词典选择全局持久化、最多 3 行滚动、选中不漂移；查词状态跨页面保留；
     键盘焦点路由清理；非阻塞 `RikaiToast`；竖排双引擎评分；OCR 日文空格
@@ -325,14 +335,28 @@ Phase 6（`docs/phase6-agent-design.md`，**设计 v2，未实现**；契约见
     增加 MDict/UniDic 官方入口；所有查词界面增加书籍图标的增量/完全/前方/
     后方匹配模式；照片 OCR 模式改为逐照片独立；OCR 中允许删除；旋转可连续
     打断；语料详情去掉“分词结果”标题；TokenChip 去掉每词 Material/InkWell
-    以减少长列表卡顿。当前 141 unit tests。
+    以减少长列表卡顿。
+- Phase 5（2026-10-30 完成并由用户确认，详见 `docs/phase5-status.md`）：
+  - 首次启动引导 `/onboarding`：本地边界、存储权限、UniDic、MDict/OCR 模型
+    入口、许可确认、开始/跳过；已有 UniDic 路径视为已完成；设置可重新打开。
+  - 语料：阅读页可保存纯文本文本；照片保存前 EXIF 校正、最长边 2048、JPEG 85；
+    `HistoryStore.clear/imageBytes`；语料页可清空全部；文本语料无照片时显示
+    「文本语料」占位；自动保存开关默认关闭，按照片+模式+文本做会话内去重。
+  - 设置：「语料与存储」自动保存/清空语料/清除 MDict 资源缓存；
+    「关于与帮助」帮助、著作权与许可、重新查看新手引导；新增 `/help`、
+    `/copyright` 路由。
+  - 新增测试 `onboarding_test`、`history_store_test`（纯图片压缩/block JSON，
+    不依赖桌面 SQLite）、`reader_save_test`；当前 149 unit tests。arm64 release
+    APK 已构建，新界面真机验收待完成。
 
 已验证：
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 141 tests passed
+flutter test     -> 149 tests passed
 flutter build apk --debug -> success
+flutter build apk --release --target-platform android-arm64 --split-per-abi
+  -> app-arm64-v8a-release.apk (60.1 MB)
 ```
 
 真实 UniDic 模拟器集成测试（x86_64 API 36，4 项全部通过）：
@@ -395,25 +419,25 @@ MDict 兼容测试（`integration_test/mdict_compat_android_test.dart`，2/2）�
 
 **当前阶段状态：**
 
-- **Phase 4.5 进行中**：4.5-A/B/C 的主要代码与 x86_64 合成测试已完成；arm64
-  真机和真实漫画页验收未完成。Phase 5 在这一验收通过前暂停。
-- Phase 5 尚未完成。基础 `HistoryStore`、语料列表/详情和部分设置已提前实现，
-  但完整历史管理、首次启动引导、错误/空态打磨、release 构建仍未完成。
+- **Phase 4.5 已完成**：2026-10-30 用户确认 arm64/真实设备验收通过；设备性能
+  数据以用户验收记录为准。
+- **Phase 5 已完成**：首次启动引导、文本/照片语料保存、自动保存开关、图片压缩、
+  语料清空/删除、设置存储/许可入口、149 tests 和 arm64 release APK（60.1 MB）
+  已完成；用户于 2026-10-30 在冷启动 x86_64 模拟器上确认测试通过。
 - Phase 6 只有 `docs/phase6-agent-design.md`（v2）和
   `docs/phase6-agent-contracts.md`/`docs/schemas/agent/` 契约，**没有代码、依赖或
   provider 调用**；不得把 README/CLAUDE 的 planned 描述当成已实现。
 
-**尚未完成 / 下一步：**
+**下一步：**
 
-- Phase 4.5：arm64 真机回归（横排/竖排/倒置/90°/270°、连续多页内存/耗时）、
-  真实漫画页质量、缓存命中和按需加载性能验收；必要时继续调 Manga 聚类/顺序。
-- Phase 5（4.5 验收后）：完整识别历史/语料管理、首次启动引导、设置与发布打磨。
-- 本开发环境只有 x86_64 模拟器 `Medium_Phone_API_36.1`；用户已在 arm64
-  真机反馈问题，但当前机器不能直接连接该设备。x86_64 仅验证功能，修复后仍需
-  arm64 复测性能/真实漫画质量。
+- Phase 6：先做设计评审并取得用户批准，再按 §4 的顺序实施；未批准前不要写
+  Agent 代码、加 provider 依赖或改主页五按钮。
+- 分发前：release 仍使用 debug keystore，替换正式签名；Phase 5 可选增强
+  （语料缩略图、更多空/错误态、无障碍细化）。
+- 本开发环境只有 x86_64 模拟器 `Medium_Phone_API_36.1`；Phase 5 UI 已在冷启动
+  模拟器确认，OCR 性能/真实漫画质量仍需 arm64 真机复测。
 - 本机模拟器 DNS 无法解析 hf-mirror/Hugging Face，因此“应用内实网下载模型”
   尚未在设备验证；主机 curl 成功，Dart 本地 HTTP 测试已覆盖 Range 续传/校验。
-- Release APK 尚未构建（不要在没有必要时重复跑长构建）。
 - MangaOCR 仍未移植上游 mask/panel/free-text 全流水线，也没有 cross-bubble
   batching/INT8 draft/密集页 tiling；90/270 已实现整图旋转，但真实页仍需调参。
 
@@ -468,7 +492,7 @@ MDD 缓存未清理、无模糊搜索。
 - 已知限制：未移植上游 mask/panel/free-text 完整流水线、无 INT8 draft、
   90/270 文档方向未做整图旋转、无 arm64 真机。
 
-### Phase 4.5：OCR 质量与性能收敛（进行中）
+### Phase 4.5：OCR 质量与性能收敛（已完成，2026-10-30）
 
 先读 `docs/phase4.5-status.md`。已完成：
 
@@ -484,27 +508,39 @@ MDD 缓存未清理、无模糊搜索。
   权限引导、拍照提示、语料卡片、下载后台/断点/清理、WebView 退出闪帧等，
   详见 `docs/phase4.5-status.md` 的 Device-feedback 小节。
 
-仍需：
+验收已通过（2026-10-30）。后续 OCR 调优时仍需在真机复测：
 
-- arm64 真机：横排 2048px <5s、单页漫画 <10s、无 OOM；
-- 真实横排/竖排/倒置/90°/270° 页面回归（7 张 test_images 已跑 x86_64）；
-- 真实漫画多气泡/多面板顺序、振假名噪声、低置信度垃圾文本验收；
+- 横排 2048px <5s、单页漫画 <10s、无 OOM；
+- 横排/竖排/倒置/90°/270° 真实页面回归；
+- 真实漫画多气泡/多面板顺序、振假名噪声、低置信度垃圾文本；
 - 首次 auto/vertical 冷启动仍有 Manga session 创建成本（x86_64 约 1.1s）；
 - 视情况继续做 panel grouping、cross-bubble batching、密集页 tiling。
-- **Phase 5 在上述验收通过前不启动。**
 
-### Phase 5：语料保存/打磨/发布（未完成，被 4.5 阻塞）
+### Phase 5：语料保存/打磨/发布（已完成，2026-10-30）
 
-- 基础 `HistoryStore`（sqflite：图片副本、OCR 文本、blocks、模式/时间）和语料
-  列表/详情已提前实现；仍需完整历史管理、删除/清空、缓存清理和边界处理。
-- 首次启动引导（权限 → UniDic → 词典可选 → 模型可选 → 许可证）。
-- 设置、错误/空状态、字体、无障碍、关于/许可证页。
-- Release：arm64、R8、`--split-per-abi`；许可证审计；README/dev-setup 完善。
+先读 `docs/phase5-status.md`。已完成：
+
+- 首次启动引导（本地边界 → 权限 → UniDic → 词典可选 → 模型可选 →
+  许可确认；可跳过，设置可重开；已有 UniDic 路径视为已完成）。
+- `HistoryStore`：文本语料、图片 EXIF 校正/2048/JPEG 85、清空、图片占用统计、
+  同毫秒稳定排序；语料页清空入口；文本语料无照片占位。
+- 阅读页“保存到语料”；照片集/多选页共用 `capture_corpus.dart`；
+  “自动保存识别结果”默认关闭，按照片+模式+文本做会话内去重。
+- 设置“语料与存储”和“关于与帮助”分区；MDict 资源缓存清理；`/help`、
+  `/copyright` 路由。
+- 149 unit tests；analyze 通过；debug APK 与 arm64 release APK（60.1 MB）
+  均构建成功；用户于 2026-10-30 在冷启动模拟器确认首次引导/语料/设置流程。
+
+分发前仍需：
+
+- Release 仍用 debug keystore（`android/app/build.gradle.kts` TODO），替换正式签名。
+- 可选：语料缩略图、更多空/错误态、无障碍细化。
 
 ### Phase 6：Mdict Agent（设计 v2，未实现）
 
 先读 `docs/phase6-agent-design.md` 和 `docs/phase6-agent-contracts.md`；本节只给
-交接摘要，细节以设计/契约文档为准。Phase 6 只能在 Phase 5 完成并经用户确认后实施。
+交接摘要，细节以设计/契约文档为准。Phase 5 已完成并经用户确认；Phase 6 仍需用户
+批准设计/实施计划后才能开始。
 
 - 主页计划五个按钮：拍照识别、查句子、查单词、历史记录、词典助手；当前代码仍是
   四个，实施前不要提前改名/加按钮。
@@ -1186,6 +1222,47 @@ MDD 缓存未清理、无模糊搜索。
        的 `citation_ids` 重新汇总；`literal` 由 quote 填充；伪造/越界只显示为普通
        文本，不导航。原文 quote 必须通过 `analysis_text` substring 校验。
 
+### 5.14 Phase 5 语料/引导经验
+
+122. **误区：首次启动直接进入主页，或给旧用户也强制弹引导。**
+     - 正确做法：路由初始位置由 `onboardingCompleted` 决定；新安装进入
+       `/onboarding`，已有 UniDic 路径的旧安装视为已完成；设置页可复位并重新打开。
+       引导里的“跳过”必须可用，`开始使用` 需要先勾选许可确认。
+123. **误区：阅读页只能看不能保存，或保存文本时伪造照片路径。**
+     - 正确做法：使用 `HistoryStore.saveText`，`image_path` 存空字符串；语料卡片/
+       详情对空路径显示「文本语料」占位和复制按钮，不渲染 `Image.file`。
+124. **误区：直接把照片原文件复制进语料，导致存储膨胀或方向错误。**
+     - 正确做法：`HistoryStore` 在保存时烘焙 EXIF、最长边限制 2048、JPEG 85；
+       无法解码的格式回退为原样复制，保存不能因转换失败而失败。
+125. **误区：自动保存每次 OCR/每次进页面都写一条。**
+     - 正确做法：默认关闭；开启后仅在**新识别结果**时写入，并用
+       photo id + mode + text 做会话内去重；缓存命中不重复保存。
+126. **误区：清空语料只删数据库行，图片副本留在磁盘。**
+     - 正确做法：`HistoryStore.clear` 同时删除所有 `image_path` 和 corpus/images
+       目录内的文件；设置/语料页二次确认后调用并 invalidate 列表。
+127. **误区：清缓存时删除用户词典或已安装模型。**
+     - 正确做法：设置里的“清除词典资源缓存”只删
+       `getApplicationCacheDirectory()/mdict` 并失效渲染 LRU；“清除模型缓存”
+       只删 `.part`/`.importing`；用户词典/UniDic/已安装模型不得触碰。
+128. **误区：用 `SharedPreferences` 的无前缀 key 写测试。**
+     - 正确做法：`setMockInitialValues` 使用 `flutter.` 前缀（如
+       `flutter.app_onboarding_completed`）；现有 widget 测试必须显式种入
+       已完成引导，否则会停在 `/onboarding`。
+129. **误区：为桌面 SQLite 单测添加 `sqflite_common_ffi` dev 依赖。**
+     - 现象：`flutter build apk` 在 native-assets 阶段尝试从 GitHub 下载
+       `libsqlite3.*.android.so`，本机 GitHub 不可达，直接构建失败（即使只是
+       dev dependency）。
+     - 正确做法：不要加入该依赖；HistoryStore 的测试只覆盖纯函数（图片压缩、
+       block JSON），UI 保存用 fake `HistoryStore`。若将来必须测数据库，先解决
+       sqlite3 的 no-download/system 配置并验证 Android 构建。
+130. **误区：debug/集成测试后直接 `flutter build apk --release`。**
+     - 现象：`GeneratedPluginRegistrant.java` 仍包含 `integration_test`，release
+       编译报 `パッケージdev.flutter.plugins.integration_testは存在しません`。
+     - 正确做法：先跑一次
+       `flutter build apk --release --target-platform android-arm64
+       --split-per-abi --config-only` 重新生成 release 注册文件，再跑正式 release
+       build；`flutter clean` 不一定能解决。不要改注册文件本身。
+
 ## 6. 关键文件
 
 ```text
@@ -1207,9 +1284,12 @@ lib/services/ocr/ocr_text_composer.dart                       # 原生行块 →
 lib/services/capture/capture_storage.dart                     # 会话副本/旋转/删除
 lib/features/capture/                                         # 相机/照片集/多选/保存/缩放查看
 lib/features/capture/photo_pane.dart                          # 共用照片区/白色拖拽条
-lib/features/corpus/corpus_page.dart                          # 语料两列卡片/删除/复制
-lib/features/corpus/corpus_detail_page.dart                   # 语料详情/OCR/分词/翻页
-lib/services/storage/history_store.dart                       # 语料 SQLite + 图片副本
+lib/features/capture/capture_corpus.dart                      # 照片语料 blocks JSON/保存
+lib/features/onboarding/onboarding_page.dart                  # 首次启动引导/许可确认
+lib/features/corpus/corpus_page.dart                          # 语料两列卡片/清空/复制
+lib/features/corpus/corpus_detail_page.dart                   # 语料详情/文本语料/翻页
+lib/services/storage/history_store.dart                       # 语料 SQLite/压缩/清空
+test/history_store_test.dart                                  # 语料图片/block 纯函数测试
 lib/features/settings/model_page.dart                         # OCR 模型/目录/迁移
 lib/features/settings/dictionary_import_page.dart             # MDict 文件夹导入
 lib/services/mdict/dictionary_scanner.dart                    # 递归扫描 isolate
@@ -1264,7 +1344,8 @@ assets/fonts/README.md                                        # 字体下载说�
 docs/phase0-status.md, docs/phase1-status.md,
 docs/phase2-status.md, docs/phase3-status.md,
 docs/phase3.5-status.md, docs/phase4-status.md               # 阶段验证结果
-docs/phase4.5-status.md                                      # OCR 收敛（进行中）
+docs/phase4.5-status.md                                      # OCR 收敛（已完成）
+docs/phase5-status.md                                        # 语料/引导/发布进展
 docs/phase6-agent-design.md                                  # Phase 6 设计 v2（未实现）
 docs/phase6-agent-contracts.md                               # Phase 6 工具/schema/状态机契约
 docs/schemas/agent/                                          # Agent JSON Schema（未实现）
@@ -1409,21 +1490,18 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
 
 1. 运行 `git status`；Phase 4 为 `f287603`，Phase 6 文档为 `c2ae03d`，
    Phase 4.5 初版为 `4d0100f`，上一轮修复为 `1e25750`，第二轮设备反馈为
-   `b2ed785`；当前横屏/搜索/采集改动未提交。不要覆盖或擅自 commit，除非用户
-   明确要求。
-2. 先完成 Phase 4.5 验收：arm64 真机横排 2048px <5s、单页漫画 <10s、无 OOM；
-   横排/竖排/倒置/90°/270° 真实页回归；真实多气泡顺序/噪声质量。横屏目标
-   已做布局收敛，仍需在真机检查搜索/查词弹层/阅读/照片集/语料详情/导入页
-   的旋转后布局与交互。验收通过前不要开始 Phase 5。
-3. 4.5 验收后进入 Phase 5：完整识别历史/语料管理、首次启动引导、设置/错误态/
-   许可证页与 release 打磨。不要重写已验证的 Paddle 横向路径或 MangaOCR 基础
-   流水线；新增优化（mask/panel、cross-bubble batching、INT8 draft、tiling）
-   应作为独立增强并补回归。
+   `b2ed785`，横屏/搜索/采集为 `979d1de`；当前 Phase 5 改动未提交。不要覆盖或
+   擅自 commit，除非用户明确要求。
+2. Phase 5 已结束（2026-10-30 用户确认模拟器测试通过）；不要再把它当进行中。
+   分发前替换 release debug keystore；可选增强只有语料缩略图/空错误态/无障碍。
+3. 下一步是 Phase 6 设计评审与用户批准；不要重写已验证的 Paddle 横向路径或
+   MangaOCR 基础流水线；新增 OCR 优化（mask/panel、cross-bubble batching、
+   INT8 draft、tiling）应作为独立增强并补回归。
 4. Phase 6 设计 v2 与 `docs/phase6-agent-contracts.md`/`docs/schemas/agent/`
    已落盘但**未实现**；开工前仍需设计评审与用户批准，并按
    Ports/Tools → Provider/Secret → 熟悉期 → Orchestrator/Validator → UI →
-   多 OCR → annotation DSL/发布的顺序实施。Phase 6 不得抢占 Phase 4.5/5，
-   在 Phase 5 未完成前不要开始 Phase 6 的 UI/数据层改造。
+   多 OCR → annotation DSL/发布的顺序实施。未获批准前不要开始 Phase 6 的
+   UI/数据层改造。
 5. 进行实网模型下载验证（本机模拟器 DNS 不可用）：在可访问 hf-mirror 的
    设备上验证 PaddleOCR/MangaOCR/orientation 下载、断点续传、镜像回退、
    本地导入与许可确认；确认模型目录与删除流程。
@@ -1432,6 +1510,6 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
 7. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
    颜色/字号，字体与模型文件不入库；**所有页面**统一深蓝顶栏和右滑覆盖转场。
    Phase 6 的五按钮/Agent UI 也必须先补 token，不能直接改现有四按钮。
-8. 每个阶段结束运行 analyze/test/debug build（当前 141 unit tests / OCR 设备
+8. 每个阶段结束运行 analyze/test/debug build（当前 149 unit tests / OCR 设备
    8 项；另有 MeCab 4、MDict 6、MDict 兼容 2、MDD 音频 1、真实图片扫描 1），
    并记录到新的阶段状态文档；设备端测试按 §7 的命令运行。

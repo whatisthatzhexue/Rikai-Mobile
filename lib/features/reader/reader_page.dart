@@ -50,6 +50,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   List<Token> _tokens = const [];
   String? _analysedText;
   bool _busy = false;
+  bool _saving = false;
   bool _controlsVisible = true;
   MecabException? _mecabError;
   Object? _unexpectedError;
@@ -143,6 +144,36 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     RikaiToast.show(context, '已复制全文');
   }
 
+  Future<void> _saveToCorpus() async {
+    if (_saving) return;
+    final text = _textController.text.trim().isEmpty
+        ? (_analysedText ?? '')
+        : _textController.text;
+    if (text.trim().isEmpty) {
+      RikaiToast.show(context, '没有可保存的文本');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await ref
+          .read(historyStoreProvider)
+          .saveText(
+            text: text,
+            engine: 'text',
+            mode: 'text',
+            orientation: 'unknown',
+          );
+      if (!mounted) return;
+      ref.invalidate(corpusEntriesProvider);
+      RikaiToast.show(context, '已保存到语料');
+    } catch (error) {
+      if (!mounted) return;
+      RikaiToast.show(context, '保存失败：$error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _showTokenLookup(Token token) async {
     // Prevent the editor from requesting focus while the lookup sheet/entry
     // page is above it. Android otherwise restores the field when the entry
@@ -181,6 +212,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         title: const Text('文本阅读'),
         actions: [
           const ReaderOptionsMenu(),
+          IconButton(
+            onPressed: _saving ? null : _saveToCorpus,
+            tooltip: '保存到语料',
+            icon: _saving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.bookmark_add_outlined),
+          ),
           IconButton(
             onPressed: () => context.push('/settings'),
             tooltip: '设置',

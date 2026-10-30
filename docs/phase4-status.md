@@ -8,7 +8,8 @@ Base: Phase 3 horizontal OCR (`docs/phase3-status.md`) and Phase 3.5
 > stat-first fingerprints, 90° image correction, mixed routing, Manga quality
 > filtering and manual rotation are documented in
 > [`docs/phase4.5-status.md`](phase4.5-status.md). Phase 4 remains the baseline
-> record; Phase 5 is paused until Phase 4.5 acceptance passes.
+> record; Phase 4.5 and Phase 5 were completed on 2026-10-30. Phase 6 remains
+> design-only pending approval.
 
 ## Scope
 

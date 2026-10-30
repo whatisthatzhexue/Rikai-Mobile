@@ -120,6 +120,31 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 The debug APK is large (all ABIs, debug runtime). The release APK is arm64-only
 and downloads OCR models on demand.
 
+If a debug or integration-test build left `integration_test` in
+`android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java`,
+the release compile fails with `パッケージdev.flutter.plugins.integration_testは
+存在しません`. Regenerate release tooling once, then build:
+
+```bash
+flutter build apk --release --target-platform android-arm64 --split-per-abi --config-only
+flutter build apk --release --target-platform android-arm64 --split-per-abi
+```
+
+`--config-only` rewrites the registrant with release filtering (dev-only plugins
+such as `integration_test` are excluded).
+
+On a fresh install the app opens the Phase 5 onboarding guide. Existing installs
+with a saved UniDic path skip it automatically; Settings → “重新查看新手引导”
+opens it again. Text/photo corpus records live under the application support
+directory; Settings → “语料与存储” can clear the corpus or the extracted MDict
+resource cache. The release build still signs with the debug keystore
+(`android/app/build.gradle.kts` has a TODO) — replace it before distribution.
+
+The current unit/widget suite is 149 tests. It includes onboarding, reader text
+saving, photo-block serialization and corpus image resize/JPEG tests; no desktop
+SQLite test dependency is used because `sqflite_common_ffi` pulls a native
+SQLite download that breaks offline Android builds.
+
 ## Emulator
 
 ```bash

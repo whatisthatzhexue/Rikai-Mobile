@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -14,6 +13,7 @@ import '../../services/ocr/ocr_text_composer.dart';
 import '../../state/capture_session.dart';
 import '../../state/providers.dart';
 import 'capture_buttons.dart';
+import 'capture_corpus.dart';
 import 'capture_dialogs.dart';
 
 class PhotoMultiSelectPage extends ConsumerStatefulWidget {
@@ -36,6 +36,7 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
   int _runToken = 0;
   bool _disposed = false;
   StreamSubscription<OcrProgress>? _progressSubscription;
+  final Set<String> _autoSaved = {};
   double _progress = 0;
 
   @override
@@ -119,13 +120,11 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
               .recognize(imagePath: photo.filePath, mode: photo.mode);
           if (token != _runToken || _disposed) return;
           final text = composeOcrText(result.blocks);
+          final photoResult = PhotoOcrResult.fromOcrResult(result, text);
           ref
               .read(captureSessionProvider.notifier)
-              .setOcrResult(
-                photo.id,
-                key,
-                PhotoOcrResult.fromOcrResult(result, text),
-              );
+              .setOcrResult(photo.id, key, photoResult);
+          unawaited(_autoSave(photo, photoResult));
         } on OcrException catch (error) {
           if (error.code == 'CANCELLED') return;
           _error = error.message;
@@ -150,6 +149,24 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
   Future<String> _ensureFingerprint() async {
     final manifest = await ref.read(ocrModelManifestProvider.future);
     return ref.read(ocrServiceProvider).ensureReady(manifest);
+  }
+
+  Future<void> _autoSave(CapturePhoto photo, PhotoOcrResult result) async {
+    if (!ref.read(appSettingsProvider).autoSaveOcr) return;
+    if (result.text.trim().isEmpty) return;
+    final key = '${photo.id}|${photo.mode.name}|${result.text}';
+    if (!_autoSaved.add(key)) return;
+    try {
+      await saveCapturePhotoToCorpus(
+        history: ref.read(historyStoreProvider),
+        photo: photo,
+        result: result,
+      );
+      if (!mounted || _disposed) return;
+      ref.invalidate(corpusEntriesProvider);
+    } catch (_) {
+      _autoSaved.remove(key);
+    }
   }
 
   Future<void> _cancelRecognition() async {
@@ -216,36 +233,15 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
         final cached = _fingerprint == null
             ? null
             : photo.findOcrResult(mode: photo.mode, fingerprint: _fingerprint!);
-        final blocksJson = jsonEncode(
-          (cached?.blocks ?? const []).map((block) {
-            return {
-              'text': block.text,
-              'left': block.left,
-              'top': block.top,
-              'right': block.right,
-              'bottom': block.bottom,
-              'confidence': block.confidence,
-              'orientation': block.orientation,
-              'points': block.points,
-            };
-          }).toList(),
+        await saveCapturePhotoToCorpus(
+          history: ref.read(historyStoreProvider),
+          photo: photo,
+          result: cached,
         );
-        await ref
-            .read(historyStoreProvider)
-            .savePhoto(
-              sourceImagePath: photo.filePath,
-              text: cached?.text ?? '',
-              engine: cached?.engine ?? 'paddle_v5',
-              mode: photo.mode.name,
-              orientation: cached?.blocks.isNotEmpty == true
-                  ? cached!.blocks.first.orientation
-                  : 'unknown',
-              blocksJson: blocksJson,
-            );
         saved++;
       }
-      ref.invalidate(corpusEntriesProvider);
       if (!mounted) return;
+      ref.invalidate(corpusEntriesProvider);
       RikaiToast.show(context, '已保存 $saved 张照片到语料库');
     } catch (error) {
       if (!mounted) return;

@@ -12,9 +12,11 @@ provider; it is not part of the current build.
 
 Phases 1–4 are working end to end on the Android emulator with a real
 UniDic and MDict dictionary. **Phase 4.5 (OCR quality and performance
-convergence) is in progress**; Phase 5 is paused until the Phase 4.5 real-device
-acceptance checks pass. The Phase 6 dictionary assistant is design v2 plus
-JSON-schema contracts only and is not implemented.
+convergence) was accepted on arm64/real devices on 2026-10-30.** **Phase 5
+(corpus/history, onboarding and release polish) was completed and
+user-confirmed on a cold-booted emulator on 2026-10-30.** The Phase 6
+dictionary assistant is design v2 plus JSON-schema contracts only and is not
+implemented.
 
 - In-place MeCab/UniDic tokenization in a long-lived worker isolate, private
   `mecabrc`, CSV-aware parsing of quoted UniDic fields
@@ -46,6 +48,19 @@ JSON-schema contracts only and is not implemented.
   the corpus list and detail page show full photos, font/furigana controls and
   copy (card bottom-right in the list, photo bottom-right in the detail), and
   the detail page shows OCR + tokenization with corpus-to-corpus navigation
+- First-run onboarding: local-only boundary, storage permission status, UniDic,
+  optional MDict/OCR setup links and a licence acknowledgement, with skip and
+  a “重新查看新手引导” entry in settings
+- Corpus lifecycle: typed text can be saved from the reader, text-only entries
+  render without a photo pane, photos are EXIF-baked and compressed to a
+  max-2048 quality-85 JPEG, and the corpus can be cleared per entry or wholesale
+- Optional “自动保存识别结果” (off by default) saves each fresh OCR result once
+  per photo/mode/text; settings also clear the extracted MDict resource cache
+  without touching dictionary files
+- Phase 5 release packaging: arm64 release APK builds successfully
+  (`app-arm64-v8a-release.apk`, about 60 MB); the onboarding/corpus/settings
+  flows were user-confirmed on a cold-booted emulator. The APK currently uses
+  the debug keystore for development.
 - MDict folder import recursively scans subfolders, previews importable/existing/
   unsupported dictionaries, and imports selected entries with progress, then
   returns directly to dictionary management
@@ -78,8 +93,9 @@ JSON-schema contracts only and is not implemented.
 
 ### Phase 6 planned: dictionary assistant (design only)
 
-Phase 6 is documented but **not implemented**. Once Phase 4.5 and Phase 5 are
-complete and the design is approved, the planned home screen has five actions:
+Phase 6 is documented but **not implemented**. Phase 5 is complete; once the
+Phase 6 design and implementation plan are approved, the planned home screen has
+five actions:
 `拍照识别`, `查句子`, `查单词`, `历史记录`, and the new `词典助手`.
 
 The planned assistant combines local OCR, UniDic tokenization, and MDict lookup
@@ -102,9 +118,9 @@ are in [docs/phase6-agent-design.md](docs/phase6-agent-design.md); the tool and
 JSON-schema contracts are in
 [docs/phase6-agent-contracts.md](docs/phase6-agent-contracts.md).
 
-Next: finish Phase 4.5 real-device acceptance, then Phase 5 (full corpus/history
-management, onboarding, release polish). Phase 6 will start only after Phase 5
-and explicit approval. See
+Next: Phase 6 design review and explicit user approval; it remains unimplemented
+until then. See
+[docs/phase5-status.md](docs/phase5-status.md),
 [docs/phase4.5-status.md](docs/phase4.5-status.md),
 [docs/phase6-agent-design.md](docs/phase6-agent-design.md),
 [docs/phase4-status.md](docs/phase4-status.md),
@@ -143,7 +159,10 @@ flutter test
 flutter build apk --debug
 ```
 
-See [docs/dev-setup.md](docs/dev-setup.md) for toolchain and device setup.
+For an arm64 release build, see [docs/dev-setup.md](docs/dev-setup.md): if a
+previous debug/integration-test run left `integration_test` in the generated
+plugin registrant, run the `--config-only` release command once before
+`flutter build apk --release --target-platform android-arm64 --split-per-abi`.
 UI work must follow [docs/design-tokens.md](docs/design-tokens.md). The current
 build contains no Agent/provider implementation, so Phase 6
 provider/fake-server tests are not part of the current build or test suite.
@@ -159,6 +178,7 @@ provider/fake-server tests are not part of the current build or test suite.
 - [Phase 3.5 capture/import status](docs/phase3.5-status.md)
 - [Phase 4 vertical OCR status](docs/phase4-status.md)
 - [Phase 4.5 OCR convergence status](docs/phase4.5-status.md)
+- [Phase 5 corpus/onboarding/release status](docs/phase5-status.md)
 - [Phase 6 agent design v2 (planned)](docs/phase6-agent-design.md)
 - [Phase 6 agent contracts (planned)](docs/phase6-agent-contracts.md)
 - [Development setup](docs/dev-setup.md)
