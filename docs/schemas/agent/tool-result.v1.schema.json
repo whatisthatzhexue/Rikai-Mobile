@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rikai.mobile/schemas/agent/tool-result.v1.schema.json",
+  "title": "Rikai Agent Tool Result v1",
+  "type": "object",
+  "required": ["ok", "data", "error", "provenance"],
+  "additionalProperties": false,
+  "properties": {
+    "ok": {"type": "boolean"},
+    "data": {"type": "object"},
+    "error": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/error"}
+      ]
+    },
+    "provenance": {"$ref": "#/$defs/provenance"}
+  },
+  "$defs": {
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            "NOT_CONFIGURED",
+            "MODEL_MISSING",
+            "MODEL_INVALID",
+            "DICTIONARY_NOT_READY",
+            "DICTIONARY_LOOKUP_FAILED",
+            "UNIDIC_NOT_READY",
+            "TOOL_TIMEOUT",
+            "TOOL_CANCELLED",
+            "TOOL_BUDGET_EXCEEDED",
+            "INVALID_ARGUMENTS",
+            "PROVIDER_AUTH_FAILED",
+            "PROVIDER_RATE_LIMITED",
+            "PROVIDER_UNAVAILABLE",
+            "PROVIDER_REFUSED",
+            "VALIDATION_FAILED",
+            "INTERNAL_ERROR"
+          ]
+        },
+        "message": {"type": "string", "minLength": 1, "maxLength": 500},
+        "retryable": {"type": "boolean"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["tool", "tool_call_id"],
+      "additionalProperties": false,
+      "properties": {
+        "tool": {"type": "string", "minLength": 1, "maxLength": 80},
+        "tool_call_id": {"type": "string", "minLength": 1, "maxLength": 128},
+        "elapsed_ms": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

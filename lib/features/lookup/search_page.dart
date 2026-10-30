@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/models/dict_info.dart';
+import '../../core/models/lookup_match_mode.dart';
 import '../../core/models/lookup_models.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/page_route.dart';
@@ -15,6 +16,7 @@ import '../../state/lookup_search.dart';
 import '../../state/providers.dart';
 import 'dictionary_filter_bar.dart';
 import 'entry_page.dart';
+import 'lookup_mode_menu.dart';
 import 'lookup_result_list.dart';
 
 class SearchPage extends ConsumerStatefulWidget {
@@ -26,6 +28,7 @@ class SearchPage extends ConsumerStatefulWidget {
 
 class _SearchPageState extends ConsumerState<SearchPage> {
   late final TextEditingController _controller;
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -39,6 +42,26 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     });
   }
 
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _onQueryChanged(String value) {
+    if (ref.read(appSettingsProvider).lookupMatchMode !=
+        LookupMatchMode.incremental) {
+      return;
+    }
+    _searchDebounce?.cancel();
+    if (value.trim().isEmpty) return;
+    // Incremental mode searches while typing; the short delay keeps the
+    // MDict worker from being flooded on every keystroke.
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) _search(null, false);
+    });
+  }
+
   Future<void> _refreshAfterExternalSelectionChange() async {
     final search = ref.read(lookupSearchProvider);
     if (search.lastQuery.isEmpty) return;
@@ -47,12 +70,18 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     final selected = preferences.selectedDictionaries(enabled);
     final signature = selected.map((dictionary) => dictionary.id).toList()
       ..sort();
-    if (signature.join(',') != search.selectionSignature) {
+    final mode = ref.read(appSettingsProvider).lookupMatchMode;
+    if (signature.join(',') != search.selectionSignature ||
+        mode != search.matchMode) {
       await ref.read(lookupSearchProvider.notifier).search(search.lastQuery);
     }
   }
 
-  Future<void> _search([String? queryOverride]) async {
+  Future<void> _search([
+    String? queryOverride,
+    bool dismissKeyboard = true,
+  ]) async {
+    _searchDebounce?.cancel();
     final query = (queryOverride ?? _controller.text).trim();
     if (query.isEmpty) return;
     if (queryOverride != null && queryOverride != _controller.text) {
@@ -62,7 +91,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       );
     }
 
-    FocusScope.of(context).unfocus();
+    if (dismissKeyboard) FocusScope.of(context).unfocus();
     await ref.read(lookupSearchProvider.notifier).search(query);
   }
 
@@ -117,6 +146,17 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         unawaited(ref.read(lookupSearchProvider.notifier).search(query));
       }
     });
+    ref.listen(appSettingsProvider.select((s) => s.lookupMatchMode), (
+      previous,
+      next,
+    ) {
+      if (previous == next) return;
+      _searchDebounce?.cancel();
+      final query = ref.read(lookupSearchProvider).lastQuery;
+      if (query.isNotEmpty) {
+        unawaited(ref.read(lookupSearchProvider.notifier).search(query));
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -126,6 +166,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             padding: const EdgeInsets.only(right: AppSpacing.xs),
             child: DictionarySelectionModeToggle(
               mode: preferences.mode,
+              onDark: true,
               onChanged: (mode) =>
                   ref.read(lookupPreferencesProvider.notifier).setMode(mode),
             ),
@@ -138,6 +179,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
             },
             icon: const Icon(Icons.library_books_outlined),
           ),
+          const LookupModeMenu(),
         ],
       ),
       body: SafeArea(
@@ -153,25 +195,23 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               child: TextField(
                 controller: _controller,
                 textInputAction: TextInputAction.search,
+                onChanged: _onQueryChanged,
                 onSubmitted: (_) => _search(),
                 onTapOutside: (_) => FocusScope.of(context).unfocus(),
                 decoration: InputDecoration(
                   hintText: '搜索……',
                   prefixIcon: const Icon(Icons.search),
-                  suffixIcon: search.busy
-                      ? const Padding(
-                          padding: EdgeInsets.all(AppSpacing.md),
-                          child: SizedBox(
+                  suffixIcon: IconButton(
+                    tooltip: search.busy ? null : '查询',
+                    onPressed: search.busy ? null : _search,
+                    icon: search.busy
+                        ? const SizedBox(
                             width: 16,
                             height: 16,
                             child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : IconButton(
-                          tooltip: '查询',
-                          onPressed: _search,
-                          icon: const Icon(Icons.arrow_forward),
-                        ),
+                          )
+                        : const Icon(Icons.arrow_forward),
+                  ),
                 ),
               ),
             ),

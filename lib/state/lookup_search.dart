@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/models/dict_info.dart';
+import '../core/models/lookup_match_mode.dart';
 import '../core/models/lookup_models.dart';
 import '../services/mdict/mdict_worker.dart';
 import 'lookup_preferences.dart';
@@ -21,6 +22,7 @@ class LookupSearchState {
     this.busy = false,
     this.lastQuery = '',
     this.selectionSignature = '',
+    this.matchMode = LookupMatchMode.exact,
   });
 
   final LookupResult? result;
@@ -33,13 +35,17 @@ class LookupSearchState {
   /// reflected when the page is reopened.
   final String selectionSignature;
 
-  LookupSearchState searching(String query) {
+  /// Matching mode used for [result]; changing the global mode must refresh it.
+  final LookupMatchMode matchMode;
+
+  LookupSearchState searching(String query, LookupMatchMode mode) {
     return LookupSearchState(
       result: result,
       error: null,
       busy: true,
       lastQuery: query,
       selectionSignature: selectionSignature,
+      matchMode: mode,
     );
   }
 
@@ -50,6 +56,7 @@ class LookupSearchState {
       busy: false,
       lastQuery: lastQuery,
       selectionSignature: signature,
+      matchMode: matchMode,
     );
   }
 
@@ -60,6 +67,7 @@ class LookupSearchState {
       busy: false,
       lastQuery: lastQuery,
       selectionSignature: signature,
+      matchMode: matchMode,
     );
   }
 }
@@ -84,6 +92,7 @@ class LookupSearchNotifier extends Notifier<LookupSearchState> {
     final query = rawQuery.trim();
     if (query.isEmpty) return;
 
+    final settings = ref.read(appSettingsProvider);
     final List<DictionaryInfo> enabled =
         dictionaries ?? ref.read(enabledDictionariesProvider);
     final selected = ref
@@ -102,21 +111,21 @@ class LookupSearchNotifier extends Notifier<LookupSearchState> {
         busy: false,
         lastQuery: query,
         selectionSignature: signature.join(','),
+        matchMode: settings.lookupMatchMode,
       );
       return;
     }
 
     final generation = ++_generation;
-    state = state.searching(query);
+    state = state.searching(query, settings.lookupMatchMode);
     try {
       final service = await ref.read(mdictServiceProvider.future);
       final result = await service.lookup(
         query: query,
         rawCandidates: [query],
         dictionaries: selected,
-        maxEntriesPerDictionary: ref
-            .read(appSettingsProvider)
-            .maxEntriesPerDictionary,
+        matchMode: settings.lookupMatchMode,
+        maxEntriesPerDictionary: settings.maxEntriesPerDictionary,
       );
       if (generation != _generation) return;
       state = state.completed(result, signature.join(','));

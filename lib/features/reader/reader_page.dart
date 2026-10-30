@@ -10,6 +10,7 @@ import '../../core/ui/rikai_toast.dart';
 import '../../services/mecab/mecab_service.dart';
 import '../../services/storage/settings_store.dart';
 import '../../state/providers.dart';
+import '../lookup/lookup_mode_menu.dart';
 import '../lookup/lookup_sheet.dart';
 import 'reader_block.dart';
 import 'reader_lines.dart';
@@ -44,6 +45,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   late final TextEditingController _textController;
   late final bool _ownsTextController;
   final ScrollController _scrollController = ScrollController();
+  final FocusNode _inputFocusNode = FocusNode();
 
   List<Token> _tokens = const [];
   String? _analysedText;
@@ -82,6 +84,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _inputFocusNode.dispose();
     if (_ownsTextController) _textController.dispose();
     super.dispose();
   }
@@ -140,16 +143,24 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     RikaiToast.show(context, '已复制全文');
   }
 
-  void _showTokenLookup(Token token) {
-    // Opening a lookup must not leave the IME attached to the editor. The
-    // sheet also clears focus after dismissal so tapping the scrim cannot
-    // bounce the keyboard back.
-    FocusManager.instance.primaryFocus?.unfocus();
-    showTokenLookupSheet(context, token);
+  Future<void> _showTokenLookup(Token token) async {
+    // Prevent the editor from requesting focus while the lookup sheet/entry
+    // page is above it. Android otherwise restores the field when the entry
+    // page pops and reopens the keyboard on the first lookup.
+    _inputFocusNode.canRequestFocus = false;
+    _inputFocusNode.unfocus(disposition: UnfocusDisposition.scope);
+    try {
+      await showTokenLookupSheet(context, token);
+    } finally {
+      if (mounted) {
+        _inputFocusNode.canRequestFocus = true;
+        _inputFocusNode.unfocus(disposition: UnfocusDisposition.scope);
+      }
+    }
   }
 
   void _hideControls() {
-    FocusManager.instance.primaryFocus?.unfocus();
+    _inputFocusNode.unfocus(disposition: UnfocusDisposition.scope);
     setState(() => _controlsVisible = false);
   }
 
@@ -175,6 +186,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
             tooltip: '设置',
             icon: const Icon(Icons.settings_outlined),
           ),
+          const LookupModeMenu(),
         ],
       ),
       body: SafeArea(
@@ -207,6 +219,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
                       ),
                       child: TextField(
                         controller: _textController,
+                        focusNode: _inputFocusNode,
                         minLines: 2,
                         maxLines: 6,
                         keyboardType: TextInputType.multiline,
@@ -287,19 +300,18 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Padding(
-                  padding: const EdgeInsets.only(
-                    left: AppSpacing.lg,
-                    top: AppSpacing.xs,
-                    bottom: AppSpacing.xs,
-                  ),
+                  padding: const EdgeInsets.only(left: AppSpacing.lg),
                   child: IconButton(
                     tooltip: '显示输入框',
                     onPressed: _showControls,
                     padding: EdgeInsets.zero,
                     alignment: Alignment.centerLeft,
                     constraints: const BoxConstraints.tightFor(
-                      width: AppSizes.control,
-                      height: AppSizes.control,
+                      width: AppSizes.chip,
+                      height: AppSizes.chip,
+                    ),
+                    style: IconButton.styleFrom(
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                     icon: const Icon(
                       Icons.visibility_outlined,

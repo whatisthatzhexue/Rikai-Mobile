@@ -279,9 +279,8 @@ class _ModelPageState extends ConsumerState<ModelPage> {
       dialogTitle: '选择 OCR 模型目录',
     );
     if (!mounted || selected == null) return;
-    final trimmed = selected.trim();
+    var trimmed = selected.trim();
     if (trimmed.isEmpty) return;
-    if (trimmed == _directoryPath) return;
     if (!await ensurePathAccess(context, ref, trimmed)) return;
     if (!mounted) return;
 
@@ -290,6 +289,14 @@ class _ModelPageState extends ConsumerState<ModelPage> {
       (sum, status) => sum + status.installedBytes,
     );
     final manager = ref.read(ocrModelManagerProvider);
+    // Accept either the root containing model folders or a single model folder
+    // such as `paddle_v5`; both resolve to the shared models root.
+    trimmed = await manager.resolveModelsRoot(trimmed);
+    if (!mounted) return;
+    if (trimmed == _directoryPath) return;
+    if (!await ensurePathAccess(context, ref, trimmed)) return;
+    if (!mounted) return;
+
     final check = await manager.validateModelsDirectory(
       trimmed,
       requiredBytes: installedBytes,
@@ -509,6 +516,15 @@ class _ModelPageState extends ConsumerState<ModelPage> {
                     onPressed: _busySetId == null ? _changeDirectory : null,
                     icon: const Icon(Icons.folder_open_outlined),
                     label: const Text('更改目录'),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '可选择模型总目录，也可直接选择 paddle_v5 / manga_ocr '
+                    '等单个模型文件夹，应用会自动定位总目录。',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: AppTypography.helper,
+                      height: 1.5,
+                    ),
                   ),
                   if (_migrationProgress != null) ...[
                     const SizedBox(height: AppSpacing.md),

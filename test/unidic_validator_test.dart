@@ -151,6 +151,39 @@ void main() {
     expect(result.message, contains('长度与文件头声明不一致'));
   });
 
+  test('discovers multiple valid UniDic directories below a parent', () async {
+    final parent = await Directory.systemTemp.createTemp('rikai_unidic_tree_');
+    addTearDown(() async {
+      if (await parent.exists()) await parent.delete(recursive: true);
+    });
+    Future<void> copyDictionary(Directory source, String child) async {
+      final target = Directory('${parent.path}/$child');
+      await target.create(recursive: true);
+      await for (final entity in source.list()) {
+        if (entity is! File) continue;
+        await entity.copy('${target.path}/${entity.uri.pathSegments.last}');
+      }
+    }
+
+    final first = await _createDictionary();
+    final second = await _createDictionary();
+    await copyDictionary(first, 'dictA');
+    await copyDictionary(second, 'dictB');
+    final broken = Directory('${parent.path}/broken');
+    await broken.create();
+    await File('${broken.path}/matrix.bin').writeAsBytes([1]);
+
+    final discovered = await UnidicValidator.discover(parent.path);
+
+    expect(discovered.length, 2);
+    expect(
+      discovered.map(
+        (validation) => UnidicValidator.displayName(validation.path),
+      ),
+      containsAll(['dictA', 'dictB']),
+    );
+  });
+
   test('normalizes paths without touching the file system', () {
     expect(
       UnidicValidator.normalizePath('  /sdcard/Download/unidic/  '),

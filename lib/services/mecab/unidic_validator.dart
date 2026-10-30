@@ -103,6 +103,65 @@ class UnidicValidator {
     return '$directory/$name';
   }
 
+  /// Finds every valid UniDic directory below [rawPath].
+  ///
+  /// A user may select either the exact UniDic directory, its parent download
+  /// folder, or even the `matrix.bin` file itself. Only directories whose
+  /// `sys.dic` also passes [validate] are returned.
+  static Future<List<UnidicValidation>> discover(String rawPath) async {
+    final normalized = normalizePath(rawPath);
+    if (normalized.isEmpty) return const [];
+
+    Directory root;
+    final directory = Directory(normalized);
+    if (directory.existsSync()) {
+      root = directory;
+    } else {
+      final file = File(normalized);
+      if (!file.existsSync()) return const [];
+      root = file.parent;
+    }
+
+    final candidates = <String>{};
+    if (await File(_join(root.path, 'matrix.bin')).exists()) {
+      candidates.add(root.path);
+    }
+    try {
+      await for (final entity in root.list(
+        recursive: true,
+        followLinks: false,
+      )) {
+        if (entity is! File) continue;
+        final name = entity.uri.pathSegments.isEmpty
+            ? ''
+            : entity.uri.pathSegments.last.toLowerCase();
+        if (name != 'matrix.bin') continue;
+        candidates.add(entity.parent.path);
+      }
+    } on FileSystemException {
+      // An unreadable subdirectory must not abort the rest of the scan.
+    }
+
+    final valid = <UnidicValidation>[];
+    for (final candidate in candidates) {
+      try {
+        final validation = await validate(candidate);
+        if (validation.isValid) valid.add(validation);
+      } on FileSystemException {
+        // Skip unreadable candidates.
+      }
+    }
+    valid.sort((a, b) => a.path.compareTo(b.path));
+    return List<UnidicValidation>.unmodifiable(valid);
+  }
+
+  /// Last path segment used as the selection dialog title.
+  static String displayName(String rawPath) {
+    final path = normalizePath(rawPath);
+    final index = path.lastIndexOf(RegExp(r'[/\\]'));
+    return index < 0 ? path : path.substring(index + 1);
+  }
+
   static Future<UnidicValidation> validate(String rawPath) async {
     final path = normalizePath(rawPath);
     if (path.isEmpty) {

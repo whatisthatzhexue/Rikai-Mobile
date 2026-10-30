@@ -16,6 +16,7 @@ import '../../services/storage/settings_store.dart';
 import '../../state/providers.dart';
 import '../capture/capture_buttons.dart';
 import '../capture/photo_pane.dart';
+import '../lookup/lookup_mode_menu.dart';
 import '../capture/photo_viewer_page.dart';
 import '../lookup/lookup_sheet.dart';
 import '../reader/reader_block.dart';
@@ -206,7 +207,7 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
       backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: const Text('语料'),
-        actions: const [ReaderOptionsMenu()],
+        actions: const [ReaderOptionsMenu(), LookupModeMenu()],
       ),
       body: entriesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -313,11 +314,7 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
           AppSpacing.lg,
           AppSpacing.lg,
         ),
-        children: [
-          Text('分词结果', style: theme.textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          ..._buildTokenStatus(entry, theme),
-        ],
+        children: [..._buildTokenStatus(entry, theme)],
       );
     }
 
@@ -328,17 +325,6 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
       child: CustomScrollView(
         cacheExtent: 800,
         slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.sm,
-              AppSpacing.lg,
-              0,
-            ),
-            sliver: SliverToBoxAdapter(
-              child: Text('分词结果', style: theme.textTheme.titleMedium),
-            ),
-          ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(
               AppSpacing.lg,

@@ -26,8 +26,26 @@ class CaptureSessionNotifier extends Notifier<CaptureSessionState> {
   }
 
   void setMode(OcrMode mode) {
-    if (state.mode == mode) return;
-    state = state.copyWith(mode: mode);
+    final current = state.current;
+    if (current == null) {
+      if (state.mode != mode) state = state.copyWith(mode: mode);
+      return;
+    }
+    setPhotoMode(current.id, mode);
+  }
+
+  /// Updates one photo without changing the OCR mode of any other photo.
+  void setPhotoMode(String photoId, OcrMode mode) {
+    final index = state.photos.indexWhere((photo) => photo.id == photoId);
+    if (index < 0) return;
+    if (state.photos[index].mode == mode && state.mode == mode) return;
+    final next = state.photos.toList();
+    next[index] = next[index].copyWith(mode: mode);
+    state = CaptureSessionState(
+      photos: next,
+      currentIndex: state.currentIndex,
+      mode: mode,
+    );
   }
 
   void removePhotos(Set<String> ids) {

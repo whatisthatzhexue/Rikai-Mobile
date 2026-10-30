@@ -108,6 +108,7 @@ void main() {
     await tester.tap(find.text('输入文本'));
     await tester.pumpAndSettle();
     expect(find.text('文本阅读'), findsOneWidget);
+    expect(find.byIcon(Icons.menu_book_outlined), findsOneWidget);
 
     final readerScaffold = tester.widget<Scaffold>(find.byType(Scaffold).last);
     expect(readerScaffold.backgroundColor, AppColors.surface);
@@ -156,7 +157,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('UniDic 分词'), findsOneWidget);
     expect(find.text('校验并保存'), findsOneWidget);
-    expect(find.text('可直接选择目录或手动填写；应用原地读取，不复制文件。'), findsOneWidget);
+    expect(find.textContaining('应用会递归查找并校验'), findsOneWidget);
     expect(find.text('应用外部私有目录'), findsOneWidget);
     expect(find.byType(Card), findsNothing);
 
@@ -208,6 +209,7 @@ void main() {
     expect(find.text('管理词典'), findsOneWidget);
     expect(find.text('查询词典'), findsNothing);
     expect(find.text('多选'), findsOneWidget);
+    expect(find.byIcon(Icons.menu_book_outlined), findsOneWidget);
   });
 
   testWidgets('dictionary management opens from settings', (tester) async {

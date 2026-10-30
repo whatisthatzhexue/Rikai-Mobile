@@ -200,6 +200,54 @@ class OcrModelManager {
     }
   }
 
+  /// Resolves a user-selected path to the directory that contains model-set
+  /// subfolders (`paddle_v5/`, `manga_ocr/`, `orientation/`).
+  ///
+  /// Users commonly pick either the parent “models” folder or the
+  /// `paddle_v5` folder itself. Both resolve to the parent root.
+  Future<String> resolveModelsRoot(String rawPath) async {
+    var candidate = Directory(rawPath.trim()).path;
+    if (!await Directory(candidate).exists()) return candidate;
+
+    final name = p.basename(candidate).toLowerCase();
+    if (_modelDirectoryNames.contains(name)) {
+      candidate = Directory(candidate).parent.path;
+    } else if (await _looksLikeModelDirectory(candidate)) {
+      candidate = Directory(candidate).parent.path;
+    }
+
+    // A model-id parent may itself have been selected from a nested path.
+    final resolvedName = p.basename(candidate).toLowerCase();
+    if (_modelDirectoryNames.contains(resolvedName)) {
+      candidate = Directory(candidate).parent.path;
+    }
+    return candidate;
+  }
+
+  static const Set<String> _modelDirectoryNames = {
+    'paddle_v5',
+    'manga_ocr',
+    'orientation',
+  };
+
+  Future<bool> _looksLikeModelDirectory(String path) async {
+    const signatures = [
+      ['det.onnx', 'rec.onnx', 'keys.yml'],
+      ['encoder_model.onnx', 'decoder_model.onnx', 'vocab.txt'],
+    ];
+    for (final signature in signatures) {
+      var allPresent = true;
+      for (final name in signature) {
+        if (!await File(p.join(path, name)).exists()) {
+          allPresent = false;
+          break;
+        }
+      }
+      if (allPresent) return true;
+    }
+    return false;
+  }
+
   /// Absolute path of the model directory currently configured.
   ///
   /// This is a pure path resolution (no directory creation, no IO side effect),

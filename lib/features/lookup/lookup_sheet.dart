@@ -12,6 +12,7 @@ import '../../state/providers.dart';
 import '../settings/dictionary_page.dart';
 import 'dictionary_filter_bar.dart';
 import 'entry_page.dart';
+import 'lookup_mode_menu.dart';
 import 'lookup_result_list.dart';
 
 /// Opens the token lookup sheet from the reader.
@@ -44,6 +45,7 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
   LookupResult? _result;
   Object? _error;
   bool _busy = false;
+  int _loadToken = 0;
 
   Token get _token => widget.token;
 
@@ -59,6 +61,7 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
   }
 
   Future<void> _load(List<String> rawCandidates) async {
+    final token = ++_loadToken;
     final enabled = ref.read(enabledDictionariesProvider);
     final dictionaries = ref
         .read(lookupPreferencesProvider)
@@ -80,21 +83,23 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
 
     try {
       final service = await ref.read(mdictServiceProvider.future);
+      final settings = ref.read(appSettingsProvider);
       final result = await service.lookup(
         query: _query,
         rawCandidates: rawCandidates,
         dictionaries: dictionaries,
-        maxEntriesPerDictionary: ref
-            .read(appSettingsProvider)
-            .maxEntriesPerDictionary,
+        matchMode: settings.lookupMatchMode,
+        maxEntriesPerDictionary: settings.maxEntriesPerDictionary,
       );
-      if (!mounted) return;
+      if (!mounted || token != _loadToken) return;
       setState(() => _result = result);
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || token != _loadToken) return;
       setState(() => _error = error);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted && token == _loadToken) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -195,6 +200,9 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
                             .read(lookupPreferencesProvider.notifier)
                             .setMode(mode),
                       ),
+                    ),
+                    LookupModeMenu(
+                      onChanged: (_) => _load(_token.lookupCandidates),
                     ),
                   ],
                 ),

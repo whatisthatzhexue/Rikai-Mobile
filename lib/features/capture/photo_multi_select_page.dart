@@ -17,13 +17,8 @@ import 'capture_buttons.dart';
 import 'capture_dialogs.dart';
 
 class PhotoMultiSelectPage extends ConsumerStatefulWidget {
-  const PhotoMultiSelectPage({
-    super.key,
-    required this.mode,
-    this.initialFingerprint,
-  });
+  const PhotoMultiSelectPage({super.key, this.initialFingerprint});
 
-  final OcrMode mode;
   final String? initialFingerprint;
 
   @override
@@ -75,7 +70,7 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
     bool hasMissing(String fingerprint) {
       return photos.any(
         (photo) =>
-            photo.findOcrResult(mode: widget.mode, fingerprint: fingerprint) ==
+            photo.findOcrResult(mode: photo.mode, fingerprint: fingerprint) ==
             null,
       );
     }
@@ -110,10 +105,10 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
       for (final photo in photos) {
         if (token != _runToken || _disposed) return;
         final key = photoOcrCacheKey(
-          mode: widget.mode,
+          mode: photo.mode,
           fingerprint: fingerprint,
         );
-        if (photo.findOcrResult(mode: widget.mode, fingerprint: fingerprint) !=
+        if (photo.findOcrResult(mode: photo.mode, fingerprint: fingerprint) !=
             null) {
           continue;
         }
@@ -121,7 +116,7 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
         try {
           final result = await ref
               .read(ocrServiceProvider)
-              .recognize(imagePath: photo.filePath, mode: widget.mode);
+              .recognize(imagePath: photo.filePath, mode: photo.mode);
           if (token != _runToken || _disposed) return;
           final text = composeOcrText(result.blocks);
           ref
@@ -220,10 +215,7 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
       for (final photo in selected) {
         final cached = _fingerprint == null
             ? null
-            : photo.findOcrResult(
-                mode: widget.mode,
-                fingerprint: _fingerprint!,
-              );
+            : photo.findOcrResult(mode: photo.mode, fingerprint: _fingerprint!);
         final blocksJson = jsonEncode(
           (cached?.blocks ?? const []).map((block) {
             return {
@@ -244,7 +236,7 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
               sourceImagePath: photo.filePath,
               text: cached?.text ?? '',
               engine: cached?.engine ?? 'paddle_v5',
-              mode: widget.mode.name,
+              mode: photo.mode.name,
               orientation: cached?.blocks.isNotEmpty == true
                   ? cached!.blocks.first.orientation
                   : 'unknown',
@@ -397,7 +389,7 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
                       final result = _fingerprint == null
                           ? null
                           : photo.findOcrResult(
-                              mode: widget.mode,
+                              mode: photo.mode,
                               fingerprint: _fingerprint!,
                             );
                       return _PhotoGridTile(
@@ -419,7 +411,9 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
                 tooltip: '删除所选照片',
                 icon: Icons.delete_outline,
                 background: AppColors.error,
-                onPressed: _selected.isEmpty || _busy ? null : _deleteSelected,
+                onPressed: _selected.isEmpty || _saving
+                    ? null
+                    : _deleteSelected,
               ),
             ),
             Positioned(

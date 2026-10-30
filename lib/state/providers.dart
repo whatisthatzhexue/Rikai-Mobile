@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/models/dict_info.dart';
 import '../core/models/corpus_entry.dart';
+import '../core/models/lookup_match_mode.dart';
 import '../core/models/ocr_model.dart';
 import '../core/theme/app_fonts.dart';
 import '../services/mdict/entry_cache.dart';
@@ -147,6 +148,10 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
 
   void setMaxEntriesPerDictionary(int value) {
     _update(state.copyWith(maxEntriesPerDictionary: value < 0 ? 0 : value));
+  }
+
+  void setLookupMatchMode(LookupMatchMode mode) {
+    _update(state.copyWith(lookupMatchMode: mode));
   }
 
   void setOcrMirror(String value) {

@@ -47,15 +47,21 @@ class TokenChip extends StatelessWidget {
         : '';
     final tap = punctuation ? null : onTap;
 
+    // Avoid a Material + InkWell for every token. A long result can contain
+    // thousands of chips, and those extra layers made scrolling rebuild work
+    // fall off the frame budget in batches. The visual treatment is unchanged;
+    // only the ripple is omitted in favour of smooth reading.
     return Semantics(
       label: reading.isEmpty ? token.surface : '${token.surface}，读音 $reading',
       button: tap != null,
-      child: Material(
-        color: background,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: tap == null ? null : () => tap(token),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: tap == null ? null : () => tap(token),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
           child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: punctuation ? 0 : AppSpacing.xs,

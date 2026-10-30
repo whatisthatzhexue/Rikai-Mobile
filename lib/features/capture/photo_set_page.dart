@@ -20,6 +20,7 @@ import '../../services/ocr/ocr_text_composer.dart';
 import '../../services/storage/settings_store.dart';
 import '../../state/capture_session.dart';
 import '../../state/providers.dart';
+import '../lookup/lookup_mode_menu.dart';
 import '../lookup/lookup_sheet.dart';
 import '../reader/reader_block.dart';
 import '../reader/reader_lines.dart';
@@ -40,6 +41,7 @@ class PhotoSetPage extends ConsumerStatefulWidget {
 class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
   String? _fingerprint;
   String? _error;
+  bool _modelMissing = false;
   String _stage = '';
   double _progress = 0;
   bool _busy = false;
@@ -59,7 +61,10 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
   int _imageRevision = 0;
   StreamSubscription<OcrProgress>? _progressSubscription;
 
-  OcrMode get _mode => ref.read(captureSessionProvider).mode;
+  OcrMode get _mode {
+    final session = ref.read(captureSessionProvider);
+    return session.current?.mode ?? OcrMode.auto;
+  }
 
   @override
   void initState() {
@@ -133,6 +138,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
             _stage = '';
             _progress = 1;
             _error = null;
+            _modelMissing = false;
             _tokens = const [];
             _analysedText = null;
             _mecabError = null;
@@ -150,6 +156,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     if (mounted) {
       setState(() {
         _error = null;
+        _modelMissing = false;
         _progress = 0;
         _stage = '正在检查 OCR 模型…';
         _busy = true;
@@ -202,6 +209,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
         _stage = '';
         _progress = 1;
         _error = null;
+        _modelMissing = false;
       });
       await _startAnalysis(photo.id, text);
       unawaited(_prewarmModels());
@@ -214,6 +222,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       if (mounted) {
         setState(() {
           _busy = false;
+          _modelMissing = _isMissingModel(error);
           _error = error.message;
         });
       }
@@ -222,10 +231,21 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       if (mounted) {
         setState(() {
           _busy = false;
+          _modelMissing = _isMissingModel(error);
           _error = _errorText(error);
         });
       }
     }
+  }
+
+  bool _isMissingModel(Object error) {
+    if (error is OcrException) {
+      return error.code == 'MODEL_MISSING' || error.code == 'MODEL_INVALID';
+    }
+    if (error is OcrModelException) {
+      return error.code == 'MODEL_MISSING' || error.code == 'MODEL_INVALID';
+    }
+    return false;
   }
 
   Future<void> _prewarmModels() async {
@@ -324,12 +344,13 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
   }
 
   Future<void> _changeMode(OcrMode mode) async {
-    if (mode == _mode) return;
+    final photo = ref.read(captureSessionProvider).current;
+    if (photo == null || mode == photo.mode) return;
     await _cancelRecognition();
-    ref.read(captureSessionProvider.notifier).setMode(mode);
+    ref.read(captureSessionProvider.notifier).setPhotoMode(photo.id, mode);
     if (mounted) setState(() => _error = null);
-    // A mode change is an explicit orientation request, so re-run instead of
-    // showing an old auto/manual cache entry.
+    // A mode change is an explicit orientation request for this photo only,
+    // so re-run this photo instead of changing every photo in the set.
     await _refreshCurrent(force: true);
   }
 
@@ -353,17 +374,22 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       await FileImage(File(photo.filePath)).evict();
       ref.read(captureSessionProvider.notifier).clearPhotoOcr(photo.id);
       if (!mounted) return;
-      setState(() => _imageRevision++);
-      await _refreshCurrent(force: true);
+      // Release the rotation lock before OCR starts, so the user can press
+      // rotate again and interrupt the new recognition immediately.
+      setState(() {
+        _imageRevision++;
+        _rotating = false;
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _busy = false;
+        _rotating = false;
         _error = '旋转失败：$error';
       });
-    } finally {
-      if (mounted) setState(() => _rotating = false);
+      return;
     }
+    await _refreshCurrent(force: true);
   }
 
   Future<void> _changePhoto(int delta) async {
@@ -505,7 +531,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     await Navigator.of(context).push(
       RikaiPageRoute<void>(
         builder: (context) =>
-            PhotoMultiSelectPage(mode: _mode, initialFingerprint: _fingerprint),
+            PhotoMultiSelectPage(initialFingerprint: _fingerprint),
       ),
     );
     if (!mounted) return;
@@ -544,6 +570,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
               style: TextStyle(color: AppColors.onHeader),
             ),
           ),
+          const LookupModeMenu(),
         ],
       ),
       body: SafeArea(
@@ -615,7 +642,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
                             label: Text('竖向'),
                           ),
                         ],
-                        selected: {session.mode},
+                        selected: {photo.mode},
                         onSelectionChanged: _busy
                             ? null
                             : (selection) => _changeMode(selection.first),
@@ -739,13 +766,18 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '识别失败',
+              _modelMissing ? '未找到 OCR 模型' : '识别失败',
               style: theme.textTheme.titleMedium?.copyWith(
                 color: AppColors.error,
               ),
             ),
             const SizedBox(height: AppSpacing.xs),
-            Text(_error!, style: theme.textTheme.bodyMedium),
+            Text(
+              _modelMissing
+                  ? '未找到可用的 OCR 模型。\n\n请点击页面下方的「模型设置」下载或导入模型。'
+                  : _error!,
+              style: theme.textTheme.bodyMedium,
+            ),
             const SizedBox(height: AppSpacing.sm),
             OutlinedButton.icon(
               onPressed: () => _refreshCurrent(force: true),

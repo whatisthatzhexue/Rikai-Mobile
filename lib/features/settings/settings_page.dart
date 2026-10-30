@@ -87,11 +87,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
   }
 
   Future<void> _validateAndSave() async {
-    final path = UnidicValidator.normalizePath(_pathController.text);
-    if (!await ensurePathAccess(context, ref, path)) return;
+    final input = UnidicValidator.normalizePath(_pathController.text);
+    if (!await ensurePathAccess(context, ref, input)) return;
     if (!mounted) return;
-    _pathController.text = path;
-    ref.read(appSettingsProvider.notifier).setUnidicPath(path);
     setState(() {
       _validating = true;
       _validation = null;
@@ -99,23 +97,79 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
 
     UnidicValidation result;
     try {
-      result = await UnidicValidator.validate(path);
+      // Accept the exact directory, a parent download folder, or a path to
+      // matrix.bin. Only a fully validated UniDic directory is selectable.
+      final discovered = await UnidicValidator.discover(input);
+      if (!mounted) return;
+      if (discovered.length == 1) {
+        result = discovered.first;
+      } else if (discovered.length > 1) {
+        final selectedPath = await _chooseUnidic(discovered);
+        if (!mounted) return;
+        if (selectedPath == null) {
+          setState(() => _validating = false);
+          return;
+        }
+        result = discovered.firstWhere(
+          (candidate) => candidate.path == selectedPath,
+        );
+      } else {
+        result = await UnidicValidator.validate(input);
+      }
     } catch (error) {
       result = UnidicValidation(
         code: UnidicValidationCode.unreadable,
-        path: path,
+        path: input,
         message: '校验失败：$error',
       );
     }
     if (!mounted) return;
+
+    _pathController.text = result.path.isEmpty ? input : result.path;
     setState(() {
       _validating = false;
       _validation = result;
     });
     if (result.isValid) {
+      ref.read(appSettingsProvider.notifier).setUnidicPath(result.path);
       ref.invalidate(mecabServiceProvider);
       RikaiToast.show(context, 'UniDic 校验通过，路径已保存');
     }
+  }
+
+  Future<String?> _chooseUnidic(List<UnidicValidation> choices) {
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('选择 UniDic 目录'),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.55,
+          ),
+          child: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final choice in choices)
+                  ListTile(
+                    leading: const Icon(Icons.folder_outlined),
+                    title: Text(UnidicValidator.displayName(choice.path)),
+                    subtitle: Text(choice.path),
+                    onTap: () => Navigator.of(dialogContext).pop(choice.path),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -330,7 +384,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
-          '可直接选择目录或手动填写；应用原地读取，不复制文件。',
+          '可直接选择 UniDic 目录、它的上级文件夹，或填写 matrix.bin 的路径；'
+          '应用会递归查找并校验。词典原地读取，不复制文件。',
           style: theme.textTheme.bodySmall?.copyWith(
             fontSize: AppTypography.helper,
             height: 1.5,

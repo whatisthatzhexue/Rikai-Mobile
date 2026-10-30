@@ -700,9 +700,11 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 
 ## 11. Phase 6 — Mdict Agent（后期设计，未纳入 MVP 估算）
 
-> 状态：**设计草案，未实现**。设计细节、schema 建议、开放问题和验收标准见
-> `docs/phase6-agent-design.md`。Phase 6 依赖 Phase 5 完成，并依赖 Phase 1–4
-> 已提供的 OCR、UniDic、MDict 接口；开工前需要用户单独批准。
+> 状态：**设计草案 v2，未实现**。设计细节、开放问题和验收标准见
+> `docs/phase6-agent-design.md`；工具/JSON Schema/状态机契约见
+> `docs/phase6-agent-contracts.md`。Phase 6 依赖 Phase 5 完成，并依赖 Phase 1–4
+> 已提供的 OCR、UniDic、MDict 接口；开工前需要用户单独批准。v2 增加固定流水线、
+> 词典熟悉、逐词/语法证据、原文引用、会话级词典选择和按需多 OCR。
 
 ### 11.1 目标
 
@@ -730,31 +732,52 @@ Phase 6 计划将主页固定为五个按钮：
 - **模型分流**：简单任务（词典查询/整理）用用户选择的 small model；复杂任务
   （词义推理/规则生成）用 complex model。
 - **输入**：图片、文字、图片+文字；图片只经本机 OCR，严禁发送给 LLM 视觉接口。
-- **输出**：安全 Markdown、ruby、日语声调横线、可点击词典来源。
+- **输出**：首版用结构化结果组件（原文引用/译文/逐句/词注/证据卡）+ 可点击词典
+  来源；安全 Markdown、ruby、日语声调横线在 P6.7 再接入。
+- **接口层**：现有 OCR/UniDic/MDict 服务外包一层窄 Port（`OcrPort`、
+  `TokenizePort`、`LookupPort`、`DictionarySamplePort`、`LlmPort`、`SecretPort`）；
+  模型只看到 JSON Schema 工具（`unidic.tokenize`、`mdict.lookup`、
+  `mdict.suggest`），OCR/采样/UniDic profile 是 orchestratorOnly。
+- **编排**：固定流水线 `OCR → 词典熟悉 → 分词 → 证据 → 推断 → 校验`；编排器预取
+  每个 token/语法目标的查词，模型只能在预算内补充查词，不能决定词典顺序或
+  自造 citation。`performLookup`/`LookupSearchNotifier` 的查词逻辑提取为纯
+  `LookupGateway`，照片集与 Agent 共用 `OcrWorkflow`。
 - **工具集**：本地 OCR、UniDic tokenization、MDict lookup/suggest，全部通过
   JSON Schema 调用。
 - **引用**：`[来源N]` 由 orchestrator 发放并映射到真实 MDict 词条；点击来源打开
   现有查词 sheet，再点击词条进入现有词条页。
+- **任务工作流**：Step -1 词典熟悉（采样→LLM 归纳→用户确认→缓存）→ Step 0
+  图片仅本机 OCR，按 `{image_id, ocr_text}` JSON 发送 → Step 1 UniDic 分词并
+  逐词检索 MDict（语法语感/多义性）→ Step 2 结合语境推断 → Step 3 结果与依据。
+  必须引用原文；严格模式每个候选都要真实 citation。
+- **会话词典选择**：每个 Agent 会话独立选择可用词典，UI 复用查词的
+  单选/多选/全选逻辑，但不改变查词全局偏好；词典输出顺序严格按用户设置。
+- **多 OCR 版本**：Agent 可调用多种本机 OCR 策略并结合词典修复 OCR；版本冲突时
+  提供给用户选择，不静默覆盖，图片始终不上云。
 - **词典熟悉期**：首次使用 MDict/UniDic 前生成探针样本和 Markdown 规则说明，
   用户确认后缓存；词典不变则复用。
 - **注音/标注规则**：用户可让 Agent 生成 app 专用安全 DSL，统一影响所有
-  UniDic token 展示；禁止执行任意代码。
+  UniDic token 展示；禁止执行任意代码。该功能排在 P6.7，不进入首版 Agent。
 - **隐私**：API Key 安全存储，日志/导出脱敏；不发送图片、词典文件、UniDic 文件；
   核心功能不依赖 provider 配置。
 
 ### 11.4 建议实施顺序
 
-1. provider 配置、安全存储、隐私同意、fake-provider 测试骨架。
-2. OCR/UniDic/MDict tool adapters、JSON Schema、citation 基础设施。
-3. Agent loop、严格/宽松模式、small/complex model 路由。
-4. Markdown/ruby/声调渲染、citation UI、错误/空态。
-5. 词典熟悉期工作流和缓存。
-6. 注音/标注规则 DSL、预览、全局渲染接入。
-7. 会话/历史、性能/内存、许可与发布验收。
+1. 能力 Ports、ToolRegistry、DTO 序列化、`LookupGateway`、`OcrWorkflow`、
+   `MdictService.sample/suggest`、语法/采样资源。
+2. Provider 配置、安全存储、隐私同意、fake-provider/fake-server 测试骨架。
+3. 词典/UniDic 熟悉期、用户确认、profile 缓存与失效。
+4. Orchestrator Stage -1–3、证据/引用/原文/词典顺序校验、AgentStore。
+5. Agent 页、会话词典选择、citation UI、历史/设置、主页第五按钮、UI token；
+   首版用结构化组件 + 安全纯文本。
+6. 按需多 OCR 版本、差异/词典辅助修复、用户选择 UI。
+7. annotation DSL、Markdown/ruby/声调渲染、性能/许可/发布验收。
 
 ### 11.5 验收
 
 Phase 6 的验收必须覆盖：五按钮 UI、无图片上云、严格引用、宽松补充标注、模型
-路由、citation 点击、熟悉文档复用/失效、annotation DSL 全局生效、API Key 脱敏、
-provider 失败恢复，以及未配置 provider 时核心离线功能不回归。完整清单见
-`docs/phase6-agent-design.md`。
+路由、citation 点击、逐词/语法检索、原文 quote 校验、词典顺序、每会话词典选择、
+多 OCR 版本选择、熟悉档案用户确认/复用/失效、预算与截断、提示词注入、
+annotation DSL 全局生效、API Key 脱敏、provider 失败恢复，以及未配置 provider
+时核心离线功能不回归。完整清单见 `docs/phase6-agent-design.md`；契约见
+`docs/phase6-agent-contracts.md`。

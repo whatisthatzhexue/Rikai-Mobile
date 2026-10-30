@@ -34,6 +34,7 @@ class CapturePhoto {
     required this.source,
     required this.createdAt,
     this.originalPath,
+    this.mode = OcrMode.auto,
     this.ocrCache = const {},
   });
 
@@ -42,6 +43,11 @@ class CapturePhoto {
   final String? originalPath;
   final CapturePhotoSource source;
   final DateTime createdAt;
+
+  /// Per-photo OCR mode. A photo set may mix horizontal and vertical pages;
+  /// keeping the mode on the photo prevents one page's choice from forcing
+  /// every other page to re-recognize.
+  final OcrMode mode;
   final Map<String, PhotoOcrResult> ocrCache;
 
   CapturePhoto copyWith({
@@ -49,6 +55,7 @@ class CapturePhoto {
     String? originalPath,
     CapturePhotoSource? source,
     DateTime? createdAt,
+    OcrMode? mode,
     Map<String, PhotoOcrResult>? ocrCache,
   }) {
     return CapturePhoto(
@@ -57,6 +64,7 @@ class CapturePhoto {
       originalPath: originalPath ?? this.originalPath,
       source: source ?? this.source,
       createdAt: createdAt ?? this.createdAt,
+      mode: mode ?? this.mode,
       ocrCache: ocrCache ?? this.ocrCache,
     );
   }

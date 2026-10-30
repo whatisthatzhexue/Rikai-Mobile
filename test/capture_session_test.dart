@@ -53,6 +53,37 @@ void main() {
     );
   });
 
+  test('each photo keeps its own OCR mode and defaults to auto', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final notifier = container.read(captureSessionProvider.notifier);
+
+    notifier.addPhotos([_photo('a'), _photo('b')]);
+    expect(
+      container.read(captureSessionProvider).photos.map((photo) => photo.mode),
+      everyElement(OcrMode.auto),
+    );
+
+    notifier.setCurrentIndex(0);
+    notifier.setMode(OcrMode.vertical);
+    expect(
+      container.read(captureSessionProvider).photos[0].mode,
+      OcrMode.vertical,
+    );
+    expect(container.read(captureSessionProvider).photos[1].mode, OcrMode.auto);
+
+    notifier.setCurrentIndex(1);
+    notifier.setMode(OcrMode.horizontal);
+    expect(
+      container.read(captureSessionProvider).photos[0].mode,
+      OcrMode.vertical,
+    );
+    expect(
+      container.read(captureSessionProvider).photos[1].mode,
+      OcrMode.horizontal,
+    );
+  });
+
   test('manual modes reuse a compatible auto result only', () {
     const paddle = PhotoOcrResult(
       text: 'ありがとう',

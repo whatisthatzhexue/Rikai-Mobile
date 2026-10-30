@@ -63,4 +63,16 @@ void main() {
     final reading = tester.widget<Text>(find.text('とうきょう'));
     expect(reading.style?.color, AppColors.primary);
   });
+
+  testWidgets('the title row keeps the mode toggle and lookup menu', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpLookupSheet(tester, _token(surface: 'ありがとう', kana: 'アリガトウ'));
+
+    expect(find.text('多选'), findsOneWidget);
+    expect(find.byIcon(Icons.menu_book_outlined), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

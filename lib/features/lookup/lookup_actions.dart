@@ -25,13 +25,13 @@ Future<LookupResult> performLookup(
     throw const MdictException(MdictErrorCode.lookupFailed, '尚未添加可用的 MDict 词典');
   }
   final service = await ref.read(mdictServiceProvider.future);
+  final settings = ref.read(appSettingsProvider);
   return service.lookup(
     query: query,
     rawCandidates: rawCandidates ?? [query],
     dictionaries: selected,
-    maxEntriesPerDictionary: ref
-        .read(appSettingsProvider)
-        .maxEntriesPerDictionary,
+    matchMode: settings.lookupMatchMode,
+    maxEntriesPerDictionary: settings.maxEntriesPerDictionary,
   );
 }
 

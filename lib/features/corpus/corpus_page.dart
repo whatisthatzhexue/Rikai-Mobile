@@ -11,6 +11,7 @@ import '../../core/ui/rikai_toast.dart';
 import '../../core/utils/date_format.dart';
 import '../../state/providers.dart';
 import '../capture/capture_buttons.dart';
+import '../lookup/lookup_mode_menu.dart';
 import '../reader/reader_options.dart';
 import 'corpus_detail_page.dart';
 
@@ -26,7 +27,7 @@ class CorpusPage extends ConsumerWidget {
       backgroundColor: AppColors.surface,
       appBar: AppBar(
         title: const Text('语料'),
-        actions: const [ReaderOptionsMenu()],
+        actions: const [ReaderOptionsMenu(), LookupModeMenu()],
       ),
       body: entries.when(
         loading: () => const Center(child: CircularProgressIndicator()),

@@ -99,14 +99,30 @@ class DictionarySelectionModeToggle extends StatelessWidget {
     super.key,
     required this.mode,
     required this.onChanged,
+    this.onDark = false,
   });
 
   final DictionarySelectionMode mode;
   final ValueChanged<DictionarySelectionMode> onChanged;
 
+  /// True inside the deep-blue AppBar: unselected labels are white.
+  final bool onDark;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final selectedForeground = onDark
+        ? AppColors.header
+        : AppColors.onPrimaryContainer;
+    final unselectedForeground = onDark
+        ? AppColors.onHeader
+        : AppColors.textPrimary;
+    final selectedBackground = onDark
+        ? AppColors.surface
+        : AppColors.primaryContainer;
+    final borderColor = onDark
+        ? AppColors.onHeader.withValues(alpha: 0.55)
+        : AppColors.border;
     return SegmentedButton<DictionarySelectionMode>(
       segments: const [
         ButtonSegment(value: DictionarySelectionMode.multi, label: Text('多选')),
@@ -117,6 +133,17 @@ class DictionarySelectionModeToggle extends StatelessWidget {
       style: ButtonStyle(
         visualDensity: VisualDensity.compact,
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        foregroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? selectedForeground
+              : unselectedForeground,
+        ),
+        backgroundColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? selectedBackground
+              : AppColors.transparent,
+        ),
+        side: WidgetStatePropertyAll(BorderSide(color: borderColor)),
         textStyle: WidgetStatePropertyAll(theme.textTheme.bodySmall),
       ),
       onSelectionChanged: (selection) => onChanged(selection.first),

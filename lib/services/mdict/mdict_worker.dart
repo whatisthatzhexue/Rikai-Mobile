@@ -6,6 +6,7 @@ import 'package:dict_reader/dict_reader.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../core/models/dict_info.dart';
+import '../../core/models/lookup_match_mode.dart';
 import '../../core/models/lookup_models.dart';
 import '../../core/utils/text_normalizer.dart';
 import 'mdd_key.dart';
@@ -104,6 +105,7 @@ class MdictService {
     required String query,
     required Iterable<String> rawCandidates,
     required List<DictionaryInfo> dictionaries,
+    LookupMatchMode matchMode = LookupMatchMode.exact,
     int maxEntriesPerDictionary = 0,
     int suggestionLimit = 30,
   }) async {
@@ -120,6 +122,7 @@ class MdictService {
           .map(_dictionaryDescriptor)
           .toList(growable: false),
       'candidates': candidates,
+      'matchMode': matchMode.name,
       'maxEntries': maxEntriesPerDictionary,
       'suggestionLimit': suggestionLimit,
     });
@@ -335,6 +338,7 @@ class _OpenDictionary {
   final DictReader mdx;
   final Map<String, DictReader> mddReaders = {};
   final Set<String> failedMddPaths = {};
+  List<String>? allKeys;
 
   Future<void> close() async {
     for (final reader in mddReaders.values) {
@@ -545,6 +549,8 @@ List<String> _discoverMddPaths(String mdxPath) {
   }
 }
 
+const int _fuzzyLookupLimit = 50;
+
 Future<Map<String, Object?>> _lookup(
   Map<dynamic, dynamic> message,
   Map<String, _OpenDictionary> openDictionaries,
@@ -558,6 +564,13 @@ Future<Map<String, Object?>> _lookup(
   final candidates = rawCandidates.whereType<String>().toList(growable: false);
   final maxEntries = message['maxEntries'] as int? ?? 0;
   final suggestionLimit = message['suggestionLimit'] as int? ?? 30;
+  final modeName =
+      message['matchMode'] as String? ?? LookupMatchMode.exact.name;
+  final matchMode = LookupMatchMode.values.firstWhere(
+    (mode) => mode.name == modeName,
+    orElse: () => LookupMatchMode.exact,
+  );
+  final fuzzyLimit = maxEntries > 0 ? maxEntries : _fuzzyLookupLimit;
   final groups = <Map<String, Object?>>[];
 
   for (final rawDescriptor in rawDictionaries) {
@@ -569,27 +582,73 @@ Future<Map<String, Object?>> _lookup(
       final entries = <LookupEntry>[];
       final seenRecords = <String>{};
 
-      for (final candidate in candidates) {
-        final hits = await dictionary.mdx.locateAll(candidate);
-        if (hits.isEmpty) continue;
+      Future<void> addHit(RecordOffsetInfo hit) async {
+        if (maxEntries > 0 && entries.length >= maxEntries) return;
+        final fingerprint =
+            '${hit.keyText}|${hit.recordBlockOffset}|${hit.startOffset}|'
+            '${hit.endOffset}';
+        if (!seenRecords.add(fingerprint)) return;
+        try {
+          entries.add(await _resolveEntry(dictionary.mdx, hit));
+        } catch (error) {
+          debugPrint('[MdictWorker] failed to read entry: $error');
+        }
+      }
 
+      Future<void> addEntriesFor(String key) async {
+        if (maxEntries > 0 && entries.length >= maxEntries) return;
+        final hits = await dictionary.mdx.locateAll(key);
         for (final hit in hits) {
           if (maxEntries > 0 && entries.length >= maxEntries) break;
-          final fingerprint =
-              '${hit.keyText}|${hit.recordBlockOffset}|${hit.startOffset}|'
-              '${hit.endOffset}';
-          if (!seenRecords.add(fingerprint)) continue;
-          try {
-            entries.add(await _resolveEntry(dictionary.mdx, hit));
-          } catch (error) {
-            debugPrint('[MdictWorker] failed to read entry: $error');
+          await addHit(hit);
+        }
+      }
+
+      if (matchMode == LookupMatchMode.exact) {
+        for (final candidate in candidates) {
+          final hits = await dictionary.mdx.locateAll(candidate);
+          if (hits.isEmpty) continue;
+          for (final hit in hits) {
+            if (maxEntries > 0 && entries.length >= maxEntries) break;
+            await addHit(hit);
+          }
+          break;
+        }
+      } else {
+        final matchedKeys = <String>{};
+        if (matchMode == LookupMatchMode.prefix) {
+          for (final candidate in candidates) {
+            matchedKeys.addAll(
+              dictionary.mdx.search(candidate, limit: fuzzyLimit),
+            );
+            if (matchedKeys.length >= fuzzyLimit) break;
+          }
+        } else {
+          // Suffix/contains searches need the sorted key list. Keep it on the
+          // long-lived worker dictionary so repeated queries do not re-read it.
+          final allKeys = dictionary.allKeys ??= dictionary.mdx
+              .search('', limit: null)
+              .toList(growable: false);
+          for (final key in allKeys) {
+            if (matchedKeys.length >= fuzzyLimit) break;
+            for (final candidate in candidates) {
+              if (keyMatchesLookupMode(key, candidate, matchMode)) {
+                matchedKeys.add(key);
+                break;
+              }
+            }
           }
         }
-        break;
+        for (final key in matchedKeys) {
+          if (maxEntries > 0 && entries.length >= maxEntries) break;
+          await addEntriesFor(key);
+        }
       }
 
       var suggestions = <String>[];
-      if (entries.isEmpty) {
+      if (entries.isEmpty &&
+          (matchMode == LookupMatchMode.exact ||
+              matchMode == LookupMatchMode.prefix)) {
         final seenSuggestions = <String>{};
         for (final candidate in candidates) {
           for (final suggestion in dictionary.mdx.search(

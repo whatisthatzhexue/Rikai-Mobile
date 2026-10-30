@@ -13,8 +13,8 @@ provider; it is not part of the current build.
 Phases 1–4 are working end to end on the Android emulator with a real
 UniDic and MDict dictionary. **Phase 4.5 (OCR quality and performance
 convergence) is in progress**; Phase 5 is paused until the Phase 4.5 real-device
-acceptance checks pass. The Phase 6 dictionary assistant is design-only and is
-not implemented.
+acceptance checks pass. The Phase 6 dictionary assistant is design v2 plus
+JSON-schema contracts only and is not implemented.
 
 - In-place MeCab/UniDic tokenization in a long-lived worker isolate, private
   `mecabrc`, CSV-aware parsing of quoted UniDic fields
@@ -82,15 +82,25 @@ Phase 6 is documented but **not implemented**. Once Phase 4.5 and Phase 5 are
 complete and the design is approved, the planned home screen has five actions:
 `拍照识别`, `查句子`, `查单词`, `历史记录`, and the new `词典助手`.
 
-The planned assistant would combine local OCR, UniDic tokenization, and MDict
-lookup as schema-defined tools. It would support strict mode (every factual
-answer must be grounded in dictionary evidence) and loose mode (dictionary-based
-plus clearly marked model commentary), with user-selected small/complex models,
-clickable dictionary citations, a local dictionary-familiarization document, and
-user-approved furigana/annotation rules. Images would only be converted by
-on-device OCR and must never be sent to the LLM as vision input. The detailed
-design, privacy boundary, open questions, and acceptance criteria are in
-[docs/phase6-agent-design.md](docs/phase6-agent-design.md).
+The planned assistant combines local OCR, UniDic tokenization, and MDict lookup
+as schema-defined tools. It uses a **fixed pipeline with bounded model tool
+calls**: the orchestrator performs OCR, tokenization, and every word/grammar
+lookup; the model only reasons and may request a small number of extra lookups.
+Strict mode requires real dictionary evidence for factual claims; loose mode
+allows clearly marked model commentary. The planned workflow familiarizes the
+LLM with each selected dictionary once (user-confirmed local profile), sends
+only `{image_id, ocr_text}` JSON (never image data), tokenizes with UniDic,
+looks up every word/grammar in MDict, and must quote the source text.
+Dictionary output order follows the user's settings; dictionary selection is
+independent per agent session. Multi-OCR variants and dictionary-assisted OCR
+repair are opt-in: the default is one on-device OCR result, and conflicts are
+shown to the user rather than silently overwritten. Images would only be
+converted by on-device OCR and must never be sent to the LLM as vision input.
+User-approved furigana/annotation rules remain a later Phase 6 item (P6.7).
+The detailed design, privacy boundary, open questions, and acceptance criteria
+are in [docs/phase6-agent-design.md](docs/phase6-agent-design.md); the tool and
+JSON-schema contracts are in
+[docs/phase6-agent-contracts.md](docs/phase6-agent-contracts.md).
 
 Next: finish Phase 4.5 real-device acceptance, then Phase 5 (full corpus/history
 management, onboarding, release polish). Phase 6 will start only after Phase 5
@@ -149,7 +159,8 @@ provider/fake-server tests are not part of the current build or test suite.
 - [Phase 3.5 capture/import status](docs/phase3.5-status.md)
 - [Phase 4 vertical OCR status](docs/phase4-status.md)
 - [Phase 4.5 OCR convergence status](docs/phase4.5-status.md)
-- [Phase 6 agent design (planned)](docs/phase6-agent-design.md)
+- [Phase 6 agent design v2 (planned)](docs/phase6-agent-design.md)
+- [Phase 6 agent contracts (planned)](docs/phase6-agent-contracts.md)
 - [Development setup](docs/dev-setup.md)
 - [Models](docs/models.md)
 - [Architecture decisions](docs/adr/)

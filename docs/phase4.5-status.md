@@ -205,6 +205,49 @@ Phase 4.5 addresses those before Phase 5 adds corpus/history/release work.
 - Landscape widget tests cover search controls, reader layout, the manual
   dictionary dialog (no keyboard), and the scrollable entry-limit dialog.
 
+### Search/precision and capture pass (2026-10-30)
+
+- **UniDic discovery**: the settings action now accepts the exact directory, a
+  parent download folder, or a `matrix.bin` path. `UnidicValidator.discover`
+  recursively finds `matrix.bin` candidates and keeps only directories that pass
+  the full `sys.dic` validation. One valid result is selected automatically;
+  multiple results open a font-style dialog with the last folder name as the
+  title and the full path as the subtitle.
+- **OCR model discovery**: `OcrModelManager.resolveModelsRoot` maps a selected
+  `paddle_v5`/`manga_ocr`/`orientation` folder back to its models root, and
+  leaves a parent `models` folder unchanged (including a parent containing a
+  single model folder).
+- **Missing models**: the photo set now says “未找到可用的 OCR 模型” and tells
+  the user to use the page-bottom “模型设置” entry instead of exposing raw model
+  file errors.
+- **Help**: MDict and UniDic introductions, licence reminders and official
+  links were added (MDict official site/community entry, UniDic back-number
+  download page).
+- **Lookup matching modes**: a book-icon menu in the AppBar (and the reader
+  lookup sheet title row) selects incremental/exact/prefix/suffix matching.
+  The setting is persisted globally. The worker caches the sorted key list for
+  suffix/contains modes and caps fuzzy results at 50 keys per dictionary.
+  Real 講談社 dictionary check: exact 8 ms, prefix 6 ms, suffix 17 ms, first
+  incremental 385 ms.
+- **Search box stability**: the query button is now the same `IconButton` in
+  idle and busy states; the spinner no longer changes the field height.
+- **AppBar mode toggle**: the lookup multi/single segmented control uses white
+  labels when unselected on the deep-blue AppBar.
+- **Per-photo OCR**: `CapturePhoto.mode` is independent (default auto), so
+  mixed horizontal/vertical photos do not force each other to re-recognize.
+  The multi-select page and save path use each photo's mode. Deletion is allowed
+  while OCR runs; the multi-select delete button is no longer disabled by
+  `_busy`.
+- **Repeat rotation**: the rotation lock now covers only the file rotation;
+  after writing the rotated copy it releases before the next OCR pass, so the
+  button can interrupt recognition repeatedly.
+- **Corpus detail**: removed the “分词结果” heading so tokens start at the top.
+- **Long token lists**: in addition to lazy slivers and no scrollbar,
+  `TokenChip` no longer creates a `Material` + `InkWell` per token. The
+  remaining jank was the combination of variable-height lazy rows, per-token
+  material layers, and scroll-extent estimation; the chip now uses a
+  `GestureDetector` + `DecoratedBox`.
+
 ## Not changed
 
 - PaddleOCR remains PP-OCRv5 mobile det/rec on ONNX Runtime; no Paddle-Lite,
@@ -222,7 +265,7 @@ Host:
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 134 tests passed
+flutter test     -> 141 tests passed
 flutter build apk --debug -> success (Kotlin/OcrTextQuality compiled)
 ```
 

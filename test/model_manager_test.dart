@@ -464,4 +464,21 @@ void main() {
       expect((await manager.status(set)).isInstalled, isTrue);
     },
   );
+
+  test('resolves a model folder or its parent to the models root', () async {
+    final root = await Directory.systemTemp.createTemp('rikai_models_root_');
+    addTearDown(() async {
+      if (await root.exists()) await root.delete(recursive: true);
+    });
+    final paddle = Directory('${root.path}/paddle_v5');
+    await paddle.create(recursive: true);
+    for (final name in ['det.onnx', 'rec.onnx', 'keys.yml']) {
+      await File('${paddle.path}/$name').writeAsBytes([1], flush: true);
+    }
+
+    final manager = OcrModelManager();
+
+    expect(await manager.resolveModelsRoot(paddle.path), root.path);
+    expect(await manager.resolveModelsRoot(root.path), root.path);
+  });
 }

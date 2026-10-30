@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rikai.mobile/schemas/agent/quote.v1.schema.json",
+  "title": "Rikai Agent Source Quote v1",
+  "type": "object",
+  "required": ["schema", "id", "source_id", "start", "end", "text", "origin"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "rikai.agent.quote.v1"},
+    "id": {"type": "string", "pattern": "^q[0-9]+$"},
+    "source_id": {"type": "string", "pattern": "^src-[0-9]+$"},
+    "start": {"type": "integer", "minimum": 0},
+    "end": {"type": "integer", "minimum": 0},
+    "text": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "origin": {"enum": ["ocr", "user_text", "user_edit", "dictionary_repair"]}
+  }
+}

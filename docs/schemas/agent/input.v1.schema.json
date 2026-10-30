@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rikai.mobile/schemas/agent/input.v1.schema.json",
+  "title": "Rikai Agent Input Envelope v1",
+  "type": "object",
+  "required": ["schema", "session_id", "mode", "sources"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "rikai.agent.input.v1"},
+    "session_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "mode": {"enum": ["strict", "loose"]},
+    "user_text": {"type": "string", "maxLength": 20000},
+    "context": {"type": "string", "maxLength": 4000},
+    "dictionaries": {
+      "type": "array",
+      "maxItems": 16,
+      "items": {"$ref": "#/$defs/dictionary"}
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/source"}
+    }
+  },
+  "$defs": {
+    "dictionary": {
+      "type": "object",
+      "required": ["id", "title", "order"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 64},
+        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "order": {"type": "integer", "minimum": 0}
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^src-[0-9]+$"},
+        "kind": {"enum": ["image_ocr", "user_text"]},
+        "text": {"type": "string", "maxLength": 20000},
+        "image_id": {"type": "string", "pattern": "^img-[0-9]+$"},
+        "selected_variant_id": {"type": "string", "pattern": "^var-[0-9]+$"},
+        "variants": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {"$ref": "#/$defs/ocr_variant"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "user_text"}}},
+          "then": {"required": ["text"]}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "image_ocr"}}},
+          "then": {"required": ["image_id", "selected_variant_id", "variants"]}
+        }
+      ]
+    },
+    "ocr_variant": {
+      "type": "object",
+      "required": ["id", "engine", "mode", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^var-[0-9]+$"},
+        "engine": {"enum": ["paddle_v5", "manga_ocr", "unknown"]},
+        "mode": {"enum": ["auto", "horizontal", "vertical"]},
+        "text": {"type": "string", "maxLength": 20000},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "elapsed_ms": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

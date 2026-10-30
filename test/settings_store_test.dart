@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rikai_mobile/core/models/lookup_match_mode.dart';
 import 'package:rikai_mobile/core/theme/app_fonts.dart';
 import 'package:rikai_mobile/services/storage/settings_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +13,7 @@ void main() {
 
     expect(settings.fontFamily, AppFonts.harmony);
     expect(settings.maxEntriesPerDictionary, 0);
+    expect(settings.lookupMatchMode, LookupMatchMode.exact);
     expect(settings.showFurigana, isTrue);
     expect(settings.readerFontSize, 20);
     expect(settings.ocrMirror, '');
@@ -27,6 +29,7 @@ void main() {
       const AppSettings(
         fontFamily: AppFonts.system,
         maxEntriesPerDictionary: 5,
+        lookupMatchMode: LookupMatchMode.prefix,
         ocrMirror: 'https://mirror.example',
         ocrModelsDirectory: '/storage/emulated/0/rikai-models',
       ),
@@ -35,6 +38,7 @@ void main() {
 
     expect(restored.fontFamily, AppFonts.system);
     expect(restored.maxEntriesPerDictionary, 5);
+    expect(restored.lookupMatchMode, LookupMatchMode.prefix);
     expect(restored.ocrMirror, 'https://mirror.example');
     expect(restored.ocrModelsDirectory, '/storage/emulated/0/rikai-models');
   });
