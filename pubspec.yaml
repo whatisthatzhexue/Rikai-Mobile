@@ -88,6 +88,7 @@ flutter:
     - assets/models/
     - assets/licenses/
     - assets/Rikai_Icon.jpg
+    - assets/agent/
 
   # HarmonyOS Sans SC is NOT distributed with this repository. Download it and
   # place it at assets/fonts/HarmonyOS_Sans_SC_Regular.ttf before building.
