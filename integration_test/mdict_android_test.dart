@@ -274,6 +274,7 @@ void main() {
     await service.dispose();
 
     final preferences = await SharedPreferences.getInstance();
+    await preferences.setBool('app_onboarding_completed', true);
     await preferences.setString(
       'mdict_dictionaries_v1',
       jsonEncode([probed.info.toJson()]),
@@ -287,7 +288,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('查词'));
+    await tester.tap(find.text('查单词'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '東京');
     await tester.tap(find.byTooltip('查询'));

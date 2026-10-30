@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'core/theme/app_tokens.dart';
 import 'core/theme/unfocus_route_observer.dart';
 import 'state/providers.dart';
+import 'features/agent/agent_page.dart';
 import 'features/capture/capture_page.dart';
 import 'features/capture/photo_set_page.dart';
 import 'features/corpus/corpus_detail_page.dart';
@@ -13,6 +14,7 @@ import 'features/home/home_page.dart';
 import 'features/lookup/search_page.dart';
 import 'features/onboarding/onboarding_page.dart';
 import 'features/reader/reader_page.dart';
+import 'features/settings/agent_settings_page.dart';
 import 'features/settings/copyright_page.dart';
 import 'features/settings/dictionary_import_page.dart';
 import 'features/settings/dictionary_page.dart';
@@ -94,6 +96,15 @@ GoRouter _createRouter({String initialLocation = '/'}) {
       GoRoute(
         path: '/settings',
         pageBuilder: (context, state) => _page(state, const SettingsPage()),
+      ),
+      GoRoute(
+        path: '/agent',
+        pageBuilder: (context, state) => _page(state, const AgentPage()),
+      ),
+      GoRoute(
+        path: '/agent-settings',
+        pageBuilder: (context, state) =>
+            _page(state, const AgentSettingsPage()),
       ),
       GoRoute(
         path: '/search',

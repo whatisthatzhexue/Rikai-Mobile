@@ -192,7 +192,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('输入文本'));
+    await tester.tap(find.text('查句子'));
     await tester.pumpAndSettle();
     expect(find.text('文本阅读'), findsOneWidget);
 

@@ -17,7 +17,7 @@ Future<void> _pumpApp(WidgetTester tester) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
-      child: const RikaiApp(),
+      child: RikaiApp(key: UniqueKey()),
     ),
   );
   await tester.pumpAndSettle();
@@ -51,9 +51,10 @@ void main() {
     expect(find.text('主页'), findsOneWidget);
     expect(find.text('使用前须知'), findsOneWidget);
     expect(find.text('拍照识别'), findsOneWidget);
-    expect(find.text('输入文本'), findsOneWidget);
-    expect(find.text('查词'), findsOneWidget);
-    expect(find.text('语料'), findsOneWidget);
+    expect(find.text('查句子'), findsOneWidget);
+    expect(find.text('查单词'), findsOneWidget);
+    expect(find.text('历史记录'), findsOneWidget);
+    expect(find.text('词典助手'), findsOneWidget);
     // The usage notice sits above the action grid.
     expect(
       tester.getTopLeft(find.text('使用前须知')).dy,
@@ -107,7 +108,7 @@ void main() {
   ) async {
     await _pumpApp(tester);
 
-    await tester.tap(find.text('输入文本'));
+    await tester.tap(find.text('查句子'));
     await tester.pumpAndSettle();
     expect(find.text('文本阅读'), findsOneWidget);
     expect(find.byIcon(Icons.menu_book_outlined), findsOneWidget);
@@ -138,13 +139,13 @@ void main() {
   ) async {
     await _pumpApp(tester);
 
-    await tester.tap(find.text('输入文本'));
+    await tester.tap(find.text('查句子'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '下書きのテキスト');
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('输入文本'));
+    await tester.tap(find.text('查句子'));
     await tester.pumpAndSettle();
     final field = tester.widget<TextField>(find.byType(TextField));
     expect(field.controller?.text, '下書きのテキスト');
@@ -200,9 +201,9 @@ void main() {
   testWidgets('search page shows the empty dictionary state', (tester) async {
     await _pumpApp(tester);
 
-    await tester.ensureVisible(find.text('查词'));
+    await tester.ensureVisible(find.text('查单词'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('查词'));
+    await tester.tap(find.text('查单词'));
     await tester.pumpAndSettle();
 
     final searchField = tester.widget<TextField>(find.byType(TextField));
@@ -236,9 +237,9 @@ void main() {
     for (final size in const [Size(360, 640), Size(800, 360)]) {
       await tester.binding.setSurfaceSize(size);
       await _pumpApp(tester);
-      await tester.ensureVisible(find.text('查词'));
+      await tester.ensureVisible(find.text('查单词'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('查词'));
+      await tester.tap(find.text('查单词'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -252,9 +253,9 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await _pumpApp(tester);
 
-    await tester.ensureVisible(find.text('输入文本'));
+    await tester.ensureVisible(find.text('查句子'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('输入文本'));
+    await tester.tap(find.text('查句子'));
     await tester.pumpAndSettle();
 
     expect(find.text('文本阅读'), findsOneWidget);

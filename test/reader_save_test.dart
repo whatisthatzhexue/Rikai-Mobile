@@ -51,7 +51,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('输入文本'));
+    await tester.tap(find.text('查句子'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), '保存するテキスト');
