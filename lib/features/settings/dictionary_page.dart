@@ -43,6 +43,7 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
   }
 
   Future<void> _addDictionary() async {
+    FocusScope.of(context).unfocus();
     final info = await showDialog<DictionaryInfo>(
       context: context,
       builder: (context) => _AddDictionaryDialog(
@@ -407,6 +408,14 @@ class _AddDictionaryDialogState extends State<_AddDictionaryDialog> {
   String _error = '';
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) FocusManager.instance.primaryFocus?.unfocus();
+    });
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();
@@ -417,7 +426,9 @@ class _AddDictionaryDialogState extends State<_AddDictionaryDialog> {
       final directoryPath = await FilePicker.getDirectoryPath(
         dialogTitle: '选择词典所在文件夹',
       );
-      if (!mounted || directoryPath == null) return;
+      if (!mounted) return;
+      FocusManager.instance.primaryFocus?.unfocus();
+      if (directoryPath == null) return;
 
       final directory = Directory(directoryPath);
       if (!await directory.exists()) {
@@ -507,7 +518,7 @@ class _AddDictionaryDialogState extends State<_AddDictionaryDialog> {
           children: [
             TextField(
               controller: _controller,
-              autofocus: true,
+              autofocus: false,
               autocorrect: false,
               enableSuggestions: false,
               onSubmitted: (_) => _busy ? null : _submit(),

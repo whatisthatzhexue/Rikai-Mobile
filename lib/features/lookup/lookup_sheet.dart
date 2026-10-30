@@ -176,7 +176,28 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_token.surface, style: theme.textTheme.headlineSmall),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _token.surface,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.headlineSmall,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: AppSpacing.sm),
+                      child: DictionarySelectionModeToggle(
+                        mode: preferences.mode,
+                        onChanged: (mode) => ref
+                            .read(lookupPreferencesProvider.notifier)
+                            .setMode(mode),
+                      ),
+                    ),
+                  ],
+                ),
                 // Do not repeat the reading when it is identical to the
                 // surface (e.g. ありがとう). Only distinct readings are shown
                 // in the blue reading line.
@@ -209,8 +230,6 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
                 mode: preferences.mode,
                 onToggle: (id) => _toggleDictionary(id, enabled),
                 onSelectAll: () => _selectAllDictionaries(enabled),
-                onModeChanged: (mode) =>
-                    ref.read(lookupPreferencesProvider.notifier).setMode(mode),
               ),
             ),
           const Divider(height: 1),

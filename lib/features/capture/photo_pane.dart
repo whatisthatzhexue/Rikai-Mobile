@@ -43,11 +43,21 @@ class _PhotoPaneState extends State<PhotoPane> {
   double? _pointerStartY;
   double? _dragStartHeight;
 
+  /// The drag handle itself stays visible when the photo is collapsed, so the
+  /// user can pull it back down. At or below the handle height the image and
+  /// overlays are omitted entirely, giving the result list the space.
+  bool get _collapsed => widget.height <= AppSizes.captureResizeHandle;
+
+  double get _effectiveHeight {
+    if (!_collapsed) return widget.height;
+    return AppSizes.captureResizeHandle.clamp(0.0, widget.maxHeight).toDouble();
+  }
+
   void _onPointerDown(PointerDownEvent event) {
     if (_pointer != null) return;
     _pointer = event.pointer;
     _pointerStartY = event.position.dy;
-    _dragStartHeight = widget.height;
+    _dragStartHeight = _effectiveHeight;
   }
 
   void _onPointerMove(PointerMoveEvent event) {
@@ -59,9 +69,7 @@ class _PhotoPaneState extends State<PhotoPane> {
       return;
     }
     final next = startHeight + event.position.dy - startY;
-    onHeightChanged(
-      next.clamp(AppSizes.capturePhotoMin, widget.maxHeight).toDouble(),
-    );
+    onHeightChanged(next.clamp(0.0, widget.maxHeight).toDouble());
   }
 
   void _endDrag(PointerEvent event) {
@@ -73,29 +81,35 @@ class _PhotoPaneState extends State<PhotoPane> {
 
   @override
   Widget build(BuildContext context) {
+    final collapsed = _collapsed;
     return SizedBox(
-      height: widget.height,
+      height: _effectiveHeight,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Semantics(
-            button: true,
-            label: '查看照片',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: widget.onTap,
-              child: ColoredBox(
-                color: AppColors.surfaceMuted,
-                child: Image.file(
-                  File(widget.imagePath),
-                  key: ValueKey('${widget.imagePath}-${widget.imageRevision}'),
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const Center(child: Text('无法显示照片')),
+          if (collapsed)
+            const ColoredBox(color: AppColors.surface)
+          else
+            Semantics(
+              button: true,
+              label: '查看照片',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onTap,
+                child: ColoredBox(
+                  color: AppColors.surfaceMuted,
+                  child: Image.file(
+                    File(widget.imagePath),
+                    key: ValueKey(
+                      '${widget.imagePath}-${widget.imageRevision}',
+                    ),
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) =>
+                        const Center(child: Text('无法显示照片')),
+                  ),
                 ),
               ),
             ),
-          ),
           if (widget.onHeightChanged != null)
             Positioned(
               left: 0,
@@ -103,7 +117,7 @@ class _PhotoPaneState extends State<PhotoPane> {
               bottom: 0,
               height: AppSizes.captureResizeHandle,
               child: Semantics(
-                label: '调整照片显示范围',
+                label: collapsed ? '下拉显示照片' : '调整照片显示范围',
                 child: Listener(
                   behavior: HitTestBehavior.opaque,
                   onPointerDown: _onPointerDown,
@@ -117,7 +131,12 @@ class _PhotoPaneState extends State<PhotoPane> {
                       height: AppSizes.captureResizeBarHeight,
                       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
                       decoration: BoxDecoration(
-                        color: AppColors.cameraControl,
+                        // On the collapsed white surface a white bar would be
+                        // invisible; keep the same 44×4 geometry but use the
+                        // neutral handle colour.
+                        color: collapsed
+                            ? AppColors.textTertiary
+                            : AppColors.cameraControl,
                         borderRadius: BorderRadius.circular(AppRadius.pill),
                       ),
                     ),
@@ -125,7 +144,7 @@ class _PhotoPaneState extends State<PhotoPane> {
                 ),
               ),
             ),
-          ...widget.overlays,
+          if (!collapsed) ...widget.overlays,
         ],
       ),
     );

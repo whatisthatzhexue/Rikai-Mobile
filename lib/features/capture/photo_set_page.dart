@@ -557,7 +557,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
                     .clamp(AppSizes.capturePhotoMin, constraints.maxHeight)
                     .toDouble();
             final photoHeight = _photoHeight
-                .clamp(AppSizes.capturePhotoMin, maxPhotoHeight)
+                .clamp(0.0, maxPhotoHeight)
                 .toDouble();
             return Stack(
               children: [

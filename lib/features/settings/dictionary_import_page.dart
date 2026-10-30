@@ -168,7 +168,9 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
     if (mounted && token == _token) {
       setState(() {
         _probing = false;
-        _status = '扫描完成';
+        // Once the list is ready, drop the transient status line so the
+        // dictionary rows get the reclaimed vertical space.
+        _status = '';
       });
     }
   }
@@ -287,15 +289,17 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    '应用会递归扫描文件夹及所有子文件夹；每个 .mdx 单独导入，'
-                    '同目录同名 .mdd 与目录内 .css 自动关联。词典原地读取，不复制文件。',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontSize: AppTypography.helper,
-                      height: 1.5,
+                  if (_entries.isEmpty) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '应用会递归扫描文件夹及所有子文件夹；每个 .mdx 单独导入，'
+                      '同目录同名 .mdd 与目录内 .css 自动关联。词典原地读取，不复制文件。',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: AppTypography.helper,
+                        height: 1.5,
+                      ),
                     ),
-                  ),
+                  ],
                   if (_error != null) ...[
                     const SizedBox(height: AppSpacing.xs),
                     Text(

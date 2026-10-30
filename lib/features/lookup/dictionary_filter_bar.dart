@@ -18,7 +18,6 @@ class DictionaryFilterBar extends StatelessWidget {
     required this.mode,
     required this.onToggle,
     required this.onSelectAll,
-    required this.onModeChanged,
   });
 
   /// At most three rows are visible; more dictionaries scroll vertically.
@@ -29,12 +28,10 @@ class DictionaryFilterBar extends StatelessWidget {
   final DictionarySelectionMode mode;
   final ValueChanged<String> onToggle;
   final VoidCallback onSelectAll;
-  final ValueChanged<DictionarySelectionMode> onModeChanged;
 
   @override
   Widget build(BuildContext context) {
     if (dictionaries.isEmpty) return const SizedBox.shrink();
-    final theme = Theme.of(context);
     final titles = dictionaries.map((dictionary) => dictionary.title).toList();
     final selectedAll = dictionaries.every(
       (dictionary) => selectedIds.contains(dictionary.id),
@@ -45,69 +42,32 @@ class DictionaryFilterBar extends StatelessWidget {
         AppSizes.dictionaryFilterRow * maxVisibleRows +
         AppSpacing.xxs * (maxVisibleRows - 1);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: SingleChildScrollView(
+        primary: false,
+        child: Wrap(
+          spacing: AppSpacing.xs,
+          runSpacing: AppSpacing.xxs,
           children: [
-            Expanded(
-              child: Text(
-                '查询词典',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
+            _DictionaryChip(
+              label: '全选',
+              selected: selectedAll,
+              onTap: onSelectAll,
+              icon: Icons.select_all,
             ),
-            SegmentedButton<DictionarySelectionMode>(
-              segments: const [
-                ButtonSegment(
-                  value: DictionarySelectionMode.multi,
-                  label: Text('多选'),
-                ),
-                ButtonSegment(
-                  value: DictionarySelectionMode.single,
-                  label: Text('单选'),
-                ),
-              ],
-              selected: {mode},
-              showSelectedIcon: false,
-              style: ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                textStyle: WidgetStatePropertyAll(theme.textTheme.bodySmall),
+            for (var index = 0; index < dictionaries.length; index++)
+              _DictionaryChip(
+                label: _shortTitle(titles[index], titles),
+                selected: selectedIds.contains(dictionaries[index].id),
+                dimmed:
+                    singleSelection &&
+                    !selectedIds.contains(dictionaries[index].id),
+                onTap: () => onToggle(dictionaries[index].id),
               ),
-              onSelectionChanged: (selection) => onModeChanged(selection.first),
-            ),
           ],
         ),
-        const SizedBox(height: AppSpacing.xxs),
-        ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxHeight),
-          child: SingleChildScrollView(
-            primary: false,
-            child: Wrap(
-              spacing: AppSpacing.xs,
-              runSpacing: AppSpacing.xxs,
-              children: [
-                _DictionaryChip(
-                  label: '全选',
-                  selected: selectedAll,
-                  onTap: onSelectAll,
-                  icon: Icons.select_all,
-                ),
-                for (var index = 0; index < dictionaries.length; index++)
-                  _DictionaryChip(
-                    label: _shortTitle(titles[index], titles),
-                    selected: selectedIds.contains(dictionaries[index].id),
-                    dimmed:
-                        singleSelection &&
-                        !selectedIds.contains(dictionaries[index].id),
-                    onTap: () => onToggle(dictionaries[index].id),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -129,6 +89,38 @@ class DictionaryFilterBar extends StatelessWidget {
       if (unique) return prefix;
     }
     return trimmed;
+  }
+}
+
+/// Single/multi-select mode control. Lives in the parent's title area rather
+/// than inside the chip list, so the chips can start at the very top.
+class DictionarySelectionModeToggle extends StatelessWidget {
+  const DictionarySelectionModeToggle({
+    super.key,
+    required this.mode,
+    required this.onChanged,
+  });
+
+  final DictionarySelectionMode mode;
+  final ValueChanged<DictionarySelectionMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SegmentedButton<DictionarySelectionMode>(
+      segments: const [
+        ButtonSegment(value: DictionarySelectionMode.multi, label: Text('多选')),
+        ButtonSegment(value: DictionarySelectionMode.single, label: Text('单选')),
+      ],
+      selected: {mode},
+      showSelectedIcon: false,
+      style: ButtonStyle(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        textStyle: WidgetStatePropertyAll(theme.textTheme.bodySmall),
+      ),
+      onSelectionChanged: (selection) => onChanged(selection.first),
+    );
   }
 }
 

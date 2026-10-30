@@ -48,8 +48,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   List<Token> _tokens = const [];
   String? _analysedText;
   bool _busy = false;
+  bool _controlsVisible = true;
   MecabException? _mecabError;
   Object? _unexpectedError;
+
+  bool get _canHideControls =>
+      _controlsVisible && _analysedText != null && _tokens.isNotEmpty;
 
   @override
   void initState() {
@@ -144,6 +148,15 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     showTokenLookupSheet(context, token);
   }
 
+  void _hideControls() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _controlsVisible = false);
+  }
+
+  void _showControls() {
+    setState(() => _controlsVisible = true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = ref.watch(appSettingsProvider);
@@ -167,86 +180,134 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       body: SafeArea(
         child: Column(
           children: [
-            Container(
-              key: const Key('reader-controls-surface'),
-              decoration: const BoxDecoration(
-                // Keep the toolbar area white to match the reading surface;
-                // only a light hairline separates it from the results, like
-                // the line below the search field on the lookup page.
-                color: AppColors.surface,
-                border: Border(
-                  bottom: BorderSide(
-                    color: AppColors.divider,
-                    width: AppSizes.borderWidth,
+            if (_controlsVisible)
+              Container(
+                key: const Key('reader-controls-surface'),
+                decoration: const BoxDecoration(
+                  // Keep the toolbar area white to match the reading surface;
+                  // only a light hairline separates it from the results, like
+                  // the line below the search field on the lookup page.
+                  color: AppColors.surface,
+                  border: Border(
+                    bottom: BorderSide(
+                      color: AppColors.divider,
+                      width: AppSizes.borderWidth,
+                    ),
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        AppSpacing.sm,
+                        AppSpacing.lg,
+                        AppSpacing.sm,
+                      ),
+                      child: TextField(
+                        controller: _textController,
+                        minLines: 2,
+                        maxLines: 6,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        style: theme.textTheme.bodyLarge,
+                        decoration: const InputDecoration(
+                          hintText: '例：何卒宜しくお願い致します。',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                          // No opaque panel inside the field; the white toolbar
+                          // stays visible behind it.
+                          filled: false,
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        0,
+                        AppSpacing.lg,
+                        AppSpacing.sm,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: _canHideControls
+                                  ? TextButton(
+                                      onPressed: _hideControls,
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: AppColors.textTertiary,
+                                        minimumSize: const Size(
+                                          0,
+                                          AppSizes.control,
+                                        ),
+                                        padding: EdgeInsets.zero,
+                                        textStyle: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: AppColors.textTertiary,
+                                            ),
+                                      ),
+                                      child: const Text('隐藏输入框'),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ),
+                          FilledButton.icon(
+                            onPressed: _busy ? null : _analyze,
+                            icon: const Icon(
+                              Icons.auto_awesome,
+                              size: AppSizes.icon,
+                            ),
+                            label: const Text('分词'),
+                          ),
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: _copyText,
+                                icon: const Icon(
+                                  Icons.copy_all_outlined,
+                                  size: AppSizes.iconSmall,
+                                ),
+                                label: const Text('复制'),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_busy)
+                      const LinearProgressIndicator(minHeight: AppSpacing.xxs),
+                  ],
+                ),
+              ),
+            if (!_controlsVisible)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                    left: AppSpacing.lg,
+                    top: AppSpacing.xs,
+                    bottom: AppSpacing.xs,
+                  ),
+                  child: IconButton(
+                    tooltip: '显示输入框',
+                    onPressed: _showControls,
+                    padding: EdgeInsets.zero,
+                    alignment: Alignment.centerLeft,
+                    constraints: const BoxConstraints.tightFor(
+                      width: AppSizes.control,
+                      height: AppSizes.control,
+                    ),
+                    icon: const Icon(
+                      Icons.visibility_outlined,
+                      size: AppSizes.icon,
+                    ),
                   ),
                 ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
-                      AppSpacing.sm,
-                      AppSpacing.lg,
-                      AppSpacing.sm,
-                    ),
-                    child: TextField(
-                      controller: _textController,
-                      minLines: 2,
-                      maxLines: 6,
-                      keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.newline,
-                      style: theme.textTheme.bodyLarge,
-                      decoration: const InputDecoration(
-                        hintText: '例：何卒宜しくお願い致します。',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                        // No opaque panel inside the field; the white toolbar
-                        // stays visible behind it.
-                        filled: false,
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
-                      0,
-                      AppSpacing.lg,
-                      AppSpacing.sm,
-                    ),
-                    child: Row(
-                      children: [
-                        const Expanded(child: SizedBox()),
-                        FilledButton.icon(
-                          onPressed: _busy ? null : _analyze,
-                          icon: const Icon(
-                            Icons.auto_awesome,
-                            size: AppSizes.icon,
-                          ),
-                          label: const Text('分词'),
-                        ),
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton.icon(
-                              onPressed: _copyText,
-                              icon: const Icon(
-                                Icons.copy_all_outlined,
-                                size: AppSizes.iconSmall,
-                              ),
-                              label: const Text('复制'),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_busy)
-                    const LinearProgressIndicator(minHeight: AppSpacing.xxs),
-                ],
-              ),
-            ),
             Expanded(child: _buildContent(settings)),
           ],
         ),

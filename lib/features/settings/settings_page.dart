@@ -271,23 +271,35 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
       builder: (dialogContext) => AlertDialog(
         title: const Text('每词典词条上限'),
         contentPadding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final choice in choices)
-              ListTile(
-                leading: Icon(
-                  current == choice
-                      ? Icons.check_circle
-                      : Icons.circle_outlined,
-                  color: current == choice
-                      ? AppColors.primary
-                      : AppColors.textTertiary,
-                ),
-                title: Text(choice == 0 ? '无限制' : '$choice 条'),
-                onTap: () => Navigator.of(dialogContext).pop(choice),
+        // Portrait phones are too short for all five choices at once. Keep
+        // the list scrollable so “10 条” remains reachable.
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.55,
+          ),
+          child: SingleChildScrollView(
+            child: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final choice in choices)
+                    ListTile(
+                      leading: Icon(
+                        current == choice
+                            ? Icons.check_circle
+                            : Icons.circle_outlined,
+                        color: current == choice
+                            ? AppColors.primary
+                            : AppColors.textTertiary,
+                      ),
+                      title: Text(choice == 0 ? '无限制' : '$choice 条'),
+                      onTap: () => Navigator.of(dialogContext).pop(choice),
+                    ),
+                ],
               ),
-          ],
+            ),
+          ),
         ),
         actions: [
           TextButton(

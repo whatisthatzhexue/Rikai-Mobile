@@ -206,6 +206,8 @@ void main() {
     expect(searchField.decoration?.hintText, '搜索……');
     expect(find.text('尚未添加 MDict 词典'), findsOneWidget);
     expect(find.text('管理词典'), findsOneWidget);
+    expect(find.text('查询词典'), findsNothing);
+    expect(find.text('多选'), findsOneWidget);
   });
 
   testWidgets('dictionary management opens from settings', (tester) async {
@@ -220,5 +222,87 @@ void main() {
     expect(find.text('尚未添加词典'), findsOneWidget);
     expect(find.text('从文件夹导入'), findsOneWidget);
     expect(find.text('手动添加词典'), findsOneWidget);
+  });
+
+  testWidgets('search controls fit portrait and landscape widths', (
+    tester,
+  ) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    for (final size in const [Size(360, 640), Size(800, 360)]) {
+      await tester.binding.setSurfaceSize(size);
+      await _pumpApp(tester);
+      await tester.ensureVisible(find.text('查词'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('查词'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('多选'), findsOneWidget);
+      expect(find.text('查询词典'), findsNothing);
+    }
+  });
+
+  testWidgets('reader controls fit landscape', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 360));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpApp(tester);
+
+    await tester.ensureVisible(find.text('输入文本'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('输入文本'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('文本阅读'), findsOneWidget);
+    expect(find.text('分词'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('manual dictionary dialog does not open the keyboard', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 360));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpApp(tester);
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('管理词典'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('管理词典'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('添加词典'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('添加 MDict 词典'), findsOneWidget);
+    expect(tester.testTextInput.isVisible, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the max-entries dialog keeps 10 reachable in landscape', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 360));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpApp(tester);
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    await tester.dragUntilVisible(
+      find.text('每词典词条上限'),
+      find.byType(ListView).first,
+      const Offset(0, -160),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('每词典词条上限'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('10 条'), findsOneWidget);
+    await tester.ensureVisible(find.text('10 条'));
+    await tester.tap(find.text('10 条'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('最多 10 条'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

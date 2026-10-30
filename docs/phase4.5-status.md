@@ -179,6 +179,32 @@ Phase 4.5 addresses those before Phase 5 adds corpus/history/release work.
 - **Corpus dates**: preview cards show `2026.09.12`, or `09.12` for the
   current year.
 
+### Landscape/layout pass (2026-10-30)
+
+- **Dictionary import**: the recursive-scan explanation is now shown only while
+  the result list is empty; the “扫描完成” status is cleared when probing ends.
+  The freed height goes to the dictionary rows.
+- **Manual MDict dialog**: the path field no longer autofocuses; the dialog
+  clears focus on entry and after the folder picker, so the keyboard does not
+  cover the dialog.
+- **Entry limit dialog**: the five choices live in a height-constrained
+  `SingleChildScrollView`, so “10 条” remains reachable on short portrait and
+  landscape screens.
+- **Photo preview collapse**: the resize handle can now reach `0`; at or below
+  the 40dp handle the image and its overlays disappear and the result list gets
+  the space. Both the photo set and corpus detail use the same `PhotoPane`
+  behaviour, and the handle remains available to pull the photo back down.
+- **Lookup filter layout**: the “查询词典” heading was removed and chips start
+  at its previous height. The single/multi toggle moved into the AppBar on the
+  search page and into the top title row of the reader lookup sheet, vertically
+  centred with the headword.
+- **Reader controls**: after tokenisation, a grey “隐藏输入框” action appears
+  to the left of “分词”. Hiding removes the whole input/toolbar block; a
+  visibility icon appears below the AppBar at the same left inset and restores
+  it. Hidden height is given to the token result list.
+- Landscape widget tests cover search controls, reader layout, the manual
+  dictionary dialog (no keyboard), and the scrollable entry-limit dialog.
+
 ## Not changed
 
 - PaddleOCR remains PP-OCRv5 mobile det/rec on ONNX Runtime; no Paddle-Lite,
@@ -196,7 +222,7 @@ Host:
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 129 tests passed
+flutter test     -> 134 tests passed
 flutter build apk --debug -> success (Kotlin/OcrTextQuality compiled)
 ```
 

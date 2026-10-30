@@ -122,6 +122,14 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       appBar: AppBar(
         title: const Text('查词'),
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.xs),
+            child: DictionarySelectionModeToggle(
+              mode: preferences.mode,
+              onChanged: (mode) =>
+                  ref.read(lookupPreferencesProvider.notifier).setMode(mode),
+            ),
+          ),
           IconButton(
             tooltip: '词典管理',
             onPressed: () {
@@ -184,9 +192,6 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                       .toggle(id, enabled),
                   onSelectAll: () =>
                       ref.read(lookupPreferencesProvider.notifier).selectAll(),
-                  onModeChanged: (mode) => ref
-                      .read(lookupPreferencesProvider.notifier)
-                      .setMode(mode),
                 ),
               ),
             const SizedBox(height: AppSpacing.xs),

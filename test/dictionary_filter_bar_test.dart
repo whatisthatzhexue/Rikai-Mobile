@@ -25,7 +25,6 @@ Future<void> _pump(
           mode: DictionarySelectionMode.multi,
           onToggle: (_) {},
           onSelectAll: () {},
-          onModeChanged: (_) {},
         ),
       ),
     ),
@@ -43,6 +42,7 @@ void main() {
     );
 
     expect(find.text('全选'), findsOneWidget);
+    expect(find.text('查询词典'), findsNothing);
     expect(find.text('大修'), findsOneWidget);
     expect(find.text('大辞'), findsOneWidget);
     expect(find.text('漢'), findsOneWidget);
