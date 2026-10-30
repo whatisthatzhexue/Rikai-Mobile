@@ -1,6 +1,11 @@
 # Phase 6 — 词典助手接口契约 v1
 
-- 状态：**设计契约，未实现**；与 `docs/phase6-agent-design.md` v2 配套。
+> **2026-10-31 实现决策**：当前为固定流水线、模型无工具。工具表（`ToolSpec`/
+> `ToolResult`、`unidic.tokenize`、`mdict.lookup`、`mdict.suggest`、预算/可见性）
+> 仅作为未来契约保留；`lib/services/agent/tools/` 已删除，模型请求不携带 tools。
+
+- 状态：**设计契约；P6.1–P6.5 核心已实现，P6.6/P6.7 未实现**；与
+  `docs/phase6-agent-design.md` v2 配套。实现状态见 `docs/phase6-status.md`。
 - 目的：把 Agent 的工具、输入/输出、错误码、状态机和校验规则固定下来，避免实现时
   各自发明字段。机器可读 schema 在 `docs/schemas/agent/`。
 - 版本规则：所有 schema 带 `schema` 常量（如 `rikai.agent.input.v1`）；破坏性字段

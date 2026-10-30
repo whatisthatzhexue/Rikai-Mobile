@@ -1,7 +1,11 @@
 # ADR 0004: Agent capability ports and deterministic citation pipeline
 
-- Status: proposed (Phase 6 design only; not implemented)
+- Status: accepted; P6.1–P6.5 implemented (P6.6/P6.7 pending)
 - Date: 2026-10-30
+- Update 2026-10-31: the fixed pipeline is the shipped design; the model has no
+  tools. `lib/services/agent/tools/` was deleted. The tool visibility list below
+  is retained only as a rejected/future option; do not present tool calling as
+  implemented without a new ADR and tool_use/tool_result message support.
 
 ## Context
 
@@ -38,7 +42,9 @@ which evidence to cite. That conflicts with the product requirements:
    claim classes before rendering. The model never receives image paths, raw
    HTML, MDD resources, or API keys.
 5. Keep UI and Agent on the same capability implementation: extract a pure
-   `LookupGateway` from the existing UI lookup paths and an `OcrWorkflow` that
+   `LookupGateway` from the existing UI lookup paths. The `OcrWorkflow` wrapper
+   was removed on 2026-10-31 because it had no production caller; OCR ports call
+   the service directly.
    bundles readiness, recognition, and text composition.
 
 ## Alternatives considered
@@ -64,6 +70,6 @@ which evidence to cite. That conflicts with the product requirements:
 - Agent behavior is deterministic and testable with fake ports/providers.
 - The model has less freedom but cannot reorder dictionaries or invent sources.
 - A new `MdictService.sample`/`suggest` surface and a pure `LookupGateway` are
-  required before the Agent UI can be built.
-- Phase 6 stays gated by Phase 4.5/Phase 5 acceptance; this ADR does not
-  authorize implementation.
+  required before the Agent UI can be built; both are now implemented.
+- P6.1–P6.5 now follow this decision. P6.6 (multi-OCR) and P6.7 (annotation
+  DSL/Markdown/ruby/pitch/history/release) remain pending.

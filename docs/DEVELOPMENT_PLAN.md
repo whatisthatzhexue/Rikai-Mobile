@@ -701,11 +701,12 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 
 ## 11. Phase 6 — Mdict Agent（后期设计，未纳入 MVP 估算）
 
-> 状态：**设计草案 v2，未实现**。设计细节、开放问题和验收标准见
+> 状态：**P6.1–P6.5 核心已实现；P6.6/P6.7 未实现**。实现记录见
+> `docs/phase6-status.md`；设计细节、开放问题和验收标准见
 > `docs/phase6-agent-design.md`；工具/JSON Schema/状态机契约见
-> `docs/phase6-agent-contracts.md`。Phase 6 依赖 Phase 5 完成，并依赖 Phase 1–4
-> 已提供的 OCR、UniDic、MDict 接口；开工前需要用户单独批准。v2 增加固定流水线、
-> 词典熟悉、逐词/语法证据、原文引用、会话级词典选择和按需多 OCR。
+> `docs/phase6-agent-contracts.md`。Phase 5 已完成并发布 1.0。v2 包含固定流水线、
+> 词典熟悉、逐词/语法证据、原文引用、会话级词典选择和按需多 OCR（多 OCR 尚待
+> P6.6）。
 
 ### 11.1 目标
 
@@ -719,12 +720,12 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 Phase 6 计划将主页固定为五个按钮：
 
 1. 拍照识别（不变）
-2. 查句子（原文本阅读；当前实现名为「输入文本」）
+2. 查句子（原文本阅读；P6.5 已改名）
 3. 查单词（原查词）
 4. 历史记录（原语料）
 5. 词典助手（新 Agent）
 
-当前实现仍是四个按钮；Phase 6 UI 实施前不得提前改名或添加按钮。
+P6.5 已接入五个按钮并更新主页测试；后续 P6.6/P6.7 UI 仍须先补设计 token。
 
 ### 11.3 产品要求
 
@@ -735,6 +736,10 @@ Phase 6 计划将主页固定为五个按钮：
 - **输入**：图片、文字、图片+文字；图片只经本机 OCR，严禁发送给 LLM 视觉接口。
 - **输出**：首版用结构化结果组件（原文引用/译文/逐句/词注/证据卡）+ 可点击词典
   来源；安全 Markdown、ruby、日语声调横线在 P6.7 再接入。
+- **界面**：采用对话式 Agent 布局（首屏消息区约 80%，小屏 ≥70%；固定底部输入区、
+  流式/停止、错误卡保留内容、证据默认折叠「依据 N 条」、本会话设置默认收起）；
+  视觉规范以 `docs/design-tokens.md` 的“Phase 6 Agent 对话式界面 v2”为准。P6.5
+  已实现基础对话式布局；状态条、历史、无障碍 200% 等完整 v2 验收待补。
 - **接口层**：现有 OCR/UniDic/MDict 服务外包一层窄 Port（`OcrPort`、
   `TokenizePort`、`LookupPort`、`DictionarySamplePort`、`LlmPort`、`SecretPort`）；
   模型只看到 JSON Schema 工具（`unidic.tokenize`、`mdict.lookup`、
@@ -776,9 +781,12 @@ Phase 6 计划将主页固定为五个按钮：
 
 ### 11.5 验收
 
-Phase 6 的验收必须覆盖：五按钮 UI、无图片上云、严格引用、宽松补充标注、模型
-路由、citation 点击、逐词/语法检索、原文 quote 校验、词典顺序、每会话词典选择、
-多 OCR 版本选择、熟悉档案用户确认/复用/失效、预算与截断、提示词注入、
-annotation DSL 全局生效、API Key 脱敏、provider 失败恢复，以及未配置 provider
-时核心离线功能不回归。完整清单见 `docs/phase6-agent-design.md`；契约见
-`docs/phase6-agent-contracts.md`。
+Phase 6 的验收必须覆盖：五按钮 UI、**对话式 Agent UI v2**（首屏约 80% 消息区，
+小屏 ≥70%；气泡最大 80%、流式/停止、错误卡保留内容、证据折叠「依据 N 条」、
+输入区 1–5 行、设置三态 Key/测试连接、Semantics/200% 字体缩放）、无图片上云、
+严格引用、宽松
+补充标注、模型路由、citation 点击、逐词/语法检索、原文 quote 校验、词典顺序、
+每会话词典选择、多 OCR 版本选择、熟悉档案用户确认/复用/失效、预算与截断、
+提示词注入、annotation DSL 全局生效、API Key 脱敏、provider 失败恢复，以及未配置
+provider 时核心离线功能不回归。完整清单见 `docs/phase6-agent-design.md`；视觉规范
+见 `docs/design-tokens.md`；契约见 `docs/phase6-agent-contracts.md`。

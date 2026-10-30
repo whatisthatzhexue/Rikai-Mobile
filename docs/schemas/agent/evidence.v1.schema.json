@@ -3,80 +3,183 @@
   "$id": "https://rikai.mobile/schemas/agent/evidence.v1.schema.json",
   "title": "Rikai Agent Evidence Bundle v1",
   "type": "object",
-  "required": ["schema", "sources", "citations"],
+  "required": [
+    "schema",
+    "sources",
+    "citations"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schema": {"const": "rikai.agent.evidence.v1"},
+    "schema": {
+      "const": "rikai.agent.evidence.v1"
+    },
     "sources": {
       "type": "array",
       "minItems": 1,
-      "items": {"$ref": "#/$defs/source_evidence"}
+      "items": {
+        "$ref": "#/$defs/source_evidence"
+      }
     },
     "patterns": {
       "type": "array",
-      "items": {"$ref": "#/$defs/grammar_pattern"}
+      "items": {
+        "$ref": "#/$defs/grammar_pattern"
+      }
     },
     "citations": {
       "type": "array",
-      "items": {"$ref": "#/$defs/citation"}
+      "items": {
+        "$ref": "#/$defs/citation"
+      }
     },
-    "truncated": {"type": "boolean"},
-    "budget": {"$ref": "#/$defs/budget"}
+    "truncated": {
+      "type": "boolean"
+    },
+    "budget": {
+      "$ref": "#/$defs/budget"
+    },
+    "structure_unavailable": {
+      "type": "boolean",
+      "default": false
+    }
   },
   "$defs": {
     "source_evidence": {
       "type": "object",
-      "required": ["id", "kind", "text", "tokens"],
+      "required": [
+        "id",
+        "kind",
+        "text",
+        "tokens"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string", "pattern": "^src-[0-9]+$"},
-        "kind": {"enum": ["image_ocr", "user_text"]},
-        "text": {"type": "string", "maxLength": 20000},
+        "id": {
+          "type": "string",
+          "pattern": "^src-[0-9]+$"
+        },
+        "kind": {
+          "enum": [
+            "image_ocr",
+            "user_text"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 20000
+        },
         "tokens": {
           "type": "array",
-          "items": {"$ref": "#/$defs/token_evidence"}
+          "items": {
+            "$ref": "#/$defs/token_evidence"
+          }
         }
       }
     },
     "token_evidence": {
       "type": "object",
-      "required": ["id", "surface", "start", "end"],
+      "required": [
+        "id",
+        "surface",
+        "start",
+        "end"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string", "pattern": "^t[0-9]+$"},
-        "surface": {"type": "string", "minLength": 1, "maxLength": 200},
-        "reading": {"type": "string", "maxLength": 200},
-        "lemma": {"type": "string", "maxLength": 200},
-        "pos": {"type": "string", "maxLength": 100},
-        "start": {"type": "integer", "minimum": 0},
-        "end": {"type": "integer", "minimum": 0},
-        "content": {"type": "boolean"},
+        "id": {
+          "type": "string",
+          "pattern": "^t[0-9]+$"
+        },
+        "surface": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "reading": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "lemma": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "pos": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "content": {
+          "type": "boolean"
+        },
         "lookup_candidates": {
           "type": "array",
           "maxItems": 12,
-          "items": {"type": "string", "maxLength": 200}
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "citation_ids": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "type": "string",
+            "pattern": "^source-[0-9]+$"
+          }
         }
       }
     },
     "grammar_pattern": {
       "type": "object",
-      "required": ["id", "surface", "token_ids", "start", "end"],
+      "required": [
+        "id",
+        "surface",
+        "token_ids",
+        "start",
+        "end"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string", "pattern": "^p[0-9]+$"},
-        "surface": {"type": "string", "minLength": 1, "maxLength": 300},
+        "id": {
+          "type": "string",
+          "pattern": "^p[0-9]+$"
+        },
+        "surface": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
         "token_ids": {
           "type": "array",
           "minItems": 1,
           "maxItems": 12,
-          "items": {"type": "string", "pattern": "^t[0-9]+$"}
+          "items": {
+            "type": "string",
+            "pattern": "^t[0-9]+$"
+          }
         },
-        "start": {"type": "integer", "minimum": 0},
-        "end": {"type": "integer", "minimum": 0},
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
         "citation_ids": {
           "type": "array",
           "maxItems": 12,
-          "items": {"type": "string", "pattern": "^source-[0-9]+$"}
+          "items": {
+            "type": "string",
+            "pattern": "^source-[0-9]+$"
+          }
         }
       }
     },
@@ -95,28 +198,80 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "id": {"type": "string", "pattern": "^source-[0-9]+$"},
-        "kind": {"enum": ["mdict", "unidic", "source"]},
-        "dictionary_id": {"type": "string", "maxLength": 64},
-        "dictionary_title": {"type": "string", "maxLength": 200},
-        "dictionary_order": {"type": "integer", "minimum": 0},
-        "entry_key": {"type": "string", "maxLength": 300},
-        "matched_key": {"type": "string", "maxLength": 300},
-        "headword": {"type": "string", "maxLength": 300},
-        "snippet": {"type": "string", "maxLength": 400},
-        "tool_call_id": {"type": "string", "maxLength": 128}
+        "id": {
+          "type": "string",
+          "pattern": "^source-[0-9]+$"
+        },
+        "kind": {
+          "enum": [
+            "mdict",
+            "unidic",
+            "source"
+          ]
+        },
+        "dictionary_id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "dictionary_title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "dictionary_order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entry_key": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "matched_key": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "headword": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "snippet": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "tool_call_id": {
+          "type": "string",
+          "maxLength": 128
+        }
       }
     },
     "budget": {
       "type": "object",
-      "required": ["source_chars", "unique_targets", "citations"],
+      "required": [
+        "source_chars",
+        "unique_targets",
+        "citations"
+      ],
       "additionalProperties": false,
       "properties": {
-        "source_chars": {"type": "integer", "minimum": 0},
-        "unique_targets": {"type": "integer", "minimum": 0},
-        "citations": {"type": "integer", "minimum": 0},
-        "max_targets": {"type": "integer", "minimum": 1},
-        "max_citations": {"type": "integer", "minimum": 1}
+        "source_chars": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unique_targets": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "citations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_targets": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_citations": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     }
   }

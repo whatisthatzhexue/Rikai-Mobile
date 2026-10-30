@@ -77,6 +77,7 @@
       "items": {"type": "string", "maxLength": 80}
     },
     "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-    "schema_version": {"type": "integer", "minimum": 1}
+    "schema_version": {"type": "integer", "minimum": 1},
+    "language": {"enum": ["zh", "en", "ja"]}
   }
 }

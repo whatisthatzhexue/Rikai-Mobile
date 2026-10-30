@@ -14,9 +14,12 @@ Phases 1–4 are working end to end on the Android emulator with a real
 UniDic and MDict dictionary. **Phase 4.5 (OCR quality and performance
 convergence) was accepted on arm64/real devices on 2026-10-30.** **Phase 5
 (corpus/history, onboarding and release polish) was completed and
-user-confirmed on a cold-booted emulator on 2026-10-30.** The Phase 6
-dictionary assistant is design v2 plus JSON-schema contracts only and is not
-implemented.
+user-confirmed on a cold-booted emulator on 2026-10-30.** Phase 6 (dictionary
+assistant) is in progress: P6.1–P6.5 core is implemented (capability ports,
+provider adapters, secure key storage, dictionary familiarization, fixed
+orchestrator/evidence/citation pipeline, Agent page and provider settings).
+P6.6 (multi-OCR variants/repair) and P6.7 (annotation DSL, Markdown/ruby/pitch,
+history/release polish) are not implemented.
 
 - In-place MeCab/UniDic tokenization in a long-lived worker isolate, private
   `mecabrc`, CSV-aware parsing of quoted UniDic fields
@@ -91,35 +94,42 @@ implemented.
   the existing model page
 - OCR text flows into the same reader and MDict lookup UI
 
-### Phase 6 planned: dictionary assistant (design only)
+### Phase 6 in progress: dictionary assistant
 
-Phase 6 is documented but **not implemented**. Phase 5 is complete; once the
-Phase 6 design and implementation plan are approved, the planned home screen has
-five actions:
-`拍照识别`, `查句子`, `查单词`, `历史记录`, and the new `词典助手`.
+Phase 6 P6.1–P6.5 core is implemented; the home screen now has five actions:
+`拍照识别`, `查句子`, `查单词`, `历史记录`, and `词典助手`.
 
-The planned assistant combines local OCR, UniDic tokenization, and MDict lookup
-as schema-defined tools. It uses a **fixed pipeline with bounded model tool
-calls**: the orchestrator performs OCR, tokenization, and every word/grammar
-lookup; the model only reasons and may request a small number of extra lookups.
-Strict mode requires real dictionary evidence for factual claims; loose mode
-allows clearly marked model commentary. The planned workflow familiarizes the
-LLM with each selected dictionary once (user-confirmed local profile), sends
-only `{image_id, ocr_text}` JSON (never image data), tokenizes with UniDic,
-looks up every word/grammar in MDict, and must quote the source text.
-Dictionary output order follows the user's settings; dictionary selection is
-independent per agent session. Multi-OCR variants and dictionary-assisted OCR
-repair are opt-in: the default is one on-device OCR result, and conflicts are
-shown to the user rather than silently overwritten. Images would only be
-converted by on-device OCR and must never be sent to the LLM as vision input.
-User-approved furigana/annotation rules remain a later Phase 6 item (P6.7).
-The detailed design, privacy boundary, open questions, and acceptance criteria
-are in [docs/phase6-agent-design.md](docs/phase6-agent-design.md); the tool and
-JSON-schema contracts are in
-[docs/phase6-agent-contracts.md](docs/phase6-agent-contracts.md).
+- Capability ports wrap the existing OCR/UniDic/MDict services; a pure
+  `LookupGateway` keeps UI and Agent lookup behavior aligned; the unused
+  `OcrWorkflow` wrapper was removed on 2026-10-31.
+- Provider adapters support OpenAI-compatible endpoints (DeepSeek/custom) and
+  Anthropic Messages API. API keys use Android secure storage; the model path is
+  text-only and a runtime guard rejects image/file payloads. The opaque
+  `image_id` handle is allowed.
+- Dictionary familiarization samples bounded entries, asks the small model for
+  a profile, requires explicit user save/skip/decline, and caches by dictionary
+  fingerprint. UniDic profiling is deterministic.
+- The fixed orchestrator runs OCR → familiarization → tokenization → evidence →
+  reasoning → quote/citation validation. It prefetches every unique
+  word/grammar target in the user's dictionary order; model output cannot invent
+  citations or reorder dictionaries. Strict mode requires citations and rejects
+  unsourced facts; loose mode labels model supplements.
+- The Agent page supports text/gallery input (local OCR only), per-session
+  dictionary selection, strict/loose mode, provider choice, stage progress,
+  cancellation, original-text quotes, evidence cards and clickable citations
+  that open the existing entry page. Provider settings are available under
+  Settings → 词典助手.
 
-Next: Phase 6 design review and explicit user approval; it remains unimplemented
-until then. See
+Still pending: P6.6 multi-OCR variants/dictionary-assisted repair and P6.7
+annotation DSL/Markdown/ruby/pitch/history/release polish. Real-network provider
+calls, secure-storage device I/O, real-dictionary `sample`/`suggest` and arm64
+Agent acceptance still need device verification. See
+[docs/phase6-status.md](docs/phase6-status.md) for the current implementation
+record, [docs/phase6-agent-design.md](docs/phase6-agent-design.md) for the design
+and [docs/phase6-agent-contracts.md](docs/phase6-agent-contracts.md) for the
+tool/JSON-schema contracts.
+
+Next: finish P6.6/P6.7 and complete arm64/device acceptance. See
 [docs/phase5-status.md](docs/phase5-status.md),
 [docs/phase4.5-status.md](docs/phase4.5-status.md),
 [docs/phase6-agent-design.md](docs/phase6-agent-design.md),
@@ -179,8 +189,9 @@ provider/fake-server tests are not part of the current build or test suite.
 - [Phase 4 vertical OCR status](docs/phase4-status.md)
 - [Phase 4.5 OCR convergence status](docs/phase4.5-status.md)
 - [Phase 5 corpus/onboarding/release status](docs/phase5-status.md)
-- [Phase 6 agent design v2 (planned)](docs/phase6-agent-design.md)
-- [Phase 6 agent contracts (planned)](docs/phase6-agent-contracts.md)
+- [Phase 6 agent design v2](docs/phase6-agent-design.md)
+- [Phase 6 agent contracts](docs/phase6-agent-contracts.md)
+- [Phase 6 implementation status](docs/phase6-status.md)
 - [Development setup](docs/dev-setup.md)
 - [Models](docs/models.md)
 - [Architecture decisions](docs/adr/)
