@@ -146,6 +146,45 @@ abstract final class AppSizes {
   static const double borderWidth = 1;
 }
 
+/// Phase 6 Agent semantic tokens. Values reuse the blue/white palette; the
+/// names keep Agent widgets free of hard-coded colors and sizes.
+abstract final class AgentTokens {
+  static const Color userSurface = AppColors.blue50;
+  static const Color assistantSurface = AppColors.surface;
+  static const Color evidenceSurface = AppColors.surface;
+  static const Color evidenceBorder = AppColors.border;
+  static const Color citationSurface = AppColors.blue50;
+  static const Color citationText = AppColors.blue700;
+  static const Color supplementSurface = AppColors.surfaceMuted;
+  static const Color strictBadge = AppColors.header;
+  static const Color looseBadge = AppColors.surfaceMuted;
+
+  static const double body = 16;
+  static const double helper = 14;
+  static const double section = 18;
+  static const double evidenceTitle = 16;
+  static const double citationChip = 12;
+  static const double citationChipHeight = 28;
+  static const double stageText = 14;
+  static const double badge = 12;
+  static const double evidenceRadius = AppRadius.md;
+  static const double cardPadding = AppSpacing.md;
+
+  // Conversational Agent v2
+  static const double bubbleRadius = AppRadius.xl;
+  static const double bubbleTailRadius = 4;
+  static const double messageMaxWidth = 0.8;
+  static const double modelLabel = 12;
+  static const double systemMessage = 14;
+  static const double sessionBarHeight = 32;
+  static const double statusBarHeight = 24;
+  static const int composerMaxLines = 5;
+  static const double composerButton = 40;
+  static const double imageThumbnail = 64;
+  static const double sentImageWidth = 160;
+  static const double sentImageHeight = 120;
+}
+
 /// Slides a new page in from the right and leaves the previous page in place.
 ///
 /// Deliberately contains no [FadeTransition]: cross-fading made the deep-blue
