@@ -4,11 +4,15 @@ import 'dart:isolate';
 
 import 'package:dict_reader/dict_reader.dart';
 import 'package:flutter/foundation.dart';
+import 'package:html/parser.dart' as html_parser;
 
 import '../../core/models/dict_info.dart';
+import '../../core/models/dictionary_sample.dart';
 import '../../core/models/lookup_match_mode.dart';
 import '../../core/models/lookup_models.dart';
+import '../../core/utils/html_text.dart';
 import '../../core/utils/text_normalizer.dart';
+import '../lookup/lookup_gateway.dart';
 import 'mdd_key.dart';
 import 'mdict_header.dart';
 
@@ -38,7 +42,7 @@ class MdictException implements Exception {
 /// Dictionary files are opened lazily, in place, and never copied. The main
 /// isolate sends path descriptors with every request; the worker caches open
 /// readers by dictionary id.
-class MdictService {
+class MdictService implements LookupBackend {
   MdictService._(this._isolate, this._receivePort);
 
   static const Duration initTimeout = Duration(seconds: 30);
@@ -101,6 +105,7 @@ class MdictService {
   ///
   /// Candidates are normalized and expanded into width/case/kana variants.
   /// Each dictionary stops at the first candidate that yields hits.
+  @override
   Future<LookupResult> lookup({
     required String query,
     required Iterable<String> rawCandidates,
@@ -166,6 +171,52 @@ class MdictService {
     }
 
     return LookupResult(query: query, candidates: candidates, groups: groups);
+  }
+
+  /// Returns a bounded, deterministic sample for dictionary familiarization.
+  ///
+  /// The worker never traverses every key. Exact probes and a few prefix
+  /// searches are enough to infer entry structure; each sample is plain text.
+  Future<DictionarySample> sample({
+    required DictionaryInfo dictionary,
+    List<String> exactProbes = const <String>[],
+    List<String> prefixProbes = const <String>[],
+    int maxEntries = 12,
+    int maxEntriesPerProbe = 2,
+  }) async {
+    final result = await _request(<String, Object?>{
+      'cmd': 'sample',
+      'dictionary': _dictionaryDescriptor(dictionary),
+      'exactProbes': exactProbes,
+      'prefixProbes': prefixProbes,
+      'maxEntries': maxEntries,
+      'maxEntriesPerProbe': maxEntriesPerProbe,
+    });
+    return DictionarySample.fromJson(_stringKeyed(result));
+  }
+
+  /// Prefix suggestions in the supplied dictionary order.
+  Future<List<String>> suggest({
+    required String prefix,
+    required List<DictionaryInfo> dictionaries,
+    int limit = 10,
+  }) async {
+    final enabled = dictionaries
+        .where((dictionary) => dictionary.enabled && dictionary.isAvailable)
+        .toList(growable: false);
+    if (enabled.isEmpty || prefix.trim().isEmpty) return const <String>[];
+    final result = await _request(<String, Object?>{
+      'cmd': 'suggest',
+      'dictionaries': enabled
+          .map(_dictionaryDescriptor)
+          .toList(growable: false),
+      'prefix': prefix,
+      'limit': limit,
+    });
+    final raw = result['suggestions'];
+    return raw is List
+        ? raw.whereType<String>().toList(growable: false)
+        : const <String>[];
   }
 
   /// Opens and initializes the given dictionaries in the worker without
@@ -312,7 +363,12 @@ class MdictService {
     'title': dict.title,
     'mdxPath': dict.mdxPath,
     'mddPaths': dict.mddPaths,
+    'cssPaths': dict.cssPaths,
   };
+}
+
+Map<String, Object?> _stringKeyed(Map<Object?, Object?> map) {
+  return map.map((key, value) => MapEntry(key.toString(), value));
 }
 
 MdictErrorCode _errorCodeFromName(String? name) {
@@ -409,6 +465,12 @@ Future<Map<String, Object?>> _handleCommand(
   }
   if (command == 'lookup') {
     return _lookup(message, openDictionaries);
+  }
+  if (command == 'sample') {
+    return _sample(message, openDictionaries);
+  }
+  if (command == 'suggest') {
+    return _suggest(message, openDictionaries);
   }
   if (command == 'warmup') {
     return _warmUp(message, openDictionaries);
@@ -688,6 +750,131 @@ Future<Map<String, Object?>> _lookup(
   }
 
   return {'groups': groups};
+}
+
+Future<Map<String, Object?>> _sample(
+  Map<dynamic, dynamic> message,
+  Map<String, _OpenDictionary> openDictionaries,
+) async {
+  final rawDescriptor = message['dictionary'];
+  if (rawDescriptor is! Map) {
+    throw const MdictException(MdictErrorCode.lookupFailed, '词典采样参数无效');
+  }
+  final maxEntries = message['maxEntries'] as int? ?? 12;
+  final perProbe = message['maxEntriesPerProbe'] as int? ?? 2;
+  final exactProbes =
+      (message['exactProbes'] as List?)?.whereType<String>().toList(
+        growable: false,
+      ) ??
+      const <String>[];
+  final prefixProbes =
+      (message['prefixProbes'] as List?)?.whereType<String>().toList(
+        growable: false,
+      ) ??
+      const <String>[];
+
+  final dictionary = await _ensureOpen(rawDescriptor, openDictionaries);
+  final entries = <Map<String, Object?>>[];
+  final seen = <String>{};
+
+  Future<void> addHit(RecordOffsetInfo hit) async {
+    if (entries.length >= maxEntries) return;
+    final fingerprint =
+        '${hit.keyText}|${hit.recordBlockOffset}|${hit.startOffset}|'
+        '${hit.endOffset}';
+    if (!seen.add(fingerprint)) return;
+    try {
+      entries.add(_sampleEntry(await _resolveEntry(dictionary.mdx, hit)));
+    } catch (error) {
+      debugPrint('[MdictWorker] failed to sample entry: $error');
+    }
+  }
+
+  for (final probe in exactProbes) {
+    if (entries.length >= maxEntries) break;
+    final hits = await dictionary.mdx.locateAll(probe);
+    for (final hit in hits) {
+      await addHit(hit);
+      if (entries.length >= maxEntries) break;
+    }
+  }
+
+  for (final probe in prefixProbes) {
+    if (entries.length >= maxEntries) break;
+    final keys = dictionary.mdx.search(probe, limit: perProbe);
+    for (final key in keys) {
+      if (entries.length >= maxEntries) break;
+      final hits = await dictionary.mdx.locateAll(key);
+      for (final hit in hits) {
+        await addHit(hit);
+        if (entries.length >= maxEntries) break;
+      }
+    }
+  }
+
+  final rawCss = rawDescriptor['cssPaths'];
+  return {
+    'dictionary_id': dictionary.id,
+    'metadata': {
+      'title': dictionary.title,
+      'entry_count': dictionary.mdx.numEntries,
+      'encoding': dictionary.mdx.header['Encoding'] ?? '',
+      'engine_version': dictionary.mdx.header['GeneratedByEngineVersion'] ?? '',
+      'has_mdd': dictionary.mddPaths.isNotEmpty,
+      'has_css': rawCss is List && rawCss.isNotEmpty,
+    },
+    'entries': entries,
+  };
+}
+
+Map<String, Object?> _sampleEntry(LookupEntry entry) {
+  final fragment = html_parser.parseFragment(entry.html);
+  final text = htmlToPlainText(entry.html, maxLength: 400);
+  return {
+    'matched_key': entry.matchedKey,
+    'headword': entry.headword,
+    'snippet': text,
+    'features': DictionarySampleFeatures(
+      hasRuby: fragment.querySelectorAll('ruby').isNotEmpty,
+      hasKanjiInfo: text.contains('漢字') || text.contains('部首'),
+      hasExamples: text.contains('例') || text.contains('用例'),
+      hasAudio:
+          entry.html.contains('sound://') ||
+          fragment.querySelectorAll('audio').isNotEmpty,
+      hasImages: fragment.querySelectorAll('img').isNotEmpty,
+      hasTables: fragment.querySelectorAll('table').isNotEmpty,
+      tagCount: fragment.querySelectorAll('*').length,
+    ).toJson(),
+  };
+}
+
+Future<Map<String, Object?>> _suggest(
+  Map<dynamic, dynamic> message,
+  Map<String, _OpenDictionary> openDictionaries,
+) async {
+  final rawDictionaries = message['dictionaries'];
+  final prefix = message['prefix']?.toString() ?? '';
+  final limit = message['limit'] as int? ?? 10;
+  if (rawDictionaries is! List || prefix.isEmpty || limit <= 0) {
+    return const <String, Object?>{'suggestions': <String>[]};
+  }
+
+  final suggestions = <String>[];
+  final seen = <String>{};
+  for (final descriptor in rawDictionaries) {
+    if (descriptor is! Map) continue;
+    try {
+      final dictionary = await _ensureOpen(descriptor, openDictionaries);
+      for (final key in dictionary.mdx.search(prefix, limit: limit)) {
+        if (seen.add(key)) suggestions.add(key);
+        if (suggestions.length >= limit) break;
+      }
+    } catch (_) {
+      // One unavailable dictionary must not hide suggestions from the rest.
+    }
+    if (suggestions.length >= limit) break;
+  }
+  return {'suggestions': suggestions};
 }
 
 Future<Map<String, Object?>> _warmUp(

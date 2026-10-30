@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/dict_info.dart';
 import '../../core/models/lookup_models.dart';
+import '../../core/models/lookup_request.dart';
 import '../../core/theme/page_route.dart';
 import '../../core/ui/rikai_toast.dart';
+import '../../services/lookup/lookup_gateway.dart';
 import '../../services/mdict/mdict_worker.dart';
 import '../../state/providers.dart';
 import 'entry_page.dart';
@@ -16,23 +18,21 @@ Future<LookupResult> performLookup(
   List<String>? rawCandidates,
   List<DictionaryInfo>? dictionaries,
 }) async {
-  final List<DictionaryInfo> source =
-      dictionaries ?? ref.read(enabledDictionariesProvider);
-  final selected = source
-      .where((dictionary) => dictionary.enabled && dictionary.isAvailable)
-      .toList(growable: false);
-  if (selected.isEmpty) {
-    throw const MdictException(MdictErrorCode.lookupFailed, '尚未添加可用的 MDict 词典');
-  }
   final service = await ref.read(mdictServiceProvider.future);
   final settings = ref.read(appSettingsProvider);
-  return service.lookup(
-    query: query,
-    rawCandidates: rawCandidates ?? [query],
-    dictionaries: selected,
-    matchMode: settings.lookupMatchMode,
-    maxEntriesPerDictionary: settings.maxEntriesPerDictionary,
-  );
+  try {
+    return await LookupGateway(service).lookup(
+      LookupRequest(
+        query: query,
+        rawCandidates: rawCandidates ?? <String>[query],
+        dictionaries: dictionaries ?? ref.read(enabledDictionariesProvider),
+        matchMode: settings.lookupMatchMode,
+        maxEntriesPerDictionary: settings.maxEntriesPerDictionary,
+      ),
+    );
+  } on LookupGatewayException catch (error) {
+    throw MdictException(MdictErrorCode.lookupFailed, error.message);
+  }
 }
 
 /// Looks up [word] (for example an `entry://` link) and pushes an entry page.

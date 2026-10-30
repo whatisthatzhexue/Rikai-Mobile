@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/models/dict_info.dart';
 import '../core/models/lookup_match_mode.dart';
 import '../core/models/lookup_models.dart';
+import '../core/models/lookup_request.dart';
+import '../services/lookup/lookup_gateway.dart';
 import '../services/mdict/mdict_worker.dart';
 import 'lookup_preferences.dart';
 import 'providers.dart';
@@ -120,12 +122,14 @@ class LookupSearchNotifier extends Notifier<LookupSearchState> {
     state = state.searching(query, settings.lookupMatchMode);
     try {
       final service = await ref.read(mdictServiceProvider.future);
-      final result = await service.lookup(
-        query: query,
-        rawCandidates: [query],
-        dictionaries: selected,
-        matchMode: settings.lookupMatchMode,
-        maxEntriesPerDictionary: settings.maxEntriesPerDictionary,
+      final result = await LookupGateway(service).lookup(
+        LookupRequest(
+          query: query,
+          rawCandidates: <String>[query],
+          dictionaries: selected,
+          matchMode: settings.lookupMatchMode,
+          maxEntriesPerDictionary: settings.maxEntriesPerDictionary,
+        ),
       );
       if (generation != _generation) return;
       state = state.completed(result, signature.join(','));
