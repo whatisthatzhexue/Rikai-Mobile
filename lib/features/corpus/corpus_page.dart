@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/models/corpus_entry.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/ui/rikai_toast.dart';
+import '../../core/utils/date_format.dart';
 import '../../state/providers.dart';
 import '../capture/capture_buttons.dart';
 import '../reader/reader_options.dart';
@@ -115,9 +117,7 @@ class CorpusPage extends ConsumerWidget {
     if (text.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已复制全文')));
+    RikaiToast.show(context, '已复制全文');
   }
 
   Future<void> _delete(
@@ -170,10 +170,7 @@ class _CorpusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final date =
-        '${entry.createdAt.year}-'
-        '${entry.createdAt.month.toString().padLeft(2, '0')}-'
-        '${entry.createdAt.day.toString().padLeft(2, '0')}';
+    final date = formatCorpusDate(entry.createdAt);
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,

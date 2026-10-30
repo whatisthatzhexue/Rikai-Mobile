@@ -43,6 +43,10 @@ class EntryRenderer {
     r'@import[^;]+;',
     caseSensitive: false,
   );
+  static final RegExp _audioExtensionPattern = RegExp(
+    r'\.(?:mp3|wav|ogg|oga|m4a|aac|flac|opus|spx|webm)(?:[?#].*)?$',
+    caseSensitive: false,
+  );
 
   final Directory _cacheDirectory;
   final MdictResourceLoader _resourceLoader;
@@ -180,10 +184,8 @@ class EntryRenderer {
           attributes.remove(key);
           continue;
         }
-        if (name == 'href' &&
-            value.trim().toLowerCase().startsWith('sound://')) {
-          attributes.remove(key);
-        }
+        // `sound://` hrefs are rewritten into local <audio> controls below;
+        // they must survive sanitisation so the MDD resource can be resolved.
       }
     }
   }
@@ -238,6 +240,59 @@ class EntryRenderer {
         resourceCache,
       );
     }
+
+    // Many Japanese dictionaries store pronunciation files in the MDD and
+    // reference them as `sound://path.mp3`. JavaScript is disabled, so instead
+    // of trying to call a dictionary player we turn the link into a native
+    // HTML audio control backed by the extracted local file.
+    for (final anchor in fragment.querySelectorAll('a[href]')) {
+      final rawHref = (anchor.attributes['href'] ?? '').trim();
+      if (!_isAudioReference(rawHref)) continue;
+      // Do not leave a sound:// or '#' navigation target behind; the native
+      // audio control is the only playback surface.
+      anchor.attributes.remove('href');
+      if (anchor.attributes['data-rikai-audio'] == 'true') continue;
+      anchor.attributes['data-rikai-audio'] = 'true';
+
+      final fileUrl = await _resolveResource(
+        _audioResourceKey(rawHref),
+        dictionaryDirectory,
+        resourceCache,
+      );
+      if (fileUrl == null) {
+        anchor.attributes['data-rikai-missing-audio'] = rawHref;
+        continue;
+      }
+      final audio = dom.Element.tag('audio')
+        ..attributes['controls'] = ''
+        ..attributes['preload'] = 'none'
+        ..attributes['src'] = fileUrl
+        ..attributes['class'] = 'rikai-audio';
+      final parent = anchor.parent;
+      if (parent == null) continue;
+      final index = parent.nodes.indexOf(anchor);
+      if (index >= 0) parent.nodes.insert(index + 1, audio);
+    }
+  }
+
+  static bool _isAudioReference(String raw) {
+    final lower = raw.trim().toLowerCase();
+    if (lower.startsWith('sound://')) return true;
+    if (lower.startsWith('entry://') ||
+        lower.startsWith('http://') ||
+        lower.startsWith('https://') ||
+        lower.startsWith('//')) {
+      return false;
+    }
+    return _audioExtensionPattern.hasMatch(lower);
+  }
+
+  static String _audioResourceKey(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.toLowerCase().startsWith('sound://')) {
+      return trimmed.substring('sound://'.length);
+    }
+    return trimmed;
   }
 
   Future<String?> _resolveResource(
@@ -342,6 +397,7 @@ body {
 .rikai-entry-body { padding: 16px; max-width: 720px; margin: 0 auto; }
 img, video, canvas, svg { max-width: 100%; height: auto; }
 img { display: block; margin: 8px 0; }
+audio.rikai-audio { display: block !important; width: 100% !important; max-width: 360px; height: 36px !important; margin: 8px 0; visibility: visible !important; }
 a { color: #0052D9; text-decoration: none; }
 a:active { text-decoration: underline; }
 table { max-width: 100%; border-collapse: collapse; }

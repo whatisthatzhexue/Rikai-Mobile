@@ -38,7 +38,10 @@ class _EntryWebViewState extends State<EntryWebView> {
             javaScriptEnabled: false,
             blockNetworkLoads: true,
             allowFileAccess: true,
-            allowFileAccessFromFileURLs: false,
+            // Local MDD audio is loaded from file:// subresources. JavaScript
+            // stays disabled, so allowing file access from file URLs cannot
+            // turn into scripted file exfiltration.
+            allowFileAccessFromFileURLs: true,
             allowUniversalAccessFromFileURLs: false,
             useShouldOverrideUrlLoading: true,
             supportZoom: true,

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/ocr_model.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/ui/rikai_toast.dart';
 import '../../core/utils/format_bytes.dart';
 import '../../services/ocr/model_manager.dart';
 import '../../state/providers.dart';
@@ -120,13 +121,12 @@ class _ModelPageState extends ConsumerState<ModelPage> {
   void _saveMirror() {
     if (!_persistMirror()) return;
     FocusScope.of(context).unfocus();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('模型镜像设置已保存')));
+    RikaiToast.show(context, '模型镜像设置已保存');
   }
 
   Future<void> _download(OcrModelSet set) async {
     if (_busySetId != null || !_persistMirror()) return;
+    FocusScope.of(context).unfocus();
     if (set.requiresAcceptance) {
       final accepted = await showDialog<bool>(
         context: context,
@@ -173,9 +173,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
       if (!mounted) return;
       await _load(showLoading: false);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${set.displayName} 下载完成')));
+      RikaiToast.show(context, '${set.displayName} 下载完成');
     } on OcrModelException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -221,9 +219,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
       }
       await _load(showLoading: false);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('${set.displayName} 导入完成')));
+      RikaiToast.show(context, '${set.displayName} 导入完成');
     } on OcrModelException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
@@ -238,6 +234,10 @@ class _ModelPageState extends ConsumerState<ModelPage> {
   }
 
   Future<void> _delete(OcrModelSet set) async {
+    // Close the mirror field's keyboard before the confirmation dialog. On
+    // Android, dismissing a dialog otherwise restores the previous focus and
+    // bounces the keyboard back up.
+    FocusScope.of(context).unfocus();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -274,6 +274,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
 
   Future<void> _changeDirectory() async {
     if (_busySetId != null) return;
+    FocusScope.of(context).unfocus();
     final selected = await FilePicker.getDirectoryPath(
       dialogTitle: '选择 OCR 模型目录',
     );
@@ -323,9 +324,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
       ref.read(appSettingsProvider.notifier).setOcrModelsDirectory(trimmed);
       await _load(showLoading: false);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(hasModels && migrate ? '模型已迁移到新目录' : '模型目录已切换')),
-      );
+      RikaiToast.show(context, hasModels && migrate ? '模型已迁移到新目录' : '模型目录已切换');
     } on OcrModelException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -402,6 +401,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
       if (mounted) Navigator.of(context).pop();
       return;
     }
+    FocusScope.of(context).unfocus();
     var stop = false;
     final leave = await showDialog<bool>(
       context: context,
@@ -539,6 +539,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
                     autocorrect: false,
                     enableSuggestions: false,
                     onSubmitted: (_) => _saveMirror(),
+                    onTapOutside: (_) => FocusScope.of(context).unfocus(),
                     decoration: const InputDecoration(
                       labelText: '自定义镜像前缀（可选）',
                       hintText: 'https://hf-mirror.com',
@@ -686,8 +687,11 @@ class _ModelPageState extends ConsumerState<ModelPage> {
                   foregroundColor: AppColors.error,
                   side: const BorderSide(color: AppColors.error),
                 ),
-                icon: const Icon(Icons.delete_outline),
-                label: const Text('删除'),
+                icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                label: const Text(
+                  '删除',
+                  style: TextStyle(color: AppColors.error),
+                ),
               ),
             OutlinedButton.icon(
               onPressed: busy ? null : () => _import(set),

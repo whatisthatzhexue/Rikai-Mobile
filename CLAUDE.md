@@ -56,9 +56,9 @@ Phase 6（`docs/phase6-agent-design.md`，**设计草案，未实现**）计划�
   复制按钮在照片显示区右下角，为深蓝长条，文案「复制文本」；语料预览卡片
   右下角的复制按钮仍为「复制」。识别方向、旋转、模型设置、页码导航贴近页面
   底部，页码箭头中心与左下/右下角按钮中心同高。
-  主页把「使用前须知」和「边界说明」两张卡片放在上方，当前四个功能按钮在
-  剩余空间垂直居中；Phase 6 计划五个按钮时必须先更新设计 token/小屏滚动规则，
-  不能直接硬编码。语料列表为两列紧凑卡片（完整 contain 照片 + 最多 3 行 OCR +
+  主页按 Column 顺序排列：使用前须知 → 当前四个功能按钮 → 边界说明；不再把
+  按钮在剩余空间垂直居中。Phase 6 计划五个按钮时必须先更新设计 token/小屏滚动
+  规则，不能直接硬编码。语料列表为两列紧凑卡片（完整 contain 照片 + 最多 3 行 OCR +
   日期 + 右上删除 + 右下复制）；点开后进入「语料」详情：照片/分词、照片右下
   复制、语料间页码、左下删除，不显示 OCR 原文/日期，无多选/方向/模型设置/保存。
   列表与详情标题栏右上角都有字号/注音菜单，分词字号随之变化。
@@ -68,9 +68,10 @@ Phase 6（`docs/phase6-agent-design.md`，**设计草案，未实现**）计划�
   构建前必须存在，否则 Flutter 报缺失资产。应用图标源 `assets/Rikai_Icon.jpg`
   由 `flutter_launcher_icons` 生成 Android 图标（配置在 `pubspec.yaml`）。
 - 仓库已有多次提交（`d0d94a3`、`dc70cee`、`91dc386`、`deb6484`、
-  `b12d24f`、`95f90e0`、`9e17984`、`f287603`、`c2ae03d`、`4d0100f`）。
+  `b12d24f`、`95f90e0`、`9e17984`、`f287603`、`c2ae03d`、`4d0100f`、`1e25750`）。
   Phase 4 为 `f287603`，Phase 6 文档为 `c2ae03d`，Phase 4.5 初版为 `4d0100f`；
-  arm64 反馈修复当前未提交。Phase 6 只有文档设计，尚未实现。不要擅自
+  上一轮 arm64 反馈修复已提交为 `1e25750`，本轮第二批反馈修复当前未提交。
+  Phase 6 只有文档设计，尚未实现。不要擅自
   `reset`/`commit`，除非用户明确要求。
 
 ## 2. 已确认的架构决策（不要随意改；第 9 项为 Phase 6 设计边界）
@@ -126,10 +127,13 @@ Phase 6（`docs/phase6-agent-design.md`，**设计草案，未实现**）计划�
    - 运行时指纹/路径校验先 stat（路径、大小、mtime），不要每次 ready 都全量
      SHA-256；下载/导入/迁移仍需 SHA-256。
    - doc orientation 只在长宽比与框布局矛盾时运行；90/270 旋转后必须重新 DBNet。
-   - auto 只能返回一个引擎（`paddle_v5` 或 `manga_ocr`）；Manga 平均置信度低于
-     0.75 时自动回退 Paddle。不要恢复按区域混合输出的旧实验。
-   - 照片集“旋转”只改私有会话副本 90°，清该照片 OCR 缓存后重新识别；不要改
-     设备原图。
+   - auto/vertical 的竖排页现在会同时评估 MangaOCR 和 PaddleOCR：按
+     置信度、日文假名覆盖、重复噪声计算统一质量分，只有 Paddle 明显更好
+     （分差 >0.04）才切换；最佳主候选低于 0.80 时才尝试 ±90° 旋转后的
+     Paddle。最终仍只返回一个引擎，不要恢复按区域混合输出。手动 vertical
+     在缺少 MangaOCR 时仍明确报 `MODEL_MISSING`。
+   - 照片集“旋转”只改私有会话副本 90°，清该照片 OCR 缓存后重新识别；旋转会
+     立即中断正在进行的 OCR，不要让用户先手动取消。不要改设备原图。
 
 ## 3. 当前进展（Phase 0–4 + Phase 3.5 已完成）
 
@@ -281,14 +285,22 @@ Phase 6（`docs/phase6-agent-design.md`，**设计草案，未实现**）计划�
   - **缓存/交互**：手动横向可复用 auto 的 `paddle_v5` 结果，手动竖向可复用
     `manga_ocr` 结果；照片集“旋转”旋转私有副本 90°、清该照片 OCR 缓存。
   - 设备 OCR 套件 8 项：横向、6° 倾斜、lazy、Manga、90°、270°、倒置 180°、
-    取消；x86_64 全部通过。冷 auto ~1.1s，热 vertical ~180ms；7 张真实图片
+    取消；x86_64 全部通过。冷 auto ~1.0s，热 vertical ~0.3s；7 张真实图片
     auto/h/v 扫描通过。arm64 仍待验收。
+  - 第二轮设备反馈（2026-10-29）：MDD `sound://` 转为本地 `<audio>`；
+    词典选择全局持久化、最多 3 行滚动、选中不漂移；查词状态跨页面保留；
+    键盘焦点路由清理；非阻塞 `RikaiToast`；竖排双引擎评分；OCR 日文空格
+    清理；长文本懒加载/去滚动条；旋转自动中断 OCR；语料日期格式；删除
+    对话框统一复选框。冷启动 x86_64 真实图片复跑：auto 0.5–6.1s，
+    `book_tategaki` 6.1s；`manga.jpg` 保持 MangaOCR，其余自动选 Paddle。
+    MDD 音频集成测试 1/1 通过（`00048.aac`，25,463 bytes）。详见
+    `docs/phase4.5-status.md`。
 
 已验证：
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 120 tests passed
+flutter test     -> 129 tests passed
 flutter build apk --debug -> success
 ```
 
@@ -329,14 +341,14 @@ OCR 设备集成测试（`integration_test/ocr_android_test.dart`，Phase 4.5 �
 orientation 模型）：
 
 ```text
-PaddleOCR horizontal      299ms   1 block   "ありがとう"
-Tilted-page deskew        201ms   1 block   "ありがとう"
+PaddleOCR horizontal      195ms   1 block   "ありがとう"
+Tilted-page deskew        169ms   1 block   "ありがとう"
 horizontal lazy sessions  passed  mangaLoaded=false
-MangaOCR auto (cold)     1175ms   1 block   "これはテストです"
-MangaOCR vertical (warm)  146ms   1 block   "これはテストです"
-Sideways 90° correction   757ms   8 blocks  "ありがとう" x8
-Sideways 270° correction  906ms   8 blocks  "ありがとう" x8
-Upside-down 180°          246ms   1 block   "ありがとう"
+MangaOCR auto (cold)     1003ms   1 block   "これはテストです"
+MangaOCR vertical (warm)  312ms   1 block   "これはテストです"
+Sideways 90° correction   832ms   8 blocks  "ありがとう" x8
+Sideways 270° correction  648ms   8 blocks  "ありがとう" x8
+Upside-down 180°          135ms   1 block   "ありがとう"
 Cancellation              passed
 ```
 
@@ -682,11 +694,11 @@ Phase 6 只能在 Phase 5 完成并经用户确认后实施。
 | 照片集/多选页出现重复“多选/全选/保存” | 标题栏只保留一个“多选”；多选页标题用“选择照片”，删除/保存只保留图标（§5.10 #61） |
 | 照片集仍有“分析句子”/不显示分词 | 删除分析按钮；配置 UniDic 后自动分词并用 ReaderBlock 渲染，未配置显示原文（§5.10 #62） |
 | 照片区不能放大/不能查看细节 | 下边缘拖拽调整高度；点击照片打开 InteractiveViewer 全屏查看（§5.10 #63） |
-| MDict 导入弹结果框/列表尾部有英文 | 扫描行只显示中文状态；导入完成直接返回，失败只用 SnackBar（§5.10 #64） |
+| MDict 导入弹结果框/列表尾部有英文 | 扫描行只显示中文状态；导入完成直接返回，失败只用 `RikaiToast`（§5.10 #64） |
 | 本地导入仍提示缺少 det.onnx/rec.onnx | 上游文件名为 inference.onnx/inference.yml；按大小+角色匹配（§5.10 #65） |
 | 模型目录切换后仍读旧文件 | 保存设置后 manager 回调读取新路径；默认迁移校验后再保存（§5.10 #66） |
 | 返回照片集或多选页又重跑 OCR | 模式存会话、指纹存 OcrService；命中缓存直接渲染，多选只补缺失（§5.10 #67） |
-| 主页使用前须知仍在按钮下方 | 须知放上方，四个按钮在剩余空间垂直居中（§5.10 #68） |
+| 主页使用前须知仍在按钮下方 | 按“须知 → 四个按钮 → 边界说明”的 Column 顺序排列，不再垂直居中（§5.10 #68） |
 | 语料仍是缩略图/点击进文本阅读 | 大照片完整 contain + 右上删除 + OCR + 日期；点击进语料详情（§5.10 #69） |
 | 语料详情只显示 OCR 或只显示分词 | 两段都显示；OCR 原文 + ReaderBlock 分词，可点词查词（§5.10 #70） |
 
@@ -899,7 +911,7 @@ Phase 6 只能在 Phase 5 完成并经用户确认后实施。
       文件名。词典标题若是 `Instance of ...`/`Exception ...` 等 Dart 调试文本，
       用 `displayDictionaryTitle` 回退文件名。词典管理的资源标签使用
       “资源/样式/无资源”。导入结束后直接返回词典管理页；仅在失败/取消时用
-      非阻塞 SnackBar 报告数量，不要弹“导入结果”对话框。
+      非阻塞 `RikaiToast` 报告数量，不要弹“导入结果”对话框。
 65. **误区：本地导入模型按 manifest 的 det.onnx/rec.onnx 精确文件名匹配。**
     - 正确做法：上游下载常为两个 `inference.onnx` + `inference.yml`；按
       文件大小、扩展名和角色映射，命中已安装文件时只补缺失项；先写
@@ -916,9 +928,10 @@ Phase 6 只能在 Phase 5 完成并经用户确认后实施。
       重新识别；指纹不变必须 `_refreshCurrent(force:false)`。多选页传入
       `initialFingerprint`，进入时先查缓存，只补识别缺失照片；全部命中时
       不要显示/闪一下进度。
-68. **误区：主页功能按钮仍在最上方，使用前须知在下方。**
-    - 正确做法：使用前须知卡片在上方；四个功能按钮在剩余空间垂直居中
-      （小屏可滚动）。保持深蓝 `header`、32sp、整体居中。
+68. **误区：主页功能按钮仍在最上方，使用前须知在下方；或继续把按钮组垂直居中。**
+    - 正确做法：按 Column 顺序排列“使用前须知 → 四个功能按钮 → 边界说明”
+      （小屏可滚动）。保持深蓝 `header`、32sp、按钮内容居中，但不再做整组
+      垂直居中。
 69. **误区：语料页沿用 72dp 缩略图和右侧小删除按钮；点击语料仍跳文本阅读页。**
     - 正确做法：语料列表与详情标题栏右上角都提供 `ReaderOptionsMenu`；分词
       按 `readerFontSize` 渲染。语料列表用与照片集多选页一致的两列紧凑卡片：
@@ -1009,6 +1022,37 @@ Phase 6 只能在 Phase 5 完成并经用户确认后实施。
 90. **误区：EntryPage 退出时让 platform WebView 参与整个 pop 动画。**
     - 正确做法：监听 route reverse，把 WebView 换成页面底色；转场 220ms/180ms。
       WebView 退出闪帧和大部分卡顿来自 platform view 参与长动画。
+91. **误区：认为 MDict 音频只需要保留 `sound://` 链接。**
+    - 正确做法：`EntryRenderer` 解析 `sound://key` 到 MDD 资源，写成缓存文件并
+      插入本地 `<audio controls>`；`mddKeyCandidates` 同时去掉 `sound://` 前缀。
+      WebView 需 `allowFileAccess` 和 `allowFileAccessFromFileURLs: true`，JS
+      仍保持关闭。`日本語文型辞典 三语音频版` 的 `00048.aac` 已在 x86_64
+      模拟器通过 `mdict_audio_android_test.dart` 验证（25,463 bytes，渲染出
+      本地 `<audio>`）；扬声器出声仍需真机确认。
+92. **误区：把词典选择/查词结果放在 SearchPage/LookupSheet 的 State。**
+    - 正确做法：选择与模式放全局 `lookupPreferencesProvider` 并持久化；
+      查询词/结果放 app-lifetime `lookupSearchProvider`。两个界面共用选择，
+      切换页面不丢结果；外部修改选择后已有查询要自动刷新。
+93. **误区：选中词典时改变字体粗细/宽度来强调。**
+    - 正确做法：只改背景/边框/文字色，保持同一字重和固定行高；否则 Wrap 会
+      重新换行，词典位置漂移并让结果区上下抖动。筛选条最多显示 3 行，其余
+      在筛选条内部纵向滚动。
+94. **误区：继续用 SnackBar 显示“已保存”等轻提示。**
+    - 正确做法：用根 Overlay 的 `RikaiToast` + `IgnorePointer`，否则底部气泡会
+      拦截其覆盖区域的点击。
+95. **误区：竖排页只跑 MangaOCR，或只用平均置信度决定引擎。**
+    - 正确做法：同时跑 MangaOCR 与 PaddleOCR，用 `OcrTextQuality` 综合置信度、
+      假名覆盖、有效字符和重复噪声评分；Paddle 需明显胜出（分差 >0.04）才
+      切换。最佳主候选 <0.80 时才尝试 ±90° Paddle；7 张真实图片实测旋转未
+      胜出，所以不要无条件增加两轮旋转。最终只返回一个引擎，手动 vertical
+      缺 Manga 仍报错。
+96. **误区：把 OCR 块之间的空格原样交给 UniDic。**
+    - 正确做法：`composeOcrText` 去掉日文之间的空格和日文标点两侧空格，保留
+      拉丁词间空格和换行。否则 UniDic 会把复合词拆成单字。
+97. **误区：长分词结果用 `ListView(children: [...])` 或保留默认滚动条。**
+    - 正确做法：用 `ListView.builder`/`SliverList.builder` 懒加载，并在这类
+      变高 token 列表上用 `NoScrollbarBehavior`；默认滚动条的估算高度会随
+      行高变化而抖动。
 
 ## 6. 关键文件
 
@@ -1042,6 +1086,7 @@ packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/MangaOcrRecognizer.kt
 packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/TextLayoutHeuristic.kt
 packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/DocOrientationRecognizer.kt
 packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/TextLineOrientationRecognizer.kt
+packages/rikai_ocr/android/src/main/kotlin/com/rikai/ocr/OcrTextQuality.kt  # 竖排候选评分
 lib/core/utils/kana.dart                                      # 假名转换
 lib/core/utils/text_normalizer.dart                           # NFKC/假名/stripkey 候选
 lib/services/mecab/unidic_validator.dart                      # UniDic 目录/头部校验
@@ -1051,7 +1096,14 @@ lib/services/mdict/mdict_worker.dart                          # MDict isolate / 
 lib/services/mdict/mdd_key.dart                               # MDD key 变体
 lib/services/mdict/mdict_header.dart                          # MDX 版本/Encrypted=2 校验
 lib/services/mdict/entry_renderer.dart                        # HTML 清洗/CSS/MDD 重写
-lib/features/lookup/dictionary_filter_bar.dart                # 简称/单选多选/全选
+lib/features/lookup/dictionary_filter_bar.dart                # 简称/单选多选/全选/3 行滚动
+lib/state/lookup_preferences.dart                             # 全局词典选择（持久化）
+lib/state/lookup_search.dart                                  # 应用生命周期查词状态
+lib/core/models/dictionary_selection.dart                     # 单选/多选枚举
+lib/core/ui/rikai_toast.dart                                  # 非阻塞底部提示
+lib/core/ui/no_scrollbar_behavior.dart                        # 长 token 列表去滚动条
+lib/core/theme/unfocus_route_observer.dart                    # 路由退出清焦点
+lib/core/utils/date_format.dart                               # 语料日期 09.12/2025.09.12
 lib/features/settings/storage_permission_prompt.dart          # 沙盒外路径授权引导
 lib/core/theme/page_route.dart                                # 220ms 滑入路由
 lib/services/storage/settings_store.dart                      # SharedPreferences 设置
@@ -1086,6 +1138,7 @@ tool/spike_mdict.dart                                         # MDict 主机 spi
 integration_test/mecab_android_test.dart                      # 设备端 MeCab/权限/UI 测试
 integration_test/mdict_android_test.dart                      # 设备端 MDict/渲染/UI 测试
 integration_test/mdict_compat_android_test.dart               # Encrypted=2/MDD 兼容测试
+integration_test/mdict_audio_android_test.dart                # MDD sound:// 音频渲染测试
 integration_test/ocr_real_images_android_test.dart            # test_images 真实图片扫描
 third_party/overlay-translator/                               # Apache 许可/修改说明
 third_party/paddleocr4android/                                # MIT 许可/可选后端说明
@@ -1149,6 +1202,11 @@ flutter test integration_test/mdict_android_test.dart -d emulator-5554 \
 ```
 
   同样需要 appops 授权循环；MDX/MDD 必须同 basename 才会自动发现。
+- 设备端 MDD 音频测试（把 `日本語文型辞典 三语音频版` 的 `.mdx/.mdd` 以
+  `dict.mdx/dict.mdd` push 到 `/sdcard/Download/rikai-mdict-audio/`）：
+  `flutter test integration_test/mdict_audio_android_test.dart -d <device>`。
+  测试查找词条 `あくまで` 的 `sound://xxxx.aac`、读取 MDD 资源并断言渲染出
+  本地 `<audio>`；扬声器是否出声仍需人工确认。
 - 设备端 OCR 测试（真实模型按 `paddle_v5/`、`manga_ocr/`、`orientation/`
   放在 `/sdcard/Download/rikai-models/` 下；测试脚本会自动寻找
   `paddle_v5` 的父目录中的可选模型）：
@@ -1203,8 +1261,8 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
 ## 8. 建议的下一个动作
 
 1. 运行 `git status`；Phase 4 为 `f287603`，Phase 6 文档为 `c2ae03d`，
-   Phase 4.5 初版为 `4d0100f`；arm64 反馈修复当前未提交。不要覆盖或擅自
-   commit，除非用户明确要求。
+   Phase 4.5 初版为 `4d0100f`，上一轮修复为 `1e25750`；本轮第二批反馈
+   修复当前未提交。不要覆盖或擅自 commit，除非用户明确要求。
 2. 先完成 Phase 4.5 验收：arm64 真机横排 2048px <5s、单页漫画 <10s、无 OOM；
    横排/竖排/倒置/90°/270° 真实页回归；真实多气泡顺序/噪声质量。验收通过前
    不要开始 Phase 5。
@@ -1223,6 +1281,6 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
 7. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
    颜色/字号，字体与模型文件不入库；**所有页面**统一深蓝顶栏和右滑覆盖转场。
    Phase 6 的五按钮/Agent UI 也必须先补 token，不能直接改现有四按钮。
-8. 每个阶段结束运行 analyze/test/debug build（当前 120 unit tests / OCR 设备
-   8 项；另有 MeCab 4、MDict 6、MDict 兼容 2、真实图片扫描 1），并记录到新的
-   阶段状态文档；设备端测试按 §7 的命令运行。
+8. 每个阶段结束运行 analyze/test/debug build（当前 129 unit tests / OCR 设备
+   8 项；另有 MeCab 4、MDict 6、MDict 兼容 2、MDD 音频 1、真实图片扫描 1），
+   并记录到新的阶段状态文档；设备端测试按 §7 的命令运行。

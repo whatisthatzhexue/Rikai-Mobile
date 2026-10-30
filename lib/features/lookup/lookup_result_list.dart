@@ -32,8 +32,8 @@ class LookupHitList extends StatelessWidget {
         for (final group in groups) ...[
           Padding(
             padding: const EdgeInsets.only(
-              top: AppSpacing.sm,
-              bottom: AppSpacing.xs,
+              top: AppSpacing.xs,
+              bottom: AppSpacing.xxs,
             ),
             child: Row(
               children: [
@@ -66,13 +66,20 @@ class LookupHitList extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 onPressed: () => onOpenAll(group),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, AppSizes.chip),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
                 icon: const Icon(Icons.list_alt, size: AppSizes.iconSmall),
                 label: Text('查看全部（${group.entries.length} 条）'),
               ),
             ),
           for (final entry in group.entries)
             Card(
-              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              margin: const EdgeInsets.only(bottom: AppSpacing.xs),
               child: InkWell(
                 onTap: () => onOpenEntry(group, entry),
                 child: Padding(

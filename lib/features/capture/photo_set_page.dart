@@ -12,6 +12,8 @@ import '../../core/models/capture_photo.dart';
 import '../../core/models/token.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/page_route.dart';
+import '../../core/ui/no_scrollbar_behavior.dart';
+import '../../core/ui/rikai_toast.dart';
 import '../../services/mecab/mecab_service.dart';
 import '../../services/ocr/model_manager.dart';
 import '../../services/ocr/ocr_text_composer.dart';
@@ -42,6 +44,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
   double _progress = 0;
   bool _busy = false;
   bool _saving = false;
+  bool _rotating = false;
   bool _disposed = false;
   int _runToken = 0;
   int _analysisToken = 0;
@@ -317,9 +320,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     if (text.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已复制全文')));
+    RikaiToast.show(context, '已复制全文');
   }
 
   Future<void> _changeMode(OcrMode mode) async {
@@ -333,18 +334,21 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
   }
 
   Future<void> _rotateCurrent() async {
-    if (_busy || _saving) return;
+    if (_rotating || _saving) return;
     final photo = ref.read(captureSessionProvider).current;
     if (photo == null) return;
-    await _cancelRecognition();
-    if (!mounted) return;
-    setState(() {
-      _busy = true;
-      _stage = '正在旋转照片…';
-      _progress = 0;
-      _error = null;
-    });
+    setState(() => _rotating = true);
     try {
+      // Rotation is an explicit interruption: stop the current OCR run, turn
+      // the private copy, then immediately start a fresh recognition pass.
+      await _cancelRecognition();
+      if (!mounted) return;
+      setState(() {
+        _busy = true;
+        _stage = '正在旋转照片…';
+        _progress = 0;
+        _error = null;
+      });
       await ref.read(captureStorageProvider).rotateSessionPhoto(photo.filePath);
       await FileImage(File(photo.filePath)).evict();
       ref.read(captureSessionProvider.notifier).clearPhotoOcr(photo.id);
@@ -357,6 +361,8 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
         _busy = false;
         _error = '旋转失败：$error';
       });
+    } finally {
+      if (mounted) setState(() => _rotating = false);
     }
   }
 
@@ -424,9 +430,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
           );
       ref.invalidate(corpusEntriesProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已保存到语料库')));
+      RikaiToast.show(context, '已保存到语料库');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = '保存失败：$error');
@@ -480,9 +484,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       return;
     }
     if (!originalDeleted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('无法删除设备原图，已仅从照片集移除')));
+      RikaiToast.show(context, '无法删除设备原图，已仅从照片集移除');
     }
     await _refreshCurrent();
   }
@@ -641,7 +643,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 TextButton.icon(
-                                  onPressed: _busy || _saving
+                                  onPressed: _saving || _rotating
                                       ? null
                                       : _rotateCurrent,
                                   icon: const Icon(Icons.rotate_right),
@@ -856,29 +858,34 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
 
   Widget _buildTokenResult(AppSettings settings, String text) {
     final lines = buildReaderLines(text, _tokens);
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.xs,
-        AppSpacing.lg,
-        AppSpacing.sm,
+    return ScrollConfiguration(
+      behavior: const NoScrollbarBehavior(),
+      child: ListView.builder(
+        cacheExtent: 800,
+        addAutomaticKeepAlives: false,
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.xs,
+          AppSpacing.lg,
+          AppSpacing.sm,
+        ),
+        itemCount: lines.length,
+        itemBuilder: (context, index) {
+          final line = lines[index];
+          if (line.tokens.isEmpty) {
+            return SizedBox(height: settings.readerFontSize + AppSpacing.md);
+          }
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+            child: ReaderBlock(
+              tokens: line.tokens,
+              fontSize: settings.readerFontSize,
+              showFurigana: settings.showFurigana,
+              onTokenTap: (token) => showTokenLookupSheet(context, token),
+            ),
+          );
+        },
       ),
-      itemCount: lines.length,
-      itemBuilder: (context, index) {
-        final line = lines[index];
-        if (line.tokens.isEmpty) {
-          return SizedBox(height: settings.readerFontSize + AppSpacing.md);
-        }
-        return Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.md),
-          child: ReaderBlock(
-            tokens: line.tokens,
-            fontSize: settings.readerFontSize,
-            showFurigana: settings.showFurigana,
-            onTokenTap: (token) => showTokenLookupSheet(context, token),
-          ),
-        );
-      },
     );
   }
 

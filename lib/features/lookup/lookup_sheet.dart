@@ -7,6 +7,7 @@ import '../../core/models/token.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/page_route.dart';
 import '../../services/mdict/mdict_worker.dart';
+import '../../state/lookup_preferences.dart';
 import '../../state/providers.dart';
 import '../settings/dictionary_page.dart';
 import 'dictionary_filter_bar.dart';
@@ -38,9 +39,6 @@ class LookupSheet extends ConsumerStatefulWidget {
 }
 
 class _LookupSheetState extends ConsumerState<LookupSheet> {
-  late List<DictionaryInfo> _enabled;
-  late Set<String> _selectedIds;
-  DictionarySelectionMode _selectionMode = DictionarySelectionMode.multi;
   late String _query;
 
   LookupResult? _result;
@@ -53,9 +51,7 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
   void initState() {
     super.initState();
     _query = _token.surface;
-    _enabled = ref.read(enabledDictionariesProvider);
-    _selectedIds = _enabled.map((dictionary) => dictionary.id).toSet();
-    if (_enabled.isNotEmpty) {
+    if (ref.read(enabledDictionariesProvider).isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _load(_token.lookupCandidates);
       });
@@ -63,9 +59,10 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
   }
 
   Future<void> _load(List<String> rawCandidates) async {
-    final dictionaries = _enabled
-        .where((dictionary) => _selectedIds.contains(dictionary.id))
-        .toList(growable: false);
+    final enabled = ref.read(enabledDictionariesProvider);
+    final dictionaries = ref
+        .read(lookupPreferencesProvider)
+        .selectedDictionaries(enabled);
     if (dictionaries.isEmpty) {
       if (!mounted) return;
       setState(() {
@@ -101,24 +98,13 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
     }
   }
 
-  void _toggleDictionary(DictionaryInfo dictionary) {
-    setState(() {
-      if (_selectionMode == DictionarySelectionMode.single) {
-        _selectedIds =
-            _selectedIds.length == 1 && _selectedIds.contains(dictionary.id)
-            ? <String>{}
-            : <String>{dictionary.id};
-      } else if (!_selectedIds.add(dictionary.id)) {
-        _selectedIds.remove(dictionary.id);
-      }
-    });
+  void _toggleDictionary(String id, List<DictionaryInfo> enabled) {
+    ref.read(lookupPreferencesProvider.notifier).toggle(id, enabled);
     _load(_token.lookupCandidates);
   }
 
-  void _selectAllDictionaries() {
-    setState(() {
-      _selectedIds = _enabled.map((dictionary) => dictionary.id).toSet();
-    });
+  void _selectAllDictionaries(List<DictionaryInfo> enabled) {
+    ref.read(lookupPreferencesProvider.notifier).selectAll();
     _load(_token.lookupCandidates);
   }
 
@@ -170,6 +156,10 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final height = MediaQuery.sizeOf(context).height * 0.8;
+    final enabled = ref.watch(enabledDictionariesProvider);
+    final preferences = ref.watch(lookupPreferencesProvider);
+    final selected = preferences.selectedDictionaries(enabled);
+    final selectedIds = selected.map((dictionary) => dictionary.id).toSet();
 
     return SizedBox(
       height: height,
@@ -205,7 +195,7 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
               ],
             ),
           ),
-          if (_enabled.length > 1)
+          if (enabled.length > 1)
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.lg,
@@ -214,28 +204,28 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
                 AppSpacing.xs,
               ),
               child: DictionaryFilterBar(
-                dictionaries: _enabled,
-                selectedIds: _selectedIds,
-                mode: _selectionMode,
-                onToggle: (id) {
-                  final dictionary = _enabled.firstWhere(
-                    (entry) => entry.id == id,
-                  );
-                  _toggleDictionary(dictionary);
-                },
-                onSelectAll: _selectAllDictionaries,
-                onModeChanged: (mode) => setState(() => _selectionMode = mode),
+                dictionaries: enabled,
+                selectedIds: selectedIds,
+                mode: preferences.mode,
+                onToggle: (id) => _toggleDictionary(id, enabled),
+                onSelectAll: () => _selectAllDictionaries(enabled),
+                onModeChanged: (mode) =>
+                    ref.read(lookupPreferencesProvider.notifier).setMode(mode),
               ),
             ),
           const Divider(height: 1),
-          Expanded(child: _buildContent(theme)),
+          Expanded(child: _buildContent(theme, enabled, selected)),
         ],
       ),
     );
   }
 
-  Widget _buildContent(ThemeData theme) {
-    if (_enabled.isEmpty) {
+  Widget _buildContent(
+    ThemeData theme,
+    List<DictionaryInfo> enabled,
+    List<DictionaryInfo> selected,
+  ) {
+    if (enabled.isEmpty) {
       return _EmptyState(
         icon: Icons.library_books_outlined,
         title: '尚未添加 MDict 词典',
@@ -244,13 +234,13 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
         onAction: _openDictionaryManagement,
       );
     }
-    if (_selectedIds.isEmpty) {
+    if (selected.isEmpty) {
       return _EmptyState(
         icon: Icons.filter_alt_off_outlined,
         title: '请选择至少一本词典',
         message: '使用上方的词典标签选择本次查询使用的词典。',
         actionLabel: '全选',
-        onAction: _selectAllDictionaries,
+        onAction: () => _selectAllDictionaries(enabled),
       );
     }
 

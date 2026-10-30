@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/theme/app_tokens.dart';
+import 'core/theme/unfocus_route_observer.dart';
 import 'state/providers.dart';
 import 'features/capture/capture_page.dart';
 import 'features/capture/photo_set_page.dart';
@@ -38,6 +39,7 @@ Page<void> _page(GoRouterState state, Widget child) {
 
 GoRouter _createRouter() {
   return GoRouter(
+    observers: [UnfocusRouteObserver()],
     routes: [
       GoRoute(
         path: '/',

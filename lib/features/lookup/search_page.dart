@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,10 +10,11 @@ import '../../core/theme/app_tokens.dart';
 import '../../core/theme/page_route.dart';
 import '../../core/utils/text_normalizer.dart';
 import '../../services/mdict/mdict_worker.dart';
+import '../../state/lookup_preferences.dart';
+import '../../state/lookup_search.dart';
 import '../../state/providers.dart';
 import 'dictionary_filter_bar.dart';
 import 'entry_page.dart';
-import 'lookup_actions.dart';
 import 'lookup_result_list.dart';
 
 class SearchPage extends ConsumerStatefulWidget {
@@ -22,102 +25,54 @@ class SearchPage extends ConsumerStatefulWidget {
 }
 
 class _SearchPageState extends ConsumerState<SearchPage> {
-  final TextEditingController _controller = TextEditingController();
-
-  LookupResult? _result;
-  Object? _error;
-  bool _busy = false;
-  Set<String>? _selectedIds;
-  DictionarySelectionMode _selectionMode = DictionarySelectionMode.multi;
-  String _lastQuery = '';
+  late final TextEditingController _controller;
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    // App-lifetime controllers/providers keep the query and results when the
+    // user briefly leaves the page.
+    _controller = ref.read(lookupQueryControllerProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _refreshAfterExternalSelectionChange();
+    });
   }
 
-  List<DictionaryInfo> _selectedFor(List<DictionaryInfo> enabled) {
-    final selected = _selectedIds;
-    if (selected == null) return enabled;
-    return enabled
-        .where((dictionary) => selected.contains(dictionary.id))
-        .toList(growable: false);
+  Future<void> _refreshAfterExternalSelectionChange() async {
+    final search = ref.read(lookupSearchProvider);
+    if (search.lastQuery.isEmpty) return;
+    final enabled = ref.read(enabledDictionariesProvider);
+    final preferences = ref.read(lookupPreferencesProvider);
+    final selected = preferences.selectedDictionaries(enabled);
+    final signature = selected.map((dictionary) => dictionary.id).toList()
+      ..sort();
+    if (signature.join(',') != search.selectionSignature) {
+      await ref.read(lookupSearchProvider.notifier).search(search.lastQuery);
+    }
   }
 
   Future<void> _search([String? queryOverride]) async {
     final query = (queryOverride ?? _controller.text).trim();
     if (query.isEmpty) return;
-    if (queryOverride != null) {
+    if (queryOverride != null && queryOverride != _controller.text) {
       _controller.value = TextEditingValue(
         text: query,
         selection: TextSelection.collapsed(offset: query.length),
       );
     }
 
-    final dictionaries = _selectedFor(ref.read(enabledDictionariesProvider));
-    if (dictionaries.isEmpty) {
-      setState(() {
-        _result = null;
-        _error = const MdictException(
-          MdictErrorCode.lookupFailed,
-          '请先选择至少一本可用的 MDict 词典',
-        );
-      });
-      return;
-    }
-
     FocusScope.of(context).unfocus();
-    setState(() {
-      _busy = true;
-      _error = null;
-      _lastQuery = query;
-    });
-
-    try {
-      final result = await performLookup(
-        ref,
-        query,
-        rawCandidates: [query],
-        dictionaries: dictionaries,
-      );
-      if (!mounted) return;
-      setState(() => _result = result);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = error);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  void _toggleDictionary(DictionaryInfo dictionary) {
-    final enabled = ref.read(enabledDictionariesProvider);
-    final current = _selectedIds ?? enabled.map((entry) => entry.id).toSet();
-    final Set<String> next;
-    if (_selectionMode == DictionarySelectionMode.single) {
-      next = current.length == 1 && current.contains(dictionary.id)
-          ? <String>{}
-          : <String>{dictionary.id};
-    } else {
-      next = {...current};
-      if (!next.add(dictionary.id)) next.remove(dictionary.id);
-    }
-    setState(() => _selectedIds = next);
-    if (_lastQuery.isNotEmpty) _search(_lastQuery);
-  }
-
-  void _selectAllDictionaries() {
-    final enabled = ref.read(enabledDictionariesProvider);
-    setState(() => _selectedIds = enabled.map((entry) => entry.id).toSet());
-    if (_lastQuery.isNotEmpty) _search(_lastQuery);
+    await ref.read(lookupSearchProvider.notifier).search(query);
   }
 
   void _openEntry(DictionaryLookupGroup group, LookupEntry entry) {
+    FocusScope.of(context).unfocus();
+    final word = ref.read(lookupSearchProvider).lastQuery;
     Navigator.of(context).push(
       RikaiPageRoute<void>(
         builder: (context) => EntryPage(
-          word: _lastQuery,
+          word: word,
           groups: [
             DictionaryLookupGroup(
               dictionary: group.dictionary,
@@ -131,10 +86,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   }
 
   void _openAll(DictionaryLookupGroup group) {
+    FocusScope.of(context).unfocus();
+    final word = ref.read(lookupSearchProvider).lastQuery;
     Navigator.of(context).push(
       RikaiPageRoute<void>(
         builder: (context) => EntryPage(
-          word: _lastQuery,
+          word: word,
           groups: [group],
           initialDictionaryId: group.dictionary.id,
         ),
@@ -146,8 +103,20 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final enabled = ref.watch(enabledDictionariesProvider);
-    final selected = _selectedFor(enabled);
+    final preferences = ref.watch(lookupPreferencesProvider);
+    final search = ref.watch(lookupSearchProvider);
+    final selected = preferences.selectedDictionaries(enabled);
     final selectedIds = selected.map((dictionary) => dictionary.id).toSet();
+
+    // A filter changed from the reader sheet (or anywhere else) should refresh
+    // the existing result instead of leaving stale hits on screen.
+    ref.listen<LookupPreferences>(lookupPreferencesProvider, (previous, next) {
+      if (previous?.signature == next.signature) return;
+      final query = ref.read(lookupSearchProvider).lastQuery;
+      if (query.isNotEmpty) {
+        unawaited(ref.read(lookupSearchProvider.notifier).search(query));
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -155,7 +124,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         actions: [
           IconButton(
             tooltip: '词典管理',
-            onPressed: () => context.push('/dictionaries'),
+            onPressed: () {
+              FocusScope.of(context).unfocus();
+              context.push('/dictionaries');
+            },
             icon: const Icon(Icons.library_books_outlined),
           ),
         ],
@@ -174,10 +146,11 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 controller: _controller,
                 textInputAction: TextInputAction.search,
                 onSubmitted: (_) => _search(),
+                onTapOutside: (_) => FocusScope.of(context).unfocus(),
                 decoration: InputDecoration(
                   hintText: '搜索……',
                   prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _busy
+                  suffixIcon: search.busy
                       ? const Padding(
                           padding: EdgeInsets.all(AppSpacing.md),
                           child: SizedBox(
@@ -205,21 +178,20 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 child: DictionaryFilterBar(
                   dictionaries: enabled,
                   selectedIds: selectedIds,
-                  mode: _selectionMode,
-                  onToggle: (id) {
-                    final dictionary = enabled.firstWhere(
-                      (entry) => entry.id == id,
-                    );
-                    _toggleDictionary(dictionary);
-                  },
-                  onSelectAll: _selectAllDictionaries,
-                  onModeChanged: (mode) =>
-                      setState(() => _selectionMode = mode),
+                  mode: preferences.mode,
+                  onToggle: (id) => ref
+                      .read(lookupPreferencesProvider.notifier)
+                      .toggle(id, enabled),
+                  onSelectAll: () =>
+                      ref.read(lookupPreferencesProvider.notifier).selectAll(),
+                  onModeChanged: (mode) => ref
+                      .read(lookupPreferencesProvider.notifier)
+                      .setMode(mode),
                 ),
               ),
             const SizedBox(height: AppSpacing.xs),
             const Divider(height: 1),
-            Expanded(child: _buildBody(theme, enabled, selected)),
+            Expanded(child: _buildBody(theme, enabled, selected, search)),
           ],
         ),
       ),
@@ -230,6 +202,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     ThemeData theme,
     List<DictionaryInfo> enabled,
     List<DictionaryInfo> selected,
+    LookupSearchState search,
   ) {
     if (enabled.isEmpty) {
       return _SearchEmpty(
@@ -246,23 +219,20 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         title: '请选择至少一本词典',
         message: '使用上方的词典标签选择本次查询使用的词典。',
         actionLabel: '全选',
-        onAction: () {
-          setState(() {
-            _selectedIds = enabled.map((dictionary) => dictionary.id).toSet();
-          });
-          if (_lastQuery.isNotEmpty) _search(_lastQuery);
-        },
+        onAction: () =>
+            ref.read(lookupPreferencesProvider.notifier).selectAll(),
       );
     }
 
-    final error = _error;
+    final error = search.error;
     if (error != null) {
       return _SearchError(
         message: _errorText(error),
-        onRetry: () => _search(_lastQuery.isEmpty ? null : _lastQuery),
+        onRetry: () =>
+            _search(search.lastQuery.isEmpty ? null : search.lastQuery),
       );
     }
-    if (_busy && _result == null) {
+    if (search.busy && search.result == null) {
       return const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -275,7 +245,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       );
     }
 
-    final result = _result;
+    final result = search.result;
     if (result == null) {
       return const _SearchEmpty(
         icon: Icons.search,
@@ -292,8 +262,9 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       );
     }
 
-    final variants = lookupCandidatesFor([_lastQuery])
-        .where((candidate) => candidate != _lastQuery)
+    final lastQuery = search.lastQuery;
+    final variants = lookupCandidatesFor([lastQuery])
+        .where((candidate) => candidate != lastQuery)
         .take(8)
         .toList(growable: false);
     final suggestionGroups = result.groups
@@ -308,7 +279,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         AppSpacing.xl,
       ),
       children: [
-        Text('未找到「$_lastQuery」', style: theme.textTheme.titleMedium),
+        Text('未找到「$lastQuery」', style: theme.textTheme.titleMedium),
         const SizedBox(height: AppSpacing.xs),
         Text('可以尝试假名变体或以下词典建议。', style: theme.textTheme.bodySmall),
         if (variants.isNotEmpty) ...[
@@ -371,7 +342,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         ],
         const SizedBox(height: AppSpacing.xl),
         OutlinedButton.icon(
-          onPressed: () => _search(_lastQuery.isEmpty ? null : _lastQuery),
+          onPressed: () => _search(lastQuery.isEmpty ? null : lastQuery),
           icon: const Icon(Icons.refresh, size: AppSizes.icon),
           label: const Text('重新查询'),
         ),

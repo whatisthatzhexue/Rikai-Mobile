@@ -9,6 +9,8 @@ import '../../core/models/corpus_entry.dart';
 import '../../core/models/token.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/page_route.dart';
+import '../../core/ui/no_scrollbar_behavior.dart';
+import '../../core/ui/rikai_toast.dart';
 import '../../services/mecab/mecab_service.dart';
 import '../../services/storage/settings_store.dart';
 import '../../state/providers.dart';
@@ -193,9 +195,7 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
     if (text.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('已复制全文')));
+    RikaiToast.show(context, '已复制全文');
   }
 
   @override
@@ -304,26 +304,88 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
     AppSettings settings,
     ThemeData theme,
   ) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.sm,
-        AppSpacing.lg,
-        AppSpacing.lg,
+    final lines = _readyLines(entry);
+    if (lines == null) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          AppSpacing.lg,
+        ),
+        children: [
+          Text('分词结果', style: theme.textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          ..._buildTokenStatus(entry, theme),
+        ],
+      );
+    }
+
+    // Build token lines lazily. A long corpus can contain thousands of tokens;
+    // spreading them into one ListView made the first frame and scrolling janky.
+    return ScrollConfiguration(
+      behavior: const NoScrollbarBehavior(),
+      child: CustomScrollView(
+        cacheExtent: 800,
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              0,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: Text('分词结果', style: theme.textTheme.titleMedium),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
+            sliver: SliverList.builder(
+              itemCount: lines.length,
+              addAutomaticKeepAlives: false,
+              itemBuilder: (context, index) {
+                final line = lines[index];
+                if (line.tokens.isEmpty) {
+                  return SizedBox(
+                    height: settings.readerFontSize + AppSpacing.md,
+                  );
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                  child: ReaderBlock(
+                    tokens: line.tokens,
+                    fontSize: settings.readerFontSize,
+                    showFurigana: settings.showFurigana,
+                    onTokenTap: (token) => showTokenLookupSheet(context, token),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
-      children: [
-        Text('分词结果', style: theme.textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.sm),
-        ..._buildTokenSection(entry, settings, theme),
-      ],
     );
   }
 
-  List<Widget> _buildTokenSection(
-    CorpusEntry entry,
-    AppSettings settings,
-    ThemeData theme,
-  ) {
+  List<ReaderLine>? _readyLines(CorpusEntry entry) {
+    if (_analysisBusy ||
+        _mecabError != null ||
+        _analysisError != null ||
+        !_unidicConfigured ||
+        _tokens.isEmpty ||
+        _analysedText != entry.text) {
+      return null;
+    }
+    return buildReaderLines(entry.text, _tokens);
+  }
+
+  List<Widget> _buildTokenStatus(CorpusEntry entry, ThemeData theme) {
     if (_analysisBusy) {
       return const [
         Row(
@@ -371,24 +433,6 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
         ),
       ];
     }
-    if (_tokens.isEmpty || _analysedText != entry.text) {
-      return [Text('没有可显示的词。', style: theme.textTheme.bodySmall)];
-    }
-    final lines = buildReaderLines(entry.text, _tokens);
-    return [
-      for (final line in lines)
-        if (line.tokens.isEmpty)
-          SizedBox(height: settings.readerFontSize + AppSpacing.md)
-        else
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: ReaderBlock(
-              tokens: line.tokens,
-              fontSize: settings.readerFontSize,
-              showFurigana: settings.showFurigana,
-              onTokenTap: (token) => showTokenLookupSheet(context, token),
-            ),
-          ),
-    ];
+    return [Text('没有可显示的词。', style: theme.textTheme.bodySmall)];
   }
 }

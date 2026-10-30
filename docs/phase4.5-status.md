@@ -122,6 +122,63 @@ Phase 4.5 addresses those before Phase 5 adds corpus/history/release work.
   home page.
 - `test_images/` is now ignored by Git.
 
+### Second device-feedback pass (2026-10-29)
+
+- **MDD audio**: `sound://` links were previously deleted by the HTML
+  sanitiser, so dictionaries with pronunciation files were silent. The
+  renderer now resolves the MDD resource and inserts a native `<audio
+  controls>` player with a local `file://` source. `sound://` keys are also
+  normalised by `mddKeyCandidates`. The real
+  `日本語文型辞典 三语音频版` entry `あくまで` was verified on the host and
+  on the x86_64 emulator: `sound://00048.aac` resolved to a 25,463-byte MDD
+  resource and became a local audio element. Actual speaker output still needs
+  a real-device check.
+- **Home layout**: the page is now a single Column-style scroll list:
+  “使用前须知” → four action buttons → “边界说明”. The previous vertical
+  centring of the buttons was removed.
+- **Model delete**: the delete button now explicitly paints both its icon and
+  label in the error colour inside the red outline.
+- **Dictionary import**: the “正在读取 x/y” probing stage now uses a
+  determinate progress bar based on the same success/total counts as the text.
+- **Lookup filter**: dictionary selection and single/multi mode are global and
+  persisted, shared by the search page and reader sheet. Chip widths no longer
+  change with selection, so the order never drifts. At most three wrapped rows
+  are visible; extra dictionaries scroll vertically. Result-group spacing was
+  tightened.
+- **Lookup session**: query text, results and the last dictionary selection
+  live in app-lifetime providers, so leaving and re-entering the search page no
+  longer clears them. A changed global selection refreshes the existing result.
+- **Keyboard focus**: a global route-pop observer clears focus after dialogs
+  and pages close; search and entry navigation also unfocus before pushing.
+- **Toasts**: all transient messages use a root-overlay `RikaiToast` wrapped in
+  `IgnorePointer`, so a “已保存到语料库” bubble no longer blocks controls
+  underneath it.
+- **Vertical OCR strategy**: a vertical page now runs both MangaOCR and
+  PaddleOCR and compares them with an engine-independent quality score
+  (confidence, Japanese/kana coverage, repetition). PaddleOCR replaces
+  MangaOCR only with a clear quality margin. If the best primary score is below
+  0.80, PaddleOCR is also tried on the page rotated ±90°; the final result still
+  uses exactly one engine. A forced-rotation experiment over all seven
+  `test_images` showed that the supplied vertical book pages already scored
+  better unrotated (book page: 0.966 unrotated vs 0.937 rotated; Twitter photo:
+  0.893 vs 0.807), so rotation remains a low-quality fallback rather than an
+  unconditional second pass.
+- **OCR text cleanup**: spaces inserted inside Japanese runs and around
+  Japanese punctuation are removed before UniDic sees the text, while Latin
+  word spacing is preserved.
+- **Long token lists**: reader, photo-set and corpus-detail token views build
+  lazily; corpus detail no longer spreads every token into one list. The
+  automatic scrollbar was suppressed on these variable-height token lists to
+  remove its stuttering thumb.
+- **Photo rotation**: the rotate action now interrupts a running OCR
+  immediately, rotates the private copy and starts the next recognition pass
+  without requiring the user to cancel first.
+- **Delete confirmation**: the single-photo and multi-select delete dialogs
+  both show the “同时删除原文件” checkbox (disabled when the photo has no
+  separate original).
+- **Corpus dates**: preview cards show `2026.09.12`, or `09.12` for the
+  current year.
+
 ## Not changed
 
 - PaddleOCR remains PP-OCRv5 mobile det/rec on ONNX Runtime; no Paddle-Lite,
@@ -133,28 +190,28 @@ Phase 4.5 addresses those before Phase 5 adds corpus/history/release work.
 - No new dependencies were added; the existing `image` package performs the
   manual 90° rotation.
 
-## Verification (2026-10-29)
+## Verification (2026-10-30)
 
 Host:
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 120 tests passed
-flutter build apk --debug -> success
+flutter test     -> 129 tests passed
+flutter build apk --debug -> success (Kotlin/OcrTextQuality compiled)
 ```
 
 Device OCR suite (`integration_test/ocr_android_test.dart`, x86_64 API 36,
 real PaddleOCR + MangaOCR + orientation models, 8/8 passed):
 
 ```text
-PaddleOCR horizontal      299ms   1 block   "ありがとう"
-Tilted-page deskew        201ms   1 block   "ありがとう"
+PaddleOCR horizontal      195ms   1 block   "ありがとう"
+Tilted-page deskew        169ms   1 block   "ありがとう"
 horizontal lazy sessions  passed  mangaLoaded=false after horizontal
-MangaOCR auto (cold)     1175ms   1 block   "これはテストです"
-MangaOCR vertical (warm)  146ms   1 block   "これはテストです"
-Sideways 90° correction   757ms   8 blocks  "ありがとう" x8
-Sideways 270° correction  906ms   8 blocks  "ありがとう" x8
-Upside-down 180°          246ms   1 block   "ありがとう"
+MangaOCR auto (cold)     1003ms   1 block   "これはテストです"
+MangaOCR vertical (warm)  312ms   1 block   "これはテストです"
+Sideways 90° correction   832ms   8 blocks  "ありがとう" x8
+Sideways 270° correction  648ms   8 blocks  "ありがとう" x8
+Upside-down 180°          135ms   1 block   "ありがとう"
 Cancellation              passed
 ```
 
@@ -171,6 +228,22 @@ ran all seven supplied `test_images` through auto/horizontal/vertical. Auto
 returns exactly one engine; low-confidence MangaOCR pages (for example the
 dense book page) fall back to PaddleOCR and now produce the readable Paddle
 text. `manga.jpg` stays on MangaOCR; horizontal screenshots stay on PaddleOCR.
+The vertical best-of path was re-run on a cold-booted x86_64 emulator after the
+second feedback pass. Auto selected exactly one engine per page; `manga.jpg`
+stayed on MangaOCR while the book/screenshot pages selected PaddleOCR. Final
+auto timings were 0.5–6.1 s, with `book_tategaki.jpg` at 6.1 s (the dense book
+page includes both engines). Manual vertical was 2.3–5.6 s on the same set.
+The ±90° retry only ran for primary scores below 0.80 and did not win on the
+supplied vertical pages; it remains available for weaker inputs. Arm64 is
+still the acceptance target.
+
+Real MDD audio rendering was verified against
+`mdicts/日本語文型辞典 三语版 音频版` on the host and on the x86_64 emulator:
+entry `あくまで` contained `sound://00048.aac`, the 25,463-byte resource was
+read from the MDD, and `EntryRenderer` produced an `<audio>` element with a
+local `file://` URL. `integration_test/mdict_audio_android_test.dart` passed
+1/1 on the emulator. The dictionary unit test also covers the transformation.
+Speaker output itself is a device-only check.
 
 `test/capture_storage_test.dart` also verifies the manual “旋转” path rotates
 the session copy clockwise (red-left/blue-right becomes red-top/blue-bottom),
@@ -188,6 +261,8 @@ The lazy-session test asserts that horizontal recognition and
 | Cached page re-entry does not re-run OCR | existing Phase 3.5 behavior | pending |
 | 90/270 sideways page correction | pass (synthetic page) | pending |
 | Auto returns one engine / low-confidence fallback | pass (synthetic + 7 real images) | pending |
+| Vertical best-of / ±90° Paddle retry | pass on 7 real images (x86_64 cold boot) | pending |
+| MDD `sound://` audio player | pass (host + x86_64 emulator); speaker pending | pending |
 | Mild deskew | pass (synthetic 6°) | real photos needed |
 | Vertical multi-bubble order/noise | synthetic + `manga.jpg` pass | real manga needed |
 | PaddleOCR 2048px < 5s | not representative | pending |
@@ -202,7 +277,9 @@ quality are checked.
 
 - First auto/vertical recognition on a fresh process still pays the MangaOCR
   session creation cost when no background prewarm has finished. Cold auto was
-  ~1.1s on the emulator; warm vertical was ~180ms.
+  ~1.0s on the emulator; warm vertical was ~0.3s. A vertical page now also
+  runs the PaddleOCR candidate for best-of selection, so its cost is higher
+  than the pure-Manga path.
 - Dense book pages that DBNet labels vertical pay for a MangaOCR attempt before
   the low-confidence fallback to Paddle. The real `book_tategaki` image took
   ~6.7s auto but returned the readable Paddle text.

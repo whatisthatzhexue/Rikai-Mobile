@@ -22,6 +22,13 @@ void main() {
     expect(candidates, contains(r'\JC_Z24Z\A471.png'));
   });
 
+  test('strips sound:// prefixes used by MDD audio', () {
+    final candidates = mddKeyCandidates('sound://audio/word.mp3');
+
+    expect(candidates, contains(r'\audio\word.mp3'));
+    expect(candidates, contains('audio/word.mp3'));
+  });
+
   test('strips relative parent prefixes from nested CSS/HTML', () {
     final candidates = mddKeyCandidates('../gaiji/参照.svg');
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/ui/rikai_toast.dart';
 import '../../state/providers.dart';
 
 /// True when [path] is outside the app's private external directory and
@@ -34,6 +35,7 @@ Future<bool> ensurePathAccess(
   if (status.sdkInt == 0 || status.granted) return true;
   if (!context.mounted) return false;
 
+  FocusManager.instance.primaryFocus?.unfocus();
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
@@ -65,18 +67,11 @@ Future<bool> ensurePathAccess(
     }
   } on PlatformException catch (error) {
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('无法打开授权页面：${error.message ?? error.code}')),
-      );
+      RikaiToast.show(context, '无法打开授权页面：${error.message ?? error.code}');
     }
   }
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('授权后请返回并重试'),
-        duration: Duration(seconds: 2),
-      ),
-    );
+    RikaiToast.show(context, '授权后请返回并重试');
   }
   return false;
 }

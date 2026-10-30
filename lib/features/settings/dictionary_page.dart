@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/models/dict_info.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/ui/rikai_toast.dart';
 import '../../services/mdict/mdict_worker.dart';
 import '../../state/providers.dart';
 import 'dictionary_import_page.dart';
@@ -51,10 +52,9 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
       ),
     );
     if (!mounted || info == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('已添加 ${info.title}（${_formatCount(info.entryCount)} 条）'),
-      ),
+    RikaiToast.show(
+      context,
+      '已添加 ${info.title}（${_formatCount(info.entryCount)} 条）',
     );
   }
 
@@ -65,7 +65,6 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
     if (!mounted || summary == null) return;
     setState(() {});
     if (summary.failed == 0 && !summary.cancelled) return;
-    final messenger = ScaffoldMessenger.of(context);
     final String message;
     if (summary.failed > 0 && summary.imported > 0) {
       message = '已导入 ${summary.imported} 本，${summary.failed} 本失败';
@@ -76,7 +75,7 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
     } else {
       message = '已取消导入';
     }
-    messenger.showSnackBar(SnackBar(content: Text(message)));
+    RikaiToast.show(context, message);
   }
 
   Future<void> _revalidate(DictionaryInfo dictionary) async {
@@ -84,14 +83,11 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
         .read(dictionaryRepositoryProvider.notifier)
         .revalidate(dictionary.id);
     if (!mounted || updated == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          updated.isAvailable
-              ? '校验通过：${_formatCount(updated.entryCount)} 条'
-              : _displayDictionaryError(updated.lastError),
-        ),
-      ),
+    RikaiToast.show(
+      context,
+      updated.isAvailable
+          ? '校验通过：${_formatCount(updated.entryCount)} 条'
+          : _displayDictionaryError(updated.lastError),
     );
   }
 
@@ -122,9 +118,7 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
         .read(dictionaryRepositoryProvider.notifier)
         .removeDictionary(dictionary.id);
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('已移除「${dictionary.title}」')));
+    RikaiToast.show(context, '已移除「${dictionary.title}」');
   }
 
   @override

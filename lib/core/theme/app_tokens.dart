@@ -118,6 +118,7 @@ abstract final class AppSizes {
   static const double control = 40;
   static const double field = 44;
   static const double chip = 28;
+  static const double dictionaryFilterRow = 32;
   static const double iconSmall = 16;
   static const double icon = 20;
   static const double iconLarge = 24;

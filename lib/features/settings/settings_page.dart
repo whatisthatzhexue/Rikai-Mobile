@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../core/ui/rikai_toast.dart';
 import '../../core/utils/format_bytes.dart';
 import '../../services/mecab/unidic_validator.dart';
 import '../../services/storage/permission_service.dart';
@@ -79,9 +80,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
       ref.invalidate(mecabServiceProvider);
     } on PlatformException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('无法打开权限设置：${error.message ?? error.code}')),
-      );
+      RikaiToast.show(context, '无法打开权限设置：${error.message ?? error.code}');
     } finally {
       if (mounted) setState(() => _permissionBusy = false);
     }
@@ -115,9 +114,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     });
     if (result.isValid) {
       ref.invalidate(mecabServiceProvider);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('UniDic 校验通过，路径已保存')));
+      RikaiToast.show(context, 'UniDic 校验通过，路径已保存');
     }
   }
 
@@ -211,14 +208,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           .read(ocrModelManagerProvider)
           .clearPartialDownloads();
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已清除 ${formatBytes(bytes)} 临时文件')));
+      RikaiToast.show(context, '已清除 ${formatBytes(bytes)} 临时文件');
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('清除失败：$error')));
+      RikaiToast.show(context, '清除失败：$error');
     }
   }
 
@@ -373,14 +366,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
       await _validateAndSave();
     } on PlatformException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('无法打开文件管理器：${error.message ?? error.code}')),
-      );
+      RikaiToast.show(context, '无法打开文件管理器：${error.message ?? error.code}');
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('选择目录失败：$error')));
+      RikaiToast.show(context, '选择目录失败：$error');
     }
   }
 

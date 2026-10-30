@@ -17,7 +17,7 @@ List<String> mddKeyCandidates(String raw) {
   }
 
   var value = decoded;
-  for (final prefix in ['file://', 'file:']) {
+  for (final prefix in ['file://', 'file:', 'sound://', 'sound:']) {
     if (value.toLowerCase().startsWith(prefix)) {
       value = value.substring(prefix.length);
       break;

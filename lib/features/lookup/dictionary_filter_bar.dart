@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/models/dict_info.dart';
+import '../../core/models/dictionary_selection.dart';
 import '../../core/theme/app_tokens.dart';
 
-enum DictionarySelectionMode { multi, single }
+export '../../core/models/dictionary_selection.dart'
+    show DictionarySelectionMode;
 
 /// Compact, wrapping dictionary selector shared by the search page and the
 /// reader lookup sheet. Names are shortened to the shortest unique prefix so
@@ -18,6 +20,9 @@ class DictionaryFilterBar extends StatelessWidget {
     required this.onSelectAll,
     required this.onModeChanged,
   });
+
+  /// At most three rows are visible; more dictionaries scroll vertically.
+  static const int maxVisibleRows = 3;
 
   final List<DictionaryInfo> dictionaries;
   final Set<String> selectedIds;
@@ -36,6 +41,9 @@ class DictionaryFilterBar extends StatelessWidget {
     );
     final singleSelection =
         mode == DictionarySelectionMode.single && selectedIds.length == 1;
+    final maxHeight =
+        AppSizes.dictionaryFilterRow * maxVisibleRows +
+        AppSpacing.xxs * (maxVisibleRows - 1);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,27 +79,33 @@ class DictionaryFilterBar extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.xs),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.xs,
-          children: [
-            _DictionaryChip(
-              label: '全选',
-              selected: selectedAll,
-              onTap: onSelectAll,
-              icon: Icons.select_all,
+        const SizedBox(height: AppSpacing.xxs),
+        ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: SingleChildScrollView(
+            primary: false,
+            child: Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xxs,
+              children: [
+                _DictionaryChip(
+                  label: '全选',
+                  selected: selectedAll,
+                  onTap: onSelectAll,
+                  icon: Icons.select_all,
+                ),
+                for (var index = 0; index < dictionaries.length; index++)
+                  _DictionaryChip(
+                    label: _shortTitle(titles[index], titles),
+                    selected: selectedIds.contains(dictionaries[index].id),
+                    dimmed:
+                        singleSelection &&
+                        !selectedIds.contains(dictionaries[index].id),
+                    onTap: () => onToggle(dictionaries[index].id),
+                  ),
+              ],
             ),
-            for (var index = 0; index < dictionaries.length; index++)
-              _DictionaryChip(
-                label: _shortTitle(titles[index], titles),
-                selected: selectedIds.contains(dictionaries[index].id),
-                dimmed:
-                    singleSelection &&
-                    !selectedIds.contains(dictionaries[index].id),
-                onTap: () => onToggle(dictionaries[index].id),
-              ),
-          ],
+          ),
         ),
       ],
     );
@@ -137,27 +151,39 @@ class _DictionaryChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Opacity(
       opacity: dimmed ? 0.35 : 1,
-      child: FilterChip(
-        selected: selected,
-        showCheckmark: false,
-        onSelected: (_) => onTap(),
-        backgroundColor: AppColors.surface,
-        selectedColor: AppColors.header,
-        side: BorderSide(color: selected ? AppColors.header : AppColors.border),
-        shape: const StadiumBorder(),
-        visualDensity: VisualDensity.compact,
-        avatar: icon == null
-            ? null
-            : Icon(
-                icon,
-                size: AppSizes.iconSmall,
-                color: selected ? AppColors.onHeader : AppColors.textSecondary,
-              ),
-        label: Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: selected ? AppColors.onHeader : AppColors.textPrimary,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+      child: SizedBox(
+        height: AppSizes.dictionaryFilterRow,
+        child: FilterChip(
+          selected: selected,
+          showCheckmark: false,
+          onSelected: (_) => onTap(),
+          backgroundColor: AppColors.surface,
+          selectedColor: AppColors.header,
+          side: BorderSide(
+            color: selected ? AppColors.header : AppColors.border,
+          ),
+          shape: const StadiumBorder(),
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxs),
+          labelPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+          avatar: icon == null
+              ? null
+              : Icon(
+                  icon,
+                  size: AppSizes.iconSmall,
+                  color: selected
+                      ? AppColors.onHeader
+                      : AppColors.textSecondary,
+                ),
+          label: Text(
+            label,
+            maxLines: 1,
+            // Keep the width identical in both states so neighbouring chips
+            // never move when the user changes the selection.
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: selected ? AppColors.onHeader : AppColors.textPrimary,
+            ),
           ),
         ),
       ),

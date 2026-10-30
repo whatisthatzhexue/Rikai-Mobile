@@ -153,6 +153,32 @@ void main() {
     expect(loadedKeys, contains('img/x.png'));
   });
 
+  test('turns sound:// links into local audio players', () async {
+    final renderer = EntryRenderer(
+      cacheDirectory: cache,
+      resourceLoader: (key) async {
+        loadedKeys.add(key);
+        return Uint8List.fromList([1, 2, 3, 4]);
+      },
+    );
+
+    final rendered = await renderer.render(
+      dictionary: _dictionary(),
+      entries: [
+        _entry(
+          '<a href="sound://audio/word.mp3">播放</a>'
+          '<audio src="audio/word.ogg"></audio>',
+        ),
+      ],
+    );
+
+    expect(loadedKeys, contains('audio/word.mp3'));
+    expect(loadedKeys, contains('audio/word.ogg'));
+    expect(rendered.html, contains('rikai-audio'));
+    expect(rendered.html, contains('file://'));
+    expect(rendered.html, isNot(contains('sound://')));
+  });
+
   test('separates multiple entries with a divider', () async {
     final renderer = EntryRenderer(
       cacheDirectory: cache,

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/dict_info.dart';
 import '../../core/models/lookup_models.dart';
 import '../../core/theme/page_route.dart';
+import '../../core/ui/rikai_toast.dart';
 import '../../services/mdict/mdict_worker.dart';
 import '../../state/providers.dart';
 import 'entry_page.dart';
@@ -41,7 +42,6 @@ Future<void> lookupAndOpenEntry(
   String word,
 ) async {
   final navigator = Navigator.of(context);
-  final messenger = ScaffoldMessenger.of(context);
 
   showDialog<void>(
     context: context,
@@ -79,14 +79,12 @@ Future<void> lookupAndOpenEntry(
   if (navigator.mounted) navigator.pop(); // close the progress dialog
   if (!navigator.mounted) return;
   if (error != null) {
-    messenger.showSnackBar(
-      SnackBar(content: Text('查询失败：${_shortError(error)}')),
-    );
+    RikaiToast.show(navigator.context, '查询失败：${_shortError(error)}');
     return;
   }
   final hitGroups = result?.hitGroups ?? const [];
   if (hitGroups.isEmpty) {
-    messenger.showSnackBar(SnackBar(content: Text('未找到「$word」')));
+    RikaiToast.show(navigator.context, '未找到「$word」');
     return;
   }
 

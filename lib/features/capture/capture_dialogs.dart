@@ -28,18 +28,21 @@ Future<DeletePhotoChoice?> showDeletePhotoDialog(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('照片会从当前照片集移除。'),
-            if (allowOriginal) ...[
-              const SizedBox(height: AppSpacing.sm),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                controlAffinity: ListTileControlAffinity.leading,
-                value: deleteOriginal,
-                onChanged: (value) =>
-                    setState(() => deleteOriginal = value ?? false),
-                title: const Text('同时删除原文件'),
-                subtitle: const Text('无法获得系统删除授权时，只移除照片集副本。'),
+            const SizedBox(height: AppSpacing.sm),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: allowOriginal && deleteOriginal,
+              onChanged: allowOriginal
+                  ? (value) => setState(() => deleteOriginal = value ?? false)
+                  : null,
+              title: const Text('同时删除原文件'),
+              subtitle: Text(
+                allowOriginal
+                    ? '无法获得系统删除授权时，只移除照片集副本。'
+                    : '当前照片只有照片集副本，没有可删除的设备原文件。',
               ),
-            ],
+            ),
           ],
         ),
         actions: [

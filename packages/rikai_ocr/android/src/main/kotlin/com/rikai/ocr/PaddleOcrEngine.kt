@@ -45,6 +45,14 @@ internal data class NativeOcrResult(
     val blocks: List<NativeOcrBlock>,
 )
 
+private data class OcrCandidate(
+    val engine: String,
+    val blocks: List<NativeOcrBlock>,
+    val score: Double,
+    val width: Int,
+    val height: Int,
+)
+
 internal object OcrRuntime {
     /**
      * Application-scoped ONNX Runtime environment. Never close this from an
@@ -400,44 +408,129 @@ internal class PaddleOcrEngine {
                     useVertical = TextLayoutHeuristic.isVertical(quads)
                 }
             }
-            if (useVertical && ensureMangaLoaded()) {
-                val blocks = manga.recognize(
-                    bitmap = activeBitmap,
-                    quads = quads,
-                    onProgress = onProgress,
-                    isCancelled = isCancelled,
-                )
-                val averageConfidence = if (blocks.isEmpty()) {
-                    0f
-                } else {
-                    blocks.map { it.confidence }.average().toFloat()
+            if (useVertical) {
+                val mangaReady = ensureMangaLoaded()
+                if (mode == "vertical" && !mangaReady) {
+                    throw if (!mangaError.isNullOrBlank()) {
+                        OcrFailure("MODEL_INVALID", "MangaOCR 模型无法使用：$mangaError")
+                    } else {
+                        OcrFailure(
+                            "MODEL_MISSING",
+                            "竖向识别需要先在「OCR 模型」中下载 MangaOCR 模型",
+                        )
+                    }
                 }
-                // Dense book pages can look vertical to DBNet while MangaOCR's
-                // fixed crop model produces noisy text. In auto mode, fall
-                // back to Paddle rather than returning low-confidence garbage.
-                val useManga = mode == "vertical" ||
-                    (blocks.isNotEmpty() &&
-                        averageConfidence >= AUTO_MANGA_MIN_CONFIDENCE)
-                if (useManga) {
-                    onProgress("done", 1, 1)
+
+                val candidates = mutableListOf<OcrCandidate>()
+                if (mangaReady) {
+                    val blocks = manga.recognize(
+                        bitmap = activeBitmap,
+                        quads = quads,
+                        onProgress = onProgress,
+                        isCancelled = isCancelled,
+                    )
+                    candidates.add(
+                        OcrCandidate(
+                            engine = "manga_ocr",
+                            blocks = blocks,
+                            score = OcrTextQuality.score(blocks),
+                            width = activeBitmap.width,
+                            height = activeBitmap.height,
+                        ),
+                    )
+                }
+                if (quads.isNotEmpty()) {
+                    val paddleBlocks = recognizePaddleQuads(
+                        bitmap = activeBitmap,
+                        quads = quads,
+                        rec = rec,
+                        keys = keys,
+                        onProgress = onProgress,
+                        isCancelled = isCancelled,
+                    )
+                    candidates.add(
+                        OcrCandidate(
+                            engine = "paddle_v5",
+                            blocks = paddleBlocks,
+                            score = OcrTextQuality.score(paddleBlocks),
+                            width = activeBitmap.width,
+                            height = activeBitmap.height,
+                        ),
+                    )
+                }
+
+                // Dense tategaki pages sometimes read better after rotating the
+                // image 90° and letting PaddleOCR's horizontal recognizer look
+                // at it. Only pay for those extra passes when both primary
+                // candidates look weak; a clean result already wins.
+                val bestPrimaryScore = candidates.maxOfOrNull { it.score } ?: 0.0
+                if (quads.isNotEmpty() &&
+                    bestPrimaryScore < VERTICAL_ROTATION_RETRY_SCORE
+                ) {
+                    for (degrees in listOf(-90f, 90f)) {
+                        if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
+                        val rotated = rotateBitmap(activeBitmap, degrees) ?: continue
+                        try {
+                            onProgress("detect", 0, 1)
+                            val rotatedQuads = detectQuads(rotated, det)
+                            onProgress("detect", 1, 1)
+                            if (rotatedQuads.isEmpty()) continue
+                            val rotatedBlocks = recognizePaddleQuads(
+                                bitmap = rotated,
+                                quads = rotatedQuads,
+                                rec = rec,
+                                keys = keys,
+                                onProgress = onProgress,
+                                isCancelled = isCancelled,
+                            )
+                            candidates.add(
+                                OcrCandidate(
+                                    engine = "paddle_v5",
+                                    blocks = rotatedBlocks,
+                                    score = OcrTextQuality.score(rotatedBlocks),
+                                    width = rotated.width,
+                                    height = rotated.height,
+                                ),
+                            )
+                        } finally {
+                            if (!rotated.isRecycled) rotated.recycle()
+                        }
+                    }
+                }
+
+                val nonEmpty = candidates.filter { it.blocks.isNotEmpty() }
+                val mangaCandidate = nonEmpty.firstOrNull { it.engine == "manga_ocr" }
+                val paddleCandidate = nonEmpty
+                    .filter { it.engine == "paddle_v5" }
+                    .maxByOrNull { it.score }
+                // PaddleOCR's confidence is often slightly higher on clean
+                // bubbles; require a clear quality win before replacing the
+                // vertical model, so ordinary manga pages stay on MangaOCR.
+                val best = when {
+                    mangaCandidate == null -> paddleCandidate
+                    paddleCandidate == null -> mangaCandidate
+                    paddleCandidate.score >
+                        mangaCandidate.score + CANDIDATE_SWITCH_MARGIN ->
+                        paddleCandidate
+                    else -> mangaCandidate
+                }
+                onProgress("done", 1, 1)
+                if (best != null) {
                     return NativeOcrResult(
-                        engine = "manga_ocr",
+                        engine = best.engine,
                         elapsedMs = SystemClock.elapsedRealtime() - started,
-                        width = activeBitmap.width,
-                        height = activeBitmap.height,
-                        blocks = blocks,
+                        width = best.width,
+                        height = best.height,
+                        blocks = best.blocks,
                     )
                 }
-            }
-            if (mode == "vertical" && !manga.isReady()) {
-                throw if (!mangaError.isNullOrBlank()) {
-                    OcrFailure("MODEL_INVALID", "MangaOCR 模型无法使用：$mangaError")
-                } else {
-                    OcrFailure(
-                        "MODEL_MISSING",
-                        "竖向识别需要先在「OCR 模型」中下载 MangaOCR 模型",
-                    )
-                }
+                return NativeOcrResult(
+                    engine = "paddle_v5",
+                    elapsedMs = SystemClock.elapsedRealtime() - started,
+                    width = activeBitmap.width,
+                    height = activeBitmap.height,
+                    blocks = emptyList(),
+                )
             }
 
             if (quads.isEmpty()) {
@@ -910,7 +1003,8 @@ internal class PaddleOcrEngine {
         private const val MIN_RECOGNITION_SCORE = 0.15f
         private const val MIN_DESKEW_DEGREES = 2f
         private const val MAX_DESKEW_DEGREES = 12f
-        private const val AUTO_MANGA_MIN_CONFIDENCE = 0.75f
+        private const val VERTICAL_ROTATION_RETRY_SCORE = 0.80
+        private const val CANDIDATE_SWITCH_MARGIN = 0.04
         private val DET_MEAN = floatArrayOf(0.485f, 0.456f, 0.406f)
         private val DET_STD = floatArrayOf(0.229f, 0.224f, 0.225f)
         private val REC_MEAN = floatArrayOf(0.5f, 0.5f, 0.5f)

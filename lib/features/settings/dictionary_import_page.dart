@@ -102,6 +102,8 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
         _scanning = false;
         _probing = entries.isNotEmpty;
         _status = entries.isEmpty ? '没有找到 .mdx 词典' : '正在读取词典信息…';
+        _progressCurrent = 0;
+        _progressTotal = entries.length;
       });
       if (entries.isNotEmpty) {
         await _probeEntries(token);
@@ -124,8 +126,14 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
     for (var index = 0; index < entries.length; index++) {
       if (!mounted || token != _token) return;
       final entry = entries[index];
-      if (entry.status == DictionaryScanStatus.existing) continue;
-      setState(() => _status = '正在读取 ${index + 1}/${entries.length}');
+      setState(() {
+        _status = '正在读取 ${index + 1}/${entries.length}';
+        _progressCurrent = index;
+      });
+      if (entry.status == DictionaryScanStatus.existing) {
+        setState(() => _progressCurrent = index + 1);
+        continue;
+      }
       DictionaryScanEntry next;
       try {
         final metadata = await service.probe(entry.path);
@@ -151,6 +159,7 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
           for (final current in _entries)
             current.path == next.path ? next : current,
         ];
+        _progressCurrent = index + 1;
         if (next.status == DictionaryScanStatus.importable) {
           _selected.add(next.path);
         }
@@ -302,7 +311,11 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
                   ],
                   if (_scanning || _probing) ...[
                     const SizedBox(height: AppSpacing.xs),
-                    const LinearProgressIndicator(),
+                    LinearProgressIndicator(
+                      value: _progressTotal == 0
+                          ? null
+                          : _progressCurrent / _progressTotal,
+                    ),
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(

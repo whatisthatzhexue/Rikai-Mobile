@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/models/lookup_models.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/ui/rikai_toast.dart';
 import '../../services/mdict/entry_renderer.dart';
 import '../../state/providers.dart';
 import 'entry_web_view.dart';
@@ -129,9 +130,7 @@ class _EntryPageState extends ConsumerState<EntryPage>
 
   void _blockedExternalLink(String url) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('离线模式：已阻止外部链接')));
+    RikaiToast.show(context, '离线模式：已阻止外部链接');
   }
 
   void _openEntryLink(String word) {

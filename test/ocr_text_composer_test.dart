@@ -22,4 +22,14 @@ void main() {
     expect(composeOcrText(const []), '');
     expect(composeOcrText([_block('  ')]), '');
   });
+
+  test('removes OCR spaces inside Japanese runs and around punctuation', () {
+    final text = composeOcrText([
+      _block('東京 で 食べ た'),
+      _block('「 ありがとう 」 と 言った'),
+      _block('Hello world 東京'),
+    ]);
+
+    expect(text, '東京で食べた\n「ありがとう」と言った\nHello world 東京');
+  });
 }

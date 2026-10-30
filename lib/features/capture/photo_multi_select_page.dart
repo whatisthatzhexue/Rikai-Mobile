@@ -8,6 +8,7 @@ import 'package:rikai_ocr/rikai_ocr.dart';
 
 import '../../core/models/capture_photo.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/ui/rikai_toast.dart';
 import '../../services/ocr/model_manager.dart';
 import '../../services/ocr/ocr_text_composer.dart';
 import '../../state/capture_session.dart';
@@ -253,9 +254,7 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
       }
       ref.invalidate(corpusEntriesProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已保存 $saved 张照片到语料库')));
+      RikaiToast.show(context, '已保存 $saved 张照片到语料库');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = '保存失败：$error');
@@ -291,9 +290,7 @@ class _PhotoMultiSelectPageState extends ConsumerState<PhotoMultiSelectPage> {
     }
     if (!mounted) return;
     if (originalDeleteFailed) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('部分设备原图无法删除，已仅从照片集移除')));
+      RikaiToast.show(context, '部分设备原图无法删除，已仅从照片集移除');
     }
     ref.read(captureSessionProvider.notifier).removePhotos(_selected.toSet());
     _selected.clear();
