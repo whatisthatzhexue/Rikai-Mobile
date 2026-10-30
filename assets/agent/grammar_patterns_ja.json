@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "patterns": [
+    {"id": "te-iru", "surface": "ている", "token_pattern": ["て", "いる"], "kind": "aspect", "note": "进行/状态"},
+    {"id": "te-shimau", "surface": "てしまう", "token_pattern": ["て", "しまう"], "kind": "aspect", "note": "完成/遗憾"},
+    {"id": "te-oku", "surface": "ておく", "token_pattern": ["て", "おく"], "kind": "aspect", "note": "预先做/放置"},
+    {"id": "te-miru", "surface": "てみる", "token_pattern": ["て", "みる"], "kind": "aspect", "note": "尝试"},
+    {"id": "te-kudasai", "surface": "てください", "token_pattern": ["て", "ください"], "kind": "request", "note": "请求"},
+    {"id": "nai-de-kudasai", "surface": "ないでください", "token_pattern": ["ない", "で", "ください"], "kind": "request", "note": "否定请求"},
+    {"id": "nakereba-naranai", "surface": "なければならない", "token_pattern": ["なければ", "ならない"], "kind": "obligation", "note": "必须"},
+    {"id": "nai-to-ikenai", "surface": "ないといけない", "token_pattern": ["ない", "と", "いけない"], "kind": "obligation", "note": "必须"},
+    {"id": "koto-ga-aru", "surface": "ことがある", "token_pattern": ["こと", "が", "ある"], "kind": "experience", "note": "有过经历"},
+    {"id": "koto-ni-suru", "surface": "ことにする", "token_pattern": ["こと", "に", "する"], "kind": "decision", "note": "决定"},
+    {"id": "koto-ni-naru", "surface": "ことになる", "token_pattern": ["こと", "に", "なる"], "kind": "result", "note": "结果/规定"},
+    {"id": "you-ni-suru", "surface": "ようにする", "token_pattern": ["ように", "する"], "kind": "effort", "note": "尽量做到"},
+    {"id": "you-ni-naru", "surface": "ようになる", "token_pattern": ["ように", "なる"], "kind": "change", "note": "变得能够"},
+    {"id": "to-iu", "surface": "という", "token_pattern": ["と", "いう"], "kind": "quotation", "note": "引用/称作"},
+    {"id": "to-omou", "surface": "と思う", "token_pattern": ["と", "思う"], "kind": "opinion", "note": "认为"},
+    {"id": "node", "surface": "ので", "token_pattern": ["ので"], "kind": "reason", "note": "原因"},
+    {"id": "noni", "surface": "のに", "token_pattern": ["のに"], "kind": "contrast", "note": "逆接/遗憾"},
+    {"id": "tara", "surface": "たら", "token_pattern": ["たら"], "kind": "condition", "note": "条件"},
+    {"id": "nara", "surface": "なら", "token_pattern": ["なら"], "kind": "condition", "note": "条件/话题"},
+    {"id": "nagara", "surface": "ながら", "token_pattern": ["ながら"], "kind": "simultaneous", "note": "同时"},
+    {"id": "bakari", "surface": "ばかり", "token_pattern": ["ばかり"], "kind": "limit", "note": "只有/刚刚"},
+    {"id": "hazu", "surface": "はず", "token_pattern": ["はず"], "kind": "expectation", "note": "应该"},
+    {"id": "wake", "surface": "わけ", "token_pattern": ["わけ"], "kind": "explanation", "note": "理由/结论"},
+    {"id": "kamoshirenai", "surface": "かもしれない", "token_pattern": ["かもしれない"], "kind": "possibility", "note": "也许"},
+    {"id": "deshou", "surface": "でしょう", "token_pattern": ["でしょう"], "kind": "conjecture", "note": "推测"},
+    {"id": "mashou", "surface": "ましょう", "token_pattern": ["ましょう"], "kind": "volition", "note": "提议"},
+    {"id": "ja-nai", "surface": "じゃない", "token_pattern": ["じゃ", "ない"], "kind": "negation", "note": "否定"},
+    {"id": "de-wa-nai", "surface": "ではない", "token_pattern": ["では", "ない"], "kind": "negation", "note": "否定"}
+  ]
+}
