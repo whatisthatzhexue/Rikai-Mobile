@@ -162,6 +162,14 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
     _update(state.copyWith(ocrModelsDirectory: value.trim()));
   }
 
+  void setAgentProfileLanguage(String value) {
+    _update(state.copyWith(agentProfileLanguage: value));
+  }
+
+  void setAgentResponseLanguage(String value) {
+    _update(state.copyWith(agentResponseLanguage: value));
+  }
+
   void setOnboardingCompleted(bool value) {
     _update(state.copyWith(onboardingCompleted: value));
   }

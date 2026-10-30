@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/lookup_match_mode.dart';
 import '../../core/theme/app_fonts.dart';
 
@@ -16,6 +17,8 @@ class AppSettings {
     this.ocrModelsDirectory = '',
     this.onboardingCompleted = false,
     this.autoSaveOcr = false,
+    this.agentProfileLanguage = 'zh',
+    this.agentResponseLanguage = 'follow',
   });
 
   final String unidicPath;
@@ -46,6 +49,12 @@ class AppSettings {
   /// Manual saving remains available either way.
   final bool autoSaveOcr;
 
+  /// Human-readable language for the dictionary profile body: zh/en/ja.
+  final String agentProfileLanguage;
+
+  /// Agent answer language: follow/zh/en/ja.
+  final String agentResponseLanguage;
+
   AppSettings copyWith({
     String? unidicPath,
     bool? showFurigana,
@@ -57,6 +66,8 @@ class AppSettings {
     String? ocrModelsDirectory,
     bool? onboardingCompleted,
     bool? autoSaveOcr,
+    String? agentProfileLanguage,
+    String? agentResponseLanguage,
   }) {
     return AppSettings(
       unidicPath: unidicPath ?? this.unidicPath,
@@ -70,6 +81,12 @@ class AppSettings {
       ocrModelsDirectory: ocrModelsDirectory ?? this.ocrModelsDirectory,
       onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
       autoSaveOcr: autoSaveOcr ?? this.autoSaveOcr,
+      agentProfileLanguage: AgentProfileLanguage.fromWire(
+        agentProfileLanguage ?? this.agentProfileLanguage,
+      ).wireName,
+      agentResponseLanguage: AgentResponseLanguage.fromWire(
+        agentResponseLanguage ?? this.agentResponseLanguage,
+      ).wireName,
     );
   }
 }
@@ -88,6 +105,8 @@ class SettingsStore {
   static const _ocrModelsDirectoryKey = 'ocr_models_directory';
   static const _onboardingCompletedKey = 'app_onboarding_completed';
   static const _autoSaveOcrKey = 'corpus_auto_save_ocr';
+  static const _agentProfileLanguageKey = 'agent_profile_language';
+  static const _agentResponseLanguageKey = 'agent_response_language';
 
   final SharedPreferences _preferences;
 
@@ -116,6 +135,12 @@ class SettingsStore {
       ocrModelsDirectory: _preferences.getString(_ocrModelsDirectoryKey) ?? '',
       onboardingCompleted: onboardingCompleted,
       autoSaveOcr: _preferences.getBool(_autoSaveOcrKey) ?? false,
+      agentProfileLanguage: AgentProfileLanguage.fromWire(
+        _preferences.getString(_agentProfileLanguageKey),
+      ).wireName,
+      agentResponseLanguage: AgentResponseLanguage.fromWire(
+        _preferences.getString(_agentResponseLanguageKey),
+      ).wireName,
     );
   }
 
@@ -139,6 +164,14 @@ class SettingsStore {
       settings.onboardingCompleted,
     );
     await _preferences.setBool(_autoSaveOcrKey, settings.autoSaveOcr);
+    await _preferences.setString(
+      _agentProfileLanguageKey,
+      settings.agentProfileLanguage,
+    );
+    await _preferences.setString(
+      _agentResponseLanguageKey,
+      settings.agentResponseLanguage,
+    );
   }
 
   static LookupMatchMode _lookupModeFromName(String? value) {
