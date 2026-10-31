@@ -600,7 +600,9 @@ class _ModelPageState extends ConsumerState<ModelPage> {
   }) {
     final status = _statuses[set.id];
     final downloading = download?.isDownloading ?? false;
-    final busy = _busySetId != null || anyDownloadActive;
+    final operationBusy = _busySetId != null;
+    final downloadBlocked = operationBusy || anyDownloadActive;
+    final deleteBusy = operationBusy || downloading;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -688,19 +690,35 @@ class _ModelPageState extends ConsumerState<ModelPage> {
               ),
             ],
           ),
-        ] else if (download != null &&
-            (download.status == OcrModelDownloadStatus.failed ||
-                download.status == OcrModelDownloadStatus.cancelled)) ...[
+        ] else if (download?.status == OcrModelDownloadStatus.cancelled) ...[
           const SizedBox(height: AppSpacing.xs),
           Row(
             children: [
               Expanded(
                 child: Text(
-                  download.error.isEmpty ? '下载未完成' : download.error,
+                  '已取消下载',
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: download.status == OcrModelDownloadStatus.cancelled
-                        ? AppColors.textSecondary
-                        : AppColors.error,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => ref
+                    .read(ocrModelDownloadControllerProvider.notifier)
+                    .dismiss(set.id),
+                child: const Text('关闭提示'),
+              ),
+            ],
+          ),
+        ] else if (download?.status == OcrModelDownloadStatus.failed) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  download!.error.isEmpty ? '下载未完成' : download.error,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.error,
                   ),
                 ),
               ),
@@ -730,7 +748,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
           children: [
             if (status?.isInstalled != true)
               OutlinedButton.icon(
-                onPressed: busy ? null : () => _download(set),
+                onPressed: downloadBlocked ? null : () => _download(set),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.primary,
                   disabledForegroundColor: AppColors.textTertiary,
@@ -741,29 +759,31 @@ class _ModelPageState extends ConsumerState<ModelPage> {
               ),
             if (status?.isInstalled ?? false)
               OutlinedButton.icon(
-                onPressed: busy ? null : () => _delete(set),
+                onPressed: deleteBusy ? null : () => _delete(set),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: busy
+                  foregroundColor: deleteBusy
                       ? AppColors.textTertiary
                       : AppColors.error,
                   disabledForegroundColor: AppColors.textTertiary,
                   side: BorderSide(
-                    color: busy ? AppColors.border : AppColors.error,
+                    color: deleteBusy ? AppColors.border : AppColors.error,
                   ),
                 ),
                 icon: Icon(
                   Icons.delete_outline,
-                  color: busy ? AppColors.textTertiary : AppColors.error,
+                  color: deleteBusy ? AppColors.textTertiary : AppColors.error,
                 ),
                 label: Text(
                   '删除',
                   style: TextStyle(
-                    color: busy ? AppColors.textTertiary : AppColors.error,
+                    color: deleteBusy
+                        ? AppColors.textTertiary
+                        : AppColors.error,
                   ),
                 ),
               ),
             OutlinedButton.icon(
-              onPressed: busy ? null : () => _import(set),
+              onPressed: operationBusy ? null : () => _import(set),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.primary,
                 disabledForegroundColor: AppColors.textTertiary,
