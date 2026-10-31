@@ -75,4 +75,23 @@ void main() {
 
     expect(after, before);
   });
+
+  testWidgets('reserves three and a half rows for the chip list', (
+    tester,
+  ) async {
+    final dictionaries = [
+      for (var index = 0; index < 12; index++)
+        DictionaryInfo(id: '$index', title: '辞$index', mdxPath: '/$index.mdx'),
+    ];
+    await _pump(tester, dictionaries: dictionaries, selectedIds: const {'0'});
+
+    final filter = find.byType(DictionaryFilterBar);
+    final constraints = tester.widget<ConstrainedBox>(
+      find.descendant(of: filter, matching: find.byType(ConstrainedBox)).first,
+    );
+    final expected =
+        AppSizes.dictionaryFilterRow * AppSizes.dictionaryFilterVisibleRows +
+        AppSpacing.xxs * (AppSizes.dictionaryFilterVisibleRows - 1);
+    expect(constraints.constraints.maxHeight, closeTo(expected, 0.01));
+  });
 }

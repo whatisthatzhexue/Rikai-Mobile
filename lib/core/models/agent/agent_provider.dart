@@ -27,6 +27,48 @@ enum AgentProviderKind {
   }
 }
 
+/// User-facing service presets. These are UI presets, not persisted protocol
+/// values: DeepSeek uses the OpenAI-compatible adapter; only [kind] is stored.
+enum AgentProviderPreset {
+  deepSeek(
+    'DeepSeek',
+    AgentProviderKind.openAiCompatible,
+    'https://api.deepseek.com/',
+  ),
+  anthropic(
+    'Claude（Anthropic）',
+    AgentProviderKind.anthropic,
+    'https://api.anthropic.com/',
+  ),
+  custom('其他 OpenAI 兼容服务', AgentProviderKind.openAiCompatible, '');
+
+  const AgentProviderPreset(this.label, this.kind, this.defaultBaseUrl);
+
+  final String label;
+  final AgentProviderKind kind;
+  final String defaultBaseUrl;
+
+  static AgentProviderPreset forConfig(AgentProviderConfig? config) {
+    if (config == null) return AgentProviderPreset.deepSeek;
+    if (config.kind == AgentProviderKind.anthropic) {
+      return AgentProviderPreset.anthropic;
+    }
+    if (config.normalizedBaseUrl ==
+        _withoutTrailingSlash(AgentProviderPreset.deepSeek.defaultBaseUrl)) {
+      return AgentProviderPreset.deepSeek;
+    }
+    return AgentProviderPreset.custom;
+  }
+
+  static String _withoutTrailingSlash(String value) {
+    var result = value.trim();
+    while (result.endsWith('/')) {
+      result = result.substring(0, result.length - 1);
+    }
+    return result;
+  }
+}
+
 /// Provider configuration without the API key. The key lives in SecretStore.
 class AgentProviderConfig {
   const AgentProviderConfig({

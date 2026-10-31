@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/dict_info.dart';
+import '../../core/models/lookup_match_mode.dart';
 import '../../core/models/lookup_models.dart';
 import '../../core/models/lookup_request.dart';
 import '../../core/theme/page_route.dart';
@@ -17,30 +18,49 @@ Future<LookupResult> performLookup(
   String query, {
   List<String>? rawCandidates,
   List<DictionaryInfo>? dictionaries,
+  LookupMatchMode? matchMode,
+  LookupRequest? request,
 }) async {
   final service = await ref.read(mdictServiceProvider.future);
   final settings = ref.read(appSettingsProvider);
-  try {
-    return await LookupGateway(service).lookup(
+  final effectiveRequest =
+      request ??
       LookupRequest(
         query: query,
         rawCandidates: rawCandidates ?? <String>[query],
         dictionaries: dictionaries ?? ref.read(enabledDictionariesProvider),
-        matchMode: settings.lookupMatchMode,
+        matchMode: matchMode ?? settings.lookupMatchMode,
         maxEntriesPerDictionary: settings.maxEntriesPerDictionary,
-      ),
-    );
+      );
+  try {
+    return await LookupGateway(service).lookup(effectiveRequest);
   } on LookupGatewayException catch (error) {
     throw MdictException(MdictErrorCode.lookupFailed, error.message);
   }
+}
+
+/// An `entry://` link stays inside the dictionary currently being read.
+/// It never falls back to the global dictionary selection or match mode.
+LookupRequest entryLinkLookupRequest({
+  required String word,
+  required DictionaryInfo dictionary,
+}) {
+  return LookupRequest(
+    query: word,
+    rawCandidates: <String>[word],
+    dictionaries: <DictionaryInfo>[dictionary],
+    matchMode: LookupMatchMode.exact,
+    maxEntriesPerDictionary: 1,
+  );
 }
 
 /// Looks up [word] (for example an `entry://` link) and pushes an entry page.
 Future<void> lookupAndOpenEntry(
   BuildContext context,
   WidgetRef ref,
-  String word,
-) async {
+  String word, {
+  LookupRequest? request,
+}) async {
   final navigator = Navigator.of(context);
 
   showDialog<void>(
@@ -71,7 +91,7 @@ Future<void> lookupAndOpenEntry(
   LookupResult? result;
   Object? error;
   try {
-    result = await performLookup(ref, word);
+    result = await performLookup(ref, word, request: request);
   } catch (caught) {
     error = caught;
   }

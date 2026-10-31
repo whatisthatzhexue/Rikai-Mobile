@@ -1,9 +1,14 @@
 # Agent 实机反馈修正计划（2026-10-31）
 
-- 状态：**任务整理与设计修订完成；代码未修改，未开始 P6.6/P6.7。**
+- 状态：**Wave 1 已实现（F4/F5/F9/F10/F15/F16）；Wave 2–4 未开始；
+  未开始 P6.6/P6.7。**
 - 来源：用户实机使用 P6.5 后提出的 17 项反馈（本文件按原编号 F1–F17 记录）。
-- 基线：P6.5 固定流水线、应用级 `AgentRunController`、206 个单元测试、
-  debug APK 构建通过；真实 arm64/漫画页验收仍未完成。本文件不改变已有验证记录。
+- 基线：P6.5 固定流水线、应用级 `AgentRunController`；Wave 1 后
+  `flutter analyze` 无问题、212 tests 通过、debug APK 构建成功。真实
+  arm64/漫画页验收仍未完成；本文件不改变已有验证记录。
+- Wave 1 验证：`flutter test` 212 passed；`flutter build apk --debug` 成功。
+  F4/F5/F9/F10 有 widget/unit 覆盖；F15 有请求范围 unit 测试；F16 有
+  controller 进度/取消测试。设备手工验收仍待 Wave 4。
 - 约束：不 commit/reset；不覆盖已有评审结论；图片仍只在本机 OCR；API Key 仍只
   在安全存储；F15/F16 是用户明确要求的非 Agent 修复，不能借机改动查词/OCR
   的核心行为。
@@ -60,19 +65,19 @@ Wave 4  回归、设备验收、状态表更新
 | F1 | 默认输入/输出中文；设置语言后结果仍不总是目标语言 | open；默认 `follow`，无结果语言校验 | 2（默认/文案）+3（校验） | F17 |
 | F2 | 离开 Agent 页后档案不保存/队列未堆积，查词提前开始 | open；页面 detach 后按 `skipOnce` 继续 | 2 | F1a、F8 |
 | F3 | 离开页面期间也要计算思考时间 | 待验证；`startedAt` 已在应用级 snapshot，页面标签为 wall-clock，缺回归测试 | 2 | F2 |
-| F4 | 依据气泡改为短胶囊并自动换行 | open；当前 28dp、12sp、Wrap，仍偏长 | 1 | — |
-| F5 | 结果中的 `（q1）` 等标记太抽象 | open；`unresolved` 直接显示 `quoteId` | 1 | — |
+| F4 | 依据气泡改为短胶囊并自动换行 | fixed（unit/widget；设备视觉待验） | 1 | — |
+| F5 | 结果中的 `（q1）` 等标记太抽象 | fixed（unit/widget） | 1 | — |
 | F6 | 查词不能只完全/前方匹配；达到全局上限或搜不到更多才停 | open；当前每目标 exact 后 prefix，`60` 硬编码 | 3 | F6 前先定义 `AgentLimits` |
 | F7 | 查词结束后补做覆盖审查，最多回退一次查词 | open；无覆盖审查 schema/阶段 | 3 | F2、F6 |
 | F8 | Agent 词典选择必须独立保存，不影响查词选择 | partial；写隔离已满足，但仍从查词偏好初始化且无独立持久化 | 2 | — |
-| F9 | 词典选择第 4 行露出半行（预留 3.5 行） | open；共享 `DictionaryFilterBar` 固定 3 行 | 1 | — |
-| F10 | Provider 表单中文化、DeepSeek/Claude 自动填 Base URL | open；仍有 Provider/Base URL/small/complex 英文 | 1 | — |
+| F9 | 词典选择第 4 行露出半行（预留 3.5 行） | fixed（shared widget + widget test；设备视觉待验） | 1 | — |
+| F10 | Provider 表单中文化、DeepSeek/Claude 自动填 Base URL | fixed（widget/unit test；设备保存待验） | 1 | — |
 | F11 | 上传照片按钮先选相机/相册，支持多选、依次追加 | open；仅相册单选 | 2 | F12 可复用 |
 | F12 | 发送后的图片可点开，全屏缩放同照片集 | open；用户气泡缩略图不可点 | 2 | F11 |
 | F13 | 标题栏管理全部词典档案：删除/修改/重新生成/多选 | open；无档案管理 UI，历史按钮仍占位 | 2 | F2 |
 | F14 | AI 结果底部循环/复制；用户气泡长按复制/修改 | open；无操作行、无结果 Markdown、无编辑重发 | 2 | F2、F13 |
-| F15 | 词条内跳转只查当前词条所在词典，完全匹配后取首个 | open；当前使用全局词典/全局匹配模式 | 1 | —（非 Agent） |
-| F16 | OCR 模型后台下载，返回模型页仍显示进度 | open；下载状态在 `ModelPage` State | 1 | —（非 Agent） |
+| F15 | 词条内跳转只查当前词条所在词典，完全匹配后取首个 | fixed（unit；设备词条跳转待验） | 1 | —（非 Agent） |
+| F16 | OCR 模型后台下载，返回模型页仍显示进度 | fixed（controller unit；设备下载页待验） | 1 | —（非 Agent） |
 | F17 | Agent 本地 UI 文案跟随输出语言，禁用输入启发式 | open；`resolveAgentUiLanguage` 按假名/拉丁推断 | 2 | F1a |
 
 ## 2. 共同基础设施（先定义，避免每项各造一套）
@@ -682,7 +687,7 @@ AgentCoverageReview          // F7 覆盖审查结果
   和链接。
 - 不修改代码、不运行需要设备/API Key 的测试。
 
-### Wave 1：低风险 UI/非 Agent 修正（可并行）
+### Wave 1：低风险 UI/非 Agent 修正（已实现）
 
 1. **F9** 3.5 行筛选条（共享 widget；先做，影响所有词典选择）。
 2. **F10** Provider 中文化与预设 Base URL。
@@ -690,6 +695,9 @@ AgentCoverageReview          // F7 覆盖审查结果
 4. **F16** 应用级 OCR 下载控制器（非 Agent；不改下载校验）。
 5. **F4** citation 短胶囊。
 6. **F5** 去除 qN 标记。
+
+验证：`flutter analyze` 无问题；完整 `flutter test` 212 passed；
+`flutter build apk --debug` 成功。设备手工验收留到 Wave 4。
 
 每项完成后 `flutter analyze`；本波结束跑 `flutter test`。
 
@@ -728,23 +736,25 @@ AgentCoverageReview          // F7 覆盖审查结果
       为英文；语言修复失败有可见警告。
 - [ ] F2 离页期间生成继续；返回按队列处理；全部处理前不进入查词；不自动跳过。
 - [ ] F3 离页 10 秒返回，思考时间包含离页区间；无第二次 provider 请求。
-- [ ] F4 依据为短胶囊、自动换行、颜色不变、触控 ≥40dp。
-- [ ] F5 结果中无 `（q1）` 等内部标记，原文 quote 仍显示。
+- [x] F4 依据为短胶囊、自动换行、颜色不变；触控目标仍需设备视觉/可点性验收。
+- [x] F5 结果中无 `（q1）` 等内部标记，原文 quote 仍显示。
 - [ ] F6 四种模式按 exact/prefix/suffix/incremental 递进；达全局上限或无新增
       即停止；上限来自 `AgentLimits`。
 - [ ] F7 查词后有一次覆盖审查；未满/已满分别走流程 A/B；最多回退一次；重复条目
       删除前有本地重合校验。
 - [ ] F8 Agent/查词词典选择双向隔离且各自持久化。
-- [ ] F9 所有词典筛选条第 4 行露出半行。
-- [ ] F10 表单无 PG/Base URL/small/complex 英文；DeepSeek/Claude 自动填地址；
-      自定义地址不被覆盖。
+- [x] F9 所有词典筛选条第 4 行露出半行（共享 widget 测试）。
+- [x] F10 表单无 Provider/Base URL/small/complex 英文；DeepSeek/Claude 自动填地址；
+      自定义地址不被覆盖（preset 逻辑/表单测试）。
 - [ ] F11 相机/相册底部菜单；多选/连续追加；上限可配。
 - [ ] F12 用户气泡图片可点开全屏缩放。
 - [ ] F13 标题栏档案管理；修改/删除/重新生成/多选/确认。
 - [ ] F14 结果操作行循环→复制；Markdown 无 raw JSON/reasoning；用户气泡可复制/
       修改并从修改处重发。
-- [ ] F15 词条内链接只用当前词典 + exact + 首个结果；不受全局选择影响。
-- [ ] F16 后台下载后返回模型页仍显示进度；取消保留 `.part`。
+- [x] F15 词条内链接只用当前词典 + exact + 首个结果；请求范围已有 unit 测试，
+      设备词条跳转待验。
+- [x] F16 下载状态提升为应用级 controller；进度/取消有 unit 测试，返回模型页
+      仍显示进度待设备验收；取消仍保留 `.part`（原有下载测试）。
 - [ ] F17 Agent 本地文案由显式输出语言决定，输入启发式已删除。
 
 ## 7. 风险与边界

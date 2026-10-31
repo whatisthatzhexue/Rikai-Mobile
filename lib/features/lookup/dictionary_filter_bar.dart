@@ -20,8 +20,10 @@ class DictionaryFilterBar extends StatelessWidget {
     required this.onSelectAll,
   });
 
-  /// At most three rows are visible; more dictionaries scroll vertically.
-  static const int maxVisibleRows = 3;
+  /// Three full rows plus half of the fourth are visible; the remainder
+  /// scrolls vertically. The half row is intentional: it signals that more
+  /// dictionaries exist below the fold.
+  static const double visibleRows = AppSizes.dictionaryFilterVisibleRows;
 
   final List<DictionaryInfo> dictionaries;
   final Set<String> selectedIds;
@@ -39,8 +41,8 @@ class DictionaryFilterBar extends StatelessWidget {
     final singleSelection =
         mode == DictionarySelectionMode.single && selectedIds.length == 1;
     final maxHeight =
-        AppSizes.dictionaryFilterRow * maxVisibleRows +
-        AppSpacing.xxs * (maxVisibleRows - 1);
+        AppSizes.dictionaryFilterRow * visibleRows +
+        AppSpacing.xxs * (visibleRows - 1);
 
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxHeight),

@@ -172,7 +172,7 @@ class AgentResultView extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.xs),
               child: Text(
-                '${unresolved.reason}（${unresolved.quoteId}）',
+                _unresolvedReason(unresolved),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontSize: AgentTokens.helper,
                   color: AppColors.warning,
@@ -254,13 +254,14 @@ class _SegmentBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final segmentCitationIds = <String>{
-      for (final note in segment.wordNotes) ...note.citationIds,
-      for (final note in segment.grammarNotes) ...note.citationIds,
-    }.where(citations.containsKey).toList(growable: false)
-      ..sort(
-        (a, b) => (citationNumbers[a] ?? 0).compareTo(citationNumbers[b] ?? 0),
-      );
+    final segmentCitationIds =
+        <String>{
+          for (final note in segment.wordNotes) ...note.citationIds,
+          for (final note in segment.grammarNotes) ...note.citationIds,
+        }.where(citations.containsKey).toList(growable: false)..sort(
+          (a, b) =>
+              (citationNumbers[a] ?? 0).compareTo(citationNumbers[b] ?? 0),
+        );
     return Container(
       margin: const EdgeInsets.only(top: AppSpacing.sm),
       padding: const EdgeInsets.all(AgentTokens.cardPadding),
@@ -320,7 +321,7 @@ class _SegmentBlock extends StatelessWidget {
               padding: const EdgeInsets.only(top: AppSpacing.sm),
               child: Wrap(
                 spacing: AppSpacing.xs,
-                runSpacing: AppSpacing.xxs,
+                runSpacing: AppSpacing.xs,
                 children: [
                   for (final id in segmentCitationIds)
                     _CitationChip(
@@ -420,7 +421,7 @@ class _InterpretationBlock extends StatelessWidget {
       padding: const EdgeInsets.only(top: AppSpacing.xs),
       child: Wrap(
         spacing: AppSpacing.xs,
-        runSpacing: AppSpacing.xxs,
+        runSpacing: AppSpacing.xs,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text(
@@ -506,12 +507,10 @@ class _EvidenceGroup extends StatelessWidget {
                               ),
                             ),
                           ),
-                          Text(
-                            '依据${citationNumbers[citation.id] ?? ''} · 查看',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontSize: AgentTokens.citationChip,
-                              color: AppColors.primary,
-                            ),
+                          _CitationChip(
+                            citation: citation,
+                            number: citationNumbers[citation.id] ?? 0,
+                            onTap: onCitationTap,
                           ),
                         ],
                       ),
@@ -534,6 +533,17 @@ class _EvidenceGroup extends StatelessWidget {
       ),
     );
   }
+}
+
+String _unresolvedReason(AgentUnresolved unresolved) {
+  final trimmed = unresolved.reason.trim();
+  if (trimmed.isEmpty) return '未解决';
+  // Quote IDs are an internal trace; never show `（q1）` to the user.
+  final withoutQuoteId = trimmed.replaceFirst(
+    RegExp(r'\s*[（(]\s*q\d+\s*[）)]\s*$'),
+    '',
+  );
+  return withoutQuoteId.trim().isEmpty ? '未解决' : withoutQuoteId.trim();
 }
 
 class _CitationChip extends StatelessWidget {

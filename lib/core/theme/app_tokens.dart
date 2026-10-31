@@ -119,6 +119,9 @@ abstract final class AppSizes {
   static const double field = 44;
   static const double chip = 28;
   static const double dictionaryFilterRow = 32;
+  // Three full rows and half of the fourth; the extra half row signals that
+  // more dictionaries can be reached by scrolling.
+  static const double dictionaryFilterVisibleRows = 3.5;
   static const double iconSmall = 16;
   static const double icon = 20;
   static const double iconLarge = 24;
@@ -164,7 +167,7 @@ abstract final class AgentTokens {
   static const double section = 18;
   static const double evidenceTitle = 16;
   static const double citationChip = 12;
-  static const double citationChipHeight = 28;
+  static const double citationChipHeight = 24;
   static const double stageText = 14;
   static const double badge = 12;
   static const double evidenceRadius = AppRadius.md;

@@ -87,8 +87,8 @@
 
 | ID | 问题 | 状态 / 修复方向 |
 |---|---|---|
-| F15 | 词条内容页的 `entry://` 跳转使用全局词典选择与全局匹配模式，而不是当前词条所在词典 | open；`lookupAndOpenEntry` 增加显式 `dictionaries` + `matchMode: exact` 参数，`EntryPage` 传当前 tab 的词典；搜索页/阅读弹层保持原全局偏好 |
-| F16 | OCR 模型后台下载时离开模型页，返回后无进度提示 | open；把下载 CancelToken/进度/完成状态提升为应用级 `OcrModelDownloadController`，`ModelPage` 每次进入订阅；不改下载校验、镜像顺序或 `.part` 续传 |
+| F15 | 词条内容页的 `entry://` 跳转使用全局词典选择与全局匹配模式，而不是当前词条所在词典 | fixed (unit)：`entryLinkLookupRequest` 限定当前词典 + exact；`EntryPage` 传当前 tab 的词典；设备词条跳转待验 |
+| F16 | OCR 模型后台下载时离开模型页，返回后无进度提示 | fixed (controller unit)：应用级 `ocrModelDownloadControllerProvider` 保存进度/取消/完成；`ModelPage` 订阅；设备下载页返回待验；未改下载校验/镜像/`.part` |
 
 > 这两项会修改非 Agent 代码，但属于用户明确要求；实施时仍要跑 MDict 查词/词条
 > 渲染和 OCR 模型下载回归，不得顺手改变查词选择全局偏好或模型下载语义。

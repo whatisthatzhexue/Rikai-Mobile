@@ -211,9 +211,42 @@ void main() {
     expect(agentBaseUrlError('http://api.deepseek.com'), contains('HTTPS'));
     expect(agentBaseUrlError(''), contains('Base URL'));
     expect(agentBaseUrlError('not a url'), contains('有效'));
+    expect(agentBaseUrlError('https://user:pass@example.com'), contains('账号'));
+  });
+
+  test('provider presets fill known service addresses', () {
+    expect(AgentProviderPreset.deepSeek.label, 'DeepSeek');
     expect(
-      agentBaseUrlError('https://user:pass@example.com'),
-      contains('账号'),
+      AgentProviderPreset.deepSeek.defaultBaseUrl,
+      'https://api.deepseek.com/',
     );
+    expect(
+      AgentProviderPreset.anthropic.defaultBaseUrl,
+      'https://api.anthropic.com/',
+    );
+    expect(AgentProviderPreset.forConfig(null), AgentProviderPreset.deepSeek);
+
+    const anthropic = AgentProviderConfig(
+      id: 'a',
+      kind: AgentProviderKind.anthropic,
+      displayName: 'Claude',
+      baseUrl: 'https://api.anthropic.com',
+      smallModel: 'small',
+      complexModel: 'large',
+    );
+    expect(
+      AgentProviderPreset.forConfig(anthropic),
+      AgentProviderPreset.anthropic,
+    );
+
+    const custom = AgentProviderConfig(
+      id: 'c',
+      kind: AgentProviderKind.openAiCompatible,
+      displayName: 'Custom',
+      baseUrl: 'https://example.com/v1',
+      smallModel: 'small',
+      complexModel: 'large',
+    );
+    expect(AgentProviderPreset.forConfig(custom), AgentProviderPreset.custom);
   });
 }

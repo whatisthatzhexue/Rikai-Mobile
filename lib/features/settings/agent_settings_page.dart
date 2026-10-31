@@ -106,7 +106,7 @@ class AgentSettingsPage extends ConsumerWidget {
           ),
           const Divider(height: AppSpacing.xxl),
           Text(
-            '模型 Provider',
+            '模型服务',
             style: theme.textTheme.titleMedium?.copyWith(
               fontSize: AppTypography.sectionHeading,
             ),
@@ -142,8 +142,8 @@ class AgentSettingsPage extends ConsumerWidget {
                       vertical: AppSpacing.md,
                     ),
                     child: Text(
-                      '还没有配置模型。添加一个 DeepSeek/OpenAI-compatible '
-                      '或 Claude Provider 后即可使用词典助手。',
+                      '还没有配置模型。添加一个 DeepSeek、Claude 或其他 '
+                      'OpenAI 兼容服务后即可使用词典助手。',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontSize: AppTypography.helper,
                         color: AppColors.textSecondary,
@@ -163,7 +163,7 @@ class AgentSettingsPage extends ConsumerWidget {
                   height: AppSizes.control,
                   child: FilledButton(
                     onPressed: () => _editProvider(context, ref, null),
-                    child: const Text('添加 Provider'),
+                    child: const Text('添加模型服务'),
                   ),
                 ),
               ],
@@ -191,7 +191,7 @@ class AgentSettingsPage extends ConsumerWidget {
       id: id,
       kind: result.kind,
       displayName: result.displayName.trim().isEmpty
-          ? '未命名 Provider'
+          ? '未命名模型服务'
           : result.displayName.trim(),
       baseUrl: result.baseUrl.trim(),
       smallModel: result.smallModel.trim(),
@@ -219,7 +219,7 @@ class AgentSettingsPage extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('删除 Provider'),
+        title: const Text('删除模型服务'),
         content: Text('确定删除「${provider.displayName}」及其 API Key 吗？'),
         actions: [
           TextButton(
@@ -239,7 +239,7 @@ class AgentSettingsPage extends ConsumerWidget {
         .read(secretStoreProvider)
         .delete(agentProviderSecretKey(provider.id));
     ref.invalidate(agentProvidersProvider);
-    if (context.mounted) RikaiToast.show(context, '已删除 Provider');
+    if (context.mounted) RikaiToast.show(context, '已删除模型服务');
   }
 }
 
@@ -257,9 +257,7 @@ class _ProviderRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final kind = provider.kind == AgentProviderKind.anthropic
-        ? 'Anthropic Claude'
-        : 'OpenAI-compatible';
+    final kind = AgentProviderPreset.forConfig(provider).label;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Row(
@@ -285,7 +283,7 @@ class _ProviderRow extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  'small: ${provider.smallModel}  complex: ${provider.complexModel}',
+                  '快速模型：${provider.smallModel}　高精度模型：${provider.complexModel}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: AppTypography.helper,
                     color: AppColors.textSecondary,
@@ -342,7 +340,7 @@ class _ProviderDialog extends StatefulWidget {
 }
 
 class _ProviderDialogState extends State<_ProviderDialog> {
-  late AgentProviderKind _kind;
+  late AgentProviderPreset _preset;
   late final TextEditingController _name;
   late final TextEditingController _baseUrl;
   late final TextEditingController _smallModel;
@@ -354,14 +352,10 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   void initState() {
     super.initState();
     final initial = widget.initial;
-    _kind = initial?.kind ?? AgentProviderKind.openAiCompatible;
+    _preset = AgentProviderPreset.forConfig(initial);
     _name = TextEditingController(text: initial?.displayName ?? '');
     _baseUrl = TextEditingController(
-      text:
-          initial?.baseUrl ??
-          (_kind == AgentProviderKind.anthropic
-              ? 'https://api.anthropic.com'
-              : ''),
+      text: initial?.baseUrl ?? _preset.defaultBaseUrl,
     );
     _smallModel = TextEditingController(text: initial?.smallModel ?? '');
     _complexModel = TextEditingController(text: initial?.complexModel ?? '');
@@ -378,6 +372,20 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     super.dispose();
   }
 
+  void _changePreset(AgentProviderPreset next) {
+    final previousDefault = _preset.defaultBaseUrl;
+    final current = _baseUrl.text.trim();
+    setState(() {
+      _preset = next;
+      // Fill the address for a new/untouched form, but never overwrite an
+      // address the user typed or an existing custom service.
+      if (current.isEmpty || current == previousDefault) {
+        _baseUrl.text = next.defaultBaseUrl;
+      }
+      _baseUrlError = null;
+    });
+  }
+
   void _save() {
     final error = agentBaseUrlError(_baseUrl.text);
     if (error != null) {
@@ -386,7 +394,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     }
     Navigator.of(context).pop(
       AgentProviderDraft(
-        kind: _kind,
+        kind: _preset.kind,
         displayName: _name.text,
         baseUrl: _baseUrl.text,
         smallModel: _smallModel.text,
@@ -400,7 +408,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   Widget build(BuildContext context) {
     final editing = widget.initial != null;
     return AlertDialog(
-      title: Text(editing ? '编辑 Provider' : '添加 Provider'),
+      title: Text(editing ? '编辑模型服务' : '添加模型服务'),
       content: ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.sizeOf(context).height * 0.65,
@@ -410,29 +418,23 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              DropdownButtonFormField<AgentProviderKind>(
-                initialValue: _kind,
+              DropdownButtonFormField<AgentProviderPreset>(
+                initialValue: _preset,
                 decoration: const InputDecoration(
-                  labelText: '协议',
+                  labelText: '服务商',
                   isDense: true,
                 ),
-                items: const <DropdownMenuItem<AgentProviderKind>>[
-                  DropdownMenuItem(
-                    value: AgentProviderKind.openAiCompatible,
-                    child: Text('OpenAI-compatible / DeepSeek'),
-                  ),
-                  DropdownMenuItem(
-                    value: AgentProviderKind.anthropic,
-                    child: Text('Anthropic Claude'),
-                  ),
+                items: <DropdownMenuItem<AgentProviderPreset>>[
+                  for (final preset in AgentProviderPreset.values)
+                    DropdownMenuItem(value: preset, child: Text(preset.label)),
                 ],
                 onChanged: (value) {
-                  if (value == null) return;
-                  setState(() => _kind = value);
+                  if (value != null) _changePreset(value);
                 },
               ),
               const SizedBox(height: AppSpacing.sm),
               TextField(
+                key: const ValueKey('agent-provider-name'),
                 controller: _name,
                 decoration: const InputDecoration(
                   labelText: '名称',
@@ -441,28 +443,34 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               ),
               const SizedBox(height: AppSpacing.sm),
               TextField(
+                key: const ValueKey('agent-provider-base-url'),
                 controller: _baseUrl,
                 keyboardType: TextInputType.url,
                 decoration: InputDecoration(
-                  labelText: 'Base URL',
-                  hintText: 'https://api.deepseek.com',
+                  labelText: '接口地址',
+                  hintText: 'https://api.deepseek.com/',
+                  helperText: 'API 的访问地址，通常以 https:// 开头',
                   errorText: _baseUrlError,
                   isDense: true,
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
               TextField(
+                key: const ValueKey('agent-provider-small-model'),
                 controller: _smallModel,
                 decoration: const InputDecoration(
-                  labelText: 'Small model',
+                  labelText: '快速模型',
+                  helperText: '用于词典档案和资料检查，可选速度较快的模型',
                   isDense: true,
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
               TextField(
+                key: const ValueKey('agent-provider-complex-model'),
                 controller: _complexModel,
                 decoration: const InputDecoration(
-                  labelText: 'Complex model',
+                  labelText: '高精度模型',
+                  helperText: '用于最终解析；留空时回退到快速模型',
                   isDense: true,
                 ),
               ),
@@ -471,7 +479,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 controller: _apiKey,
                 obscureText: true,
                 decoration: InputDecoration(
-                  labelText: 'API Key',
+                  labelText: '接口密钥（API Key）',
                   hintText: editing ? '留空则不修改' : '',
                   isDense: true,
                 ),

@@ -133,9 +133,14 @@ class _EntryPageState extends ConsumerState<EntryPage>
     RikaiToast.show(context, '离线模式：已阻止外部链接');
   }
 
-  void _openEntryLink(String word) {
+  void _openEntryLink(DictionaryLookupGroup group, String word) {
     if (!mounted || word == widget.word) return;
-    lookupAndOpenEntry(context, ref, word);
+    lookupAndOpenEntry(
+      context,
+      ref,
+      word,
+      request: entryLinkLookupRequest(word: word, dictionary: group.dictionary),
+    );
   }
 
   @override
@@ -194,7 +199,7 @@ class _EntryPageState extends ConsumerState<EntryPage>
         return EntryWebView(
           html: rendered.html,
           baseUrl: rendered.baseUrl,
-          onEntryLink: _openEntryLink,
+          onEntryLink: (word) => _openEntryLink(group, word),
           onExternalLink: _blockedExternalLink,
         );
       },

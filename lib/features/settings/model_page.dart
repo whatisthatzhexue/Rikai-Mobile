@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +7,7 @@ import '../../core/theme/app_tokens.dart';
 import '../../core/ui/rikai_toast.dart';
 import '../../core/utils/format_bytes.dart';
 import '../../services/ocr/model_manager.dart';
+import '../../state/ocr_model_download.dart';
 import '../../state/providers.dart';
 import 'storage_permission_prompt.dart';
 
@@ -29,8 +29,6 @@ class _ModelPageState extends ConsumerState<ModelPage> {
   String? _busySetId;
   String? _error;
   String? _mirrorError;
-  CancelToken? _downloadCancel;
-  OcrModelDownloadProgress? _downloadProgress;
   OcrModelMigrationProgress? _migrationProgress;
   bool _permissionPrompted = false;
   bool _allowPop = false;
@@ -151,52 +149,21 @@ class _ModelPageState extends ConsumerState<ModelPage> {
       );
       if (accepted != true || !mounted) return;
     }
-    final cancel = CancelToken();
-    setState(() {
-      _busySetId = set.id;
-      _error = null;
-      _downloadCancel = cancel;
-      _downloadProgress = null;
-    });
-    try {
-      await ref
-          .read(ocrModelManagerProvider)
-          .downloadSet(
-            set,
-            cancelToken: cancel,
-            customMirror: ref.read(appSettingsProvider).ocrMirror,
-            onProgress: (progress) {
-              if (!mounted) return;
-              setState(() => _downloadProgress = progress);
-            },
-          );
-      if (!mounted) return;
+    setState(() => _error = null);
+    await ref.read(ocrModelDownloadControllerProvider.notifier).start(set);
+    if (!mounted) return;
+    final download = ref.read(ocrModelDownloadControllerProvider)[set.id];
+    if (download?.status == OcrModelDownloadStatus.completed) {
       await _load(showLoading: false);
-      if (!mounted) return;
-      RikaiToast.show(context, '${set.displayName} 下载完成');
-    } on OcrModelException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _error = error.code == 'CANCELLED' ? '已取消下载' : error.message;
-      });
+      if (mounted) RikaiToast.show(context, '${set.displayName} 下载完成');
+    } else if (download?.status == OcrModelDownloadStatus.failed) {
+      setState(() => _error = download!.error);
       await _load(showLoading: false);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = '下载失败：$error');
-      await _load(showLoading: false);
-    } finally {
-      if (mounted) {
-        setState(() {
-          _busySetId = null;
-          _downloadCancel = null;
-          _downloadProgress = null;
-        });
-      }
     }
   }
 
-  void _cancelDownload() {
-    _downloadCancel?.cancel('用户取消下载');
+  void _cancelDownload(OcrModelSet set) {
+    ref.read(ocrModelDownloadControllerProvider.notifier).cancel(set.id);
   }
 
   Future<void> _import(OcrModelSet set) async {
@@ -404,7 +371,12 @@ class _ModelPageState extends ConsumerState<ModelPage> {
   }
 
   Future<void> _confirmLeaveDownload() async {
-    if (_downloadCancel == null || !mounted) {
+    final active = ref
+        .read(ocrModelDownloadControllerProvider)
+        .values
+        .where((task) => task.isDownloading)
+        .toList(growable: false);
+    if (active.isEmpty || !mounted) {
       if (mounted) Navigator.of(context).pop();
       return;
     }
@@ -445,7 +417,12 @@ class _ModelPageState extends ConsumerState<ModelPage> {
       ),
     );
     if (leave != true || !mounted) return;
-    if (stop) _downloadCancel?.cancel('用户退出下载页面');
+    if (stop) {
+      final controller = ref.read(ocrModelDownloadControllerProvider.notifier);
+      for (final task in active) {
+        controller.cancel(task.setId);
+      }
+    }
     setState(() => _allowPop = true);
     await Future<void>.delayed(Duration.zero);
     if (mounted) Navigator.of(context).pop();
@@ -454,8 +431,12 @@ class _ModelPageState extends ConsumerState<ModelPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final downloads = ref.watch(ocrModelDownloadControllerProvider);
+    final hasActiveDownload = downloads.values.any(
+      (task) => task.isDownloading,
+    );
     return PopScope(
-      canPop: _allowPop || _downloadCancel == null,
+      canPop: _allowPop || !hasActiveDownload,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) _confirmLeaveDownload();
       },
@@ -591,35 +572,15 @@ class _ModelPageState extends ConsumerState<ModelPage> {
                       label: const Text('保存镜像'),
                     ),
                   ),
-                  if (_downloadCancel != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      _downloadProgress == null
-                          ? '正在连接模型服务器…'
-                          : '正在下载 ${_downloadProgress!.fileName} '
-                                '${(_downloadProgress!.overallProgress * 100).round()}%',
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    LinearProgressIndicator(
-                      value: _downloadProgress?.overallProgress,
-                    ),
-                    TextButton.icon(
-                      onPressed: _cancelDownload,
-                      icon: const Icon(Icons.stop_circle_outlined),
-                      label: const Text('取消下载'),
-                    ),
-                    Text(
-                      '可以离开本页，下载会继续；再次下载时会从断点继续。',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: AppTypography.helper,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: AppSpacing.lg),
                   for (final set
                       in _manifest?.sets.values ?? const <OcrModelSet>[]) ...[
-                    _buildSetSection(theme, set),
+                    _buildSetSection(
+                      theme,
+                      set,
+                      download: downloads[set.id],
+                      anyDownloadActive: hasActiveDownload,
+                    ),
                     const Divider(height: AppSpacing.xxl),
                   ],
                 ],
@@ -631,9 +592,15 @@ class _ModelPageState extends ConsumerState<ModelPage> {
   int get _installedBytes =>
       _statuses.values.fold(0, (sum, status) => sum + status.installedBytes);
 
-  Widget _buildSetSection(ThemeData theme, OcrModelSet set) {
+  Widget _buildSetSection(
+    ThemeData theme,
+    OcrModelSet set, {
+    required OcrModelDownloadState? download,
+    required bool anyDownloadActive,
+  }) {
     final status = _statuses[set.id];
-    final busy = _busySetId != null;
+    final downloading = download?.isDownloading ?? false;
+    final busy = _busySetId != null || anyDownloadActive;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -675,6 +642,70 @@ class _ModelPageState extends ConsumerState<ModelPage> {
                 : '未安装：缺少 ${status.missingFiles.length} 个文件',
             style: theme.textTheme.bodyMedium,
           ),
+        if (downloading) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            download!.fileName.isEmpty
+                ? '正在连接模型服务器…'
+                : '正在下载 ${download.fileName} '
+                      '${(download.progress * 100).round()}%',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          LinearProgressIndicator(value: download.progress),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => _cancelDownload(set),
+              icon: const Icon(Icons.stop_circle_outlined),
+              label: const Text('取消下载'),
+            ),
+          ),
+          Text(
+            '可以离开本页，下载会继续；再次下载时会从断点继续。',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: AppTypography.helper,
+              height: 1.5,
+            ),
+          ),
+        ] else if (download?.status == OcrModelDownloadStatus.completed) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '下载完成',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.success,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => ref
+                    .read(ocrModelDownloadControllerProvider.notifier)
+                    .dismiss(set.id),
+                child: const Text('关闭提示'),
+              ),
+            ],
+          ),
+        ] else if (download != null &&
+            (download.status == OcrModelDownloadStatus.failed ||
+                download.status == OcrModelDownloadStatus.cancelled)) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            download.error.isEmpty ? '下载未完成' : download.error,
+            style: theme.textTheme.bodyMedium?.copyWith(color: AppColors.error),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () => ref
+                  .read(ocrModelDownloadControllerProvider.notifier)
+                  .dismiss(set.id),
+              child: const Text('关闭提示'),
+            ),
+          ),
+        ],
         if (set.id == 'manga_ocr') ...[
           const SizedBox(height: AppSpacing.xs),
           Text(

@@ -82,6 +82,9 @@ const _result = AgentRunResult(
         ],
       ),
     ],
+    unresolved: <AgentUnresolved>[
+      AgentUnresolved(quoteId: 'q1', reason: '词典中未找到依据（q1）'),
+    ],
   ),
   validation: AgentValidationResult(
     valid: true,
@@ -119,6 +122,9 @@ void main() {
     // detail must not repeat it as a second section.
     expect(find.text('请多关照。'), findsNothing);
     expect(find.text('依据1'), findsWidgets);
+    expect(find.text('词典中未找到依据'), findsOneWidget);
+    expect(find.textContaining('（q1）'), findsNothing);
+    expect(find.textContaining('· 查看'), findsNothing);
 
     await tester.tap(find.text('依据1').first);
     expect(tapped?.id, 'source-1');

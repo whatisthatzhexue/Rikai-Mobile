@@ -7,9 +7,9 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 
 > **Status: P6.1–P6.5 core implemented; P6.6 (multi-OCR variants/repair) and
 > P6.7 (annotation DSL/Markdown/ruby/pitch/release) are not implemented.**
-> 2026-10-31 real-device feedback F1–F17 is documented but **not implemented**;
-> follow `docs/agent_docs/device-feedback-2026-10-31.md` before extending the
-> Agent. Automated tests use fake providers and never a real API key. On
+> 2026-10-31 real-device feedback F1–F17: **Wave 1 (F4/F5/F9/F10/F15/F16) is
+> implemented; Waves 2–4 are pending**; follow
+> `docs/agent_docs/device-feedback-2026-10-31.md` before extending the Agent. Automated tests use fake providers and never a real API key. On
 > 2026-10-30 a user-configured DeepSeek provider was smoke-tested on the x86_64
 > emulator (key never logged); arm64/real manga-page and real-dictionary
 > `sample`/`suggest` acceptance still remain. The review backlog in
@@ -150,7 +150,7 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 - **Strict mode**: word notes always require citations in strict mode; unknown
   source/citation and empty results are rejected; debug-only raw-output logs.
 
-### 2026-10-31 real-device feedback backlog (documented, not implemented)
+### 2026-10-31 real-device feedback backlog (Wave 1 implemented)
 
 The user reported 17 additional issues after a real-device P6.5 trial. The
 authoritative plan, current-code evidence, wave ordering and acceptance
@@ -175,6 +175,22 @@ Summary:
 - F2 must precede F7/F13/F14 profile work. F6 must precede F7. F17 must precede
   all Agent UI localization work. Do not start P6.6/P6.7 from this backlog.
 
+Wave 1 implementation (2026-10-31):
+
+- `DictionaryFilterBar` now reserves 3.5 rows; `AppSizes.dictionaryFilterVisibleRows`
+  is the shared token.
+- Provider settings use Chinese labels and `AgentProviderPreset` (`DeepSeek`,
+  `Claude（Anthropic）`, other OpenAI-compatible); DeepSeek/Claude fill their
+  default base URLs without overwriting a user-edited address.
+- `entry://` links build an exact `LookupRequest` limited to the current entry
+  tab's dictionary; global lookup selection/mode is not used.
+- OCR model downloads moved to app-scoped `ocrModelDownloadControllerProvider`;
+  the model page subscribes and re-enters with the current progress/cancel state.
+- Citation chips use the compact 24dp pill and `Wrap`; evidence rows no longer
+  use the long `依据N · 查看` string. Unresolved items no longer show `（q1）`.
+- Wave 1 verification: `flutter analyze` clean, 212 tests passed, debug APK
+  built. Device visual/navigation/download acceptance remains for Wave 4.
+
 Current behavior that differs from the target:
 
 - `AgentPage.dispose()` detaches the profile handler and
@@ -195,7 +211,7 @@ Current behavior that differs from the target:
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 206 tests passed
+flutter test     -> 212 tests passed
 flutter build apk --debug -> success
 ```
 
@@ -222,13 +238,15 @@ New test files include: `agent_models_test.dart`, `lookup_gateway_test.dart`,
 `agent_page_test.dart`, `agent_run_controller_test.dart`,
 `agent_lifecycle_test.dart`, `agent_result_view_test.dart`,
 `provider_http_test.dart`, `provider_retry_test.dart`,
-`analysis_normalizer_test.dart`, `analysis_schema_contract_test.dart`.
+`analysis_normalizer_test.dart`, `analysis_schema_contract_test.dart`,
+`agent_settings_page_test.dart`, `lookup_actions_test.dart`,
+`ocr_model_download_controller_test.dart`.
 
 ## Not implemented / next
 
-1. **2026-10-31 device feedback (F1–F17)**: execute the wave order in
-   `docs/agent_docs/device-feedback-2026-10-31.md`. Wave 1 quick UI/non-Agent
-   fixes; Wave 2 language/profile queue/multi-image/action row; Wave 3 lookup
+1. **2026-10-31 device feedback (F1–F17)**: Wave 1 quick UI/non-Agent fixes
+   are implemented and verified by unit/widget tests; continue with Wave 2
+   language/profile queue/multi-image/action row, then Wave 3 lookup
    completeness + coverage review. **Do not start P6.6/P6.7 until these
    feedback items are closed or explicitly deferred.**
 2. **P6.6 multi-OCR**: `ocr.consensus` variants, diff/hit-rate scoring,
