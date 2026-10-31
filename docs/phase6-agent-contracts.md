@@ -6,6 +6,9 @@
 
 - 状态：**设计契约；P6.1–P6.5 核心已实现，P6.6/P6.7 未实现**；与
   `docs/phase6-agent-design.md` v2 配套。实现状态见 `docs/phase6-status.md`。
+  **2026-10-31 实机反馈的 F1–F17 修正计划见
+  `docs/agent_docs/device-feedback-2026-10-31.md`；其中覆盖审查 `coverage.v1`、
+  输出语言校验和应用级档案队列仍是待实现契约，不能写成已支持。**
 - 目的：把 Agent 的工具、输入/输出、错误码、状态机和校验规则固定下来，避免实现时
   各自发明字段。机器可读 schema 在 `docs/schemas/agent/`。
 - 版本规则：所有 schema 带 `schema` 常量（如 `rikai.agent.input.v1`）；破坏性字段
@@ -388,6 +391,61 @@ class ToolResult {
 - `model_supplements` 严格模式必须为空/隐藏；宽松模式必须带“模型补充”标签。
 - `reading` 必须匹配 token 读音或 citation 摘要；否则标 `未验证` 或移除。
 
+### 5.1 覆盖审查 `rikai.agent.coverage.v1`（2026-10-31 F7，待实现）
+
+初始证据后调用一次，判断是否缺少词典资料。这是独立的轻量 schema，不直接复用
+较重的 `analysis.v1`。机器可读草案：
+`docs/schemas/agent/coverage.v1.schema.json`（尚未接入运行时，字段变更需升
+版本）。
+
+```json
+{
+  "schema": "rikai.agent.coverage.v1",
+  "source_id": "src-1",
+  "verdict": "missing",
+  "missing": [
+    {
+      "kind": "word",
+      "query": "何卒",
+      "source_refs": ["t12", "p3"],
+      "reason": "缺少正式请求语境下的释义",
+      "priority": 1
+    }
+  ],
+  "duplicate_groups": [
+    {
+      "dictionary_id": "dict_a",
+      "keep_entry_key": "何卒",
+      "remove_entry_keys": ["何卒（副）"],
+      "reason": "词条相同且释义大部分重合"
+    }
+  ],
+  "notes": ""
+}
+```
+
+- `verdict`: `sufficient | missing`；`missing` 最多 20 项，`duplicate_groups`
+  最多 10 组（来自 `AgentLimits`）。
+- `query` 必须可追溯到源文本/token lemma/lookupCandidates/语法模式/suggest；
+  不可追溯项由 orchestrator 丢弃，不能让模型任意浏览词典。
+- `duplicate_groups` 仅是建议；orchestrator 必须本地验证同词典、同 headword/
+  entryKey、摘要大部分重合后才可删除，且优先删除信息密度较低者。
+- 未达 citation 上限走流程 A（按 missing 补充检索，模式 exact→prefix→suffix→
+  incremental）；已达上限走流程 B（先删可验证重复腾槽位，再走流程 A）。
+- 每个用户请求最多一次覆盖审查 + 一次回退；失败/无重复/无可追溯 query 时保留
+  原证据并显示 warning，不让整次 run 失败。
+
+### 5.2 输出语言（2026-10-31 F1，待实现）
+
+- `AgentResponseLanguage` 默认 `zh`；旧 `follow` 迁移为 `zh`，不得按输入假名/
+  拉丁字符推断语言。
+- system prompt 要求所有人类可读字段使用目标语言；日语仅用于原文 quote、词形、
+  读音、词典例句。
+- 结果后校验只检查人类可读字段（translation/segments interpretation/word
+  sense/grammar explanation/unresolved reason/model supplement），不检查原文
+  与 citation 摘要。偏离目标语言时允许一次语言修复；仍偏离则保留结果并显示
+  warning，不得丢弃已生成内容。API 无法保证 100% 语言一致，契约不承诺绝对。
+
 ## 6. 词典档案 `rikai.dictionary.profile.v1`
 
 完整 schema：`docs/schemas/agent/dictionary-profile.v1.schema.json`。
@@ -473,15 +531,21 @@ idle
   → prepare
   → ocr
   → familiarizing
-  → awaitingProfile（用户确认/跳过）
+  → awaitingProfile（应用级档案队列，逐个用户处理）
   → tokenizing
   → evidence
+  → coverage（一次覆盖审查，可选补充检索）
   → reasoning
   → validating
   → done | error | cancelled
 ```
 
-- `awaitingProfile` 只在需要熟悉且用户尚未决定时出现；可跳过，不阻断后续。
+- `awaitingProfile` 只在需要熟悉且仍有未处理档案时出现；**必须由用户显式处理
+  （信任/本次跳过/不再询问）全部已生成档案后，才进入 tokenizing**。页面离开、
+  重建或 dismiss sheet 不得自动 skip；`unavailable` 档案无确认内容，记录 issue
+  后不阻塞。队列属于应用级 controller，不属于 `AgentPage`。
+- `coverage` 是 2026-10-31 F7 的一次性覆盖审查；每个请求最多触发一次补充检索，
+  `coverageFallbackUsed=true` 后不得再次回退。
 - 任何阶段可取消；取消后状态为 `cancelled`，保留已完成的本地结果。
 - 阶段事件带 `run_id, stage, message, progress`；UI 不从页面 State 推断。
 - 重试从失败阶段开始；OCR 可重新识别，provider 可重试，校验失败可做一次修复。
@@ -492,15 +556,18 @@ idle
 |---|---|
 | 单次分析源文本 | ≤ 6,000 日文字符（超限选段，不静默截断） |
 | 唯一检索目标 | ≤ 120 |
-| citation 总数 | ≤ 60 |
+| citation 总数 | ≤ 60（`AgentLimits.maxEvidenceEntries`，唯一来源，禁止硬编码） |
 | 每词每典条数 | ≤ 3 |
 | 摘要长度 | ≤ 400 字符 |
 | 每词典档案 | ≤ 2,000 字符 |
 | 模型额外工具调用 | ≤ 6 |
 | 单工具超时 | 60s |
 | 额外工具总预算 | 90s |
-| provider 超时 | 120s |
+| provider 超时 | 180s（当前实现默认；旧契约 120s 以此为准统一） |
 | provider 重试 | 429/5xx 最多 2 次；401/403 不重试 |
+| 覆盖审查缺失项 | ≤ 20 |
+| 覆盖审查重复组 | ≤ 10 |
+| 覆盖检索回退 | ≤ 1 次/用户请求 |
 
 超预算时设置 `truncated=true`，UI 显示“已按预算缩减，未分析的部分不会出现在结果
 中”；不得静默截断长文本。

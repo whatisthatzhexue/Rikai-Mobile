@@ -76,3 +76,17 @@
 | R2 | fixed (label) | `integration_test/mdict_android_test.dart` 已改为「查单词」并补 onboarding 种子；设备 5/6 通过，最后一个搜索页断言未找到 `とうきょう【東京】`，与 R2 文案无关，未改非 Agent 搜索逻辑 |
 | R3 | fixed | `lib/features/settings/help_page.dart` 已改为「历史记录」 |
 | R4–R9 | open | 等待完整 analyze/test/debug build 与设备回归；本表只记录状态，不改上述评审结论 |
+
+## 6. 2026-10-31 实机反馈中的非 Agent 项
+
+以下两项来自用户实机反馈，已在
+[device-feedback-2026-10-31.md](device-feedback-2026-10-31.md) 的 Wave 1 中安排；
+本文件只登记，不改变 R1–R9 的原始评审结论。
+
+| ID | 问题 | 状态 / 修复方向 |
+|---|---|---|
+| F15 | 词条内容页的 `entry://` 跳转使用全局词典选择与全局匹配模式，而不是当前词条所在词典 | open；`lookupAndOpenEntry` 增加显式 `dictionaries` + `matchMode: exact` 参数，`EntryPage` 传当前 tab 的词典；搜索页/阅读弹层保持原全局偏好 |
+| F16 | OCR 模型后台下载时离开模型页，返回后无进度提示 | open；把下载 CancelToken/进度/完成状态提升为应用级 `OcrModelDownloadController`，`ModelPage` 每次进入订阅；不改下载校验、镜像顺序或 `.part` 续传 |
+
+> 这两项会修改非 Agent 代码，但属于用户明确要求；实施时仍要跑 MDict 查词/词条
+> 渲染和 OCR 模型下载回归，不得顺手改变查词选择全局偏好或模型下载语义。

@@ -203,3 +203,18 @@ citation open 移到 controller/use-case，页面只负责渲染与路由。
 | M16 | fixed | familiarization system prompt 内联单个/批量 profile schema |
 
 > 本表只更新状态，不覆盖上文评审结论。
+
+## 十、2026-10-31 实机反馈
+
+17 项实机反馈的方案、依赖与波次见
+[device-feedback-2026-10-31.md](device-feedback-2026-10-31.md)。与本评审直接相关的
+后续项：
+
+- F2（应用级档案队列/gate）会重做熟悉期生成/确认边界，关联 M3/M11；
+- F13（词典档案管理）需要 `AgentStore` 的 profile 列表/更新/批量删除方法，关联
+  M25，但不等于 P6.7 会话历史；
+- F14（复制/编辑/重新生成）会新增结果 Markdown 构建和 controller 恢复旧结果，
+  关联 M6/M7；
+- F6/F7 会拆出检索策略与覆盖审查，关联 M5/M20、H6。
+
+在上述反馈未完成前，仍不要开始 P6.6/P6.7。

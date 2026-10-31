@@ -3,6 +3,10 @@
 - 日期：2026-10-30
 - 状态：评审完成；**H1/H8 未关闭，H2 已修复，H3–H7 部分修复**（2026-10-30
   管线加固，见文末 §7）。原始评审只读代码与文档，未修改业务代码、未运行设备测试。
+  **2026-10-31 又收到 17 项实机反馈，修正计划见
+  [device-feedback-2026-10-31.md](device-feedback-2026-10-31.md)；该反馈扩展了
+  H4（档案队列/离页计时）与 H6（检索完整度/覆盖审查），实施顺序以新文档为准，
+  本文原始评审结论不覆盖。**
 - 评审范围：
   - 设计/契约：`docs/phase6-agent-design.md`、`docs/phase6-agent-contracts.md`、
     `docs/phase6-status.md`、`docs/adr/0004-agent-capability-boundary.md`、

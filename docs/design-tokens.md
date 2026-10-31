@@ -140,7 +140,7 @@
 | `AppSizes.control` | 40 | 按钮、图标按钮最小高度/触控区 |
 | `AppSizes.field` | 44 | 输入框目标高度 |
 | `AppSizes.chip` | 28 | 标签/Chip 高度 |
-| `AppSizes.dictionaryFilterRow` | 32 | 查词筛选条单行高度（最多 3 行） |
+| `AppSizes.dictionaryFilterRow` | 32 | 查词筛选条单行高度（预留 3.5 行） |
 | `AppSizes.iconSmall` | 16 | 行内小图标 |
 | `AppSizes.icon` | 20 | 常规图标 |
 | `AppSizes.iconLarge` | 24 | 重点图标 |
@@ -253,7 +253,7 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 | 证据卡片 | `agentEvidenceSurface` | `AppColors.surface` + 1px `border`，圆角 12，内边距 12 |
 | 证据标题 | `agentEvidenceTitle` | 16sp/600，`textPrimary` |
 | 证据摘要 | `agentEvidenceBody` | 14sp，`textSecondary`，完整换行 |
-| citation chip | `agentCitationChip` | 高 28、12sp、`blue50` 底 + `blue700` 字，触控 ≥40 |
+| citation chip | `agentCitationChip` | 短胶囊：视觉高 24–28、12sp、`blue50` 底 + `blue700` 字，水平内边距 8，`Wrap` 间距/行距 4，触控 ≥40；自动换行，不使用长条/整行 |
 | 严格徽标 | `agentStrictBadge` | `header` 底 + 白字，12sp |
 | 宽松徽标 | `agentLooseBadge` | `surfaceMuted` 底 + `textPrimary`，12sp |
 | 阶段文字 | `agentStageText` | 14sp，`primary`；spinner 16dp |
@@ -268,10 +268,19 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 | 状态条 | `agentStatusBar` | 高 24–32，`surfaceMuted`，14sp，不遮挡消息 |
 | 错误卡 | `agentErrorCard` | `surface` 底 + `error` 图标/1px 边框，14sp 原因 + 一个主操作 |
 | 流式光标 | `agentStreamingCursor` | `primary`，1×16，闪烁；不使用整块“正在输入” |
-| 操作行 | `agentActionRow` | 复制/重试/引用 20dp 图标，40dp 触控，带 Semantics |
+| 操作行 | `agentActionRow` | AI 结果底部从左到右：循环（从熟悉词典步骤重新生成）→复制 Markdown；20dp 图标，40dp 触控，带 Semantics；用户气泡长按提供复制/修改 |
 | 证据折叠条 | `agentEvidenceCollapsed` | 14sp，`primary`，“依据 N 条 ▾” |
 | 无依据标注 | `agentNoCitation` | 14sp，`textSecondary` + warning 图标，不隐藏 |
 | 输入区最多行数 | `agentComposerMaxLines` | 5 行后内部滚动；发送按钮位置固定 |
+
+**2026-10-31 实机反馈补充（未实现，实施时同步 token/测试）**
+
+- 所有词典选择界面（查词、阅读弹层、Agent）预留 3.5 行；第 4 行半可见。
+- citation 使用短胶囊并自动换行，颜色保持浅蓝底蓝字；不改成词典筛选的深蓝选中态。
+- 用户气泡图片可点击打开照片集同款黑底全屏查看器；多图逐张可点。
+- 结果底部操作行固定为“循环 → 复制”；用户气泡长按“复制/修改”。
+- Agent 功能区本地文案由显式回答语言决定（默认中文），禁止输入启发式；详见
+  `docs/agent_docs/device-feedback-2026-10-31.md` 的 F1/F17。
 
 **布局与交互**
 
@@ -284,7 +293,8 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 - 严格/宽松使用紧凑 `SegmentedButton`，放在“本会话设置”面板或输入区上方的紧凑
   行；首屏默认收起，当前模型路由用 14sp 辅助文字。
 - 会话词典筛选复用 `DictionaryFilterBar` + `DictionarySelectionModeToggle`：放在
-  “本会话设置”展开面板内，模式切换放在“本次词典”标题行，Chip 最多 3 行内部滚动；
+  “本会话设置”展开面板内，模式切换放在“本次词典”标题行，Chip 预留 3.5 行高度
+  （第 4 行半可见）并内部滚动；
   **会话级独立**，不写查词全局偏好。该条是对 §“查词词典筛选”全局规则的明确例外。
 - OCR 版本 chip 高 28、12sp；差异高亮用 `blue50` 底 + `blue700` 字；修复建议按钮
   为次按钮，不自动应用。
@@ -339,7 +349,8 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 - 气泡内边距 12–16；消息间距 12。
 - 消息最大宽 80%；字号放大到 200% 时允许 90%，仍禁止满宽。长代码/表格/引用块
   横向滚动，不撑破气泡。
-- 操作行：完成后显示复制/重试/引用 20dp 图标，40dp 触控，带 `Semantics`。
+- 操作行：完成后从左到右显示循环（重新生成）/复制（Markdown）20dp 图标，
+  40dp 触控，带 `Semantics`；用户气泡长按提供复制/修改。
 - 错误卡：AI 消息下方独立卡片，`agentErrorCard`（surface + error 图标/1px 边框），
   14sp 原因 + 一个主操作；已生成内容保留。
 
@@ -361,7 +372,7 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 | 空闲 | 输入框可用，发送按钮正常。 |
 | 提交中 | 用户消息立即上屏；AI 气泡显示三点动画（≤3 秒），不整屏 loading。 |
 | 流式生成 | 文本逐字/逐块出现，尾部光标闪烁，发送按钮变停止图标。 |
-| 生成完成 | 光标消失，出现复制/重试/引用操作行。 |
+| 生成完成 | 光标消失，出现循环（重新生成）→复制（Markdown）操作行。 |
 | 生成中断 | 保留已生成内容，下方 14sp textSecondary“生成中断 · 重试”。 |
 | 降级 | 状态条或消息内 14sp warning“已降级为本地组合结果”，并说明原因。 |
 | 离线 | 输入区上方常驻状态条“离线模式，仅本地功能可用”；Agent 发送禁用并说明。 |
@@ -416,13 +427,18 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 **Agent 对话式 v2 自查项（基础已实现，逐项验收）**
 
 - [ ] 首屏约 80% 为消息区（小屏 ≥70%）；本会话设置默认收起，展开后词典筛选/
-      模式可用。
+      模式可用；筛选条预留 3.5 行，第 4 行半可见。
 - [ ] AppBar 52、标题左对齐、模型/模式 14sp；不出现第二个深蓝顶栏。
-- [ ] 用户/AI 气泡最大 80%、16/4 圆角、颜色/字号来自 token；无头像/时间戳。
-- [ ] 流式逐字/逐块 + 光标；提交中三点 ≤3 秒；完成后操作行可用。
+- [ ] 用户/AI 气泡最大 80%、16/4 圆角、颜色/字号来自 token；无头像/时间戳；
+      用户气泡多图可点开全屏缩放。
+- [ ] 流式逐字/逐块 + 光标；提交中三点 ≤3 秒；完成后操作行为循环→复制。
 - [ ] 生成中可停止；中断保留内容；错误卡不弹全局对话框。
-- [ ] 证据默认折叠“依据 N 条”；展开按词典顺序；严格无依据显示但不隐藏。
-- [ ] 输入区固定底部、1–5 行内部滚动、发送/停止位置固定；占位符 ≤20 字。
+- [ ] 证据默认折叠“依据 N 条”；展开按词典顺序；citation 为短胶囊自动换行；
+      严格无依据显示但不隐藏。
+- [ ] 输入区固定底部、1–5 行内部滚动、发送/停止位置固定；占位符 ≤20 字；
+      图片入口提供拍照/相册多选并追加。
+- [ ] Agent 本地文案只由显式回答语言决定（默认中文）；日语输入不触发日文 UI；
+      用户可见文本无 `（q1）` 等内部 ID。
 - [ ] provider/模型/语言/隐私/关于分组；API Key 有显示切换/测试连接/三态标签。
 - [ ] Semantics、40dp 触控、200% 字体缩放、对比度；仅浅色主题。
 
@@ -446,8 +462,10 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
   1px `divider` 浅色细线收边。
 
 ### 查词词典筛选（搜索页 / 阅读查词弹层）
-- 使用可换行的 `FilterChip`，不再横向滚动整行词典全名；最多连续显示 3 行，
-  超出部分在筛选条内部纵向滑动，不推挤结果区。
+- 使用可换行的 `FilterChip`，不再横向滚动整行词典全名；**预留 3.5 行高度**
+  （第 4 行至少露出半个 chip，避免用户误以为没有第 4 行），超出部分在筛选条
+  内部纵向滑动，不推挤结果区。搜索页、阅读查词弹层、Agent 会话面板共用同一
+  `DictionaryFilterBar`，不得在单页写死 3 行高度。
 - 第一个选项固定为「全选」；其后按最短唯一前缀显示词典简称，例如“大修”/
   “大辞”/“漢”。仍不唯一时继续增加字符，直到可区分或显示全名。
 - 选中 Chip 使用深蓝 `AppColors.header` 背景 + 白字/白图标，不使用浅蓝。
@@ -757,7 +775,8 @@ Phase 1 及之前的页面（首页、文本阅读、设置、TokenChip、底部
 - [ ] 照片集只有一个标题栏“多选”入口；多选页删除/保存图标与单张页一致；
       多选 OCR 预览 ≥20sp；Checkbox 没有黑色圆底。
 - [ ] 相机不可用/权限被拒时仍能看到“从相册导入”和“照片集（N）”。
-- [ ] 查词词典筛选使用唯一简称、最多 3 行滚动、深蓝选中色和单选/多选/全选；
+- [ ] 查词词典筛选使用唯一简称、预留 3.5 行（第 4 行半可见）滚动、深蓝选中色
+      和单选/多选/全选；
       不显示“查询词典”标题行，模式胶囊位于 AppBar/弹层标题行。
 - [ ] 文本阅读分词后提供灰色「隐藏输入框」，隐藏后 AppBar 下方左侧有恢复图标。
 - [ ] 选中/取消词典时 Chip 不换行、不漂移；已有结果区不上下抖动。

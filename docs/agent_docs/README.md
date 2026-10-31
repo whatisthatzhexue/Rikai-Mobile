@@ -8,20 +8,22 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
 ## 开发前必读
 
 1. 本文件。
-2. [phase6-pipeline-review.md](phase6-pipeline-review.md) —— 当前管线评审与
+2. [device-feedback-2026-10-31.md](device-feedback-2026-10-31.md) —— 2026-10-31
+   实机反馈 17 项（F1–F17）的修正方案、依赖与执行波次；**当前优先工作队列**。
+3. [phase6-pipeline-review.md](phase6-pipeline-review.md) —— 当前管线评审与
    已知问题（含 file:line 证据）。
-3. [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md) ——
+4. [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md) ——
    运行生命周期、离开/返回页面、取消、并发、进程死亡等意外情况规范。
-4. [agent-maintainability-review.md](agent-maintainability-review.md) —— Agent
+5. [agent-maintainability-review.md](agent-maintainability-review.md) —— Agent
    代码可维护性评审（死抽象、god 文件、controller/测试、schema 债务）。
-5. [non-agent-regression-review.md](non-agent-regression-review.md) —— Agent
+6. [non-agent-regression-review.md](non-agent-regression-review.md) —— Agent
    以外功能的回归检查（旧 integration test 文案、帮助页文案、构建风险）。
-6. [../phase6-agent-design.md](../phase6-agent-design.md) —— 设计 v2。
-7. [../phase6-agent-contracts.md](../phase6-agent-contracts.md) —— 工具/schema/
+7. [../phase6-agent-design.md](../phase6-agent-design.md) —— 设计 v2。
+8. [../phase6-agent-contracts.md](../phase6-agent-contracts.md) —— 工具/schema/
    状态机契约。
-8. [../phase6-status.md](../phase6-status.md) —— 当前实现记录。
-9. [../adr/0004-agent-capability-boundary.md](../adr/0004-agent-capability-boundary.md)
-   —— 能力边界决策。
+9. [../phase6-status.md](../phase6-status.md) —— 当前实现记录。
+10. [../adr/0004-agent-capability-boundary.md](../adr/0004-agent-capability-boundary.md)
+    —— 能力边界决策。
 
 ## 硬规则
 
@@ -36,6 +38,9 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
   [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md)。
 - 图片只能经本机 OCR；不要把图片、路径、base64 或 provider 视觉能力引入 Agent。
 - API Key 只放安全存储；不进 SharedPreferences、SQLite、日志、导出或仓库。
+- **2026-10-31 实机反馈未关闭前，先按
+  [device-feedback-2026-10-31.md](device-feedback-2026-10-31.md) 的 Wave 顺序处理；
+  不要开始 P6.6/P6.7。**
 - 修复问题时同步更新本目录的状态表，并在完成一项后记录验证方式。
 
 ## 问题状态表
@@ -43,7 +48,7 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
 | ID | 问题 | 状态 |
 |---|---|---|
 | H1 | 工具调用层未接入，且 LLM Port 无法表达 tool_use/tool_result | fixed by removal：已确认固定流水线、模型无工具；删除 tools/、AgentTool* 死 DTO、LlmTool/Capabilities，契约保留为未来参考 |
-| H2 | OpenAI-compatible/DeepSeek 生产路径缺少 JSON schema 回退 | partially fixed：analysis schema 已内联 prompt 并补 json_object 测试；familiarization prompt 仍未内联 schema（见 M16），需修正 README 的“已内联”说法 |
+| H2 | OpenAI-compatible/DeepSeek 生产路径缺少 JSON schema 回退 | fixed：analysis/familiarization schema 已内联 prompt 并补 json_object 测试（M16） |
 | H3 | 严格模式可空结果/零 citation 通过，epistemic 可绕过 | partially fixed：非空/source_id、词注强制 citation、literal/pattern 归一化、epistemic 徽标；translation 逐句 citation 仍可加强 |
 | H4 | 取消是表面取消，并发 run 竞态 | mostly fixed：应用级 controller/run token/provider CancelToken/OCR cancel/evidence 检查；familiarization 取消链仍待补 |
 | H5 | 多源输入只对 primary source 生成 quote，用户文本/指令混用 | partially fixed：有图时文本作为 instruction 不再进入 evidence；多 source 结果表达仍受限 |
@@ -56,16 +61,27 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
 > DeepSeek 流式分析（阶段 + 已思考时长）→ 中文译文/逐句/原文/词典依据
 > 已跑通；206 tests 与 debug APK 构建通过。仍不要据此开始 P6.6/P6.7。
 
+### 2026-10-31 实机反馈（F1–F17）
+
+- 完整方案、现状证据、时序与验收见
+  [device-feedback-2026-10-31.md](device-feedback-2026-10-31.md)。
+- 当前状态：**均有待实施/验证项**，代码尚未按反馈修改；F8 的“Agent 不影响
+  查词”写隔离已满足，但独立持久化仍缺。
+- 优先波次：Wave 1 低风险 UI/非 Agent；Wave 2 语言/档案队列/多图/操作行
+  （F2 是分界）；Wave 3 检索完整度/覆盖审查；Wave 4 回归验收。
+- F2 未完成前，不要实现 F7/F13/F14 的档案相关部分；不要把“页面 detach 后
+  skip-once”当成合法确认。
+
 ## 回归与维护性评审
 
 - **非 Agent 回归**：[non-agent-regression-review.md](non-agent-regression-review.md)
-  —— 2 个 Android integration test 仍使用旧主页文案（「输入文本」「查词」），
-  1 个帮助页文案指向旧「语料」入口；其余非 Agent 代码未发现确认的运行时回归，
-  风险集中在构建/提交边界和 MDict worker 队列。详见该文档 R1–R9。
+  —— 历史 R1–R9 结论保留；状态表显示 R1/R3 已修复、R2 文案已修但 MDict 搜索页
+  最终断言仍失败；2026-10-31 新增 F15（词条内跳转范围）和 F16（OCR 下载状态）
+  两个非 Agent 项，列入 device-feedback 的 Wave 1。详见该文档 §5–§6。
 - **Agent 可维护性**：[agent-maintainability-review.md](agent-maintainability-review.md)
-  —— 核心 Ports/Evidence/Citation/Validator 设计良好，但整体目前为中等可维护：
-  约 900 行工具层生产未用、`AgentPage` 1,152 行、`DictionaryFamiliarizationService`
-  752 行且流程重复、`AgentRunController` 不可注入/无测试、词典错误被吞、
-  snapshot 丢错误码、schema/DTO 手工副本多。详见 M1–M28 与修复顺序。
-- 这两份报告是**当前快照**；另一个 session 继续修改后，行号/状态需要复核。
-  `flutter analyze` 当前为 No issues found；完整 `flutter test`/build 尚未运行。
+  —— 历史评审的 M1–M28 仍作为背景；状态表已更新：M1 死工具层已删除、M2
+  `AgentPage` 已拆到 292 行、M3/M4/M5/M11 部分修复、M15/M16 已修复。新的 F1–F17
+  反馈会重做档案队列、语言与检索策略，详见状态表和 device-feedback。
+- 这些报告是**历史快照 + 状态表**；行号会随实现变化，继续修改后需复核。
+  `flutter analyze` 最近记录为 No issues found；完整测试/构建以
+  `docs/phase6-status.md` 的最新记录为准。

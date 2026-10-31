@@ -1,8 +1,10 @@
 # Agent 运行生命周期与意外情况处理
 
 - 状态：**开发规范（要求）**。应用级 `AgentRunController`、provider CancelToken、
-  OCR/Evidence 取消、四步进度和编号依据已落地；进程死亡持久化、familiarization
-  取消和“离开页面→返回”的 widget 测试仍待补。未完成前不要把剩余能力写成已实现。
+  OCR/Evidence 取消、四步进度和编号依据已落地；**2026-10-31 实机反馈要求把词典
+  档案确认改为应用级队列（F2），当前实现仍是页面回调 + 离开后 skip-once，属于
+  待修问题**。进程死亡持久化、familiarization 取消和“离开页面→返回”的 widget
+  测试仍待补。未完成前不要把剩余能力写成已实现。
 - 适用范围：`lib/features/agent/`、`lib/state/`、`lib/services/agent/` 及后续
   P6.6/P6.7 的 Agent UI。
 - 关联：[管线评审](phase6-pipeline-review.md) 的 H4（取消/并发）与 H8（持久化）、
@@ -22,25 +24,30 @@
 2. **用户离开词典助手页面时，运行必须继续。** 返回主页、打开设置/历史/模型页、
    切换 Tab、旋转屏幕、页面被重建，都不得取消正在进行的 OCR、分词、查词、
    熟悉期或 LLM 请求（除非用户明确点“停止”）。
-3. **用户回到助手界面时，必须看到最新进展。** 包括当前阶段（本机 OCR/熟悉词典/
+3. **词典档案生成与确认必须解耦。** 熟悉期生成完成后，每个档案进入应用级待确认
+   队列；页面离开后队列继续保留，返回时逐个展示。用户必须对每个已生成档案做
+   显式处理（信任 / 本次跳过 / 不再询问）后，才能进入查词阶段；页面离开、重建
+   或 dismiss sheet **不得自动 skip**。采样/模型失败产生的 `unavailable` 档案
+   没有可确认内容，记录 warning 后不阻塞。
+4. **用户回到助手界面时，必须看到最新进展。** 包括当前阶段（本机 OCR/熟悉词典/
    分词/查词/生成/校验）、已流式生成的部分文本（如有）、证据/citation 数量、
-   错误或完成状态；不得重新发一次请求，也不得显示空白新会话。
-4. **“思考进展”不是隐藏推理链。** UI 展示阶段文字、已用思考时间和证据/citation
+   待确认档案数量、错误或完成状态；不得重新发一次请求，也不得显示空白新会话。
+5. **“思考进展”不是隐藏推理链。** UI 展示阶段文字、已用思考时间和证据/citation
    计数即可。生成过程中显示**已思考时长**（每秒刷新），不要显示已接收字数、
    原始流式 JSON、模型隐藏 chain-of-thought、原始 provider 请求体或 API Key。
    已生成的内部文本只用于诊断/恢复，不作为用户可见进度。
-5. **取消只有用户显式操作才发生。** “停止”按钮可以取消；`dispose`、路由 pop、
+6. **取消只有用户显式操作才发生。** “停止”按钮可以取消；`dispose`、路由 pop、
    打开设置、应用切后台都不得等价于取消。
-6. **同一 session 同时最多一个 run。** 重复点“开始分析”、旧 run 未结束时新开
+7. **同一 session 同时最多一个 run。** 重复点“开始分析”、旧 run 未结束时新开
    run、旧回调覆盖新结果，都必须被 runId/generation token 阻止。
-7. **应用生命周期内有效，不等于进程死后还能继续。** Android 可能杀进程/限制
+8. **应用生命周期内有效，不等于进程死后还能继续。** Android 可能杀进程/限制
    后台网络；应用内页面切换必须继续，切后台尽力继续，进程死亡后只能显示
    “已中断/重试”，不得承诺自动续跑。
-8. **失败不吞内容。** 已生成的文本、证据和部分结果必须保留；错误以消息内卡片
+9. **失败不吞内容。** 已生成的文本、证据和部分结果必须保留；错误以消息内卡片
    或状态条呈现，不整屏清空、不弹阻塞式全局对话框。
-9. **就地恢复，不重复扣费。** 返回页面只重新订阅当前 run；不得因为重建页面
-   重新调用 provider，也不得重置 citation/进度。
-10. **配置在 run 开始时快照。** 会话词典、严格/宽松、provider/model、语言在
+10. **就地恢复，不重复扣费。** 返回页面只重新订阅当前 run；不得因为重建页面
+    重新调用 provider，也不得重置 citation/进度。
+11. **配置在 run 开始时快照。** 会话词典、严格/宽松、provider/model、语言在
     run 开始时确定；run 中修改设置只影响下一次 run，不改变当前 run 的词典顺序
     或模型。
 
@@ -52,9 +59,10 @@
   页面生命周期不能决定 run 生命周期。
 - **思考/生成进展**：当前 stage、stage message、已用思考时长、证据/citation
   数量、可取消状态。不是模型隐藏推理过程，也不展示原始流式 JSON 或字数。
-- **界面进展语言**：阶段文字与“已思考 N 秒”跟随“回答语言”设置；`follow` 时
-  按输入推断（含假名→日文，纯拉丁→英文，其余→中文）。模型隐藏推理的语言只能
-  通过 prompt 引导，无法由 API 强制。
+- **界面进展语言**：阶段文字与“已思考 N 秒”只跟随显式的“回答语言”设置；
+  `zh/en/ja` 分别对应中文/英文/日文。禁止按输入文本启发式推断；旧 `follow`
+  一律按中文处理（并建议迁移为 `zh`），避免“日语输入、需要中文翻译”被误判。
+  模型隐藏推理的语言只能通过 prompt 引导，无法由 API 强制。
 - **阶段进度**：固定四步 OCR → 查词 → 生成 → 校验；显示当前/已完成步骤、
   已检索词典条目数与 citation 数。不显示字数或原始流式 JSON。
 - **部分结果**：只展示本地校验/抢救后仍成立、且有 citation/evidence 支撑的
@@ -74,12 +82,15 @@
 ```text
 AgentRunSnapshot {
   runId, sessionId,
-  status: idle | preparing | ocr | familiarizing | tokenizing | evidence |
-          reasoning | validating | done | cancelled | interrupted | error,
-  stageMessage,                // 跟随回答语言的阶段说明
+  status: idle | preparing | ocr | familiarizing | awaitingProfile |
+          tokenizing | evidence | coverage | reasoning | validating |
+          done | cancelled | interrupted | error,
+  stageMessage,                // 跟随显式回答语言的阶段说明
   startedAt,                   // run 开始时间；UI 据此显示“已思考 N 秒”
   internalChars,               // 仅供诊断/恢复，不得作为进度展示
   evidenceCount, citationCount,
+  pendingProfileCount,         // 应用级档案队列中尚未处理的档案数
+  coverageFallbackUsed,        // F7：每次请求最多一次覆盖回退
   partialResult,               // 已通过校验/可渲染的结构化结果（可选）
   errorCode, errorMessage,
   updatedAt,
@@ -92,11 +103,14 @@ AgentRunSnapshot {
 - `runId` 每次 start 重新生成；所有异步回调（stage、stream、OCR、familiarization、
   lookup）必须携带 runId，controller 丢弃非当前 run 的事件。
 - 生成中的可见进度是 `startedAt` 推导的**已思考时长**，由页面每秒刷新；页面
-  重建/返回时从 snapshot 的 `startedAt` 继续计时，不得从 0 重新开始。
+  重建/返回时从 snapshot 的 `startedAt` 继续计时，不得从 0 重新开始。离开
+  Agent 页、应用切后台的时间也计入 wall-clock；`awaitingProfile` 等待用户处理
+  的时间同样计入（UI 同时显示等待状态，不重置时钟）。
 - `internalChars`（若实现）只在 controller 内部记录，用于诊断/失败详情；UI
   **不得显示字数**，也不得显示原始流式 JSON。
 - `partialResult` 只在安全时写入；校验失败/中断时保留可展示的部分，不整块清除。
-- `stageMessage` 跟随回答语言设置（`follow` 按输入推断），不显示原生异常、路径、Key。
+- `stageMessage` 只跟随显式回答语言设置（`zh/en/ja`；旧 `follow` 按中文处理），
+  不得按输入文本推断；不显示原生异常、路径、Key。
 - controller 负责创建 `AgentOrchestrator`/ports；页面不得自己构造 orchestrator。
 - controller 的 `cancel()` 只应由用户“停止”调用；页面 `dispose()` 只取消订阅，
   不调用 `cancel()`。
@@ -107,7 +121,7 @@ AgentRunSnapshot {
 |---|---|---|
 | 用户从 Agent 页返回主页/其他页 | run 继续；controller 保留 snapshot；返回时显示最新进展 | 在 `dispose` 里 cancel；清空 result/stage |
 | 用户打开设置/历史/模型页 | run 继续；返回后仍能看到阶段/已思考时长 | 重新开始 run；显示空会话 |
-| 用户打开熟悉期 sheet 后离开 | 决定为“本次跳过”或保留 sheet 待返回；run 不取消、不永久挂起 | 让 run 无限等待一个已不存在的页面 |
+| 用户打开熟悉期 sheet 后离开 | 档案留在应用级待确认队列；生成继续；run 停在 `awaitingProfile`，返回后继续逐个处理 | 自动记为“本次跳过”；丢失未保存档案；未处理完就进入查词 |
 | 应用切后台 | 进程存活时尽力继续；回前台刷新 snapshot | 主动取消；承诺后台一定完成 |
 | 应用回前台 | 显示当前 run 的最新状态；若已被系统中断则显示 interrupted | 自动从头重跑；重复请求 |
 | 进程被杀/重启 | 从持久化快照显示“已中断/重试”；不自动续跑 | 声称 run 还在继续；静默丢弃 |
@@ -142,11 +156,13 @@ AgentRunSnapshot {
    “已思考 N 秒”，两者跟随回答语言）、四步进度（OCR → 查词 → 生成 → 校验）、
    已检索条目/citation 计数、停止按钮；输入区按生成中状态处理。不显示字数/
    原始 JSON，也不展示未校验的部分结果。
-3. **run 已完成**：显示结果、证据折叠、操作行（复制/重试/引用）。
+3. **run 已完成**：显示结果、证据折叠、操作行（循环重新生成 → 复制 Markdown；
+   错误态另行提供重试）。
 4. **run 已取消**：保留 partial，显示“已停止 · 重试”。
 5. **run 已中断/失败**：保留 partial，显示错误卡或“生成中断 · 重试”。
-6. **熟悉期 sheet 待确认**：返回时重新展示 sheet（或按“本次跳过”继续），不得让
-   run 永久停在 `awaitingProfile`。
+6. **熟悉期队列待确认**：返回时按应用级队列逐个重新展示 sheet，顶部显示待处理
+   数量；用户必须显式处理每一项才进入查词。不得自动按“本次跳过”继续，也不得
+   因为页面重建丢失队列；dismiss 只保留 pending，不推进。
 7. **正在 `push` 设置页**：Agent 页仍在栈中时继续订阅；从设置返回时无需重新
    start。
 8. **发送后输入栏清空**：用户点发送并成功创建 run 后，输入框文本和已选图片
@@ -154,8 +170,9 @@ AgentRunSnapshot {
    输入栏不得残留待发送状态。
 9. **用户气泡显示图片本身**：发送图片后，用户气泡必须直接展示本地缩略图
     （多张图用 Wrap 排列），而不是“图片 1 张（仅本机 OCR）”占位；下方可保留
-   “仅本机 OCR，不会上传”说明。图片路径只用于本机渲染，不得进入 provider
-   请求、SQLite、日志或导出。
+   “仅本机 OCR，不会上传”说明。点击任意缩略图应打开与照片集相同的黑底
+   `PhotoViewerPage`（双指缩放/平移/关闭），多图逐张可点。图片路径只用于本机
+   渲染，不得进入 provider 请求、SQLite、日志或导出。
 10. **重试复用请求快照**：发送时保存文本/图片/词典/模式/provider/语言的快照；
    “重试”从该快照重新创建 run，不读取（已被清空的）输入栏，也不得清空用户在
    发送后新输入的草稿。
@@ -214,6 +231,11 @@ run（`agent_page.dart:63-68`）。因此“离开页面继续生成、返回恢
 
 仍需补齐：
 
+- **档案确认队列（F2，高优先级）**：当前 `AgentPage.dispose()` 会 detach
+  profile handler，controller 在 handler 为空时返回 `skipOnce`
+  （`agent_run_controller.dart:205-220`），导致离开页面后生成的档案不保存、
+  查词提前开始。必须按本文改为应用级队列 + `awaitingProfile` gate；F2 完成前
+  不得实现 F7/F13/F14 的档案相关部分。
 - **进程死亡/重启持久化**：`AgentRunSnapshot` 是应用内存态；`AgentStore` 的
   sessions/runs/messages/citations 表仍未写入（H8），进程被杀后无法恢复。
 - **provider 取消链**：OpenAI/Anthropic 已接 `LlmCancelToken` → Dio
@@ -225,8 +247,8 @@ run（`agent_page.dart:63-68`）。因此“离开页面继续生成、返回恢
   校验后的合法条目逐条淡入；不保存/展示原始流式 JSON，也不显示字数。失败/
   取消时保留已校验的结构化结果（若有），绝不展示 raw JSON 或隐藏 reasoning。
 - **测试**：已有 controller 的 start→done、cancel、immediate error 测试，以及
-  发送清空/思考时长 widget 测试；离开页面→继续→返回的 widget 测试和进程死亡
-  模拟仍缺。
+  发送清空/思考时长 widget 测试；离开页面→继续→返回、档案队列、离页计时、
+  进程死亡模拟仍缺。
 - **页面职责**：`AgentPage` 已降至 292 行，会话设置/composer/消息/证据/动作/
   进度拆到独立文件；页面只做 wiring。
 - **取消边界**：provider/OCR/EvidenceBuilder 已接入；familiarization 的
@@ -252,8 +274,9 @@ run（`agent_page.dart:63-68`）。因此“离开页面继续生成、返回恢
 - [x] 校验完成的合法条目逐条淡入；不做流式 JSON 解析，不展示未校验尾部。
 - [ ] 生成摘要（P3）暂不做；未来只允许独立 `summary` 字段，禁止截取 reasoning。
 - [x] 重复发送/新会话/重试有幂等保护；同一 session 最多一个 active run。
-- [x] 熟悉期 confirm 回调在 controller 层排队；页面离开时按 skip-once 返回，
-      不让 run 永久挂起（返回后不会自动重开 sheet）。
+- [ ] 熟悉期生成与确认解耦：应用级 `AgentProfileInboxController` 保存待确认
+      档案；页面离开不自动 skip；全部处理完才进入 tokenizing；返回时逐个重开
+      sheet（当前实现仍是页面回调 + skip-once，F2 待改）。
 - [x] 发送成功后同时清空输入栏文本和图片附件；重试从发送快照重放，不清空新草稿。
 - [x] run 开始时快照词典/模式/模型/语言；run 中设置变更不影响当前 run。
 - [ ] 失败/取消/中断保留 partial；错误卡可重试；不弹阻塞全局对话框。
@@ -281,7 +304,11 @@ run（`agent_page.dart:63-68`）。因此“离开页面继续生成、返回恢
       发送图片路径的清空与重试复用仍需补设备测试。
 - [ ] 旧 run 未结束时新 run：旧结果不覆盖新结果；旧 stage 不覆盖新 stage。
 - [ ] 旋转/重建页面：snapshot 保留，不重复请求。
-- [ ] 熟悉期 sheet 打开时离开/返回：不永久挂起；skip-once 或重新展示。
+- [ ] 熟悉期 sheet 打开时离开/返回：档案进入应用级队列；返回逐个展示；全部
+      处理完才进入查词；不自动 skip-once、不丢失档案。
+- [ ] 离页 10 秒再返回：思考时间包含离页区间；无第二次 provider 请求。
+- [ ] 任务所选语言为中文、输入为日文时：Agent 本地 UI 与结果人类可读字段为
+      中文；输入启发式已删除（F1/F17）。
 - [ ] 进程死亡模拟（重建 provider/store）：显示 interrupted + 重试，不自动续跑。
 - [ ] 应用切后台/回前台：回前台显示最新 snapshot；不自动重跑。
 - [ ] 网络断开/provider 429/超时：错误卡 + partial + 重试；不整屏清空。
@@ -294,12 +321,14 @@ run（`agent_page.dart:63-68`）。因此“离开页面继续生成、返回恢
 
 1. 用户发送图片/文本后，立即返回主页；等待 10 秒再回到词典助手，仍能看到
    最新阶段和“已思考 N 秒”，且没有第二次 provider 请求。
-2. 用户在流式生成中打开设置页，修改模型后返回；当前 run 继续使用旧模型完成，
+2. 用户在档案生成期间离开；生成继续，返回时看到待处理档案队列，逐个处理后
+   才进入查词；没有任何一项被自动记为“本次跳过”。
+3. 用户在流式生成中打开设置页，修改模型后返回；当前 run 继续使用旧模型完成，
    下一次 run 使用新模型。
-3. 用户在流式中点“停止”；后台请求不应再写入 UI，页面保留阶段/耗时并可重试
+4. 用户在流式中点“停止”；后台请求不应再写入 UI，页面保留阶段/耗时并可重试
    （provider 网络取消已接入；familiarization 取消仍待补）。
-4. 用户快速返回/重进三次；只有一个 run、一个请求、一个结果，无旧结果覆盖。
-5. 旋转屏幕/系统回收页面后返回；阶段、思考时长和最终结果不丢。
-6. 进程被杀后重开；显示“已中断”而非“已完成”，提供重试（P6.7 持久化待补）。
+5. 用户快速返回/重进三次；只有一个 run、一个请求、一个结果，无旧结果覆盖。
+6. 旋转屏幕/系统回收页面后返回；阶段、思考时长和最终结果不丢。
+7. 进程被杀后重开；显示“已中断”而非“已完成”，提供重试（P6.7 持久化待补）。
 
 > 当前 P6.5 页面不满足以上验收；改造完成前，本文是**目标规范**，不是现状描述。

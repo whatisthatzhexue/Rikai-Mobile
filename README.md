@@ -4,9 +4,10 @@ An Android Japanese reader and dictionary whose core runs on-device. Take a
 photo or paste text, run OCR (PaddleOCR for horizontal, MangaOCR for vertical),
 tokenize with the user's UniDic, show furigana, and look up any word in the
 user's MDict dictionaries. OCR models may be downloaded during setup; after
-that, OCR, tokenization, and dictionary lookup are offline. Phase 6 (planned)
-adds an optional dictionary assistant that can call a user-configured LLM
-provider; it is not part of the current build.
+that, OCR, tokenization, and dictionary lookup are offline. Phase 6 adds an
+optional dictionary assistant that can call a user-configured LLM provider;
+P6.1–P6.5 are implemented, while P6.6/P6.7 and the 2026-10-31 device-feedback
+hardening are pending.
 
 ## Status
 
@@ -120,16 +121,20 @@ Phase 6 P6.1–P6.5 core is implemented; the home screen now has five actions:
   that open the existing entry page. Provider settings are available under
   Settings → 词典助手.
 
-Still pending: P6.6 multi-OCR variants/dictionary-assisted repair and P6.7
-annotation DSL/Markdown/ruby/pitch/history/release polish. Real-network provider
-calls, secure-storage device I/O, real-dictionary `sample`/`suggest` and arm64
-Agent acceptance still need device verification. See
-[docs/phase6-status.md](docs/phase6-status.md) for the current implementation
+Still pending: the 2026-10-31 real-device feedback backlog (Chinese-first
+language, app-level dictionary-profile confirmation queue, multi-image input,
+lookup completeness/coverage review and related UI), then P6.6 multi-OCR
+variants/dictionary-assisted repair and P6.7 annotation DSL/Markdown/ruby/pitch/
+history/release polish. Real-network provider calls, secure-storage device I/O,
+real-dictionary `sample`/`suggest` and arm64 Agent acceptance still need device
+verification. The feedback plan and wave order are in
+[docs/agent_docs/device-feedback-2026-10-31.md](docs/agent_docs/device-feedback-2026-10-31.md).
+See [docs/phase6-status.md](docs/phase6-status.md) for the current implementation
 record, [docs/phase6-agent-design.md](docs/phase6-agent-design.md) for the design
 and [docs/phase6-agent-contracts.md](docs/phase6-agent-contracts.md) for the
 tool/JSON-schema contracts.
 
-Next: finish P6.6/P6.7 and complete arm64/device acceptance. See
+Next: finish the feedback backlog, then P6.6/P6.7 and arm64/device acceptance. See
 [docs/phase5-status.md](docs/phase5-status.md),
 [docs/phase4.5-status.md](docs/phase4.5-status.md),
 [docs/phase6-agent-design.md](docs/phase6-agent-design.md),
@@ -148,7 +153,7 @@ Next: finish P6.6/P6.7 and complete arm64/device acceptance. See
   place it at `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`; see
   [assets/fonts/README.md](assets/fonts/README.md)
 
-### Phase 6 planned (not required for the current build)
+### Phase 6 optional Agent requirements
 
 - Network access only when the optional dictionary assistant is configured and
   the user explicitly sends a request.
@@ -174,8 +179,8 @@ previous debug/integration-test run left `integration_test` in the generated
 plugin registrant, run the `--config-only` release command once before
 `flutter build apk --release --target-platform android-arm64 --split-per-abi`.
 UI work must follow [docs/design-tokens.md](docs/design-tokens.md). The current
-build contains no Agent/provider implementation, so Phase 6
-provider/fake-server tests are not part of the current build or test suite.
+build contains the P6.1–P6.5 Agent/provider implementation; P6.6/P6.7 and the
+2026-10-31 feedback hardening are not yet implemented.
 
 ## Documents
 

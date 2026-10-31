@@ -10,10 +10,10 @@
 > 用户使用中文沟通；代码/标识符用英文。
 >
 > **Agent 开发提醒**：开发或修改 Phase 6 词典助手前，必须先读
-> `docs/agent_docs/`（尤其 `phase6-pipeline-review.md` 与
-> `agent-lifecycle-and-edge-cases.md`），优先解决其中列出的高优先级管线问题；
-> 问题未关闭前，不要在 P6.6/P6.7 上继续叠加新功能，也不要把未实现能力写成
-> 已支持。
+> `docs/agent_docs/`（尤其 `device-feedback-2026-10-31.md`、`phase6-pipeline-review.md` 与
+> `agent-lifecycle-and-edge-cases.md`），优先解决其中列出的高优先级管线和实机反馈；
+> 2026-10-31 的 F1–F17 未关闭前，不要在 P6.6/P6.7 上继续叠加新功能，也不要把
+> 未实现能力写成已支持。
 
 ## 1. 项目是什么
 
@@ -32,6 +32,9 @@ Phase 6（`docs/phase6-agent-design.md`，**设计 v2；P6.1–P6.5 已实现，
 用户配置的远程文本 LLM（DeepSeek/Claude 等），把本地 OCR、UniDic、MDict 作为
 schema 化证据；采用固定流水线，模型无工具调用（2026-10-31 决策）。图片只在本机 OCR，禁止视觉上云；
 核心离线功能不得依赖该 Agent。实现进度见 `docs/phase6-status.md`。
+**2026-10-31 实机反馈 F1–F17 的修正计划见
+`docs/agent_docs/device-feedback-2026-10-31.md`；未完成前优先按该文档执行，不要
+开始 P6.6/P6.7。**
 
 - 项目根目录：`C:\Projects\Rikai-Mobile`（ASCII 路径，旧的 `E:\MyData\大工\...` 已不存在）
 - 包名/applicationId/namespace：`com.rikai.mobile`
@@ -326,7 +329,7 @@ schema 化证据；采用固定流水线，模型无工具调用（2026-10-31 �
     取消；x86_64 全部通过。冷 auto ~1.0s，热 vertical ~0.3s；7 张真实图片
     auto/h/v 扫描通过。2026-10-30 用户确认 arm64/真实设备验收通过。
   - 第二轮设备反馈（2026-10-29）：MDD `sound://` 转为本地 `<audio>`；
-    词典选择全局持久化、最多 3 行滚动、选中不漂移；查词状态跨页面保留；
+    词典选择全局持久化、预留 3.5 行（第 4 行半可见）滚动、选中不漂移；查词状态跨页面保留；
     键盘焦点路由清理；非阻塞 `RikaiToast`；竖排双引擎评分；OCR 日文空格
     清理；长文本懒加载/去滚动条；旋转自动中断 OCR；语料日期格式；删除
     对话框统一复选框。冷启动 x86_64 真实图片复跑：auto 0.5–6.1s，
@@ -438,14 +441,17 @@ MDict 兼容测试（`integration_test/mdict_compat_android_test.dart`，2/2）�
   `flutter analyze` 无问题，206 tests 通过，debug APK 构建成功；x86_64 模拟器
   已用真实相册图片 + 用户配置的 DeepSeek 跑通“实时思考/生成 → 中文译文/逐句/
   原文/词典依据”。
-- Phase 6 未完成：P6.6 多 OCR 版本/词典辅助修复、P6.7 annotation DSL/
-  Markdown/ruby/pitch、Agent 会话历史 UI、真实 provider/API Key 与真实词典
-  sample/suggest 设备验收。详见 `docs/phase6-status.md`。
+- Phase 6 未完成：**2026-10-31 实机反馈 F1–F17**（默认中文/UI 语言、应用级
+  档案确认队列、多图、结果操作行、检索完整度/覆盖审查等）、P6.6 多 OCR 版本/
+  词典辅助修复、P6.7 annotation DSL/Markdown/ruby/pitch、Agent 会话历史 UI、
+  真实 provider/API Key 与真实词典 sample/suggest 设备验收。详见
+  `docs/agent_docs/device-feedback-2026-10-31.md` 和 `docs/phase6-status.md`。
 
 **下一步：**
 
-- Phase 6：先做设计评审并取得用户批准，再按 §4 的顺序实施；未批准前不要写
-  Agent 代码、加 provider 依赖或改主页五按钮。
+- Phase 6：先按 `docs/agent_docs/device-feedback-2026-10-31.md` 的 Wave 1–4
+  处理实机反馈；F2（档案队列）完成前不要做 F7/F13/F14 的档案相关部分，F6 完成
+  前不要做 F7。之后再做 P6.6/P6.7；未实现能力仍不得写成已支持。
 - 分发前：release 仍使用 debug keystore，替换正式签名；Phase 5 可选增强
   （语料缩略图、更多空/错误态、无障碍细化）。
 - 本开发环境只有 x86_64 模拟器 `Medium_Phone_API_36.1`；Phase 5 UI 已在冷启动
@@ -1132,8 +1138,8 @@ Phase 5 已完成并发布；Phase 6 P6.1–P6.5 已实现，P6.6/P6.7 待做。
       切换页面不丢结果；外部修改选择后已有查询要自动刷新。
 93. **误区：选中词典时改变字体粗细/宽度来强调。**
     - 正确做法：只改背景/边框/文字色，保持同一字重和固定行高；否则 Wrap 会
-      重新换行，词典位置漂移并让结果区上下抖动。筛选条最多显示 3 行，其余
-      在筛选条内部纵向滚动。
+      重新换行，词典位置漂移并让结果区上下抖动。筛选条预留 3.5 行（第 4 行
+      半可见），其余在筛选条内部纵向滚动。
 94. **误区：继续用 SnackBar 显示“已保存”等轻提示。**
     - 正确做法：用根 Overlay 的 `RikaiToast` + `IgnorePointer`，否则底部气泡会
       拦截其覆盖区域的点击。
@@ -1323,7 +1329,7 @@ lib/services/mdict/mdict_worker.dart                          # MDict isolate / 
 lib/services/mdict/mdd_key.dart                               # MDD key 变体
 lib/services/mdict/mdict_header.dart                          # MDX 版本/Encrypted=2 校验
 lib/services/mdict/entry_renderer.dart                        # HTML 清洗/CSS/MDD 重写
-lib/features/lookup/dictionary_filter_bar.dart                # 简称/单选多选/全选/3 行滚动
+lib/features/lookup/dictionary_filter_bar.dart                # 简称/单选多选/全选/3.5 行滚动
 lib/core/models/lookup_match_mode.dart                        # 增量/完全/前方/后方匹配
 lib/features/lookup/lookup_mode_menu.dart                     # 标题栏书籍图标搜索模式菜单
 lib/state/lookup_preferences.dart                             # 全局词典选择（持久化）
@@ -1365,6 +1371,7 @@ docs/phase6-agent-design.md                                  # Phase 6 设计 v2
 docs/phase6-agent-contracts.md                               # Phase 6 工具/schema/状态机契约
 docs/phase6-status.md                                        # Phase 6 实现记录（P6.1–P6.5）
 docs/agent_docs/                                             # Agent 管线评审/已知问题（开发前必读）
+docs/agent_docs/device-feedback-2026-10-31.md                # F1–F17 实机反馈修正计划/波次
 docs/schemas/agent/                                          # Agent JSON Schema
 docs/dev-setup.md                                             # 构建/数据/缓存/集成测试
 docs/adr/                                                     # 四个架构决策（含 0004 Agent 边界）
@@ -1511,12 +1518,12 @@ adb push "mdicts/講談社 日本語大辞典 第二版 双解版" /sdcard/Downl
    P6.1–P6.5 改动未提交。不要覆盖或擅自 commit，除非用户明确要求。
 2. Phase 5 已结束（2026-10-30 用户确认并发布 1.0）；不要再把它当进行中。
    分发前替换 release debug keystore；可选增强只有语料缩略图/空错误态/无障碍。
-3. Phase 6 P6.1–P6.5 已实现（见 `docs/phase6-status.md`）；**下一步先读并处理
-   `docs/agent_docs/phase6-pipeline-review.md` 中的高优先级管线问题**，再继续
-   P6.6 多 OCR 版本/词典辅助修复，最后做 P6.7 annotation DSL/Markdown/ruby/
-   pitch/历史 UI/发布。不要重写已验证的 Paddle 横向路径或 MangaOCR 基础流水线；
-   新增 OCR 优化（mask/panel、cross-bubble batching、INT8 draft、tiling）应作为
-   独立增强并补回归。
+3. Phase 6 P6.1–P6.5 已实现（见 `docs/phase6-status.md`）；**下一步先按
+   `docs/agent_docs/device-feedback-2026-10-31.md` 的 Wave 1–4 处理 2026-10-31
+   实机反馈 F1–F17**，再继续 P6.6 多 OCR 版本/词典辅助修复，最后做 P6.7
+   annotation DSL/Markdown/ruby/pitch/历史 UI/发布。不要重写已验证的 Paddle
+   横向路径或 MangaOCR 基础流水线；新增 OCR 优化（mask/panel、cross-bubble
+   batching、INT8 draft、tiling）应作为独立增强并补回归。
 4. Phase 6 的真实 provider/API Key、secure storage 设备 I/O、真实词典
    `sample`/`suggest` 和 arm64 Agent 端到端仍未验收；不要把它们描述成已验证。
 5. 进行实网模型下载验证（本机模拟器 DNS 不可用）：在可访问 hf-mirror 的

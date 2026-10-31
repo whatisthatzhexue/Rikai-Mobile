@@ -7,10 +7,12 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 
 > **Status: P6.1–P6.5 core implemented; P6.6 (multi-OCR variants/repair) and
 > P6.7 (annotation DSL/Markdown/ruby/pitch/release) are not implemented.**
-> Automated tests use fake providers and never a real API key. On 2026-10-30 a
-> user-configured DeepSeek provider was smoke-tested on the x86_64 emulator
-> (key never logged); arm64/real manga-page and real-dictionary `sample`/
-> `suggest` acceptance still remain. The review backlog in
+> 2026-10-31 real-device feedback F1–F17 is documented but **not implemented**;
+> follow `docs/agent_docs/device-feedback-2026-10-31.md` before extending the
+> Agent. Automated tests use fake providers and never a real API key. On
+> 2026-10-30 a user-configured DeepSeek provider was smoke-tested on the x86_64
+> emulator (key never logged); arm64/real manga-page and real-dictionary
+> `sample`/`suggest` acceptance still remain. The review backlog in
 > `docs/agent_docs/phase6-pipeline-review.md` is authoritative for open gaps.
 
 ## Implemented
@@ -148,6 +150,47 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 - **Strict mode**: word notes always require citations in strict mode; unknown
   source/citation and empty results are rejected; debug-only raw-output logs.
 
+### 2026-10-31 real-device feedback backlog (documented, not implemented)
+
+The user reported 17 additional issues after a real-device P6.5 trial. The
+authoritative plan, current-code evidence, wave ordering and acceptance
+criteria are in
+[`docs/agent_docs/device-feedback-2026-10-31.md`](agent_docs/device-feedback-2026-10-31.md).
+Summary:
+
+- **Wave 1 (quick/low-risk)**: short citation pills (F4), remove `qN` markers
+  (F5), 3.5-row dictionary filters (F9), Chinese provider labels/presets (F10),
+  current-dictionary-only entry links (F15), app-scoped OCR download progress
+  (F16).
+- **Wave 2 (Agent lifecycle/UI)**: Chinese-first default and no input-language
+  heuristic (F1/F17), independent Agent dictionary preferences (F8), app-level
+  dictionary-profile inbox that gates tokenizing (F2), elapsed time across page
+  leave (F3), camera/gallery multi-image input (F11), full-screen sent-image
+  viewer (F12), profile manager (F13), result action row/copy/edit/regenerate
+  (F14).
+- **Wave 3 (evidence)**: global `AgentLimits` and exact → prefix → suffix →
+  incremental lookup (F6); one schema-constrained coverage review with at most
+  one supplementary lookup pass (F7); output-language field validation and one
+  repair (F1b).
+- F2 must precede F7/F13/F14 profile work. F6 must precede F7. F17 must precede
+  all Agent UI localization work. Do not start P6.6/P6.7 from this backlog.
+
+Current behavior that differs from the target:
+
+- `AgentPage.dispose()` detaches the profile handler and
+  `AgentRunController` returns `skipOnce` when no handler is attached
+  (`lib/state/agent_run_controller.dart:205-220`), so a profile generated while
+  the user is away is not saved and tokenizing can start. This is F2.
+- The default answer language is still `follow`, and `resolveAgentUiLanguage`
+  still infers Japanese/English from the input
+  (`lib/services/agent/agent_messages.dart:7-29`). This is F1/F17.
+- Agent dictionary selection is still seeded from the lookup preference and is
+  not independently persisted (`lib/features/agent/agent_page.dart:52-58`).
+  This is F8.
+- Evidence lookup is exact→prefix only and the `60` limit is hard-coded in
+  several places (`lib/services/agent/evidence_builder.dart:23-25`,
+  `lib/services/agent/agent_orchestrator.dart:45-47`). This is F6.
+
 ## Tests and build
 
 ```text
@@ -183,29 +226,34 @@ New test files include: `agent_models_test.dart`, `lookup_gateway_test.dart`,
 
 ## Not implemented / next
 
-1. **P6.6 multi-OCR**: `ocr.consensus` variants, diff/hit-rate scoring,
+1. **2026-10-31 device feedback (F1–F17)**: execute the wave order in
+   `docs/agent_docs/device-feedback-2026-10-31.md`. Wave 1 quick UI/non-Agent
+   fixes; Wave 2 language/profile queue/multi-image/action row; Wave 3 lookup
+   completeness + coverage review. **Do not start P6.6/P6.7 until these
+   feedback items are closed or explicitly deferred.**
+2. **P6.6 multi-OCR**: `ocr.consensus` variants, diff/hit-rate scoring,
    dictionary-assisted repair suggestions and the Agent OCR-version UI. The
    current Agent uses one OCR mode per image.
-2. **P6.7**: annotation DSL, Markdown/ruby/pitch rendering, history/session UI
+3. **P6.7**: annotation DSL, Markdown/ruby/pitch rendering, history/session UI
    (tables exist; no write/read UI yet), provider test-connection, release
    packaging/licence review.
-3. Real device verification: provider network calls with a real key, MDict
+4. Real device verification: provider network calls with a real key, MDict
    `sample`/`suggest` against the 463k-entry dictionary, Agent end-to-end on
    arm64, and secure-storage read/write/clear on device.
-4. Agent conversation persistence: `AgentStore` schema is ready, but the
+5. Agent conversation persistence: `AgentStore` schema is ready, but the
    controller keeps the current run only in memory; history/UI persistence and
    process-death recovery are pending.
-5. Tool calling: removed by decision (2026-10-31). The pipeline is fixed and the
+6. Tool calling: removed by decision (2026-10-31). The pipeline is fixed and the
    model has no tools; the contracts keep the tool table only as a future
    reference. Reintroducing tool calls requires a new ADR plus tool_use/
    tool_result message support.
-6. Provider reliability: OpenAI/Anthropic now use a provider-neutral cancel
+7. Provider reliability: OpenAI/Anthropic now use a provider-neutral cancel
    token, retry 429/5xx/timeouts up to 3 attempts, parse multi-line SSE data and
    stream error objects. Remaining: familiarization cancellation and exposing a
    structured retryable error detail for every provider failure.
-7. No commit/reset was performed by this session; the tree also contains an
+8. No commit/reset was performed by this session; the tree also contains an
    external save-point commit (`c79d03f`) that predates the latest edits.
-8. **Conversational Agent UI v2**: `docs/design-tokens.md` defines the
+9. **Conversational Agent UI v2**: `docs/design-tokens.md` defines the
    message-first Agent layout (about 80% message area, ≥70% on small screens,
    16/4 bubbles, fixed composer, streaming/stop, folded evidence, error cards,
    grouped settings). The current P6.5 page has the conversation layout

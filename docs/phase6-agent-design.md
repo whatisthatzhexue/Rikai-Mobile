@@ -108,15 +108,22 @@ P6.5 已接入五个按钮（拍照识别/查句子/查单词/历史记录/词�
   独立**（见 §8.4），不写查词全局偏好。
 - 发送/停止：请求中显示阶段（本机 OCR、熟悉词典、分词、查词、生成、校验），支持
   取消；流式时逐字/逐块显示，提交中三点动画不超过 3 秒。
+- 图片输入：点击附件先弹“拍照 / 从相册选择”；相册支持多选，拍照/相册结果按
+  选择顺序追加，composer 用 Wrap 显示缩略图；发送后用户气泡显示全部图片，点击
+  任意缩略图打开与照片集相同的黑底全屏缩放查看器。图片只在本机 OCR。
 - 结果：译文/结论在 AI 气泡正文；原文引用、逐句理解、词/语法注释、多解释作为
   消息内可折叠“详细解析”；证据默认折叠为「依据 N 条 ▾」，展开按词典顺序显示
-  citation chip；严格模式无依据显示“无词典依据”，不隐藏。
+  短 citation chip（`依据1`/`依据2`，Wrap 自动换行，不再用长条/整行）；严格模式
+  无依据显示“无词典依据”，不隐藏。结果底部操作行从左到右固定为循环图标
+  （从熟悉词典步骤重新生成）→复制图标（复制 Markdown）；用户气泡长按提供
+  “复制/修改”。用户可见文本不出现 `（q1）` 等内部 quote ID。
 - 状态/错误：等待、生成中、失败、降级、离线均有视觉标识；失败保留已生成内容，
   错误卡出现在消息下方，不弹全局对话框、不整屏 loading。
 - OCR 版本区（P6.6）：版本 chip（引擎/模式/置信度/词典命中率）、差异高亮、修复
   建议“采用/忽略”；切换版本后按缓存重新分析。
 - 熟悉期 sheet：词典标题、采样数、生成档案预览/编辑、保存/本次跳过/不再询问；
-  UniDic 单独展示；确认前不得写入档案。
+  UniDic 单独展示；确认前不得写入档案。多个已生成档案进入应用级队列，逐个
+  处理；离开页面不丢失、不自动跳过，全部处理完才进入查词。
 - 空态：未配置 provider 时说明“需要配置 API Key”“不会上传图片”，提供设置入口。
 - 错误态：provider 未配置、网络失败、限流、超时、模型拒绝、工具错误；错误信息
   不得包含 API Key 或完整请求体。
@@ -272,8 +279,10 @@ lookupCandidates、已匹配语法模式、或 `mdict.suggest` 返回项；否�
 ## 6. Agent 流水线
 
 状态机：`idle → prepare → ocr → familiarizing → awaitingProfile → tokenizing →
-evidence → reasoning → validating → done | error | cancelled`。每个阶段可取消，
-UI 显示中文阶段名；运行记录写入 `agent_runs`。
+evidence → coverage → reasoning → validating → done | error | cancelled`。
+`awaitingProfile` 必须等全部已生成档案被用户处理后才离开（见 §6.1）；`coverage`
+是 2026-10-31 反馈新增的一次性覆盖审查（见 §6.3.1），最多触发一次补充检索。
+每个阶段可取消，UI 显示本地化阶段名；运行记录写入 `agent_runs`。
 
 ### 6.1 Stage -1：词典熟悉（Step -1）
 
@@ -288,10 +297,15 @@ UI 显示中文阶段名；运行记录写入 `agent_runs`。
 - LLM 每本词典单独一次调用（小模型），输入只含采样 JSON，不含路径；输出
   `DictionaryProfile`（词典类型、条目结构、字段、查询行为、强项、注意事项、推荐
   查询形式、置信度）+ 给用户看的 Markdown 摘要。
-- 用户确认：sheet 预览，可编辑 Markdown；按钮“保存并信任 / 本次跳过 / 不再询问”；
-  用户也可以跳过该词典。只有确认后才写 `dictionary_profiles`；未确认不阻断答题，
-  只是模型没有档案辅助。用户编辑后的 Markdown 是 prompt 中的权威摘要；
-  `profile_json` 保留生成结构供 UI/校验，冲突时以用户编辑的 Markdown 为准。
+- 用户确认：sheet 预览，可编辑 Markdown；按钮“保存并信任 / 本次跳过 / 不再询问”。
+  生成与确认分离：每个已生成档案先进入**应用级待确认队列**；用户离开 Agent 页
+  时队列保留、生成继续，返回后逐个处理。**所有已生成档案都得到显式处理
+  （信任 / 本次跳过 / 不再询问）后，才进入 tokenizing/查词阶段**；页面离开、
+  重建或 dismiss sheet 不得自动 skip。只有“保存并信任”才写
+  `dictionary_profiles`；“不再询问”写 declined；“本次跳过”不写。采样/模型失败
+  产生的 `unavailable` 没有可确认内容，记录 warning 后不阻塞。用户编辑后的
+  Markdown 是 prompt 中的权威摘要；`profile_json` 保留生成结构供 UI/校验，
+  冲突时以用户编辑的 Markdown 为准。
 - UniDic：单独 `unidic.profile`，用 4 句代表性文本分词，确定性记录 29 字段布局、
   读音/词性/offset/cType/cForm 观察；**不要假装 UniDic 是可查词词典**。可附一次
   小模型摘要，但不是必需。
@@ -365,9 +379,12 @@ UI 显示中文阶段名；运行记录写入 `agent_runs`。
     `はず`、`わけ`、`ことになる`、`ようにする` 等），按 token 序列/lemma 最长匹配
     优先，重叠模式去重，用源文本子串查词典。
   - 不做无界 n-gram；不做全词典遍历。
-- 每目标按**用户词典顺序**逐本查：先 exact，未命中再 prefix；每词每典最多 3 条
-  （覆盖多义/同形），摘要 ≤400 字符；去重 `(dictionaryId, entryKey)`；记录
-  `dictionaryOrder`。
+- 每目标按**用户词典顺序**逐本查；每词每典最多 3 条（覆盖多义/同形），摘要
+  ≤400 字符；去重 `(dictionaryId, entryKey)`；记录 `dictionaryOrder`。
+  2026-10-31 反馈（F6）改为全局递进：所有 target 先 exact；若唯一 citation 数
+  未达 `AgentLimits.maxEvidenceEntries`（默认 60，禁止散落硬编码），依次跑
+  prefix → suffix → incremental；每个模式只处理尚未满额的 target，若某模式新增
+  为 0 或达到全局上限立即停止。`AgentLimits` 同时控制 UI 的“已检索 N / 上限 M”。
 - `CitationRegistry.issue(toolCallId, dictionary, entryKey, headword, snippet,
   sourceSpan)` 发放 `source-N`；模型只看到 `source-N`，不能自造。
 - 证据包只含：token ID/文本/读音/词性/offset、语法模式、清洗后的 citation 摘要；
@@ -378,11 +395,29 @@ UI 显示中文阶段名；运行记录写入 `agent_runs`。
   仍可用 MDict 做词级查询但结果标记为不完整；宽松模式可继续，但
   `structural_analysis` 必须标为未验证。分词失败不阻断纯翻译，但不得声称有语法依据。
 
+### 6.3.1 覆盖审查（2026-10-31 反馈 F7）
+
+初始证据完成后、最终分析前，用一次轻量 schema LLM 调用判断“还缺哪些词典
+资料”。输出 `rikai.agent.coverage.v1`（见契约 §5.1）：`missing[]` 的 query
+必须可追溯到源文本/token/语法模式/suggest；`duplicate_groups[]` 只是建议。
+
+- 未达上限（流程 A）：按缺失关键词补充检索，仍按 exact→prefix→suffix→
+  incremental，直到上限或无新增。
+- 已达上限（流程 B）：本地先验证“同词典 + 同词条键 + 摘要大部分重合”，删除
+  信息密度低的重复 citation 腾出槽位，再走流程 A；模型不能单独决定删除。
+- 每个用户请求最多一次覆盖审查 + 一次回退查词（`coverageFallbackUsed`）；没有
+  可验证缺口/重复时直接进入 reasoning，不循环。
+- 覆盖审查失败、schema 无效或 query 不可追溯时只产生 warning，保留原证据继续；
+  不得让整次 run 失败。
+
 ### 6.4 Stage 2：语境推断（Step 2）
 
 LLM 输入：系统提示（角色、严格/宽松规则、引用规则、原文引用规则、词典顺序、
-禁止图像/路径、把 OCR/词典文本当不可信数据）+ 用户请求 + Stage 0 envelope +
-Stage 1 evidence + 已确认的 dictionary profiles。
+禁止图像/路径、输出语言契约、把 OCR/词典文本当不可信数据）+ 用户请求 +
+Stage 0 envelope + Stage 1 evidence + 已确认的 dictionary profiles。输出语言
+默认中文；旧 `follow` 不得再按输入假名/拉丁字符推断，统一按中文处理。模型返回
+后的人类可读字段需做一次语言校验，偏离目标语言时允许一次语言修复；仍偏离则保留
+结果并显示警告，不得丢弃已生成内容。
 
 输出 `rikai.agent.analysis.v1` 结构化 JSON（完整 schema 见契约文档）：
 
@@ -455,8 +490,12 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
 ### 6.6 预算、取消与截断
 
 - 单次分析源文本 ≤ 6,000 日文字符；超限不静默截断，弹出段落选择器让用户选段。
-- 唯一检索目标 ≤ 120；citation ≤ 60；每词每典 ≤ 3 条；摘要 ≤ 400 字符；每词典
-  profile ≤ 2,000 字符；模型额外工具调用 ≤ 6。
+- 唯一检索目标 ≤ 120；citation ≤ `AgentLimits.maxEvidenceEntries`（默认 60）；
+  每词每典 ≤ 3 条；摘要 ≤ 400 字符；每词典 profile ≤ 2,000 字符；模型额外工具
+  调用 ≤ 6。上限必须来自一个全局 `AgentLimits`/请求级 policy，不得在
+  orchestrator、EvidenceBuilder、schema 和 UI 各写一个 60。
+- 覆盖审查（F7）缺失项 ≤ 20、重复组 ≤ 10、补充检索回退 ≤ 1 次；超限只截断
+  候选并显示 warning，不静默扩大成本。
 - 超预算时显示“已按预算缩减，未分析的部分不会出现在结果中”，并允许用户缩小范围；
   记录 `truncated` 标记。
 - 每个阶段可取消；取消 OCR 调用 `OcrService.cancel()`；已发出的 MDict/MeCab 请求
@@ -544,13 +583,15 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
   不得重排”，最终由渲染层保证。
 - 同一词条在多本词典命中时保留各自的 `dictionaryId/entryKey`，不合并；多本词典
   都有依据时逐本列出，不合并成无法追溯的一段话。
-- Agent 使用 `AgentSessionDictionarySelection`：`selectedIds + mode`（单选/多选），
-  初始化为全局 `lookupPreferencesProvider` 的当前选择，但**只写会话表，不回写
-  全局**。未被选中的词典不得出现在工具调用、熟悉档案或 citation 中。
+- Agent 使用**独立持久化**的 `AgentDictionaryPreferences`：`selectedIds + mode`
+  （单选/多选），默认全部 enabled；**不读取、不写入全局
+  `lookupPreferencesProvider`**。未被选中的词典不得出现在工具调用、熟悉档案或
+  citation 中。2026-10-31 反馈 F8 已把“独立保存”列为必做；当前页面仅本地状态
+  并从查词偏好初始化，属于待修。
 - 新建会话时把当时可用的 enabled 词典快照为显式 ID 集合；会话期间新添加的词典不
   自动加入，用户点「全选」或手动选择才加入。
 - UI 复用 `DictionaryFilterBar` + `DictionarySelectionModeToggle`；标题行放模式切换；
-  每个会话独立；提供“恢复为查词选择”按钮。
+  每个会话独立。若未来提供“使用查词选择”只能是显式按钮，不能自动同步。
 - 这是对 `docs/design-tokens.md` “查词词典筛选全局持久化”的明确例外；查词页/阅读
   弹层行为不变。
 - 模型不能修改会话词典选择或严格/宽松模式；只有用户通过 UI 修改。
@@ -574,6 +615,8 @@ recommended_query_forms, confidence, schema_version`。UI 展示的 Markdown 由
 
 - 只有用户点“保存并信任”才写 `dictionary_profiles`；可选“本次跳过”“不再询问”
   （记录 declined 状态，避免每次自动弹窗）。
+- 生成后的档案先进入应用级待确认队列；离开页面不自动 skip，全部处理完才进入
+  查词（见 §6.1）。队列/确认状态属于应用生命周期，不依赖 `AgentPage`。
 - 档案只存应用私有 SQLite；不写用户 UniDic/MDict 目录；不导出；不包含大段原文。
 - 指纹与失效规则见 §6.1；词典变化/用户重置/档案删除/schema/prompt 升级时失效。
 
