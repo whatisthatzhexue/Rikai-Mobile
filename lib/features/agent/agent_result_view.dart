@@ -568,6 +568,9 @@ class _CitationChip extends StatelessWidget {
         onTap: () => onTap(citation),
         child: Container(
           height: AgentTokens.citationChipHeight,
+          constraints: const BoxConstraints(
+            minWidth: AgentTokens.citationChipMinWidth,
+          ),
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
           decoration: BoxDecoration(
             color: AgentTokens.citationSurface,
@@ -575,7 +578,7 @@ class _CitationChip extends StatelessWidget {
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
                 '依据$number',

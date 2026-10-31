@@ -168,6 +168,7 @@ abstract final class AgentTokens {
   static const double evidenceTitle = 16;
   static const double citationChip = 12;
   static const double citationChipHeight = 24;
+  static const double citationChipMinWidth = 48;
   static const double stageText = 14;
   static const double badge = 12;
   static const double evidenceRadius = AppRadius.md;
