@@ -188,7 +188,7 @@ Wave 1 implementation (2026-10-31):
   the model page subscribes and re-enters with the current progress/cancel state.
 - Citation chips use the compact 24dp pill and `Wrap`; evidence rows no longer
   use the long `依据N · 查看` string. Unresolved items no longer show `（q1）`.
-- Wave 1 verification: `flutter analyze` clean, 212 tests passed, debug APK
+- Wave 1 verification: `flutter analyze` clean, 213 tests passed, debug APK
   built. Device visual/navigation/download acceptance remains for Wave 4.
 
 Current behavior that differs from the target:
@@ -211,7 +211,7 @@ Current behavior that differs from the target:
 
 ```text
 flutter analyze  -> No issues found
-flutter test     -> 212 tests passed
+flutter test     -> 213 tests passed
 flutter build apk --debug -> success
 ```
 

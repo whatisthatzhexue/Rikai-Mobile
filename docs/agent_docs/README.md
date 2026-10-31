@@ -59,7 +59,7 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
 > 该表只记录评审结论；修复后请更新为 `fixed` / `partially fixed` 并附验证记录。
 > 2026-10-30 设备验证：模拟器 x86_64 上图片 OCR → 分词 → MDict 查词 →
 > DeepSeek 流式分析（阶段 + 已思考时长）→ 中文译文/逐句/原文/词典依据
-> 已跑通；Wave 1 后 212 tests 与 debug APK 构建通过。仍不要据此开始 P6.6/P6.7。
+> 已跑通；Wave 1 后 213 tests 与 debug APK 构建通过。仍不要据此开始 P6.6/P6.7。
 
 ### 2026-10-31 实机反馈（F1–F17）
 

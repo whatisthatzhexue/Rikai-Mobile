@@ -320,6 +320,8 @@ class _SegmentBlock extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.sm),
               child: Wrap(
+                alignment: WrapAlignment.start,
+                crossAxisAlignment: WrapCrossAlignment.start,
                 spacing: AppSpacing.xs,
                 runSpacing: AppSpacing.xs,
                 children: [
@@ -571,12 +573,15 @@ class _CitationChip extends StatelessWidget {
             color: AgentTokens.citationSurface,
             borderRadius: BorderRadius.circular(AppRadius.pill),
           ),
-          alignment: Alignment.center,
-          child: Text(
-            '依据$number',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: AgentTokens.citationChip,
-              color: AgentTokens.citationText,
+          child: Center(
+            widthFactor: 1,
+            heightFactor: 1,
+            child: Text(
+              '依据$number',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: AgentTokens.citationChip,
+                color: AgentTokens.citationText,
+              ),
             ),
           ),
         ),

@@ -4,9 +4,9 @@
   未开始 P6.6/P6.7。**
 - 来源：用户实机使用 P6.5 后提出的 17 项反馈（本文件按原编号 F1–F17 记录）。
 - 基线：P6.5 固定流水线、应用级 `AgentRunController`；Wave 1 后
-  `flutter analyze` 无问题、212 tests 通过、debug APK 构建成功。真实
+  `flutter analyze` 无问题、213 tests 通过、debug APK 构建成功。真实
   arm64/漫画页验收仍未完成；本文件不改变已有验证记录。
-- Wave 1 验证：`flutter test` 212 passed；`flutter build apk --debug` 成功。
+- Wave 1 验证：`flutter test` 213 passed；`flutter build apk --debug` 成功。
   F4/F5/F9/F10 有 widget/unit 覆盖；F15 有请求范围 unit 测试；F16 有
   controller 进度/取消测试。设备手工验收仍待 Wave 4。
 - 约束：不 commit/reset；不覆盖已有评审结论；图片仍只在本机 OCR；API Key 仍只
@@ -696,7 +696,7 @@ AgentCoverageReview          // F7 覆盖审查结果
 5. **F4** citation 短胶囊。
 6. **F5** 去除 qN 标记。
 
-验证：`flutter analyze` 无问题；完整 `flutter test` 212 passed；
+验证：`flutter analyze` 无问题；完整 `flutter test` 213 passed；
 `flutter build apk --debug` 成功。设备手工验收留到 Wave 4。
 
 每项完成后 `flutter analyze`；本波结束跑 `flutter test`。

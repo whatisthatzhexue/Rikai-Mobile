@@ -257,7 +257,6 @@ class _ProviderRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final kind = AgentProviderPreset.forConfig(provider).label;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Row(
@@ -276,14 +275,21 @@ class _ProviderRow extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
-                  '$kind · ${provider.baseUrl}',
+                  '接口地址：${provider.baseUrl}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: AppTypography.helper,
                     color: AppColors.textSecondary,
                   ),
                 ),
                 Text(
-                  '快速模型：${provider.smallModel}　高精度模型：${provider.complexModel}',
+                  '复杂模型：${provider.complexModel}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: AppTypography.helper,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                Text(
+                  '简单模型：${provider.smallModel}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: AppTypography.helper,
                     color: AppColors.textSecondary,
@@ -449,7 +455,6 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 decoration: InputDecoration(
                   labelText: '接口地址',
                   hintText: 'https://api.deepseek.com/',
-                  helperText: 'API 的访问地址，通常以 https:// 开头',
                   errorText: _baseUrlError,
                   isDense: true,
                 ),
@@ -460,7 +465,6 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 controller: _smallModel,
                 decoration: const InputDecoration(
                   labelText: '快速模型',
-                  helperText: '用于词典档案和资料检查，可选速度较快的模型',
                   isDense: true,
                 ),
               ),
@@ -470,7 +474,6 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 controller: _complexModel,
                 decoration: const InputDecoration(
                   labelText: '高精度模型',
-                  helperText: '用于最终解析；留空时回退到快速模型',
                   isDense: true,
                 ),
               ),
@@ -482,6 +485,24 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                   labelText: '接口密钥（API Key）',
                   hintText: editing ? '留空则不修改' : '',
                   isDense: true,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                '快速模型用于词典档案和资料检查。',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: AppTypography.helper,
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                '高精度模型用于最终解析。',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: AppTypography.helper,
+                  color: AppColors.textSecondary,
+                  height: 1.5,
                 ),
               ),
             ],

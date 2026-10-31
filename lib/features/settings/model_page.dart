@@ -391,7 +391,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('退出后下载会继续在后台进行。再次下载时会从已完成的断点继续。'),
+              const Text('退出后下载会继续在后台进行。'),
               const SizedBox(height: AppSpacing.sm),
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
@@ -662,7 +662,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
             ),
           ),
           Text(
-            '可以离开本页，下载会继续；再次下载时会从断点继续。',
+            '可以离开本页，下载会继续。',
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: AppTypography.helper,
               height: 1.5,
@@ -692,18 +692,25 @@ class _ModelPageState extends ConsumerState<ModelPage> {
             (download.status == OcrModelDownloadStatus.failed ||
                 download.status == OcrModelDownloadStatus.cancelled)) ...[
           const SizedBox(height: AppSpacing.xs),
-          Text(
-            download.error.isEmpty ? '下载未完成' : download.error,
-            style: theme.textTheme.bodyMedium?.copyWith(color: AppColors.error),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: () => ref
-                  .read(ocrModelDownloadControllerProvider.notifier)
-                  .dismiss(set.id),
-              child: const Text('关闭提示'),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  download.error.isEmpty ? '下载未完成' : download.error,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: download.status == OcrModelDownloadStatus.cancelled
+                        ? AppColors.textSecondary
+                        : AppColors.error,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => ref
+                    .read(ocrModelDownloadControllerProvider.notifier)
+                    .dismiss(set.id),
+                child: const Text('关闭提示'),
+              ),
+            ],
           ),
         ],
         if (set.id == 'manga_ocr') ...[
@@ -724,6 +731,11 @@ class _ModelPageState extends ConsumerState<ModelPage> {
             if (status?.isInstalled != true)
               OutlinedButton.icon(
                 onPressed: busy ? null : () => _download(set),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  disabledForegroundColor: AppColors.textTertiary,
+                  side: const BorderSide(color: AppColors.border),
+                ),
                 icon: const Icon(Icons.download_outlined),
                 label: const Text('下载'),
               ),
@@ -731,17 +743,32 @@ class _ModelPageState extends ConsumerState<ModelPage> {
               OutlinedButton.icon(
                 onPressed: busy ? null : () => _delete(set),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.error,
-                  side: const BorderSide(color: AppColors.error),
+                  foregroundColor: busy
+                      ? AppColors.textTertiary
+                      : AppColors.error,
+                  disabledForegroundColor: AppColors.textTertiary,
+                  side: BorderSide(
+                    color: busy ? AppColors.border : AppColors.error,
+                  ),
                 ),
-                icon: const Icon(Icons.delete_outline, color: AppColors.error),
-                label: const Text(
+                icon: Icon(
+                  Icons.delete_outline,
+                  color: busy ? AppColors.textTertiary : AppColors.error,
+                ),
+                label: Text(
                   '删除',
-                  style: TextStyle(color: AppColors.error),
+                  style: TextStyle(
+                    color: busy ? AppColors.textTertiary : AppColors.error,
+                  ),
                 ),
               ),
             OutlinedButton.icon(
               onPressed: busy ? null : () => _import(set),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                disabledForegroundColor: AppColors.textTertiary,
+                side: const BorderSide(color: AppColors.border),
+              ),
               icon: const Icon(Icons.folder_open_outlined),
               label: const Text('本地导入'),
             ),
