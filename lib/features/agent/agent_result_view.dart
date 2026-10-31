@@ -573,16 +573,18 @@ class _CitationChip extends StatelessWidget {
             color: AgentTokens.citationSurface,
             borderRadius: BorderRadius.circular(AppRadius.pill),
           ),
-          child: Center(
-            widthFactor: 1,
-            heightFactor: 1,
-            child: Text(
-              '依据$number',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: AgentTokens.citationChip,
-                color: AgentTokens.citationText,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.start,
+            children: [
+              Text(
+                '依据$number',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: AgentTokens.citationChip,
+                  color: AgentTokens.citationText,
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),

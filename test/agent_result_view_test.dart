@@ -126,6 +126,11 @@ void main() {
     expect(find.textContaining('（q1）'), findsNothing);
     expect(find.textContaining('· 查看'), findsNothing);
 
+    final chip = find
+        .ancestor(of: find.text('依据1').first, matching: find.byType(Container))
+        .first;
+    expect(tester.getSize(chip).width, lessThan(100));
+
     await tester.tap(find.text('依据1').first);
     expect(tapped?.id, 'source-1');
   });
