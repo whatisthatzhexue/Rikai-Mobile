@@ -9,7 +9,10 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > P6.7 (annotation DSL/Markdown/ruby/pitch/release) are not implemented.**
 > 2026-10-31 real-device feedback F1–F17: **Wave 1 (F4/F5/F9/F10/F15/F16) is
 > implemented; Waves 2–4 are pending**; follow
-> `docs/agent_docs/device-feedback-2026-10-31.md` before extending the Agent. Automated tests use fake providers and never a real API key. On
+> `docs/agent_docs/device-feedback-2026-10-31.md` before extending the Agent.
+> **Current test/device/build/environment numbers are centralized in
+> `docs/project-data.md`; do not copy them here.** Automated tests use fake
+> providers and never a real API key. On
 > 2026-10-30 a user-configured DeepSeek provider was smoke-tested on the x86_64
 > emulator (key never logged); arm64/real manga-page and real-dictionary
 > `sample`/`suggest` acceptance still remain. The review backlog in
@@ -188,8 +191,9 @@ Wave 1 implementation (2026-10-31):
   the model page subscribes and re-enters with the current progress/cancel state.
 - Citation chips use the compact 24dp pill and `Wrap`; evidence rows no longer
   use the long `依据N · 查看` string. Unresolved items no longer show `（q1）`.
-- Wave 1 verification: `flutter analyze` clean, 213 tests passed, debug APK
-  built. Device visual/navigation/download acceptance remains for Wave 4.
+- Wave 1 verification: `flutter analyze` clean; current test/build results in
+  `docs/project-data.md` §2/§5. Device visual/navigation/download acceptance
+  remains for Wave 4.
 
 Current behavior that differs from the target:
 
@@ -210,15 +214,15 @@ Current behavior that differs from the target:
 ## Tests and build
 
 ```text
-flutter analyze  -> No issues found
-flutter test     -> 213 tests passed
-flutter build apk --debug -> success
+flutter analyze  -> No issues found (see docs/project-data.md §2.1)
+flutter test     -> see docs/project-data.md §2.1
+flutter build apk --debug -> see docs/project-data.md §5
 ```
 
-Device integration on the x86_64 emulator: MeCab/UniDic 4/4 passed;
-MDict 5/6 passed (home label now reaches the search page, but the final search
-assertion did not find `とうきょう【東京】`; this is the pre-existing non-Agent
-search test, not an Agent path). No arm64/real-device Agent run was performed.
+Device integration: current suite counts/results are in
+`docs/project-data.md` §3. Known issue: MDict's final search assertion does not
+find `とうきょう【東京】`; this is the pre-existing non-Agent search test, not
+an Agent path. No arm64/real-device Agent run was performed.
 
 Device smoke: a real gallery image (`何卒宜しくお願い致します。\n東京で食べた。`)
 completed on-device OCR → UniDic → MDict evidence → DeepSeek streaming analysis

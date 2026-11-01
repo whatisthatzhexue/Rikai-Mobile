@@ -2,11 +2,9 @@
 
 ## Toolchain
 
-- Flutter 3.38.9 (Dart 3.10.8), native assets enabled
-- Android SDK 36, build-tools 36.1.0, platform android-36
-- NDK **28.2.13676358** (installed at `%LOCALAPPDATA%\Android\Sdk\ndk`)
-- JDK 17+ (Android Studio JBR 21 works)
-- CMake 3.22.1 (only needed if MeCab native assets are replaced by a CMake module)
+- 精确的 Flutter/Dart、Android SDK/build-tools/platform、NDK、JDK、CMake 版本
+  统一见 [docs/project-data.md](project-data.md) §1；不要在本页复制第二份版本表。
+- 安装时启用 native assets；CMake 3.22.1 仅在替换 MeCab native assets 时需要。
 
 ## Project location
 
@@ -140,10 +138,11 @@ directory; Settings → “语料与存储” can clear the corpus or the extrac
 resource cache. The release build still signs with the debug keystore
 (`android/app/build.gradle.kts` has a TODO) — replace it before distribution.
 
-The current unit/widget suite is 149 tests. It includes onboarding, reader text
-saving, photo-block serialization and corpus image resize/JPEG tests; no desktop
-SQLite test dependency is used because `sqflite_common_ffi` pulls a native
-SQLite download that breaks offline Android builds.
+当前测试数量、测试文件和设备套件结果统一见
+[docs/project-data.md](project-data.md) §2–§3；本页不再重复具体数字。测试包含
+onboarding、阅读器保存、photo-block 序列化和语料图片缩放/JPEG；不使用桌面
+SQLite 测试依赖，因为 `sqflite_common_ffi` 会拉取原生 SQLite 下载并破坏离线
+Android 构建。
 
 ## Emulator
 

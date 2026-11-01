@@ -62,7 +62,8 @@ history/release polish) are not implemented.
   per photo/mode/text; settings also clear the extracted MDict resource cache
   without touching dictionary files
 - Phase 5 release packaging: arm64 release APK builds successfully
-  (`app-arm64-v8a-release.apk`, about 60 MB); the onboarding/corpus/settings
+  (`app-arm64-v8a-release.apk`; size 见 [project-data](docs/project-data.md) §5);
+  the onboarding/corpus/settings
   flows were user-confirmed on a cold-booted emulator. The APK currently uses
   the debug keystore for development.
 - MDict folder import recursively scans subfolders, previews importable/existing/
@@ -97,8 +98,8 @@ history/release polish) are not implemented.
 
 ### Phase 6 in progress: dictionary assistant
 
-Phase 6 P6.1–P6.5 core is implemented; the home screen now has five actions:
-`拍照识别`, `查句子`, `查单词`, `历史记录`, and `词典助手`.
+Phase 6 P6.1–P6.5 core is implemented; 主页功能按钮的数量、顺序和固定文案见
+[project-data](docs/project-data.md) §7，不在本文件重复。
 
 - Capability ports wrap the existing OCR/UniDic/MDict services; a pure
   `LookupGateway` keeps UI and Agent lookup behavior aligned; the unused
@@ -146,8 +147,8 @@ Next: finish the feedback backlog, then P6.6/P6.7 and arm64/device acceptance. S
 
 ## Requirements
 
-- Flutter 3.38+ / Dart 3.10+
-- Android SDK 36, NDK 28.2.13676358
+- 精确的 Flutter/Dart/SDK/NDK、测试和设备基线统一见
+  [docs/project-data.md](docs/project-data.md) §1；本文件不重复具体版本号。
 - User-supplied UniDic (MeCab compiled dictionary) and MDict `.mdx` files
 - **HarmonyOS Sans SC Regular**, downloaded by the user (not in this repository):
   place it at `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`; see
@@ -197,6 +198,7 @@ build contains the P6.1–P6.5 Agent/provider implementation; P6.6/P6.7 and the
 - [Phase 6 agent design v2](docs/phase6-agent-design.md)
 - [Phase 6 agent contracts](docs/phase6-agent-contracts.md)
 - [Phase 6 implementation status](docs/phase6-status.md)
+- [Project test/verification data](docs/project-data.md)
 - [Development setup](docs/dev-setup.md)
 - [Models](docs/models.md)
 - [Architecture decisions](docs/adr/)

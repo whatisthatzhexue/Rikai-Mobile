@@ -784,7 +784,8 @@ Phase 6 实施后至少覆盖：
 当前实现验收（P6.1–P6.5）：
 
 - `docs/schemas/agent/*.schema.json` 均可解析为合法 JSON。
-- `flutter analyze` 无问题；`flutter test` 199 项通过；debug APK 构建成功。
+- `flutter analyze` 无问题；当前测试/构建基线见
+  [`docs/project-data.md`](project-data.md) §2/§5；debug APK 构建成功。
 - x86_64 模拟器真实图片 + DeepSeek 跑通实时生成、中文译文/逐句/原文/词典依据；
   仍待 arm64/真实漫画页验收。
 - 主页五按钮已接入，Agent 页/Provider 设置/熟悉期/证据/引用/校验可用。

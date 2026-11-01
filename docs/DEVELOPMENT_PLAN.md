@@ -14,6 +14,9 @@
 > `docs/phase4.5-status.md`。该阶段已于 2026-10-30 通过 arm64/真实设备验收并关闭；
 > **Phase 5（语料/历史、首次引导与发布打磨）也已于 2026-10-30 完成并由用户确认。**
 > Phase 6 P6.1–P6.5 已实现并提交；后续进度以 `docs/phase6-status.md` 为准。
+>
+> **当前测试/环境/性能/开发数据统一见 `docs/project-data.md`。** 本文中的历史
+> 调研数值（日期、文件大小、性能）仅作为当时背景，不再作为当前基线引用。
 
 ---
 
@@ -37,26 +40,31 @@
 ### 2.1 UniDic（用户自备，开发期在 `unidic/`）
 
 - 版本：現代書き言葉 UniDic ver. 2025.12，MeCab 编译后的二进制格式，**不是 CSV**。
-- 必需运行文件：`sys.dic`（283.9MB）、`matrix.bin`（1,029.5MB）、`char.bin`（262KB）、`unk.dic`（5.8KB）、`dicrc`（1KB），合计 **约 1.313GB**。
-- `sys.dic` 头部：版本 102、UTF-8、1,027,505 条词条。
+- 必需运行文件：`sys.dic`、`matrix.bin`、`char.bin`、`unk.dic`、`dicrc`；
+  文件大小/词条数/总大小见 [`docs/project-data.md`](project-data.md) §6。
 - 许可证：GPL v2 / LGPL v2.1 / 修正 BSD 三选一；本项目**不随包分发**，仅读取用户路径，但仍需在“关于/许可证”中提示。
 - 无 `mecabrc`；`mecab_for_dart` 默认强制 `-r <dicdir>/mecabrc`，直接使用原始目录会失败，且不应向用户的 UniDic 目录写文件。
 - 29 个特征字段（已通过 `sys.dic` 样本验证）：
   - `0-3` pos1-4，`4` cType，`5` cForm，`6` lForm/語彙素読み，`7` lemma，`8` orth，`9` pron，`10` orthBase，`11` pronBase，`12` goshu；
   - `20` kana（仮名形出現形，**注音首选**），`21` kanaBase，`24-26` accent，`27` lid，`28` lemma_id。
-- 1GB 矩阵必须按需 mmap，不能整体读入 Dart 内存；64 位 ABI 基本是硬要求。
+- 大型 `matrix.bin`（大小见 `project-data.md` §6）必须按需 mmap，不能整体读入
+  Dart 内存；64 位 ABI 基本是硬要求。
 
 ### 2.2 MDict（用户自备，开发期在 `mdicts/`）
 
 - 测试词典：講談社 日本語大辞典 第二版 双解版。
-- `MDX`：33.8MB，MDict **v2.0**，UTF-8，`Encrypted="No"`，HTML，zlib 记录块，463,312 条词条，391 个 key block。
-- `MDD`：6.2MB，v2.0，9,220 个资源；MDX 的 `StyleSheet` 为空，旁边有独立 `NihongoDaijiten.css`（6.1KB）。
+- `MDX`：MDict v2.0、UTF-8、HTML、zlib 记录块；大小/条目数/key block 统计见
+  [`docs/project-data.md`](project-data.md) §6。
+- `MDD`：v2.0；资源数/大小见 `project-data.md` §6；MDX 的 `StyleSheet` 为空，
+  旁边有独立 `NihongoDaijiten.css`。
 - 可用 Dart 包 `dict_reader`（MIT，1.6.1）：
   - 支持 MDX/MDD v2，本次数据可直接读取；
   - API：`init` / `locate` / `locateAll` / `readOneMdx` / `readOneMdd` / `search(prefix, limit)`；
   - 使用 `RandomAccessFile` + 记录块缓存，不会整体载入词典；
   - 限制：不支持 LZO、record block 加密、checksum 校验；v3 支持不完整。导入时必须预检并给出明确错误。
-- 463k 词条的 key 列表常驻内存的量级可接受（估算几十 MB），但首次 `init(readKey: true)` 需要实测；如过慢，使用 `exportCache/importCache` 或自建 SQLite key 索引作为后备。
+- 大词典的 key 列表常驻内存的量级可接受（估算几十 MB），但首次
+  `init(readKey: true)` 需要实测；如过慢，使用 `exportCache/importCache` 或自建
+  SQLite key 索引作为后备。
 
 ### 2.3 OCR 仓库
 
@@ -68,7 +76,8 @@
   - `AutomaticOcrRecognizer` + `OrientationClassifier` + `PaddleDocOriClassifier` + `PaddleTextLineOrientationClassifier`：自动横/竖排、旋转判别；
   - `TextBlockReadingOrder`：横排 LTR、竖排 RTL、漫画分栏阅读顺序；
   - `DBPostprocessor`：**纯 Kotlin** DBNet 后处理，无 OpenCV。
-- 推理运行时：ONNX Runtime **1.28.2**（Java API，无自定义 JNI）。
+- 推理运行时：ONNX Runtime（Java API，无自定义 JNI）；版本见
+  [`docs/project-data.md`](project-data.md) §1。
 - 模型：
   - PaddleOCR v5 mobile det/rec ONNX + `inference.yml` 内嵌字典，约 22MB，Apache-2.0；
   - manga-ocr 2025 ONNX：`encoder_model.onnx` ~22MB、`decoder_model.onnx` ~118MB、`vocab.txt` 6144 行 + 4 个 JSON，约 140MB（含 INT8 draft 约 205MB）；模型卡**未声明许可**，只能下载使用、不得随包分发；
@@ -91,10 +100,9 @@
 
 ### 2.4 本机环境与网络
 
-- Flutter 3.38.9 / Dart 3.10.8（`enable-native-assets` 已开启）。
-- Android SDK 36.1.0、build-tools 36.1.0、platforms 33–36、NDK 27.0.12077973 / 28.2.13676358、CMake 3.22.1。
-- JDK：Android Studio JBR 21.0.8；Flutter 工具链可用。
-- 无 Android 真机连接，仅有 `Medium_Phone_API_36.1` 模拟器；最终性能/竖排 OCR 需 arm64 真机验证。
+- 精确的 Flutter/Dart、Android SDK/build-tools/platform、NDK、JDK、CMake 与
+  模拟器基线统一见 [`docs/project-data.md`](project-data.md) §1。
+- 无 Android 真机连接；最终性能/竖排 OCR 需 arm64 真机验证。
 - 网络：
   - Maven Central、pub.dev、dl.google.com、services.gradle.org 可用；
   - `maven.google.com`、GitHub 直连超时；
@@ -124,7 +132,7 @@
 > 用户可配置远程文本 LLM；它不是云 OCR，不使用视觉能力，图片仍只在本机 OCR。
 > 详见 `docs/phase6-agent-design.md` 和 §11。
 
-> 关于“仅原地路径”的重要后果：Android 11+ 需要 `MANAGE_EXTERNAL_STORAGE`（所有文件访问）才能读取 `/storage/emulated/0/...` 下的 UniDic/MDict；若用户拒绝，只能把文件放在 `/storage/emulated/0/Android/data/<包名>/files/` 等应用可访问目录，并在设置中填写该路径。应用不会复制 1.3GB 的 UniDic。该权限在 Google Play 上受限，本项目按 sideload/学习用途设计。
+> 关于“仅原地路径”的重要后果：Android 11+ 需要 `MANAGE_EXTERNAL_STORAGE`（所有文件访问）才能读取 `/storage/emulated/0/...` 下的 UniDic/MDict；若用户拒绝，只能把文件放在 `/storage/emulated/0/Android/data/<包名>/files/` 等应用可访问目录，并在设置中填写该路径。应用不会复制大型 UniDic（规模见 [`docs/project-data.md`](project-data.md) §6）。该权限在 Google Play 上受限，本项目按 sideload/学习用途设计。
 
 ---
 
@@ -166,7 +174,7 @@ Rikai-Mobile/
 ├─ THIRD_PARTY_NOTICES.md
 ├─ 项目初始文档.txt
 ├─ android/                                  # Flutter Android host
-│  ├─ app/build.gradle.kts                   # minSdk 26 / target 36 / NDK 27 / arm64
+│  ├─ app/build.gradle.kts                   # SDK/NDK 见 project-data §1 / arm64
 │  └─ app/src/main/AndroidManifest.xml       # MANAGE_EXTERNAL_STORAGE 等
 ├─ assets/
 │  ├─ models/manifest.json                   # 模型 URL/大小/SHA-256/许可（不含模型本体）
@@ -225,7 +233,8 @@ Rikai-Mobile/
 - `flutter_riverpod`、`go_router`
 - `dict_reader`（MIT）
 - `mecab_for_dart`（vendored path dependency，BSD-3）
-- `onnxruntime-android:1.28.0`（Maven Central，MIT）
+- `onnxruntime-android`（Maven Central，MIT）；版本见
+  [`docs/project-data.md`](project-data.md) §1
 - `image_picker`、`image`（EXIF/缩放）
 - `dio`、`crypto`（模型下载与 SHA-256）
 - `path_provider`、`shared_preferences`、`sqflite`
@@ -258,7 +267,10 @@ Rikai-Mobile/
   - 新增 `rcPath` 参数（Dart API 增加可选 `rcPath`）；
   - 使用应用私有目录下的 `mecabrc`（内容可为空，或 `charset = UTF-8`），**不再要求 `<dicdir>/mecabrc`**；
   - 仍传 `-d <dicdir>`，不修改用户文件。
-- 原生构建走 `hook/build.dart` + `native_toolchain_c`（Flutter 3.38 已启用 native assets）；NDK 固定 27.0.12077973；若 Android native assets 构建失败，回退方案：把 MeCab `src/unix` 源码用 CMake 编进 `packages/rikai_mecab` 本地插件（BSD 许可允许）。
+- 原生构建走 `hook/build.dart` + `native_toolchain_c`（当前 Flutter 版本见
+  `docs/project-data.md` §1，已启用 native assets）；NDK 版本同样以该节为准；
+  若 Android native assets 构建失败，回退方案：把 MeCab `src/unix` 源码用
+  CMake 编进 `packages/rikai_mecab` 本地插件（BSD 许可允许）。
 - 工作 Isolate：`MecabService` 启动后懒加载，串行 `analyze`；`Mecab.transferableState` 支持跨 isolate。保留一个长生命周期 isolate，避免重复 mmap 模型。
 - 输出：默认 `%m\t%H\n`（`mecab_sparse_tostr`），按 29 字段解析；字段数异常时记录并降级为“surface 可点击、无注音”。
 
@@ -289,7 +301,8 @@ Rikai-Mobile/
   3. 处理 `@@@LINK=目标` 重定向（最多 3 层，防环）；
   4. 多词典结果按词典顺序分组返回。
 - 无命中时：`search(prefix, limit: 30)` 返回建议词；若查询是活用形，先用 MeCab 分析并取 `lemma/orthBase` 再查。
-- 性能：首次 `init(readKey: true)` 需实测；若 > 3s 或内存过高，启用 `exportCache/importCache` 或自建 SQLite key 索引。463k 词条目标：热查询 < 300ms。
+- 性能：首次 `init(readKey: true)` 需实测；若 > 3s 或内存过高，启用
+  `exportCache/importCache` 或自建 SQLite key 索引。大词典热查询目标 < 300ms。
 - 方言/表记差异：候选中保留 hiragana↔katakana 变体；不做模糊编辑距离（MVP）。
 
 **HTML 渲染**
@@ -440,9 +453,11 @@ EventChannel: model load/prewarm/OCR stage progress
 
 任务：
 
-1. `flutter create --org com.rikai --project-name rikai_mobile --platforms=android .`；将 `applicationId`/`namespace` 统一为 `com.rikai.mobile`；配置 minSdk 26 / compileSdk 36 / NDK 27、arm64 release、debug x86_64；`.gitignore`、`NOTICE`、许可证目录。
+1. `flutter create --org com.rikai --project-name rikai_mobile --platforms=android .`；将 `applicationId`/`namespace` 统一为 `com.rikai.mobile`；配置 arm64 release、debug x86_64；SDK/NDK 值见 [`docs/project-data.md`](project-data.md) §1；`.gitignore`、`NOTICE`、许可证目录。
 2. 建立 `packages/rikai_ocr` 插件骨架；`packages/mecab_for_dart` vendored + `dependency_overrides`；写入 ORT 依赖与 R8 keep 规则。
-3. **Spike A**：Android 模拟器/真机上加载 1.3GB UniDic（原地路径），验证 MeCab native assets 构建、`mecabrc` 补丁、分词输出 29 字段。
+3. **Spike A**：Android 模拟器/真机上加载大型 UniDic（原地路径；规模见
+   `project-data.md` §6），验证 MeCab native assets 构建、`mecabrc` 补丁、
+   分词输出 29 字段。
 4. **Spike B**：用 ORT 跑 PP-OCRv5 det/rec 与 MangaOCR 模型；通过 hf-mirror 下载；验证 x86_64 模拟器与 arm64 release 构建。
 5. **Spike C**：`dict_reader` 直接打开测试 MDX/MDD，测量 init/lookup 内存与耗时；WebView 渲染一个词条（CSS + 图片）。
 6. 记录 ADR：`docs/adr/0001-ocr-onnx.md`、`0002-unidic-in-place.md`、`0003-mdict-dict-reader.md`；若 spike 失败，写清回退方案并先与用户确认。
@@ -484,7 +499,7 @@ EventChannel: model load/prewarm/OCR stage progress
 
 - 点击 `食べる` → 講談社词典词条正确显示，CSS 生效，MDD 图片可见。
 - 搜索 `東京` 精确命中；输入 `とうきょう` 能通过假名变体命中。
-- 463k 词条热查询 < 300ms；首次初始化有进度提示。
+- 大词典热查询 < 300ms；首次初始化有进度提示。
 - LZO/加密/损坏词典显示明确错误，不崩溃。
 
 ### Phase 3 — 横向 PaddleOCR 与拍照流程（3–4 天）
@@ -600,12 +615,12 @@ EventChannel: model load/prewarm/OCR stage progress
 | 风险 | 影响 | 缓解 |
 |---|---|---|
 | MeCab native assets 在 Android 构建失败 | 无法分词 | Phase 0 spike；vendored 源码 + CMake 本地插件回退；保留 BSD 许可 |
-| 1.3GB UniDic 原地路径不可读 / 外部存储 mmap 不兼容 | 无法使用 | 所有文件访问权限引导；应用外部私有目录路径；Spike A 实测 mmap；若 FUSE 路径失败，引导使用应用内部存储或提供受控复制回退（需用户确认）；诊断日志 |
+| 大型 UniDic 原地路径不可读 / 外部存储 mmap 不兼容 | 无法使用 | 所有文件访问权限引导；应用外部私有目录路径；Spike A 实测 mmap；若 FUSE 路径失败，引导使用应用内部存储或提供受控复制回退（需用户确认）；诊断日志 |
 | `dict_reader` 不支持用户的某本词典（LZO/加密/v3） | 该词典不可用 | 导入预检 + 明确错误；后续可评估 Rust mdict/转换脚本 |
-| 463k 词条首次初始化慢/内存高 | 启动卡顿 | 懒初始化 + isolate；测量后启用 cache/SQLite key 索引 |
+| 大词典首次初始化慢/内存高 | 启动卡顿 | 懒初始化 + isolate；测量后启用 cache/SQLite key 索引 |
 | MangaOCR 模型许可未声明 | 合规风险 | 不随包分发；下载前提示；仅本地使用；支持用户导入 Apache-2.0 转换模型 |
 | 模型下载源不稳定（HF/GitHub 受限） | 无法下载 | hf-mirror 优先；自定义镜像；本地导入；断点续传/重试 |
-| ORT/Paddle 模型算子不兼容 | OCR 失败 | Phase 0 spike；固定 ORT 1.28.0；准备 PP-OCRv5 备用模型/版本 |
+| ORT/Paddle 模型算子不兼容 | OCR 失败 | Phase 0 spike；ORT 版本见 `project-data.md` §1；准备 PP-OCRv5 备用模型/版本 |
 | 竖排/混合排版识别差 | 体验差 | Phase 4.5 已做 90° 纠正、auto 单引擎+置信度回退、deskew、尺寸自适应气泡；arm64 真实页待验 |
 | WebView HTML 安全/兼容 | 安全问题或渲染异常 | 禁 JS/网络、HTML 清洗、仅本地文件；真实词典回归测试 |
 | APK 体积/内存 | 安装门槛 | 模型按需下载；release 仅 arm64；限制图片尺寸；释放 ORT/Bitmap |
@@ -661,7 +676,7 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 |---|---|
 | UniDic 首次加载 | < 5s（显示进度） |
 | 500 字分词 | < 100ms |
-| 词典首次 init（463k） | < 3s（可接受 5s，带进度） |
+| 大词典首次 init | < 3s（可接受 5s，带进度） |
 | 热查询 | < 300ms |
 | PaddleOCR（2048px 页面） | < 5s |
 | MangaOCR（单页漫画） | < 10s |
@@ -719,15 +734,9 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 
 ### 11.2 主页与命名
 
-Phase 6 计划将主页固定为五个按钮：
-
-1. 拍照识别（不变）
-2. 查句子（原文本阅读；P6.5 已改名）
-3. 查单词（原查词）
-4. 历史记录（原语料）
-5. 词典助手（新 Agent）
-
-P6.5 已接入五个按钮并更新主页测试；后续 P6.6/P6.7 UI 仍须先补设计 token。
+Phase 6 固定主页功能按钮；数量、固定文案、顺序和命名以
+[`docs/project-data.md`](project-data.md) §7 为准，本文件不重复列表。
+P6.5 已接入功能按钮并更新主页测试；后续 P6.6/P6.7 UI 仍须先补设计 token。
 
 ### 11.3 产品要求
 
@@ -775,14 +784,15 @@ P6.5 已接入五个按钮并更新主页测试；后续 P6.6/P6.7 UI 仍须先�
 2. Provider 配置、安全存储、隐私同意、fake-provider/fake-server 测试骨架。
 3. 词典/UniDic 熟悉期、用户确认、profile 缓存与失效。
 4. Orchestrator Stage -1–3、证据/引用/原文/词典顺序校验、AgentStore。
-5. Agent 页、会话词典选择、citation UI、历史/设置、主页第五按钮、UI token；
+5. Agent 页、会话词典选择、citation UI、历史/设置、主页新增功能入口、UI token；
    首版用结构化组件 + 安全纯文本。
 6. 按需多 OCR 版本、差异/词典辅助修复、用户选择 UI。
 7. annotation DSL、Markdown/ruby/声调渲染、性能/许可/发布验收。
 
 ### 11.5 验收
 
-Phase 6 的验收必须覆盖：五按钮 UI、**对话式 Agent UI v2**（首屏约 80% 消息区，
+Phase 6 的验收必须覆盖：主页功能按钮 UI（数量/文案见 `project-data.md` §7）、
+**对话式 Agent UI v2**（首屏约 80% 消息区，
 小屏 ≥70%；气泡最大 80%、流式/停止、错误卡保留内容、证据折叠「依据 N 条」、
 输入区 1–5 行、设置三态 Key/测试连接、Semantics/200% 字体缩放）、无图片上云、
 严格引用、宽松

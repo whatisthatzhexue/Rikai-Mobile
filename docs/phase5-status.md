@@ -96,6 +96,9 @@ pure-function tests rather than a desktop SQLite harness.
 
 Verification:
 
+> 以下为 Phase 5 当时记录；当前测试/构建/设备基线见
+> [`docs/project-data.md`](project-data.md)。
+
 ```text
 flutter analyze  -> No issues found
 flutter test     -> 149 tests passed

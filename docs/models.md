@@ -1,5 +1,9 @@
 # OCR models
 
+> 当前测试/性能/环境基线统一见
+> [`docs/project-data.md`](project-data.md)；模型 URL/SHA/文件名仍以
+> `assets/models/manifest.json` 为准。
+
 Models are **not** committed. `assets/models/manifest.json` is the source of
 truth for URLs, sizes, SHA-256 hashes, licenses, and mirror order. The app
 downloads to `getExternalFilesDir()/models/` by default; the model page can

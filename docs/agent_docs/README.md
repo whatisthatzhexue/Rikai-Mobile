@@ -10,19 +10,21 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
 1. 本文件。
 2. [device-feedback-2026-10-31.md](device-feedback-2026-10-31.md) —— 2026-10-31
    实机反馈 17 项（F1–F17）的修正方案、依赖与执行波次；**当前优先工作队列**。
-3. [phase6-pipeline-review.md](phase6-pipeline-review.md) —— 当前管线评审与
+3. [../project-data.md](../project-data.md) —— 当前测试/设备/性能/环境/固定文案
+   的单一事实源。
+4. [phase6-pipeline-review.md](phase6-pipeline-review.md) —— 当前管线评审与
    已知问题（含 file:line 证据）。
-4. [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md) ——
+5. [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md) ——
    运行生命周期、离开/返回页面、取消、并发、进程死亡等意外情况规范。
-5. [agent-maintainability-review.md](agent-maintainability-review.md) —— Agent
+6. [agent-maintainability-review.md](agent-maintainability-review.md) —— Agent
    代码可维护性评审（死抽象、god 文件、controller/测试、schema 债务）。
-6. [non-agent-regression-review.md](non-agent-regression-review.md) —— Agent
+7. [non-agent-regression-review.md](non-agent-regression-review.md) —— Agent
    以外功能的回归检查（旧 integration test 文案、帮助页文案、构建风险）。
-7. [../phase6-agent-design.md](../phase6-agent-design.md) —— 设计 v2。
-8. [../phase6-agent-contracts.md](../phase6-agent-contracts.md) —— 工具/schema/
-   状态机契约。
-9. [../phase6-status.md](../phase6-status.md) —— 当前实现记录。
-10. [../adr/0004-agent-capability-boundary.md](../adr/0004-agent-capability-boundary.md)
+8. [../phase6-agent-design.md](../phase6-agent-design.md) —— 设计 v2。
+9. [../phase6-agent-contracts.md](../phase6-agent-contracts.md) —— 契约/schema/
+   状态机。
+10. [../phase6-status.md](../phase6-status.md) —— 当前实现记录。
+11. [../adr/0004-agent-capability-boundary.md](../adr/0004-agent-capability-boundary.md)
     —— 能力边界决策。
 
 ## 硬规则
@@ -38,6 +40,8 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
   [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md)。
 - 图片只能经本机 OCR；不要把图片、路径、base64 或 provider 视觉能力引入 Agent。
 - API Key 只放安全存储；不进 SharedPreferences、SQLite、日志、导出或仓库。
+- **测试数、设备结果、性能、环境版本和固定 UI 文案统一引用
+  [`docs/project-data.md`](../project-data.md)，不要在其他文档复制当前数值。**
 - **2026-10-31 实机反馈未关闭前，先按
   [device-feedback-2026-10-31.md](device-feedback-2026-10-31.md) 的 Wave 顺序处理；
   不要开始 P6.6/P6.7。**
@@ -59,7 +63,8 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
 > 该表只记录评审结论；修复后请更新为 `fixed` / `partially fixed` 并附验证记录。
 > 2026-10-30 设备验证：模拟器 x86_64 上图片 OCR → 分词 → MDict 查词 →
 > DeepSeek 流式分析（阶段 + 已思考时长）→ 中文译文/逐句/原文/词典依据
-> 已跑通；Wave 1 后 213 tests 与 debug APK 构建通过。仍不要据此开始 P6.6/P6.7。
+> 已跑通；当前测试/构建/设备基线见
+> [`docs/project-data.md`](../project-data.md) §2/§3/§5。仍不要据此开始 P6.6/P6.7。
 
 ### 2026-10-31 实机反馈（F1–F17）
 
