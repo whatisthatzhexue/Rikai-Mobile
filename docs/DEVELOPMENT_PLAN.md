@@ -4,14 +4,16 @@
 >
 > 本计划基于 2026-10-26 对两个克隆仓库、UniDic/MDict 实际数据、本机 Flutter/Android 环境和网络连通性的调研。已确认的产品/技术决策见 §3。
 >
-> **Phase 6（Mdict Agent）是后期设计扩展，未纳入本 MVP 的时间估算。** 设计指南见
-> `docs/phase6-agent-design.md`。MVP 的 OCR/UniDic/MDict 核心仍离线；Phase 6 才会
-> 引入用户自备 API Key 的可选在线 LLM。Phase 6 开工前需 Phase 5 完成并经用户批准。
+> **Phase 6（Mdict Agent）已实现 P6.1–P6.5；当前为固定流水线、模型无工具
+> （2026-10-31 决策），P6.6/P6.7 未实现。** 最新进度见 `docs/phase6-status.md`；
+> 实机反馈队列见 `docs/agent_docs/device-feedback-2026-10-31.md`。MVP 的
+> OCR/UniDic/MDict 核心仍离线；Phase 6 可选在线 LLM 使用用户自备 API Key，
+> 未配置 provider 时核心功能保持离线。
 >
 > **Phase 4.5（OCR 质量与性能收敛）已插入 Phase 4 与 Phase 5 之间。** 记录见
 > `docs/phase4.5-status.md`。该阶段已于 2026-10-30 通过 arm64/真实设备验收并关闭；
 > **Phase 5（语料/历史、首次引导与发布打磨）也已于 2026-10-30 完成并由用户确认。**
-> 下一步是 Phase 6 设计评审与用户批准，未批准前不实施。
+> Phase 6 P6.1–P6.5 已实现并提交；后续进度以 `docs/phase6-status.md` 为准。
 
 ---
 
@@ -699,19 +701,19 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 
 ---
 
-## 11. Phase 6 — Mdict Agent（后期设计，未纳入 MVP 估算）
+## 11. Phase 6 — Mdict Agent（P6.1–P6.5 已实现）
 
-> 状态：**P6.1–P6.5 核心已实现；P6.6/P6.7 未实现**。实现记录见
+> 状态：**P6.1–P6.5 核心已实现；P6.6/P6.7 未实现**。最新进度见
 > `docs/phase6-status.md`；设计细节、开放问题和验收标准见
-> `docs/phase6-agent-design.md`；工具/JSON Schema/状态机契约见
-> `docs/phase6-agent-contracts.md`。Phase 5 已完成并发布 1.0。v2 包含固定流水线、
-> 词典熟悉、逐词/语法证据、原文引用、会话级词典选择和按需多 OCR（多 OCR 尚待
-> P6.6）。
+> `docs/phase6-agent-design.md`；契约/JSON Schema/状态机见
+> `docs/phase6-agent-contracts.md`。Phase 5 已完成并发布 1.0。v2 采用固定流水线、
+> 模型无工具（2026-10-31 决策），包含词典熟悉、逐词/语法证据、原文引用、
+> 会话级词典选择和按需多 OCR（多 OCR 尚待 P6.6）。
 
 ### 11.1 目标
 
 在现有阅读/查词应用上增加「词典助手」：把本地 OCR、UniDic 分词和 MDict 查词
-组织成 schema 化的工具，支持图片、文字或图片+文字输入，由用户配置的远程 LLM
+组织成固定流水线，支持图片、文字或图片+文字输入，由用户配置的远程 LLM
 完成严格/宽松两种模式的学习辅助。核心 OCR/分词/查词仍离线；Agent 仅在用户
 配置 API Key 并主动请求时联网。
 
@@ -729,10 +731,10 @@ P6.5 已接入五个按钮并更新主页测试；后续 P6.6/P6.7 UI 仍须先�
 
 ### 11.3 产品要求
 
-- **两种模式**：严格模式必须以词典工具结果为事实依据；宽松模式允许模型补充，
+- **两种模式**：严格模式必须以词典查词结果为事实依据；宽松模式允许模型补充，
   但必须与词典事实分开标注。
-- **模型分流**：简单任务（词典查询/整理）用用户选择的 small model；复杂任务
-  （词义推理/规则生成）用 complex model。
+- **模型分流**：简单任务（熟悉期摘要/格式整理）用用户选择的 small model；复杂
+  任务（词义推理/语境比较/多解释）用 complex model。
 - **输入**：图片、文字、图片+文字；图片只经本机 OCR，严禁发送给 LLM 视觉接口。
 - **输出**：首版用结构化结果组件（原文引用/译文/逐句/词注/证据卡）+ 可点击词典
   来源；安全 Markdown、ruby、日语声调横线在 P6.7 再接入。
@@ -742,14 +744,13 @@ P6.5 已接入五个按钮并更新主页测试；后续 P6.6/P6.7 UI 仍须先�
   已实现基础对话式布局；状态条、历史、无障碍 200% 等完整 v2 验收待补。
 - **接口层**：现有 OCR/UniDic/MDict 服务外包一层窄 Port（`OcrPort`、
   `TokenizePort`、`LookupPort`、`DictionarySamplePort`、`LlmPort`、`SecretPort`）；
-  模型只看到 JSON Schema 工具（`unidic.tokenize`、`mdict.lookup`、
-  `mdict.suggest`），OCR/采样/UniDic profile 是 orchestratorOnly。
+  模型不接触工具；OCR/采样/UniDic profile 全部由 orchestrator 调用。
 - **编排**：固定流水线 `OCR → 词典熟悉 → 分词 → 证据 → 推断 → 校验`；编排器预取
-  每个 token/语法目标的查词，模型只能在预算内补充查词，不能决定词典顺序或
-  自造 citation。`performLookup`/`LookupSearchNotifier` 的查词逻辑提取为纯
-  `LookupGateway`，照片集与 Agent 共用 `OcrWorkflow`。
-- **工具集**：本地 OCR、UniDic tokenization、MDict lookup/suggest，全部通过
-  JSON Schema 调用。
+  每个 token/语法目标的查词，模型只做理解、推断和引用已有证据，不能决定词典
+  顺序或自造 citation。`performLookup`/`LookupSearchNotifier` 的查词逻辑提取为
+  纯 `LookupGateway`；OCR 由 `OcrPortAdapter` 直接完成（`OcrWorkflow` 已删除）。
+- **模型工具**：当前无模型工具；本地 OCR、UniDic 分词和 MDict 查词全部由
+  orchestrator 预取，模型请求不携带 tools。
 - **引用**：`[来源N]` 由 orchestrator 发放并映射到真实 MDict 词条；点击来源打开
   现有查词 sheet，再点击词条进入现有词条页。
 - **任务工作流**：Step -1 词典熟悉（采样→LLM 归纳→用户确认→缓存）→ Step 0
@@ -769,8 +770,8 @@ P6.5 已接入五个按钮并更新主页测试；后续 P6.6/P6.7 UI 仍须先�
 
 ### 11.4 建议实施顺序
 
-1. 能力 Ports、ToolRegistry、DTO 序列化、`LookupGateway`、`OcrWorkflow`、
-   `MdictService.sample/suggest`、语法/采样资源。
+1. 能力 Ports、DTO 序列化、`LookupGateway`、`MdictService.sample/suggest`、
+   语法/采样资源；不引入 ToolRegistry/OcrWorkflow（2026-10-31 已删除）。
 2. Provider 配置、安全存储、隐私同意、fake-provider/fake-server 测试骨架。
 3. 词典/UniDic 熟悉期、用户确认、profile 缓存与失效。
 4. Orchestrator Stage -1–3、证据/引用/原文/词典顺序校验、AgentStore。

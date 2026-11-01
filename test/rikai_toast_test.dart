@@ -46,5 +46,6 @@ void main() {
 
     // Let the toast timer expire so the test binding has no pending timers.
     await tester.pump(const Duration(seconds: 3));
+    expect(find.text('已保存'), findsNothing);
   });
 }

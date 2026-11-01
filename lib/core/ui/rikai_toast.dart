@@ -11,6 +11,7 @@ import '../theme/app_tokens.dart';
 abstract final class RikaiToast {
   static OverlayEntry? _entry;
   static Timer? _timer;
+  static String _message = '';
 
   static void show(
     BuildContext context,
@@ -54,15 +55,23 @@ abstract final class RikaiToast {
       ),
     );
     _entry = entry;
+    _message = message;
     overlay.insert(entry);
     _timer = Timer(duration, () {
       if (identical(_entry, entry)) _remove();
     });
   }
 
+  /// Dismisses a toast only when it is still the same message. This lets async
+  /// screens add an independent fallback timer without closing a newer toast.
+  static void dismissIf(String message) {
+    if (_message == message) _remove();
+  }
+
   static void _remove() {
     _timer?.cancel();
     _timer = null;
+    _message = '';
     final entry = _entry;
     _entry = null;
     if (entry != null && entry.mounted) entry.remove();

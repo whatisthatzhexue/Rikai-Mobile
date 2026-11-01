@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -155,7 +157,18 @@ class _ModelPageState extends ConsumerState<ModelPage> {
     final download = ref.read(ocrModelDownloadControllerProvider)[set.id];
     if (download?.status == OcrModelDownloadStatus.completed) {
       await _load(showLoading: false);
-      if (mounted) RikaiToast.show(context, '${set.displayName} 下载完成');
+      if (mounted) {
+        final message = '${set.displayName} 下载完成';
+        RikaiToast.show(context, message);
+        // The toast owns its normal timer, but adding a screen-scoped fallback
+        // keeps a stale completion bubble from surviving a route rebuild.
+        unawaited(
+          Future<void>.delayed(
+            const Duration(seconds: 2),
+            () => RikaiToast.dismissIf(message),
+          ),
+        );
+      }
     } else if (download?.status == OcrModelDownloadStatus.failed) {
       setState(() => _error = download!.error);
       await _load(showLoading: false);
@@ -435,6 +448,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
     final hasActiveDownload = downloads.values.any(
       (task) => task.isDownloading,
     );
+    final changeDirectoryBlocked = _busySetId != null || hasActiveDownload;
     return PopScope(
       canPop: _allowPop || !hasActiveDownload,
       onPopInvokedWithResult: (didPop, result) {
@@ -494,7 +508,12 @@ class _ModelPageState extends ConsumerState<ModelPage> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   OutlinedButton.icon(
-                    onPressed: _busySetId == null ? _changeDirectory : null,
+                    onPressed: changeDirectoryBlocked ? null : _changeDirectory,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      disabledForegroundColor: AppColors.textTertiary,
+                      side: const BorderSide(color: AppColors.border),
+                    ),
                     icon: const Icon(Icons.folder_open_outlined),
                     label: const Text('更改目录'),
                   ),
@@ -783,7 +802,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
                 ),
               ),
             OutlinedButton.icon(
-              onPressed: operationBusy ? null : () => _import(set),
+              onPressed: downloadBlocked ? null : () => _import(set),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.primary,
                 disabledForegroundColor: AppColors.textTertiary,
