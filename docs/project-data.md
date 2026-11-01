@@ -3,12 +3,16 @@
 > **单一事实源**：所有跨文档复用的测试数量、设备结果、性能、构建产物、环境版本、
 > 开发数据统计和固定 UI 文案以本文件为准。其他文档只引用本文件对应小节，不再
 > 复制具体数值；历史 phase 文档可以保留“当时值”，但必须标注为历史快照。
+> 规范性 MUST/MUST NOT 规则见 `docs/project-rules.md`；视觉数值见
+> `docs/design-tokens.md`。
 >
 > - last_verified: 2026-11-01
-> - HEAD: `c6094b5`（`fix: OCR模型页面操作逻辑修正`）
+> - last_verified_code_commit: `c6094b5`（`fix: OCR模型页面操作逻辑修正`）
+> - last_doc_sync: 2026-11-01（引用结构整理，不改变代码验证结果）
 > - 设备基线: `Medium_Phone_API_36.1`（x86_64 模拟器，API 36）；无 arm64 真机
-> - 维护规则：数据变化时只改本文件，并同步更新 `last_verified`/`HEAD`；其他文档
->   的引用链接不需要改。
+> - 维护规则：数据变化时只改本文件，并同步更新 `last_verified`/
+>   `last_verified_code_commit`；其他文档的引用链接不需要改。不要把本文件自身的
+>   文档提交哈希写成“当前 HEAD”，避免自引用。
 
 ## 1. 环境与构建基线
 
@@ -44,7 +48,7 @@
 | 最近 `flutter build apk --debug` | success |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
-> 该数字对应 HEAD `c6094b5`。新增/删除测试后只更新本节。
+> 该数字对应 `last_verified_code_commit: c6094b5`。新增/删除测试后只更新本节。
 
 ### 2.2 历史测试基线（不要当作当前值）
 
@@ -141,33 +145,78 @@ arm64 真机性能另需复测。
 | 证据折叠 | 依据 N 条 ▾ |
 | 状态 | 本机 OCR、熟悉词典、分词、生成、校验、已停止、生成中断、无词典依据 |
 | 输入占位 | 输入问题，或粘贴文本… |
+| 查词占位 | 搜索…… |
 | 档案操作 | 保存并信任、本次跳过、不再询问 |
 | 隐私文案 | 图片只在本机 OCR，不会上传 |
 | 设置分组 | 词典助手设置、模型服务、服务商、接口地址、快速模型、高精度模型、接口密钥（API Key） |
+| 复制按钮 | 照片「复制文本」；语料卡片「复制」；语料详情「复制文本」 |
+| 文本语料 | 文本语料（无照片占位的卡片/详情） |
+| 阅读工具栏 | 隐藏输入框 |
+| 多选页 | 选择照片 |
+| 空态/错误 | 去设置、尚未配置模型、未找到可用的 OCR 模型 |
+| Agent 状态 | 离线模式，仅本地功能可用、已停止 · 重试、生成中断 · 重试、待处理档案 N 个 |
+| Citation | 来源N、依据 N 条 ▾ |
+| 引导/设置 | 开始使用、跳过、重新查看新手引导、自动保存识别结果、清除词典资源缓存 |
 
 > 这些文案目前也出现在设计/契约/测试里；修改时只改本表，并同步 UI 实现/测试的
 > 引用。历史评审中的旧文案保留为历史记录，不作为当前值。
 
-## 8. Agent 当前预算/上限
+## 8. Agent / Provider / 图片处理限制
 
-| 项 | 当前值 |
-|---|---:|
-| 单次分析源文本 | 6,000 字符 |
-| 唯一检索目标 | 120 |
-| citation 总数 | 60 |
-| 每词每典条数 | 3 |
-| 摘要长度 | 400 字符 |
-| 模型额外工具调用 | 0（当前固定流水线、模型无工具） |
+### 8.1 当前 Agent 限制
 
-> 历史 tool loop 预算（6 次、单工具 60s、总 90s）仅作未来参考，不是当前实现。
-> 契约中的默认值仍以 `docs/phase6-agent-contracts.md` 为准；本表与契约冲突时先
-> 以本表确认当前实现，再修契约。
+| 项 | 当前值 | 状态/说明 |
+|---|---:|---|
+| 单次分析源文本 | 6,000 字符 | 当前 orchestrator 拒绝超限 |
+| 唯一检索目标 | 120 | 当前 EvidenceBuilder |
+| citation 总数 | 60 | 当前 EvidenceBuilder |
+| 每词每典条数 | 3 | 当前 lookup |
+| 摘要长度 | 400 字符 | 当前 citation snippet |
+| 单个 source 的 quote 上限 | 40 | `quote_builder.dart` |
+| 熟悉期每词典样本 | 12 | `DictionaryFamiliarizationService` |
+| UniDic 熟悉样本句 | 4 | `UnidicFamiliarizationService` |
+| 熟悉期 batch tokens | 4,000（最多 6,000） | 当前服务 |
+| 分析请求 maxTokens | 12,000 | `analysis_prompts.dart` |
+| 模型额外工具调用 | 0 | 当前固定流水线、模型无工具 |
+| 每词典档案 Markdown | 2,000 字符 | **设计/契约目标；当前代码未强制** |
+| 输入 variants / sources | 4 / 8 | Schema 契约上限；当前 UI 单图 |
+| 每次 run 图片数 | 6 | **F11 计划值；当前 UI 单图** |
+| 覆盖审查 missing / duplicate / fallback | 20 / 10 / 1 | **F7 计划值；当前未实现** |
+| 历史 tool loop | 6 次 / 60s / 90s | **未来参考，不是当前实现** |
+
+### 8.2 当前 Provider/LLM 限制
+
+| 项 | 当前值 | 状态/说明 |
+|---|---:|---|
+| Provider 默认超时 | 180 秒 | `AgentProviderConfig.timeoutSeconds` |
+| 429/5xx 最大尝试次数 | 3（即最多 2 次重试） | `provider_http.dart` |
+| 401/403 | 不重试 | 当前 provider 映射 |
+| Anthropic API version | `2026-10-21` | 当前适配器 |
+| 文本-only | 是 | 无 tool/capability 请求面 |
+
+### 8.3 图片/语料处理限制
+
+| 项 | 当前值 | 说明 |
+|---|---:|---|
+| OCR 输入最长边 | 2,048 | Paddle/Manga 预处理 |
+| 保存语料图片最长边 | 2,048 | HistoryStore |
+| 保存语料 JPEG 质量 | 85 | HistoryStore |
+| 阅读字号范围/默认 | 14–30 / 20 | 视觉值以 `design-tokens.md` 为准 |
+| 振假名比例 | 55% | 视觉值以 `design-tokens.md` 为准 |
+
+> UI 间距、字号、圆角、组件高度、筛选条 3.5 行、消息宽度 80%、气泡 16/4、
+> composer 5 行、citation chip 24–28 等视觉数值，统一以
+> `docs/design-tokens.md` 为权威；本文件不复制这些 token，只记录跨模块使用的
+> 处理/业务数值。
+
+> 契约中的默认值若与本表冲突：以本表作为当前实现值，并修
+> `docs/phase6-agent-contracts.md`；未来 tool loop/coverage 值必须标明 future。
 
 ## 9. 当前阶段/提交锚点
 
 | 项 | 值 |
 |---|---|
-| 当前 HEAD | `c6094b5`（OCR 模型页操作逻辑修正） |
+| 最近验证代码提交 | `c6094b5`（OCR 模型页操作逻辑修正） |
 | Phase 5 基线 | `2534c3a` |
 | Phase 6 P6.1–P6.5 提交起点 | `7be4b81` |
 | Phase 6 文档提交 | `b208456` |
@@ -179,9 +228,13 @@ arm64 真机性能另需复测。
 
 ## 10. 引用规则
 
-- 当前测试/设备/性能/构建/环境/数据值：引用本文件，不复制数字。
-- 历史 phase 文档：保留“当时值”，并加 `历史值` 标注；需要当前值则链接本文件。
-- UI token、模型 hash、Schema/契约：分别以 `design-tokens.md`、
-  `assets/models/manifest.json`、`phase6-agent-contracts.md`/`docs/schemas/agent/`
-  为准；本文件不接管这些规范。
-- 修改本文件后，仅需更新 `last_verified`/`HEAD`；其他文档的链接保持有效。
+- **规则**：正面/反面 MUST/MUST NOT 规则统一引用 `docs/project-rules.md`，不在本
+  文件重复。
+- **当前数据**：测试/设备/性能/构建/环境/预算/固定文案引用本文件，不复制数字。
+- **视觉数值**：字号、间距、颜色、圆角、组件尺寸以 `design-tokens.md` 为准。
+- **Agent 字段/错误码/Schema**：以 `phase6-agent-contracts.md` /
+  `docs/schemas/agent/` 为准；未来 tool loop/coverage 必须标 future。
+- **模型 URL/SHA**：以 `assets/models/manifest.json` 为准；本文件只记录统计值。
+- **历史 phase 文档**：保留“当时值”，并加 `历史值` 标注；需要当前值则链接本文件。
+- 修改本文件后，仅需更新 `last_verified`/`last_verified_code_commit`；其他文档的
+  链接保持有效。

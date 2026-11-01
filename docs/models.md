@@ -2,7 +2,8 @@
 
 > 当前测试/性能/环境基线统一见
 > [`docs/project-data.md`](project-data.md)；模型 URL/SHA/文件名仍以
-> `assets/models/manifest.json` 为准。
+> `assets/models/manifest.json` 为准。模型/隐私/发布规则见
+> [`docs/project-rules.md`](project-rules.md) R-PROD/R-SEC/R-ARCH/R-DEV。
 
 Models are **not** committed. `assets/models/manifest.json` is the source of
 truth for URLs, sizes, SHA-256 hashes, licenses, and mirror order. The app
@@ -69,13 +70,13 @@ does not redistribute it. The download screen shows this warning and asks for
 confirmation. Users may import an ONNX export they produced themselves from the
 Apache-2.0 model.
 
-## Phase 6 remote LLM configuration (planned)
+## Optional Agent LLM configuration (P6.1–P6.5 implemented)
 
-Phase 6 is not implemented. Unlike OCR models, the planned dictionary assistant
-does not add local LLM weights to `assets/models/manifest.json` or the model
-directory. LLM inference is hosted by a user-selected provider.
+The dictionary assistant does not add local LLM weights to
+`assets/models/manifest.json` or the model directory. LLM inference is hosted by
+a user-selected provider; the OCR model manager is unchanged.
 
-Planned configuration:
+Current configuration:
 
 - provider (DeepSeek, Claude, or an OpenAI-compatible endpoint);
 - base URL where applicable;
@@ -83,10 +84,10 @@ Planned configuration:
 - `smallModel` for simple lookup/formatting tasks;
 - `complexModel` for reasoning and rule generation.
 
-The existing OCR model manager remains unchanged. The Agent must never use a
-provider's image/vision endpoint, and its model configuration must not be
-required for the offline OCR/UniDic/MDict core. See
-`docs/phase6-agent-design.md` for privacy and acceptance details.
+The Agent must never use a provider's image/vision endpoint, and its model
+configuration must not be required for the offline OCR/UniDic/MDict core.
+Rules/privacy: `docs/project-rules.md` R-SEC/R-AGENT; design details:
+`docs/phase6-agent-design.md`.
 
 ## Not used
 

@@ -9,6 +9,11 @@ optional dictionary assistant that can call a user-configured LLM provider;
 P6.1–P6.5 are implemented, while P6.6/P6.7 and the 2026-10-31 device-feedback
 hardening are pending.
 
+> Current test/device/performance/build/environment data lives in
+> [docs/project-data.md](docs/project-data.md). Normative MUST/MUST NOT rules
+> live in [docs/project-rules.md](docs/project-rules.md). Other documents link
+> to them instead of copying current values or rule text.
+
 ## Status
 
 Phases 1–4 are working end to end on the Android emulator with a real
@@ -186,6 +191,8 @@ build contains the P6.1–P6.5 Agent/provider implementation; P6.6/P6.7 and the
 ## Documents
 
 - [Development plan](docs/DEVELOPMENT_PLAN.md)
+- [Project rules](docs/project-rules.md)
+- [Project data (single source)](docs/project-data.md)
 - [Design tokens](docs/design-tokens.md)
 - [Phase 0 status](docs/phase0-status.md)
 - [Phase 1 status](docs/phase1-status.md)
@@ -198,7 +205,7 @@ build contains the P6.1–P6.5 Agent/provider implementation; P6.6/P6.7 and the
 - [Phase 6 agent design v2](docs/phase6-agent-design.md)
 - [Phase 6 agent contracts](docs/phase6-agent-contracts.md)
 - [Phase 6 implementation status](docs/phase6-status.md)
-- [Project test/verification data](docs/project-data.md)
+- [Agent docs / current Device feedback](docs/agent_docs/README.md)
 - [Development setup](docs/dev-setup.md)
 - [Models](docs/models.md)
 - [Architecture decisions](docs/adr/)
@@ -211,8 +218,9 @@ PaddleOCR4Android (MIT). MeCab/mecab_for_dart are BSD-3. ONNX Runtime is MIT.
 UniDic and MDict dictionaries are supplied by the user and are not
 redistributed. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-The planned Phase 6 assistant would use user-supplied API keys and a
+The optional Phase 6 assistant uses user-supplied API keys and a
 user-selected remote LLM provider. Provider terms and privacy policies apply;
-Rikai-Mobile would not redistribute LLM weights, keys, or conversations. Images
-would remain on-device; only locally extracted text and tool results would be
-sent when the user explicitly initiates a request.
+Rikai-Mobile does not redistribute LLM weights, keys, or conversations. Images
+remain on-device; only locally extracted text and cleaned evidence are sent when
+the user explicitly initiates a request. Binding privacy/security rules:
+[docs/project-rules.md](docs/project-rules.md) R-SEC.

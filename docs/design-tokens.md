@@ -6,6 +6,10 @@
 >
 > 实现：`lib/core/theme/app_tokens.dart`（token）与 `AppTheme.light()`
 > （Material 3 主题）。页面中不得硬编码颜色、字号、间距、圆角。
+>
+> 本文件是**视觉数值**的唯一权威；UI 的 MUST/MUST NOT 规则见
+> `docs/project-rules.md` §5，固定用户文案见 `docs/project-data.md` §7。
+> 页面/测试只引用 token 与文案表，不复制具体数值/文案。
 
 ## 1. 视觉方向
 
@@ -238,7 +242,8 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 
 - 顺序：拍照识别 → 查句子 → 查单词 → 历史记录 → 词典助手；文案在实施前不得提前
   改。仅新增第五个按钮，不改变现有四个的图标语义。
-- 常规屏：沿用 72dp 高、32sp、12dp 间距；五按钮整体仍放在可滚动 `ListView` 中。
+- 常规屏：沿用 72dp 高、32sp、12dp 间距；五按钮整体放在可滚动容器
+  （`SingleChildScrollView`/`ListView`）中，当前实现为 `SingleChildScrollView`。
 - 紧凑屏（可用高度 < 640dp）：按钮高 64dp、文字 28sp、间距 8dp，点击区域仍 ≥48dp；
   `使用前须知`/`边界说明` 不折叠，靠滚动保证不溢出。
 - 五按钮仍使用 `AppColors.header` 深蓝 + `onHeader` 白字白图标；不新增第五种按钮
@@ -416,7 +421,7 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 
 **Phase 6 实施时必须追加的自查项**
 
-- [ ] 主页五按钮顺序、紧凑屏高度/字号/间距、滚动不溢出，四按钮回归通过。
+- [ ] 主页五按钮顺序、紧凑屏高度/字号/间距、滚动不溢出，五按钮回归通过。
 - [ ] Agent 页/证据卡片/citation chip/严格/宽松徽标/阶段文字均走语义 token，无
       硬编码颜色/字号。
 - [ ] 会话词典筛选与查词全局筛选隔离；模式切换位置、Chip 不漂移。
@@ -681,7 +686,7 @@ Phase 1 及之前的页面（首页、文本阅读、设置、TokenChip、底部
 `AppTheme.light()` 与 token 统一：
 
 - 所有页面：深蓝 `#003A99` 顶栏 + 白色标题/图标；词条页 TabBar 为白色。
-- 首页：使用前须知 → 四个 `header` 深蓝功能按钮 → 边界说明，按 Column
+- 首页：使用前须知 → 五个 `header` 深蓝功能按钮 → 边界说明，按 Column
   顺序排列；左侧抽屉（直角、深蓝头部、应用图标）（图标+文字整体居中，
   32sp）；移除冗长介绍文字。
 - 阅读页：阅读面、结果区与输入/分词/复制工具区均为白色；工具区底边

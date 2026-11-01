@@ -6,8 +6,9 @@
 > `docs/phase6-agent-design.md`（Phase 6 设计 v2；P6.1–P6.5 已实现，P6.6/P6.7
 > 未实现）、`docs/phase6-agent-contracts.md`（契约/schema）、
 > `docs/phase6-status.md`（当前实现记录）、`docs/project-data.md`（测试/环境/开发
-> 数据/固定文案的单一来源）和 `docs/agent_docs/`（Agent 管线评审、已知问题与生命
-> 周期规范，开发 Agent 前必读）。
+> 数据/固定文案的单一来源）、`docs/project-rules.md`（正面/反面项目规则的单一
+> 来源）和 `docs/agent_docs/`（Agent 管线评审、已知问题与生命周期规范，开发 Agent
+> 前必读）。
 > 用户使用中文沟通；代码/标识符用英文。
 >
 > **Agent 开发提醒**：开发或修改 Phase 6 词典助手前，必须先读
@@ -16,8 +17,9 @@
 > 2026-10-31 的 F1–F17 未关闭前，不要在 P6.6/P6.7 上继续叠加新功能，也不要把
 > 未实现能力写成已支持。
 >
-> **数据引用规则**：测试数、设备结果、性能、环境版本和固定 UI 文案统一以
-> `docs/project-data.md` 为准；其他文档只引用，不复制当前数值。
+> **数据/规则引用规则**：测试数、设备结果、性能、环境版本、预算和固定 UI 文案
+> 统一以 `docs/project-data.md` 为准；正面/反面 MUST/MUST NOT 规则统一以
+> `docs/project-rules.md` 为准。其他文档只引用，不复制当前数值或规则正文。
 
 ## 1. 项目是什么
 
@@ -540,6 +542,8 @@ Phase 5 已完成并发布；Phase 6 P6.1–P6.5 已实现，P6.6/P6.7 待做。
 ## 5. 项目误区 → 解决方案（重要）
 
 > 每条先写“误区/表现”，再写“正确做法”。遇到相似问题直接照做，不要重复试错。
+> 本节保留**阶段实现陷阱/历史经验**；长期有效的 MUST/MUST NOT 规则以
+> `docs/project-rules.md` 为准，本节与其冲突时以后者为准。
 
 ### 5.1 架构与 OCR
 
@@ -1316,6 +1320,7 @@ docs/phase6-agent-design.md                                  # Phase 6 设计 v2
 docs/phase6-agent-contracts.md                               # Phase 6 契约/schema/状态机
 docs/phase6-status.md                                        # Phase 6 实现记录（P6.1–P6.5）
 docs/project-data.md                                         # 测试/环境/数据/固定文案单一来源
+docs/project-rules.md                                        # 正面/反面项目规则单一来源
 docs/agent_docs/                                             # Agent 管线评审/已知问题（开发前必读）
 docs/agent_docs/device-feedback-2026-10-31.md                # F1–F17 实机反馈修正计划/波次
 docs/schemas/agent/                                          # Agent JSON Schema

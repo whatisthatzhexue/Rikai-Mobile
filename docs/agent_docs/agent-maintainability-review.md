@@ -1,4 +1,6 @@
 > ⚠️ 历史快照：本文档记录特定历史时期的审查结论。当前修复状态请以 docs/phase6-status.md 和各 phase 状态文件为准。
+> 规范性规则见 [`../project-rules.md`](../project-rules.md)；当前数据见
+> [`../project-data.md`](../project-data.md)。
 
 # Agent 代码可维护性评审
 

@@ -11,12 +11,14 @@
   [`docs/project-data.md`](../project-data.md) §2/§5。
   F4/F5/F9/F10 有 widget/unit 覆盖；F15 有请求范围 unit 测试；F16 有
   controller 进度/取消测试。设备手工验收仍待 Wave 4。
-- 约束：不 commit/reset；不覆盖已有评审结论；图片仍只在本机 OCR；API Key 仍只
-  在安全存储；F15/F16 是用户明确要求的非 Agent 修复，不能借机改动查词/OCR
-  的核心行为。
+- 约束：规则见 `docs/project-rules.md`（R-SEC/R-AGENT/R-DEV），数据/文案见
+  `docs/project-data.md`；F15/F16 是用户明确要求的非 Agent 修复，不能借机改动
+  查词/OCR 的核心行为。
 
 关联文档：
 
+- [项目规则](../project-rules.md)（R-AGENT/R-UI/R-SEC）
+- [项目数据](../project-data.md)（当前测试/预算/文案）
 - [生命周期规范](agent-lifecycle-and-edge-cases.md)
 - [管线评审](phase6-pipeline-review.md)（H1–H8）
 - [可维护性评审](agent-maintainability-review.md)（M1–M28）

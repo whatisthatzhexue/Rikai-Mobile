@@ -11,7 +11,8 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > implemented; Waves 2–4 are pending**; follow
 > `docs/agent_docs/device-feedback-2026-10-31.md` before extending the Agent.
 > **Current test/device/build/environment numbers are centralized in
-> `docs/project-data.md`; do not copy them here.** Automated tests use fake
+> `docs/project-data.md`; do not copy them here.** Normative MUST/MUST NOT rules
+> live in `docs/project-rules.md`. Automated tests use fake
 > providers and never a real API key. On
 > 2026-10-30 a user-configured DeepSeek provider was smoke-tested on the x86_64
 > emulator (key never logged); arm64/real manga-page and real-dictionary
@@ -23,7 +24,8 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 ### P6.1 Capability layer
 
 - `lib/core/models/agent/` DTOs: input envelope, evidence/citation, analysis,
-  dictionary/UniDic profile, quote/source version, tool spec/result.
+  dictionary/UniDic profile, quote/source version, and `AgentToolErrorCode`
+  (tool spec/result DTOs were removed with the 2026-10-31 tool-layer removal).
 - `lib/core/models/lookup_request.dart`, `lib/core/models/dictionary_sample.dart`.
 - `lib/services/agent/ports/`: OCR, tokenize, lookup, dictionary sample, LLM,
   secret, capability exception. Text-only LLM port has no image/file part.
@@ -34,9 +36,10 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 - `lib/services/mdict/mdict_worker.dart`: `sample` and `suggest` worker commands;
   `MdictService` implements `LookupBackend`; bounded samples produce plain-text
   snippets/features.
-- Tool registry/adapters: `unidic.tokenize`, `mdict.lookup`, `mdict.suggest`
-  (model-visible); `ocr.recognize`, `dictionary.sample`, `unidic.profile`
-  (orchestrator-only). Minimal JSON-schema validator and per-run budget.
+- **Tool registry/adapters were removed on 2026-10-31** with the fixed-pipeline/
+  no-tools decision. `lib/services/agent/tools/` is absent; the contract keeps the
+  tool table only as future reference. `AgentToolErrorCode` remains as the stable
+  error vocabulary.
 - `CitationRegistry` issues/keeps `source-N`, dedupes by dictionary + entry.
 - Assets: `assets/agent/dictionary_probes.json`,
   `assets/agent/grammar_patterns_ja.json`; grammar longest-match catalog.
@@ -232,7 +235,7 @@ final JSON ~3k chars; DeepSeek `deepseek-flash` can take ~50s, which is why live
 progress is required.
 
 New test files include: `agent_models_test.dart`, `lookup_gateway_test.dart`,
-`agent_tool_registry_test.dart`, `grammar_patterns_test.dart`,
+`grammar_patterns_test.dart`,
 `dictionary_probes_test.dart`, `provider_payload_test.dart`,
 `openai_compatible_provider_test.dart`, `anthropic_provider_test.dart`,
 `fake_provider_test.dart`, `profile_fingerprint_test.dart`,

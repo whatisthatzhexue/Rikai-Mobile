@@ -12,39 +12,34 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
    实机反馈 17 项（F1–F17）的修正方案、依赖与执行波次；**当前优先工作队列**。
 3. [../project-data.md](../project-data.md) —— 当前测试/设备/性能/环境/固定文案
    的单一事实源。
-4. [phase6-pipeline-review.md](phase6-pipeline-review.md) —— 当前管线评审与
+4. [../project-rules.md](../project-rules.md) —— 正面/反面 MUST/MUST NOT 规则的
+   单一来源；Agent 相关规则见 R-AGENT。
+5. [phase6-pipeline-review.md](phase6-pipeline-review.md) —— 当前管线评审与
    已知问题（含 file:line 证据）。
-5. [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md) ——
+6. [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md) ——
    运行生命周期、离开/返回页面、取消、并发、进程死亡等意外情况规范。
-6. [agent-maintainability-review.md](agent-maintainability-review.md) —— Agent
+7. [agent-maintainability-review.md](agent-maintainability-review.md) —— Agent
    代码可维护性评审（死抽象、god 文件、controller/测试、schema 债务）。
-7. [non-agent-regression-review.md](non-agent-regression-review.md) —— Agent
+8. [non-agent-regression-review.md](non-agent-regression-review.md) —— Agent
    以外功能的回归检查（旧 integration test 文案、帮助页文案、构建风险）。
-8. [../phase6-agent-design.md](../phase6-agent-design.md) —— 设计 v2。
-9. [../phase6-agent-contracts.md](../phase6-agent-contracts.md) —— 契约/schema/
-   状态机。
-10. [../phase6-status.md](../phase6-status.md) —— 当前实现记录。
-11. [../adr/0004-agent-capability-boundary.md](../adr/0004-agent-capability-boundary.md)
+9. [../phase6-agent-design.md](../phase6-agent-design.md) —— 设计 v2。
+10. [../phase6-agent-contracts.md](../phase6-agent-contracts.md) —— 契约/schema/
+    状态机。
+11. [../phase6-status.md](../phase6-status.md) —— 当前实现记录。
+12. [../adr/0004-agent-capability-boundary.md](../adr/0004-agent-capability-boundary.md)
     —— 能力边界决策。
 
 ## 硬规则
 
-- **开发或修改 Agent 前，先读 `docs/agent_docs/`，优先解决
-  `phase6-pipeline-review.md` 中列出的高优先级问题。**
-- 高优先级问题未关闭前，不要在 P6.6/P6.7 上继续叠加新功能；先把管线正确性
-  （输入/校验/取消/失败路径）修好。
-- 不要把未实现的能力写成已支持：模型工具调用、历史会话、真实 provider 验收、
-  多 OCR 等当前状态以评审文档和 `docs/phase6-status.md` 为准。
-- **运行状态必须放在应用级 controller，不得只存在 `AgentPage` State；用户离开
-  Agent 页不得取消生成；返回时必须恢复最新阶段/流式文本/结果。** 具体规则见
-  [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md)。
-- 图片只能经本机 OCR；不要把图片、路径、base64 或 provider 视觉能力引入 Agent。
-- API Key 只放安全存储；不进 SharedPreferences、SQLite、日志、导出或仓库。
-- **测试数、设备结果、性能、环境版本和固定 UI 文案统一引用
-  [`docs/project-data.md`](../project-data.md)，不要在其他文档复制当前数值。**
-- **2026-10-31 实机反馈未关闭前，先按
-  [device-feedback-2026-10-31.md](device-feedback-2026-10-31.md) 的 Wave 顺序处理；
-  不要开始 P6.6/P6.7。**
+- **规范性 MUST/MUST NOT 规则统一以 `docs/project-rules.md` 为准；当前测试/设备/
+  性能/环境/预算/固定文案统一以 `docs/project-data.md` 为准。** 本目录只保留
+  Agent 专项评审、生命周期和历史 gap 证据，不复制规则正文/当前数值。
+- 开发或修改 Agent 前，先读 `device-feedback-2026-10-31.md`（当前队列）；
+  `phase6-pipeline-review.md` 是历史 gap 证据，不是当前任务清单。优先级/门禁见
+  [`../project-rules.md`](../project-rules.md) R-AGENT-14/15。
+- 图片/密钥/运行状态/未实现能力等具体规则见
+  [`../project-rules.md`](../project-rules.md) R-SEC/R-AGENT；
+  生命周期细节见 [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md)。
 - 修复问题时同步更新本目录的状态表，并在完成一项后记录验证方式。
 
 ## 问题状态表

@@ -3,6 +3,10 @@
 > **2026-10-31 实现决策**：当前为固定流水线、模型无工具。工具表（`ToolSpec`/
 > `ToolResult`、`unidic.tokenize`、`mdict.lookup`、`mdict.suggest`、预算/可见性）
 > 仅作为未来契约保留；`lib/services/agent/tools/` 已删除，模型请求不携带 tools。
+>
+> 规范性 MUST/MUST NOT 规则见 `docs/project-rules.md`；当前预算/上限和固定文案
+> 见 `docs/project-data.md`。本文件只保留 Agent 字段、错误码、状态机和未来
+> tool 契约，不重复规则正文或当前实现数值。
 
 - 状态：**设计契约；P6.1–P6.5 核心已实现，P6.6/P6.7 未实现**；与
   `docs/phase6-agent-design.md` v2 配套。实现状态见 `docs/phase6-status.md`。
@@ -552,23 +556,11 @@ idle
 
 ## 9. 预算默认值
 
-| 项 | 默认值 |
-|---|---|
-| 单次分析源文本 | ≤ 6,000 日文字符（超限选段，不静默截断） |
-| 唯一检索目标 | ≤ 120 |
-| citation 总数 | ≤ 60（`AgentLimits.maxEvidenceEntries`，唯一来源，禁止硬编码） |
-| 每词每典条数 | ≤ 3 |
-| 摘要长度 | ≤ 400 字符 |
-| 每词典档案 | ≤ 2,000 字符 |
-| 模型额外工具调用 | ≤ 6 |
-| 单工具超时 | 60s |
-| 额外工具总预算 | 90s |
-| provider 超时 | 180s（当前实现默认；旧契约 120s 以此为准统一） |
-| provider 重试 | 429/5xx 最多 2 次；401/403 不重试 |
-| 覆盖审查缺失项 | ≤ 20 |
-| 覆盖审查重复组 | ≤ 10 |
-| 覆盖检索回退 | ≤ 1 次/用户请求 |
+当前实现/计划中的源文本、target、citation、每词典条数、摘要、profile、Provider
+超时/重试、图片与覆盖审查预算统一见 `docs/project-data.md` §8。本契约不复制这些
+数字；代码/测试读取 `AgentLimits`/请求级 policy，文档引用 project-data。
 
+历史 tool loop 预算（6 次/单工具 60s/总 90s）仅作未来契约参考，不是当前实现。
 超预算时设置 `truncated=true`，UI 显示“已按预算缩减，未分析的部分不会出现在结果
 中”；不得静默截断长文本。
 
@@ -605,8 +597,8 @@ validate(analysis, evidence, quotes, mode):
 
 ## 11. Provider 请求契约
 
-- `LlmRequest` 只含 `messages`、`tools`（schema）、`response_format`、`max_tokens`、
-  `stream`。
+- 当前 `LlmRequest` 含 `model`、`messages`、`responseFormat`、`maxTokens`、`stream`；
+  **不含 `tools`**。若未来恢复 tool loop，才增加 tools/tool_result 契约。
 - `LlmMessage.content` 只有 `LlmTextPart`；**没有 image/file 类型**。
 - 发送前 `assertNoImagePayload`：递归检查 JSON 键/值，禁止
   `image`、`image_url`、`input_image`、`base64`、`data:image`、`file://`、
@@ -625,11 +617,11 @@ validate(analysis, evidence, quotes, mode):
 | `input.v1` | `lib/core/models/agent/agent_input.dart` |
 | `evidence.v1` | `lib/core/models/agent/agent_evidence.dart` |
 | `analysis.v1` | `lib/core/models/agent/agent_analysis.dart` |
-| `dictionary-profile.v1` | `lib/core/models/agent/dictionary_profile.dart` |
-| `tool-result.v1` | `lib/core/models/agent/agent_tool.dart` |
+| `dictionary-profile.v1` | `lib/core/models/agent/agent_profile.dart`（`AgentDictionaryProfile`） |
+| `tool-result.v1` | future-only；当前无 ToolResult DTO，`agent_tool.dart` 仅保留错误码 |
 | `quote.v1` | `lib/core/models/agent/agent_quote.dart` |
 | Ports | `lib/services/agent/ports/` |
-| Tool registry/adapters | `lib/services/agent/tools/` |
+| Tool registry/adapters | 2026-10-31 已删除；仅作未来契约参考 |
 | Orchestrator | `lib/services/agent/agent_orchestrator.dart` |
 | Validator | `lib/services/agent/agent_validator.dart` |
 | Citation registry | `lib/services/agent/citation_registry.dart` |

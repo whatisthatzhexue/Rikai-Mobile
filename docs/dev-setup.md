@@ -1,5 +1,8 @@
 # Development setup
 
+> 规范性 MUST/MUST NOT 规则见 [`docs/project-rules.md`](project-rules.md)；
+> 本文只保留操作步骤与命令，不复制规则正文。
+
 ## Toolchain
 
 - 精确的 Flutter/Dart、Android SDK/build-tools/platform、NDK、JDK、CMake 版本

@@ -5,6 +5,9 @@
 > 本文中“受限模型工具调用”章节保留为未来扩展参考，不代表已实现。P6.6 若需要
 > 模型补查，必须先重新批准 tool loop 并补 `LlmMessage` tool_use/tool_result。
 > 同样，`OcrWorkflow` 因无生产调用已删除，OCR 由 `OcrPortAdapter` 直接完成。
+>
+> 规范性 MUST/MUST NOT 规则见 `docs/project-rules.md`；当前预算/上限和固定文案
+> 见 `docs/project-data.md`。本文保留产品/流程设计细节，不重复规则正文或当前数值。
 
 - 状态：**设计 v2；P6.1–P6.5 核心已实现，P6.6（多 OCR）与 P6.7（DSL/发布）未实现**
 - 日期：2026-10-30
@@ -20,8 +23,9 @@
 
 ## 0. v2 变更摘要
 
-1. 从“通用工具型 Agent”改为**固定流水线 + 受限模型工具调用**：编排器预取
-   OCR/分词/逐词查词，模型只做理解、推断和预算内的补充查词。
+1. 从“通用工具型 Agent”改为**固定流水线 + 受限模型工具调用**（v2 原目标；
+   2026-10-31 实现决策进一步收敛为**模型无工具**，补充查词留作未来扩展）：
+   编排器预取 OCR/分词/逐词查词，模型只做理解、推断和引用已有证据。
 2. 新增 **Step -1 词典熟悉期**：有界采样、LLM 归纳、用户确认、按指纹缓存。
 3. 新增 **Step 0 OCR JSON 信封**：只发送不含路径的文本 JSON（`sources[]` +
    `variants[]`，核心字段 `image_id` + OCR 文本），多图一一对应，禁止
@@ -56,7 +60,8 @@ Phase 6 在现有阅读/查词应用上增加「词典助手」：把本地 OCR�
 
 **已确认的架构决策**
 
-1. 采用**固定流水线 + 受限模型工具调用**：不采用自由 ReAct 大循环。
+1. 采用**固定流水线**：不采用自由 ReAct 大循环；2026-10-31 决策为**模型无
+   工具**，tool loop 仅保留为未来扩展。
 2. Provider 首版支持 **OpenAI-compatible（DeepSeek/自定义 endpoint）** 与
    **Anthropic Claude Messages API**；API Key 用 `flutter_secure_storage`
    （Android Keystore 支持），失败时退回原生 Keystore MethodChannel。
@@ -170,7 +175,7 @@ SecretStore（flutter_secure_storage，仅 API Key）
 
 | 能力 | 现有入口 | 现状 | 接口化产物 |
 |---|---|---|---|
-| OCR | `OcrService.recognize/ensureReady/prewarm/cancel` | UI-free；`recognize` 不负责 readiness；`OcrResult` 无 `toJson` | `OcrPort` + `OcrRun` DTO + `OcrWorkflow`（ensureReady→recognize→composeOcrText） |
+| OCR | `OcrService.recognize/ensureReady/prewarm/cancel` | UI-free；`recognize` 不负责 readiness；`OcrResult` 无 `toJson` | `OcrPort` + `OcrRun` DTO；`OcrPortAdapter` 直接做 ensureReady→recognize→compose（`OcrWorkflow` 已删除） |
 | UniDic | `MecabService.analyze` → `List<Token>` | isolate 服务；`Token` 无 `toJson` | `TokenizePort` + `TokenEvidence` DTO（复用 `Token.lookupCandidates/reading/posLabel`） |
 | MDict | `MdictService.lookup/probe/readResource/warmUp` | 返回 `DictionaryInfo` + 原始 HTML；UI 选择逻辑耦合 | `LookupPort` + 纯 `LookupGateway` + 纯文本证据摘要（复用 `htmlToPlainText`） |
 | 词典采样 | 无 | 无公开 API；不能遍历大词典 | `DictionarySamplePort` + worker `sample` 命令（有界探针） |
@@ -489,13 +494,10 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
 
 ### 6.6 预算、取消与截断
 
-- 单次分析源文本 ≤ 6,000 日文字符；超限不静默截断，弹出段落选择器让用户选段。
-- 唯一检索目标 ≤ 120；citation ≤ `AgentLimits.maxEvidenceEntries`（默认 60）；
-  每词每典 ≤ 3 条；摘要 ≤ 400 字符；每词典 profile ≤ 2,000 字符；模型额外工具
-  调用 ≤ 6。上限必须来自一个全局 `AgentLimits`/请求级 policy，不得在
-  orchestrator、EvidenceBuilder、schema 和 UI 各写一个 60。
-- 覆盖审查（F7）缺失项 ≤ 20、重复组 ≤ 10、补充检索回退 ≤ 1 次；超限只截断
-  候选并显示 warning，不静默扩大成本。
+- 当前源文本/target/citation/每典/摘要/profile/Provider/覆盖审查预算统一见
+  `docs/project-data.md` §8；代码必须通过 `AgentLimits`/请求级 policy 读取，不得在
+  orchestrator、EvidenceBuilder、schema 和 UI 各写一份数字。
+- 历史 tool loop 预算（6 次/单工具 60s/总 90s）仅作未来参考，不是当前实现。
 - 超预算时显示“已按预算缩减，未分析的部分不会出现在结果中”，并允许用户缩小范围；
   记录 `truncated` 标记。
 - 每个阶段可取消；取消 OCR 调用 `OcrService.cancel()`；已发出的 MDict/MeCab 请求
@@ -755,7 +757,7 @@ SharedPreferences，但不得混入 Key。
 
 Phase 6 实施后至少覆盖：
 
-1. 五按钮顺序、命名、小屏布局；当前四按钮 UI 回归。
+1. 五按钮顺序、命名、小屏布局；五按钮 UI 回归。
 2. 图片输入只调用本机 OCR；捕获 provider 请求，断言无图片/base64/路径/视觉字段。
 3. 文字、图片、图片+文字三种输入路径。
 4. Step -1：有界采样、用户确认才保存、复用、词典变化后失效、不写用户目录。
@@ -799,9 +801,10 @@ Phase 6 实施后至少覆盖：
 Phase 6 已在 Phase 5 完成后开始；P6.1–P6.5 核心已完成，P6.6/P6.7 待做。
 以下不是时间估算：
 
-1. **6.1 能力 Ports/Tools**：`lib/services/agent/ports/`、`tool_registry.dart`、
-   DTO 序列化、`LookupGateway`、`OcrWorkflow`、`MdictService.sample/suggest`、
-   `assets/agent/{grammar_patterns_ja,dictionary_probes}.json`。
+1. **6.1 能力 Ports**：`lib/services/agent/ports/`、DTO 序列化、`LookupGateway`、
+   `MdictService.sample/suggest`、`assets/agent/{grammar_patterns_ja,
+   dictionary_probes}.json`。`ToolRegistry` 与 `OcrWorkflow` 已于 2026-10-31
+   删除；本节只保留历史实施顺序。
 2. **6.2 Provider/Secret**：`lib/services/agent/providers/`、
    `lib/services/security/secret_store.dart`、`flutter_secure_storage`、FakeProvider、
    fake server 测试、无图片请求体断言。
@@ -820,7 +823,7 @@ Phase 6 已在 Phase 5 完成后开始；P6.1–P6.5 核心已完成，P6.6/P6.7
 **已定：**
 
 - Phase 6 已在 Phase 5 后开始；P6.1–P6.5 核心已实现，P6.6/P6.7 待做。
-- 固定流水线 + 受限模型工具调用。
+- 固定流水线；模型无工具（2026-10-31 决策；tool loop 为未来扩展）。
 - OpenAI-compatible + Anthropic 双适配；`flutter_secure_storage`。
 - 多 OCR 按需；默认单版本。
 - 严格模式无依据：明确说明 + 建议切宽松；不编造。

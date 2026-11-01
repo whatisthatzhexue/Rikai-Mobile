@@ -1,5 +1,8 @@
 # Agent 运行生命周期与意外情况处理
 
+> 规范性规则见 [`../project-rules.md`](../project-rules.md) R-AGENT-16；当前数据/
+> 文案见 [`../project-data.md`](../project-data.md)。本文只描述生命周期细节。
+
 - 状态：**开发规范（要求）**。应用级 `AgentRunController`、provider CancelToken、
   OCR/Evidence 取消、四步进度和编号依据已落地；**2026-10-31 实机反馈要求把词典
   档案确认改为应用级队列（F2），当前实现仍是页面回调 + 离开后 skip-once，属于

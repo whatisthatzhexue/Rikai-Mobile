@@ -5,10 +5,10 @@
 - 适用范围：Phase 3.5 / Phase 4 / Phase 5（阶段划分见 `docs/DEVELOPMENT_PLAN.md`）
 - 相关文档：`CLAUDE.md`、`docs/design-tokens.md`、`docs/phase3-status.md`、`docs/models.md`
 
-> **Phase 6 superseded note（2026-10-29）**
-> `docs/phase6-agent-design.md` 计划把主页改为五个按钮（拍照识别、查句子、
-> 查单词、历史记录、词典助手）并新增词典助手。本文件中的四个按钮/语料命名是
-> Phase 3.5/4 的历史实现要求；当前代码仍按本文件，Phase 6 UI 尚未实施。
+> **Phase 6 superseded note（2026-10-29，2026-11-01 更新）**
+> 主页现为五个按钮（拍照识别、查句子、查单词、历史记录、词典助手），Agent 页面
+> 已实现。本文件中的四个按钮/语料命名只是 Phase 3.5/4 的历史实现要求；当前 UI
+> 与文案以 `docs/project-data.md` §7 和 `docs/design-tokens.md` 为准。
 
 > **2026-10-29 最终实现修正（覆盖下文旧描述）**
 > 1. 照片集不再有“分析句子”按钮：OCR 完成后若已配置 UniDic，自动分词并按文本
