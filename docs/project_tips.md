@@ -1,17 +1,9 @@
 # 项目误区与解决方案（Project Tips）
 
 > **单一经验源**：项目历史上的误区、踩坑表现与已验证解决方式统一在本文件维护。
-> 其它文档（含 `CLAUDE.md`、`README.md`、`docs/phase*-status.md`）只引用
-> `T-###` 或链接本文件，不再复制误区正文；**今后的新误区只在本文件追加**。
+> 其它文档只引用 `T-###`，不再复制误区正文；**今后的新误区只在本文件追加**。
 >
-> - 规范性 MUST / MUST NOT 规则：`docs/project-rules.md`
-> - 当前测试/设备/性能/环境/预算/固定文案：`docs/project-data.md`
-> - UI 视觉数值：`docs/design-tokens.md`
-> - Agent 字段/错误码/状态机：`docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
-> - 架构决策：`docs/adr/`
-> - 历史阶段快照：`docs/phase*-status.md`（保留当时值，不作当前数据）
->
-> - last_migrated: 2026-11-01（从 `CLAUDE.md` §5 迁移，共 129 条）
+> - last_migrated: 2026-11-01（从原交接文档 §5 迁移，共 129 条）
 > - last_updated: 2026-11-01
 > - 编号说明：条目使用连续的 `T-001`–`T-129`；原文档 §5.14 的 #122–#130
 >   顺延为 `T-121`–`T-129`。编号一经发布不再复用。
@@ -21,22 +13,20 @@
 > 先查文末的「附录 A：症状 → 处理速查」，再按 `T-###` 阅读完整条目。
 >
 > **写法**：每条先写“误区/表现”，再写“正确做法”；必要时附“参考实现”。
-> 条目中的代码/路径/命令是已验证做法，不是当前数值来源；与
-> `docs/project-rules.md` 冲突时以规则文件为准。
+> 条目中的代码/路径/命令是已验证做法，不是当前数值来源。
 
 ## 0. 使用与维护
 
 1. **查找**：先按症状查附录 A；再按域名读对应章节。
 2. **新增**：只在本文件追加 `T-130` 起的连续编号；如适用，同时在附录 A 增加
-   症状行。不要往 `CLAUDE.md`、phase status 或 README 写误区正文。
+   症状行。不要往其他文档写误区正文。
 3. **失效**：确认某条不再适用时，保留编号并标注“已失效 / 已被 `T-###` 取代”；
    不要复用编号。
-4. **冲突**：规则 → `docs/project-rules.md`；当前数据 → `docs/project-data.md`；
-   视觉数值 → `docs/design-tokens.md`；字段/错误码 →
-   `docs/phase6-agent-contracts.md`。发现摘要冲突时修正低权威文档。
-5. **引用**：其他文档只写 `docs/project_tips.md` + `T-###` 或链接，不复制正文。
+4. **冲突**：发现与当前规则、数据或视觉规范冲突时，以对应权威内容为准，并修正
+   低权威摘要。
+5. **引用**：引用本文件时只写 `T-###` 或链接，不复制正文。
 
-### 0.1 与原 `CLAUDE.md` §5 的对照
+### 0.1 与原文档 §5 的对照
 
 | 原章节 | 本文件章节 | 条目 |
 |---|---|---|
@@ -56,8 +46,6 @@
 | §5.14 Phase 5 语料/引导 | §13 | T-121–T-129 |
 
 ## 1. 架构与 OCR（T-001–T-005）
-
-> 相关规则：`docs/project-rules.md` R-ARCH、R-PROD。
 
 ### T-001 把 PaddleOCR4Android 的 Paddle-Lite/OpenCV/NDK r21 模块塞进 Flutter
 
@@ -96,12 +84,9 @@ keep `ai.onnxruntime.**`。
 **误区**：把模拟器耗时当作真机性能或验收结果。
 
 **正确做法**：模拟器只做功能冒烟；性能、内存、竖排质量用 arm64 真机，记录到
-`docs/phase0-status.md` 或对应阶段状态文档（历史数据见
-`docs/project-data.md` §4）。
+对应阶段状态文档；不要把模拟器数据当作当前验收结果。
 
 ## 2. UniDic / MeCab（T-006–T-010）
-
-> 相关规则：`docs/project-rules.md` R-ARCH-07/08、R-SEC-10。
 
 ### T-006 因为 `mecab_for_dart` 要求 `<dicdir>/mecabrc` 就往用户 UniDic 目录写文件
 
@@ -110,15 +95,15 @@ keep `ai.onnxruntime.**`。
 **正确做法**：已 patch `packages/mecab_for_dart/src/dart_ffi.cpp`：只有该文件存在时
 才传 `-r <dicdir>/mecabrc`。应用在**私有目录**创建 `mecabrc`，用
 `Mecab.create(dictDir: path, options: '-r "<私有rc路径>"')` 传入。该方式已在
-Android x86_64 模拟器 + 真实大型 UniDic 上验证成功（规模见
-`docs/project-data.md` §6）；不需要改 C++ 的 `rcPath` 参数，**不要**写用户目录。
+Android x86_64 模拟器 + 真实大型 UniDic 上验证成功；不需要改 C++ 的
+`rcPath` 参数，**不要**写用户目录。
 
 ### T-007 把 UniDic 复制到 app 存储“更稳”
 
 **误区**：默认把大型 UniDic 复制进应用存储。
 
-**正确做法**：用户明确选择原地路径；不要默认复制大型 UniDic（规模见
-`docs/project-data.md` §6）。权限不足时引导 All Files Access，或让用户放到
+**正确做法**：用户明确选择原地路径；不要默认复制大型 UniDic。权限不足时引导
+All Files Access，或让用户放到
 `/sdcard/Android/data/com.rikai.mobile/files/`。外部存储 mmap 失败时记录具体
 错误并**询问用户**，不要静默改成复制方案。
 
@@ -156,8 +141,6 @@ feature 行。
 
 ## 3. MDict（T-011–T-014）
 
-> 相关规则：`docs/project-rules.md` R-ARCH-09/10。
-
 ### T-011 把 `locateAll` 返回的内容直接当最终 HTML
 
 **误区**：忽略 `@@@LINK=` 重定向，把链接文本直接渲染。
@@ -188,8 +171,8 @@ Future<({String key, String html})> resolve(
 **误区**：在主 isolate 初始化全部词典，拖慢启动并占用大量内存。
 
 **正确做法**：懒初始化 + 长生命周期 worker isolate；只打开启用的词典。大词典的
-初始化耗时/内存见 `docs/project-data.md` §4/§6；需要时用
-`exportCache/importCache` 或 SQLite key 索引，不要在主 isolate 初始化。
+初始化耗时/内存按实际设备测量；需要时用 `exportCache/importCache` 或 SQLite
+key 索引，不要在主 isolate 初始化。
 
 ### T-013 使用已废弃的 `init()`
 
@@ -209,8 +192,6 @@ Future<({String key, String html})> resolve(
 `entry://` 与外部 URL。
 
 ## 4. Android / 权限 / 构建（T-015–T-020）
-
-> 相关规则：`docs/project-rules.md` R-DEV、R-SEC-09。
 
 ### T-015 认为 `permission_handler` 可以处理“所有文件访问”
 
@@ -260,7 +241,7 @@ Move-Item "$c\dependencies-accessors" "$c\dependencies-accessors.bak"
 **误区**：修改 NDK 版本以绕过构建问题。
 
 **正确做法**：`android/app/build.gradle.kts` 固定 NDK/compileSdk/targetSdk/minSdk，
-具体值见 `docs/project-data.md` §1（`jni` 插件要求）；不要降 NDK。
+具体值以该构建文件为准（`jni` 插件要求）；不要降 NDK。
 
 ### T-019 release 构建随时可跑、很快
 
@@ -278,8 +259,6 @@ Move-Item "$c\dependencies-accessors" "$c\dependencies-accessors.bak"
 改动；结束时报告未提交文件。
 
 ## 5. 许可 / 仓库 / 范围（T-021–T-025）
-
-> 相关规则：`docs/project-rules.md` R-PROD、R-DEV-04。
 
 ### T-021 模型/词典可以随仓库提交
 
@@ -312,7 +291,7 @@ Apache-2.0，但仅作为可选转换来源。
 **正确做法**：MVP/核心仍锁定 Android 单端、离线 OCR/分词/词典；不引入 iOS、
 ML Kit 或云 OCR/云翻译。Phase 6 是**可选的用户配置文本 LLM Agent**：必须单独
 批准，默认不联网，图片不上传，不使用 provider 视觉，不把 API Key 写入仓库/日志；
-未实现前 README/CLAUDE 只能写 planned/design。
+未实现前文档只能写 planned/design。
 
 ### T-025 恢复旧包名/旧 MainActivity
 
@@ -323,8 +302,6 @@ ML Kit 或云 OCR/云翻译。Phase 6 是**可选的用户配置文本 LLM Agent
 `com/rikai/rikai_mobile/MainActivity.kt` 只是注释，不要恢复类。
 
 ## 6. 设备实测与开发流程（Phase 1，2026-10-27）（T-026–T-039）
-
-> 相关规则：`docs/project-rules.md` R-DEV、R-ARCH。
 
 ### T-026 在 Git Bash 里直接传 `/sdcard/...` 给 adb 或 `--dart-define`
 
@@ -340,7 +317,7 @@ ML Kit 或云 OCR/云翻译。Phase 6 是**可选的用户配置文本 LLM Agent
 **正确做法**：该命令测试前安装、测试后卸载应用，`MANAGE_EXTERNAL_STORAGE`
 appops 随之丢失。用同一 shell 的后台循环在应用出现后反复执行
 `adb shell appops set com.rikai.mobile MANAGE_EXTERNAL_STORAGE allow`；集成测试
-会轮询最多 120 秒等待 UniDic 可读。命令见 `docs/dev-setup.md`。
+会轮询最多 120 秒等待 UniDic 可读。命令按设备集成测试流程执行。
 
 ### T-028 忽略 Riverpod 3 的默认 retry
 
@@ -371,8 +348,7 @@ appops 随之丢失。用同一 shell 的后台循环在应用出现后反复执
 **正确做法**：`assets/fonts/*.ttf` 已被 `.gitignore` 忽略；用户按
 `assets/fonts/README.md` 自行下载。UI 必须使用
 `lib/core/theme/app_tokens.dart` 与 `AppTheme.light()`，禁止散落
-`Color(0x...)`/`fontSize: 数字`（阅读区用户字号除外）；规范见
-`docs/design-tokens.md`。
+`Color(0x...)`/`fontSize: 数字`（阅读区用户字号除外）。
 
 ### T-032 把 MDD key 直接当作 HTML 的 `src` 交给 `DictReader.locate`
 
@@ -442,8 +418,6 @@ Access；搜索/词条页有持续动画时用定时 `tester.pump` 轮询，不�
 白字；不要再按页面单独设白底。详见 `T-041`。
 
 ## 7. UI / 启动修正（2026-10-28）（T-040–T-051）
-
-> 相关规则：`docs/project-rules.md` R-UI；视觉数值见 `docs/design-tokens.md`。
 
 ### T-040 设备集成测试后直接安装 `app-debug.apk` 手动验收
 
@@ -543,7 +517,7 @@ Access；搜索/词条页有持续动画时用定时 `tester.pump` 轮询，不�
 
 **正确做法**：内容词蓝50底 + 蓝700；功能词/标点透明底 + `textPrimary` 近黑；
 振假名品牌蓝 `primary`。阅读器内不使用灰色文字，靠蓝色/黑色/字重建立层级；
-对应规范见 `docs/design-tokens.md` §3.2/TokenChip。
+对应 TokenChip token 在 `lib/core/theme/app_tokens.dart`。
 
 ### T-051 查词弹层保留右上角关闭叉；词形与读音相同仍显示蓝字读音
 
@@ -554,8 +528,6 @@ Access；搜索/词条页有持续动画时用定时 `tester.pump` 轮询，不�
 词形。
 
 ## 8. OCR 设备经验（Phase 3，2026-10-28）（T-052–T-058）
-
-> 相关规则：`docs/project-rules.md` R-ARCH-03/04/06。
 
 ### T-052 用 `adb push` 往 `/sdcard/Android/data/<pkg>/files/models` 塞模型后直接让 app 读取
 
@@ -584,7 +556,7 @@ Access；搜索/词条页有持续动画时用定时 `tester.pump` 轮询，不�
 
 **正确做法**：v13 是静态 API：`FilePicker.pickFiles()` 直接返回
 `List<PlatformFile>`（取消为空列表）；目录选择用
-`FilePicker.getDirectoryPath()`。详见 `docs/dev-setup.md`。
+`FilePicker.getDirectoryPath()`。
 
 ### T-055 解析 PP-OCRv5 的 `keys.yml` 时用 `trim()`/`rstrip()`
 
@@ -594,7 +566,7 @@ Access；搜索/词条页有持续动画时用定时 `tester.pump` 轮询，不�
 空格，Kotlin 的 `trim()`/Python 的 `rstrip()` 会将其删掉。
 
 **正确做法**：按行处理时只去掉 `\r`/`\n`，YAML 标量只去掉 ASCII 空格；
-`CtcDictionary.kt` 已按此实现，输出 class 数见 `docs/project-data.md` §6。
+`CtcDictionary.kt` 已按此实现，输出 class 数按模型字典实际长度校验。
 
 ### T-056 每个 OCR 引擎 close 时关闭 `OrtEnvironment`，或把竖排请求静默当横排处理
 
@@ -621,9 +593,6 @@ Access；搜索/词条页有持续动画时用定时 `tester.pump` 轮询，不�
 0.229/0.224/0.225 归一化检测输入；识别输入用 0.5/0.5。
 
 ## 9. 采集 / 导入 / 语料（Phase 3.5，2026-10-29）（T-059–T-074）
-
-> 相关规则：`docs/project-rules.md` R-UI-07、R-ARCH-11；固定文案见
-> `docs/project-data.md` §7。
 
 ### T-059 继续用 `image_picker` 的系统相机 Intent 冒充实时拍照页
 
@@ -717,8 +686,8 @@ Access；搜索/词条页有持续动画时用定时 `tester.pump` 轮询，不�
 **误区**：信息顺序不符；按钮组占用剩余空间居中。
 
 **正确做法**：按 Column 顺序排列“使用前须知 → 功能按钮区 → 边界说明”（小屏可
-滚动；按钮数量/文案见 `docs/project-data.md` §7）。保持深蓝 `header`、32sp、
-按钮内容居中，但不再做整组垂直居中。
+滚动；按钮数量/文案按当前产品定义）。保持深蓝 `header`、32sp、按钮内容居中，
+但不再做整组垂直居中。
 
 ### T-069 语料页沿用 72dp 缩略图和右侧小删除按钮；点击语料仍跳文本阅读页
 
@@ -773,8 +742,6 @@ auto/vertical 会复用旧横向结果。
 
 ## 10. Agent 设计期（Phase 6）（T-075–T-081）
 
-> 相关规则：`docs/project-rules.md` R-AGENT、R-SEC。
-
 ### T-075 把图片/base64 或图片路径发给 LLM，让模型“顺便看看图”
 
 **误区**：把图片或图片路径作为 provider 输入，或调用视觉能力。
@@ -825,12 +792,10 @@ UniDic/MDict 目录。
 
 **误区**：功能未实现先改入口/文案；文档把 planned 写成已支持。
 
-**正确做法**：P6.5 已接入功能按钮并更新 README/CLAUDE/设计 token/测试；P6.6/
+**正确做法**：P6.5 已接入功能按钮并同步更新文档、设计 token 与测试；P6.6/
 P6.7 的新 UI 仍必须先补 token 与测试，不能把未实现能力写成已支持。
 
 ## 11. OCR 收敛（Phase 4.5）（T-082–T-112）
-
-> 相关规则：`docs/project-rules.md` R-ARCH-05/06、R-UI-07。
 
 ### T-082 每次 `ensureReady` 都重新创建全部可选 session / 全量 SHA-256
 
@@ -906,8 +871,8 @@ WebView 退出闪帧和大部分卡顿来自 platform view 参与长动画。
 本地 `<audio controls>`；`mddKeyCandidates` 同时去掉 `sound://` 前缀。WebView 需
 `allowFileAccess` 和 `allowFileAccessFromFileURLs: true`，JS 仍保持关闭。
 `日本語文型辞典 三语音频版` 的 `00048.aac` 已在 x86_64 模拟器通过
-`mdict_audio_android_test.dart` 验证（资源/结果见 `docs/project-data.md` §3），
-渲染出本地 `<audio>`；扬声器出声仍需真机确认。
+`mdict_audio_android_test.dart` 验证，渲染出本地 `<audio>`；扬声器出声仍需真机
+确认。
 
 ### T-092 把词典选择/查词结果放在 SearchPage/LookupSheet 的 State
 
@@ -939,7 +904,7 @@ WebView 退出闪帧和大部分卡顿来自 platform view 参与长动画。
 **正确做法**：同时跑 MangaOCR 与 PaddleOCR，用 `OcrTextQuality` 综合置信度、
 假名覆盖、有效字符和重复噪声评分；Paddle 需明显胜出（分差 >0.04）才切换。最佳
 主候选 <0.80 时才尝试 ±90° Paddle；真实图片扫描结果见
-`docs/project-data.md` §3，旋转未胜出，所以不要无条件增加两轮旋转。最终只返回
+`docs/phase4.5-status.md`，旋转未胜出，所以不要无条件增加两轮旋转。最终只返回
 一个引擎，手动 vertical 缺 Manga 仍报错。
 
 ### T-096 把 OCR 块之间的空格原样交给 UniDic
@@ -1067,8 +1032,6 @@ token 列表上用 `NoScrollbarBehavior`；默认滚动条的估算高度会随�
 
 ## 12. Agent v2 设计期（Phase 6）（T-113–T-120）
 
-> 相关规则：`docs/project-rules.md` R-AGENT、R-SEC。
-
 ### T-113 把图片路径、文件名、base64 或 EXIF 放进 provider 请求
 
 **误区**：provider 能推断本地文件信息，或请求体包含图片数据。
@@ -1081,9 +1044,9 @@ token 列表上用 `NoScrollbarBehavior`；默认滚动条的估算高度会随�
 
 **误区**：原始词条内容进入 provider，泄露资源或引入注入面。
 
-**正确做法**：用 `htmlToPlainText` + sanitizer 生成摘要（长度上限见
-`docs/project-data.md` §8）；去路径、base64、MDD/MDX、音频/图片引用。完整词条
-只在用户点击 citation 时走现有 WebView，不进入 provider。
+**正确做法**：用 `htmlToPlainText` + sanitizer 生成摘要（长度上限按当前预算
+常量）；去路径、base64、MDD/MDX、音频/图片引用。完整词条只在用户点击 citation
+时走现有 WebView，不进入 provider。
 
 ### T-115 让模型决定先查哪本词典、如何合并/重排结果
 
@@ -1096,9 +1059,8 @@ token 列表上用 `NoScrollbarBehavior`；默认滚动条的估算高度会随�
 
 **误区**：用户不知道哪些内容未被分析。
 
-**正确做法**：超过源文本预算（见 `docs/project-data.md` §8）先让用户选段；超
-预算设置 `truncated=true` 并在 UI 明示“未分析的部分不会出现在结果中”，不静默
-截断。
+**正确做法**：超过源文本预算先让用户选段；超预算设置 `truncated=true` 并在 UI
+明示“未分析的部分不会出现在结果中”，不静默截断。
 
 ### T-117 词典熟悉档案未经用户确认就保存，或写进用户 UniDic/MDict 目录
 
@@ -1131,9 +1093,6 @@ token 列表上用 `NoScrollbarBehavior`；默认滚动条的估算高度会随�
 不导航。原文 quote 必须通过 `analysis_text` substring 校验。
 
 ## 13. 语料 / 引导（Phase 5）（T-121–T-129）
-
-> 相关规则：`docs/project-rules.md` R-DEV、R-UI；固定文案见
-> `docs/project-data.md` §7。
 
 ### T-121 首次启动直接进入主页，或给旧用户也强制弹引导
 
@@ -1262,6 +1221,6 @@ build；`flutter clean` 不一定能解决。不要改注册文件本身。
 | 本地导入仍提示缺少 det.onnx/rec.onnx | 上游文件名为 inference.onnx/inference.yml；按大小+角色匹配（`T-065`） |
 | 模型目录切换后仍读旧文件 | 保存设置后 manager 回调读取新路径；默认迁移校验后再保存（`T-066`） |
 | 返回照片集或多选页又重跑 OCR | 模式存会话、指纹存 OcrService；命中缓存直接渲染，多选只补缺失（`T-067`） |
-| 主页使用前须知仍在按钮下方 | 按“须知 → 功能按钮区 → 边界说明”的 Column 顺序排列，不再垂直居中；数量/文案见 `docs/project-data.md` §7（`T-068`） |
+| 主页使用前须知仍在按钮下方 | 按“须知 → 功能按钮区 → 边界说明”的 Column 顺序排列，不再垂直居中；数量/文案按当前产品定义（`T-068`） |
 | 语料仍是缩略图/点击进文本阅读 | 大照片完整 contain + 右上删除 + OCR + 日期；点击进语料详情（`T-069`） |
 | 语料详情只显示 OCR 或只显示分词 | 两段都显示；OCR 原文 + ReaderBlock 分词，可点词查词（`T-070`） |

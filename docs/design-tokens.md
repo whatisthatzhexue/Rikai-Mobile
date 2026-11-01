@@ -7,11 +7,8 @@
 > 实现：`lib/core/theme/app_tokens.dart`（token）与 `AppTheme.light()`
 > （Material 3 主题）。页面中不得硬编码颜色、字号、间距、圆角。
 >
-> 本文件是**视觉数值**的唯一权威；页面结构、控件位置与交互顺序等 UI 行为细节
-> 也以本文件为准。UI 的 MUST/MUST NOT 规则见 `docs/project-rules.md` §5，
-> 固定用户文案见 `docs/project-data.md` §7，实现误区见 `docs/project_tips.md`。
-> `CLAUDE.md` §1 只保留项目摘要并引用本文件；页面/测试只引用 token 与文案表，
-> 不复制具体数值/文案。
+> 本文件是**视觉数值与 UI 行为细节**的唯一权威：颜色、字号、间距、圆角、组件、
+> 页面结构、控件位置与交互顺序均以此为准。页面/测试只引用 token，不复制具体数值。
 
 ## 1. 视觉方向
 

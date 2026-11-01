@@ -1,12 +1,11 @@
 # Development setup
 
-> 规范性 MUST/MUST NOT 规则见 [`docs/project-rules.md`](project-rules.md)；
-> 本文只保留操作步骤与命令，不复制规则正文。
+> 本文只保留环境、构建、设备测试与排障的操作步骤和命令。
 
 ## Toolchain
 
 - 精确的 Flutter/Dart、Android SDK/build-tools/platform、NDK、JDK、CMake 版本
-  统一见 [docs/project-data.md](project-data.md) §1；不要在本页复制第二份版本表。
+  以本机工具链和 `android/app/build.gradle.kts` 为准；不要在本页复制版本表。
 - 安装时启用 native assets；CMake 3.22.1 仅在替换 MeCab native assets 时需要。
 
 ## Project location
@@ -27,7 +26,6 @@ assets/fonts/HarmonyOS_Sans_SC_Regular.ttf
 
 See `assets/fonts/README.md`. `pubspec.yaml` declares the family, so
 `flutter pub get`/build fails with a missing-asset error until the file exists.
-UI tokens and component rules are in `docs/design-tokens.md`.
 
 ## Launcher icon and splash
 
@@ -141,11 +139,10 @@ directory; Settings → “语料与存储” can clear the corpus or the extrac
 resource cache. The release build still signs with the debug keystore
 (`android/app/build.gradle.kts` has a TODO) — replace it before distribution.
 
-当前测试数量、测试文件和设备套件结果统一见
-[docs/project-data.md](project-data.md) §2–§3；本页不再重复具体数字。测试包含
-onboarding、阅读器保存、photo-block 序列化和语料图片缩放/JPEG；不使用桌面
-SQLite 测试依赖，因为 `sqflite_common_ffi` 会拉取原生 SQLite 下载并破坏离线
-Android 构建。
+本页不记录测试数量、测试文件数或设备套件结果；这些是易变数据，每次验证时以
+实际输出为准。测试包含 onboarding、阅读器保存、photo-block 序列化和语料图片
+缩放/JPEG；不使用桌面 SQLite 测试依赖，因为 `sqflite_common_ffi` 会拉取原生
+SQLite 下载并破坏离线 Android 构建。
 
 ## Emulator
 
@@ -259,8 +256,7 @@ root-package dependencies just to run the spike.
 Automated Agent tests use fake providers and must never contain a real API key.
 Request-body tests assert that images, base64, file paths, and file names are
 absent. Real provider calls, secure-storage device I/O, and real-dictionary
-`sample`/`suggest` still require device acceptance; see
-[project-data.md](project-data.md) §8 and `docs/project-rules.md` R-SEC/R-AGENT.
+`sample`/`suggest` still require device acceptance.
 
 ## Camera and capture session
 

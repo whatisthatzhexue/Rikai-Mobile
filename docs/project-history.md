@@ -2,17 +2,16 @@
 
 > **历史流水汇总**：本文件汇总 Phase 0–Phase 5 的实现、修复与验收过程，供追溯
 > “当时做了什么、为什么这样修”时查阅；**不代表当前规则、当前数据或当前任务**。
-> 当前状态/下一步见 `CLAUDE.md` §3–§4；当前数值见 `docs/project-data.md`；
-> 规范性规则见 `docs/project-rules.md`；各阶段详细快照仍以
-> `docs/phase*-status.md` 为准；本文件是时间线汇总，细节以 phase status 为准。
+> 各阶段详细快照见 `docs/phase*-status.md`；本文件是时间线汇总，细节以 phase
+> status 为准。
 >
-> - last_migrated: 2026-11-01（从 `CLAUDE.md` §3–§4 的已完成部分迁出）
+> - last_migrated: 2026-11-01（从原交接文档 §3–§4 的已完成部分迁出）
 > - 覆盖范围: Phase 0–Phase 5（记录截至 2026-10-30）
-> - 维护规则: 新阶段完成后在本文件追加“完成记录”，并在 `CLAUDE.md` §3 只保留
->   一句结论与指针；当前测试/设备/性能/构建数据仍只写 `docs/project-data.md`。
+> - 维护规则: 新阶段完成后在本文件追加“完成记录”；当前测试/设备/性能/构建数据
+>   不写在这里。
 
 **结论**：Phase 0–5 已全部完成；Phase 4.5 于 2026-10-30 通过 arm64/真实设备验收，
-Phase 5 已由用户确认并发布 1.0。当前焦点是 Phase 6（见 `CLAUDE.md` §3–§4）。
+Phase 5 已由用户确认并发布 1.0。当前焦点是 Phase 6。
 
 ## 阶段总览
 
@@ -27,8 +26,7 @@ Phase 5 已由用户确认并发布 1.0。当前焦点是 Phase 6（见 `CLAUDE.
 | Phase 4.5 | OCR 质量/性能收敛完成；2026-10-30 arm64/真实设备验收通过 | `docs/phase4.5-status.md` |
 | Phase 5 | 语料/首次引导/设置/发布打磨完成；2026-10-30 用户确认并发布 1.0 | `docs/phase5-status.md` |
 
-> Phase 6 不在本文件；当前状态/下一步见 `CLAUDE.md` §3–§4，实现进度见
-> `docs/phase6-status.md`。
+> Phase 6 不在本文件；实现进度见 `docs/phase6-status.md`。
 
 ## Phase 0 — 工程与基建
 
@@ -71,7 +69,7 @@ Phase 5 已由用户确认并发布 1.0。当前焦点是 Phase 6（见 `CLAUDE.
   HTML 清洗、CSS 注入、MDD 图片缓存与 `file://` 重写、离线 WebView
   （JS/网络关闭，`entry://` 导航，外部链接拦截）、词条页多词典 Tab、
   阅读区查词弹层、搜索页、词典管理页。
-- `docs/design-tokens.md` + `lib/core/theme/app_tokens.dart`：蓝/白 token、
+- 设计 token + `lib/core/theme/app_tokens.dart`：蓝/白 token、
   3x 72/48/36 → 24/16/12sp、4pt 间距、紧凑组件、TDesign 映射；已迁移
   既有 UI。HarmonyOS Sans SC 字体按用户要求**不入库**。
 - 中期 UI/功能修正（`项目初始文档.txt`）：
@@ -167,7 +165,7 @@ Phase 5 已由用户确认并发布 1.0。当前焦点是 Phase 6（见 `CLAUDE.
 - 模型页允许下载 MangaOCR，下载前确认许可未声明；照片集「竖向」启用，
   helper 根据 MangaOCR 是否就绪显示自动路由或下载提示。
 - 设备合成测试：自动/手动竖向均通过并输出 `これはテストです`；倒置横向页
-  180° 重跑后输出 `ありがとう`。设备/性能数据见 `project-data` §3–§4。
+  180° 重跑后输出 `ありがとう`。设备/性能数据见 `docs/phase4-status.md`。
 
 ## Phase 4.5 — OCR 质量/性能收敛 + 设备反馈
 
@@ -193,7 +191,8 @@ Phase 5 已由用户确认并发布 1.0。当前焦点是 Phase 6（见 `CLAUDE.
 - **缓存/交互**：手动横向可复用 auto 的 `paddle_v5` 结果，手动竖向可复用
   `manga_ocr` 结果；照片集“旋转”旋转私有副本 90°、清该照片 OCR 缓存。
 - 设备 OCR 套件（横向、6° 倾斜、lazy、Manga、90°、270°、倒置 180°、取消）
-  在 x86_64 全部通过；具体套件数、耗时和真实图片结果见 `project-data` §3–§4。
+  在 x86_64 全部通过；具体套件数、耗时和真实图片结果见
+  `docs/phase4.5-status.md`。
   2026-10-30 用户确认 arm64/真实设备验收通过。
 - 第二轮设备反馈（2026-10-29）：MDD `sound://` 转为本地 `<audio>`；MDict
   `Encrypted=2`/MDD 兼容、词典搜索单选/多选与简称、词条标题、权限引导、拍照
@@ -201,8 +200,7 @@ Phase 5 已由用户确认并发布 1.0。当前焦点是 Phase 6（见 `CLAUDE.
   预留 3.5 行（第 4 行半可见）滚动、选中不漂移；查词状态跨页面保留；键盘焦点
   路由清理；非阻塞 `RikaiToast`；竖排双引擎评分；OCR 日文空格清理；长文本
   懒加载/去滚动条；旋转自动中断 OCR；语料日期格式；删除对话框统一复选框。
-  冷启动真实图片复跑结果、MDD 音频测试结果见 `project-data` §3–§4；详见
-  `docs/phase4.5-status.md`。
+  冷启动真实图片复跑结果、MDD 音频测试结果详见 `docs/phase4.5-status.md`。
 - 横屏/布局收敛（2026-10-30）：批量导入扫描完成隐藏说明/状态；手动词典
   对话框不自动弹键盘；词条上限对话框可滚动到 10；照片区拖到顶部隐藏图片、
   保留 40dp 拖拽条；查词筛选去掉“查询词典”、模式胶囊进 AppBar/弹层标题行；
@@ -229,7 +227,7 @@ Phase 5 已由用户确认并发布 1.0。当前焦点是 Phase 6（见 `CLAUDE.
   `/copyright` 路由。
 - 新增测试 `onboarding_test`、`history_store_test`（纯图片压缩/block JSON，
   不依赖桌面 SQLite）、`reader_save_test`；Phase 5 当时的测试/构建记录见
-  `docs/project-data.md` §2.2/§5。arm64 release APK 已构建。
+  `docs/phase5-status.md`。arm64 release APK 已构建。
 - Phase 5 已由用户于 2026-10-30 在冷启动 x86_64 模拟器上确认首次引导/语料/设置
   流程测试通过，并发布为 1.0 release。
 
@@ -240,14 +238,14 @@ Phase 5 已由用户确认并发布 1.0。当前焦点是 Phase 6（见 `CLAUDE.
 ### UniDic/MeCab + Phase 1
 
 - 私有 `mecabrc` + `-r` 已在 Android 实测成功；
-- 大型 UniDic 外部存储 mmap 可用（数据规模见 `docs/project-data.md` §6）；
+- 大型 UniDic 外部存储 mmap 可用（数据规模见 `docs/phase1-status.md`）；
 - 29 字段映射与引号 CSV 解析已由真实词典验证；
 - All Files Access 原生通道已实现。
 
 ### ORT 模型冒烟（PaddleOCR）
 
 - 主机 Python ORT 与 Android x86_64 合成图片冒烟均通过；模型形状、字符表
-  数量、耗时与置信度见 `docs/project-data.md` §4/§6。
+  数量、耗时与置信度见 `docs/phase3-status.md`。
 - MangaOCR encoder/decoder 已在 Phase 4 完成设备冒烟（合成竖排气泡
   `これはテストです`）；模型许可未声明，不随包分发。
 
@@ -279,8 +277,8 @@ MDD 缓存未清理、无模糊搜索。
 
 ## 历史验证与提交锚点
 
-历史测试/设备/性能/构建数据统一见 `docs/project-data.md` §2–§5；各阶段细节见
-对应的 `docs/phase*-status.md`。不要把历史值当作当前值。
+历史测试/设备/性能/构建数据见各阶段 `docs/phase*-status.md`。不要把历史值当作
+当前值。
 
 仓库历史提交包括：`d0d94a3`、`dc70cee`、`91dc386`、`deb6484`、`b12d24f`、
 `95f90e0`、`9e17984`、`f287603`、`c2ae03d`、`4d0100f`、`1e25750`、`b2ed785`、

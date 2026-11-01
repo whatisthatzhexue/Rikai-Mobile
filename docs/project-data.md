@@ -2,16 +2,12 @@
 
 > **单一事实源**：所有跨文档复用的测试数量、设备结果、性能、构建产物、环境版本、
 > 开发数据统计和固定 UI 文案以本文件为准。其他文档只引用本文件对应小节，不再
-> 复制具体数值；历史阶段记录（`docs/project-history.md` / `docs/phase*-status.md`）
-> 可以保留“当时值”，但必须标注为历史快照。
-> 规范性 MUST/MUST NOT 规则见 `docs/project-rules.md`；视觉数值见
-> `docs/design-tokens.md`；误区/踩坑见 `docs/project_tips.md`；阶段流水见
-> `docs/project-history.md`。
+> 复制具体数值；历史记录可以保留“当时值”，但必须标注为历史快照。
 >
 > - last_verified: 2026-11-01
 > - last_verified_code_commit: `c6094b5`（`fix: OCR模型页面操作逻辑修正`）
-> - last_doc_sync: 2026-11-01（引用结构整理；新增 `project-history` 指针；补记
->   Agent 语言默认值决策，不改变代码验证结果）
+> - last_doc_sync: 2026-11-01（引用结构整理；补记 Agent 语言默认值决策，不改变
+>   代码验证结果）
 > - 设备基线: `Medium_Phone_API_36.1`（x86_64 模拟器，API 36）；无 arm64 真机
 > - 维护规则：数据变化时只改本文件，并同步更新 `last_verified`/
 >   `last_verified_code_commit`；其他文档的引用链接不需要改。不要把本文件自身的
@@ -35,8 +31,7 @@
 | `dict_reader` | 1.6.1 |
 | `flutter_secure_storage` | 11.2.0 |
 
-> 构建命令、权限和集成测试步骤不在这份数据文档中重复，见
-> `docs/dev-setup.md`。
+> 构建命令、权限和集成测试步骤不在这份数据文档中重复。
 
 ## 2. 自动化测试
 
@@ -64,9 +59,7 @@
 | Wave 1 后 | 212 | Agent Wave 1 完成时 |
 | 当前 | **213** | 见 §2.1 |
 
-> 历史 phase 文档保留当时值；引用当前值时使用
-> `[当前测试基线](project-data.md#21-当前基线)`（docs/ 下页面）或
-> `[当前测试基线](../project-data.md#21-当前基线)`（docs/agent_docs/ 下页面）。
+> 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
 ## 3. 设备集成测试
 
@@ -81,7 +74,6 @@
 | 真实图片扫描（`ocr_real_images_android_test.dart`） | **7 张** | `test_images/` × auto/横向/竖向 |
 
 > 设备均为 x86_64 模拟器（API 36）；arm64/真实设备验收不能从这些结果推断。
-> 详细命令见 `docs/dev-setup.md`。
 
 ## 4. 性能记录
 
@@ -136,8 +128,7 @@ arm64 真机性能另需复测。
 
 ## 7. 固定 UI 文案/标签
 
-> 视觉数值（字号、间距、颜色、圆角）以 `docs/design-tokens.md` 和
-> `lib/core/theme/app_tokens.dart` 为准；本表只集中**用户可见文案**。
+> 视觉数值（字号、间距、颜色、圆角）不在本表重复；本表只集中**用户可见文案**。
 
 | 类别 | 固定值 |
 |---|---|
@@ -204,13 +195,10 @@ arm64 真机性能另需复测。
 | OCR 输入最长边 | 2,048 | Paddle/Manga 预处理 |
 | 保存语料图片最长边 | 2,048 | HistoryStore |
 | 保存语料 JPEG 质量 | 85 | HistoryStore |
-| 阅读字号范围/默认 | 14–30 / 20 | 视觉值以 `design-tokens.md` 为准 |
-| 振假名比例 | 55% | 视觉值以 `design-tokens.md` 为准 |
 
 > UI 间距、字号、圆角、组件高度、筛选条 3.5 行、消息宽度 80%、气泡 16/4、
-> composer 5 行、citation chip 24–28 等视觉数值，统一以
-> `docs/design-tokens.md` 为权威；本文件不复制这些 token，只记录跨模块使用的
-> 处理/业务数值。
+> composer 5 行、citation chip 24–28 等视觉数值不在这份数据文档中重复；本文件
+> 只记录跨模块使用的处理/业务数值。
 
 ### 8.4 Agent 语言默认值
 
@@ -220,7 +208,7 @@ arm64 真机性能另需复测。
 | 可选语言 | zh / en / ja | 用户显式设置；`follow` 仅兼容旧配置，解析为 `zh` |
 
 > 当前代码仍默认 `follow`，`resolveAgentUiLanguage` 仍有输入启发式；F1/F17
-> 的实现待 Wave 2。权威规则见 `docs/project-rules.md` R-AGENT-18。
+> 的实现待 Wave 2。
 
 > 契约中的默认值若与本表冲突：以本表作为当前实现值，并修
 > `docs/phase6-agent-contracts.md`；未来 tool loop/coverage 值必须标明 future。
@@ -236,22 +224,13 @@ arm64 真机性能另需复测。
 | 历史快照 banner | `3709d3d` |
 | 当前工作队列 | `docs/agent_docs/device-feedback-2026-10-31.md`（F1–F17，Wave 2–4 待做） |
 
-> 历史提交的完整列表在 `git log`、`docs/project-history.md` 与各 phase status 中；
-> 本表只保留当前锚点，避免每次提交都改多份文档。
+> 历史提交的完整列表在 `git log` 与各 phase status 中；本表只保留当前锚点，
+> 避免每次提交都改多份文档。
 
-## 10. 引用规则
+## 10. 维护规则
 
-- **规则**：正面/反面 MUST/MUST NOT 规则统一引用 `docs/project-rules.md`，不在本
-  文件重复。
-- **当前数据**：测试/设备/性能/构建/环境/预算/固定文案引用本文件，不复制数字。
-- **视觉数值**：字号、间距、颜色、圆角、组件尺寸以 `design-tokens.md` 为准。
-- **误区/踩坑**：历史经验与解决方案统一引用 `docs/project_tips.md` 的 `T-###`，
-  不在本文件或阶段文档复制误区正文。
-- **Agent 字段/错误码/Schema**：以 `phase6-agent-contracts.md` /
-  `docs/schemas/agent/` 为准；未来 tool loop/coverage 必须标 future。
-- **模型 URL/SHA**：以 `assets/models/manifest.json` 为准；本文件只记录统计值。
-- **历史阶段**：阶段流水引用 `docs/project-history.md`；详细快照引用
-  `docs/phase*-status.md`。它们保留“当时值”，并加 `历史值` 标注；需要当前值则
-  链接本文件。
-- 修改本文件后，仅需更新 `last_verified`/`last_verified_code_commit`；其他文档的
-  链接保持有效。
+- 本文件只记录当前测试/设备/性能/构建/环境/预算/固定文案；其他文档不复制这些
+  数值。
+- 视觉数值、规范规则、误区正文和 Agent 字段不在这份数据文档中重复。
+- 修改本文件后更新 `last_verified`/`last_verified_code_commit`；引用本文件的
+  链接保持有效，历史记录保留“历史值”标注。
