@@ -1,14 +1,20 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/models/agent/agent_analysis.dart';
+import '../../core/models/agent/agent_coverage.dart';
 import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
+import '../../core/models/agent/agent_limits.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/agent/agent_quote.dart';
 import '../../core/models/agent/agent_tool.dart';
+import 'agent_language_validator.dart';
+import 'agent_coverage_parser.dart';
 import 'agent_messages.dart';
 import 'agent_run.dart';
 import 'agent_validator.dart';
+import 'coverage_prompts.dart';
+import 'coverage_support.dart';
 import 'analysis_normalizer.dart';
 import 'analysis_prompts.dart';
 import 'analysis_salvager.dart';
@@ -40,9 +46,8 @@ class AgentOrchestrator {
     this.dictionaryFamiliarizer,
     this.unidicFamiliarizer,
     this.validator = const AgentValidator(),
-    this.maxTargets = 120,
-    this.maxCitations = 60,
-    this.maxSourceChars = 6000,
+    this.languageValidator = const AgentLanguageValidator(),
+    this.limits = AgentLimits.standard,
   }) : _ocrPort = ocrPort,
        _tokenizePort = tokenizePort,
        _lookupPort = lookupPort,
@@ -59,9 +64,12 @@ class AgentOrchestrator {
   final DictionaryFamiliarizationService? dictionaryFamiliarizer;
   final UnidicFamiliarizationService? unidicFamiliarizer;
   final AgentValidator validator;
-  final int maxTargets;
-  final int maxCitations;
-  final int maxSourceChars;
+  final AgentLanguageValidator languageValidator;
+  final AgentLimits limits;
+
+  int get maxTargets => limits.maxTargets;
+  int get maxCitations => limits.maxEvidenceEntries;
+  int get maxSourceChars => limits.maxSourceChars;
 
   Future<AgentRunResult> run(
     AgentRunRequest request, {
@@ -261,26 +269,33 @@ class AgentOrchestrator {
                   : AgentQuoteOrigin.userText,
             );
 
+      final llm = _llmFactory(request.provider);
+      final requestedUser = request.images.isNotEmpty && userText.isNotEmpty
+          ? userText
+          : '解释这段日文并给出词典依据';
+      final smallModel = request.provider.smallModel.trim().isEmpty
+          ? analysisModel
+          : request.provider.smallModel.trim();
+
       notify(
         AgentStage.tokenizing,
         agentStageMessage(AgentStage.tokenizing, uiLanguage),
       );
       checkCancelled();
-      final evidence =
-          await EvidenceBuilder(
-            tokenizePort: _tokenizePort,
-            lookupPort: _lookupPort,
-            grammar: _grammar,
-            citations: _citations,
-            maxTargets: maxTargets,
-            maxCitations: maxCitations,
-          ).build(
-            sources: envelope.sources,
-            dictionaries: request.dictionaries,
-            maxSourceChars: maxSourceChars,
-            isCancelled: () => cancellation?.isCancelled == true,
-            onProgress: onEvidenceProgress,
-          );
+      final evidenceBuilder = EvidenceBuilder(
+        tokenizePort: _tokenizePort,
+        lookupPort: _lookupPort,
+        grammar: _grammar,
+        citations: _citations,
+        limits: limits,
+      );
+      var evidence = await evidenceBuilder.build(
+        sources: envelope.sources,
+        dictionaries: request.dictionaries,
+        maxSourceChars: maxSourceChars,
+        isCancelled: () => cancellation?.isCancelled == true,
+        onProgress: onEvidenceProgress,
+      );
       checkCancelled();
       for (final issue in evidence.dictionaryIssues) {
         profiles.add(
@@ -298,14 +313,37 @@ class AgentOrchestrator {
         );
       }
 
+      final warnings = <String>[];
+      var coverageFallbackUsed = false;
+      if (limits.maxCoverageFallback > 0) {
+        notify(
+          AgentStage.coverage,
+          agentStageMessage(AgentStage.coverage, uiLanguage),
+        );
+        checkCancelled();
+        final coverage = await _applyCoverageReview(
+          llm: llm,
+          model: smallModel,
+          request: request,
+          envelope: envelope,
+          evidence: evidence,
+          evidenceBuilder: evidenceBuilder,
+          cancellation: cancellation,
+          uiLanguage: uiLanguage,
+          primarySourceId: primary?.id,
+          userRequest: requestedUser,
+          onProgress: onEvidenceProgress,
+        );
+        evidence = coverage.evidence;
+        coverageFallbackUsed = coverage.fallbackUsed;
+        warnings.addAll(coverage.warnings);
+        checkCancelled();
+      }
+
       notify(
         AgentStage.reasoning,
         agentStageMessage(AgentStage.reasoning, uiLanguage),
       );
-      final llm = _llmFactory(request.provider);
-      final requestedUser = request.images.isNotEmpty && userText.isNotEmpty
-          ? userText
-          : '解释这段日文并给出词典依据';
       final analysisRequest = buildAnalysisRequest(
         model: analysisModel,
         mode: request.mode,
@@ -414,6 +452,88 @@ class AgentOrchestrator {
           citationsUsed: validation.citationsUsed,
         );
       }
+
+      final allowedTerms = <String>{
+        for (final source in evidence.sources)
+          for (final token in source.tokens) ...<String>[
+            token.surface,
+            token.lemma,
+            token.reading,
+            ...token.lookupCandidates,
+          ],
+        for (final pattern in evidence.patterns) pattern.surface,
+        for (final citation in evidence.citations) ...<String>[
+          citation.headword,
+          citation.entryKey,
+          citation.matchedKey,
+        ],
+        for (final quote in quotes) quote.text,
+      };
+
+      // F1b: check only human-readable fields. A single repair may translate
+      // them; a failed or still-mismatched repair keeps the result and warns.
+      if (analysis != null && validation != null && validation.valid) {
+        var languageCheck = languageValidator.check(
+          analysis,
+          request.responseLanguage,
+          allowedJapaneseTerms: allowedTerms,
+        );
+        if (languageCheck.isMismatch) {
+          checkCancelled();
+          notify(AgentStage.reasoning, agentRepairingMessage(uiLanguage));
+          try {
+            final languageRaw = await _collect(
+              llm,
+              buildAnalysisLanguageRepairRequest(
+                model: analysisModel,
+                mode: request.mode,
+                responseLanguage: request.responseLanguage,
+                input: envelope,
+                evidence: evidence,
+                quotes: quotes,
+                dictionaryProfiles: profiles,
+                userRequest: requestedUser,
+                rawOutput: raw,
+                mismatchedFields: languageCheck.mismatchedFields,
+              ),
+              cancellation,
+            );
+            final repaired = _parseAndNormalize(
+              languageRaw,
+              quotes,
+              evidence,
+              expectedSourceId: primary?.id,
+            );
+            if (repaired.analysis != null && repaired.integrityErrors.isEmpty) {
+              final repairedValidation = validator.validate(
+                analysis: repaired.analysis!,
+                evidence: evidence,
+                quotes: quotes,
+                mode: request.mode,
+                expectedSourceId: primary?.id,
+              );
+              if (repairedValidation.valid) {
+                raw = languageRaw;
+                analysis = repaired.analysis;
+                validation = repairedValidation;
+                formatErrors = repaired.integrityErrors;
+              }
+            }
+          } on AgentRunFailure {
+            if (cancellation?.isCancelled == true) rethrow;
+            // Keep the original result; the warning below records the failure.
+          }
+          languageCheck = languageValidator.check(
+            analysis!,
+            request.responseLanguage,
+            allowedJapaneseTerms: allowedTerms,
+          );
+          if (languageCheck.isMismatch) {
+            warnings.add(agentLanguageWarning(uiLanguage));
+          }
+        }
+      }
+
       if (analysis == null || validation == null || !validation.valid) {
         final salvaged = analysis == null
             ? null
@@ -438,6 +558,15 @@ class AgentOrchestrator {
             ...salvaged.notes,
             if (!salvageValidation.valid) ...salvageValidation.errors,
           }.toList(growable: false);
+          if (languageValidator
+              .check(
+                salvaged.analysis,
+                request.responseLanguage,
+                allowedJapaneseTerms: allowedTerms,
+              )
+              .isMismatch) {
+            warnings.add(agentLanguageWarning(uiLanguage));
+          }
           return AgentRunResult(
             input: envelope,
             evidence: evidence,
@@ -452,6 +581,8 @@ class AgentOrchestrator {
             dictionaryProfiles: profiles,
             profileWarnings: profileWarnings,
             unavailableProfiles: unavailableProfiles,
+            warnings: warnings,
+            coverageFallbackUsed: coverageFallbackUsed,
           );
         }
         throw AgentRunFailure(
@@ -475,6 +606,8 @@ class AgentOrchestrator {
         dictionaryProfiles: profiles,
         profileWarnings: profileWarnings,
         unavailableProfiles: unavailableProfiles,
+        warnings: warnings,
+        coverageFallbackUsed: coverageFallbackUsed,
       );
     } on AgentRunFailure {
       rethrow;
@@ -493,6 +626,172 @@ class AgentOrchestrator {
         cause: error,
       );
     }
+  }
+
+  /// F7: one bounded coverage review after the initial evidence. It may run one
+  /// supplementary lookup pass, and only deletes model-suggested duplicates
+  /// after local verification.
+  Future<_CoverageOutcome> _applyCoverageReview({
+    required LlmPort llm,
+    required String model,
+    required AgentRunRequest request,
+    required AgentInputEnvelope envelope,
+    required AgentEvidenceBundle evidence,
+    required EvidenceBuilder evidenceBuilder,
+    required AgentCancellation? cancellation,
+    required AgentUiLanguage uiLanguage,
+    required String? primarySourceId,
+    required String userRequest,
+    required void Function(int citations)? onProgress,
+  }) async {
+    final warnings = <String>[];
+    AgentCoverageReview? review;
+    String raw;
+    try {
+      raw = await _collect(
+        llm,
+        buildCoverageRequest(
+          model: model,
+          language: request.responseLanguage,
+          input: envelope,
+          evidence: evidence,
+          userRequest: userRequest,
+        ),
+        cancellation,
+      );
+    } on AgentRunFailure {
+      if (cancellation?.isCancelled == true) rethrow;
+      return _CoverageOutcome(
+        evidence: evidence,
+        warnings: <String>[agentCoverageUnavailable(uiLanguage)],
+      );
+    }
+
+    var parsed = parseCoverageReview(
+      raw,
+      expectedSourceId: primarySourceId ?? '',
+    );
+    review = parsed.review;
+    if (review == null) {
+      // One bounded JSON-format repair; never loop.
+      try {
+        final repaired = await _collect(
+          llm,
+          buildCoverageRepairRequest(
+            model: model,
+            language: request.responseLanguage,
+            input: envelope,
+            evidence: evidence,
+            userRequest: userRequest,
+            rawOutput: raw,
+            errors: parsed.errors,
+          ),
+          cancellation,
+        );
+        parsed = parseCoverageReview(
+          repaired,
+          expectedSourceId: primarySourceId ?? '',
+        );
+        review = parsed.review;
+      } on AgentRunFailure {
+        if (cancellation?.isCancelled == true) rethrow;
+      }
+    }
+    if (review == null) {
+      return _CoverageOutcome(
+        evidence: evidence,
+        warnings: <String>[agentCoverageUnavailable(uiLanguage)],
+      );
+    }
+    if (review.verdict != AgentCoverageVerdict.missing) {
+      return _CoverageOutcome(evidence: evidence, warnings: warnings);
+    }
+
+    final validated = validateCoverageReview(
+      review: review,
+      input: envelope,
+      evidence: evidence,
+      limits: limits,
+    );
+    if (validated.droppedMissing > 0) {
+      warnings.add(agentCoverageUnverifiable(uiLanguage));
+    }
+    if (validated.missing.isEmpty && validated.duplicateGroups.isEmpty) {
+      return _CoverageOutcome(evidence: evidence, warnings: warnings);
+    }
+
+    var workingEvidence = evidence;
+    var fallbackUsed = false;
+    var remainingSlots =
+        limits.maxEvidenceEntries - workingEvidence.citations.length;
+    if (remainingSlots < 0) remainingSlots = 0;
+    var excludedKeys = const <String>{};
+
+    if (remainingSlots == 0) {
+      if (validated.missing.isEmpty) {
+        return _CoverageOutcome(evidence: evidence, warnings: warnings);
+      }
+      final removeIds = verifyCoverageDuplicates(
+        evidence: workingEvidence,
+        groups: validated.duplicateGroups,
+      );
+      if (removeIds.isEmpty) {
+        warnings.add(agentCoverageAtLimit(uiLanguage));
+        return _CoverageOutcome(evidence: evidence, warnings: warnings);
+      }
+      excludedKeys = <String>{
+        for (final citation in workingEvidence.citations)
+          if (removeIds.contains(citation.id))
+            '${citation.dictionaryId}\u0000${citation.entryKey}',
+      };
+      _citations.removeAll(removeIds);
+      workingEvidence = pruneCoverageCitations(
+        evidence: workingEvidence,
+        removeIds: removeIds,
+        limits: limits,
+      );
+      remainingSlots = removeIds.length;
+      fallbackUsed = true;
+    }
+
+    if (validated.missing.isEmpty || remainingSlots <= 0) {
+      return _CoverageOutcome(
+        evidence: workingEvidence,
+        fallbackUsed: fallbackUsed,
+        warnings: warnings,
+      );
+    }
+
+    final supplementary = await evidenceBuilder.lookupExtraQueries(
+      queries: <String>[for (final item in validated.missing) item.query],
+      dictionaries: request.dictionaries,
+      maxNewCitations: remainingSlots,
+      excludedKeys: excludedKeys,
+      isCancelled: () => cancellation?.isCancelled == true,
+      onProgress: onProgress,
+      onDictionaryError: (dictionary, message) {
+        final warning = agentDictionaryLookupFailed(
+          uiLanguage,
+          dictionary.title,
+        );
+        if (!warnings.contains(warning)) warnings.add(warning);
+      },
+    );
+    fallbackUsed = true;
+    final merged = mergeCoverageEvidence(
+      evidence: workingEvidence,
+      citationsByQuery: supplementary,
+      missing: validated.missing,
+      limits: limits,
+    );
+    if (merged.citations.length <= workingEvidence.citations.length) {
+      warnings.add(agentCoverageNoNew(uiLanguage));
+    }
+    return _CoverageOutcome(
+      evidence: merged,
+      fallbackUsed: fallbackUsed,
+      warnings: warnings,
+    );
   }
 
   Future<AgentInputEnvelope> _buildInput(
@@ -680,6 +979,18 @@ class AgentOrchestrator {
     }
     return buffer.toString();
   }
+}
+
+class _CoverageOutcome {
+  const _CoverageOutcome({
+    required this.evidence,
+    required this.warnings,
+    this.fallbackUsed = false,
+  });
+
+  final AgentEvidenceBundle evidence;
+  final List<String> warnings;
+  final bool fallbackUsed;
 }
 
 String _debugHead(String raw) {

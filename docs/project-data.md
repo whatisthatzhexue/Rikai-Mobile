@@ -39,11 +39,11 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **268** |
-| 当前测试文件数 | **69** |
+| 当前 test/testWidgets 声明数 | **291** |
+| 当前测试文件数 | **72** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | 268 passed |
-| 最近 `flutter build apk --debug` | success（输出格式清理前） |
+| 最近 `flutter test` | 291 passed |
+| 最近 `flutter build apk --debug` | success（Wave 3） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
 > 该数字对应 `389e86e` 之后的标签块完整性/旧 schema 清理工作区（尚未提交）。
@@ -62,7 +62,8 @@
 | Wave 2 follow-up | 246 | 档案队列复用、自动保存、标签输出、交互修正 |
 | 标签完整性/旧 schema 清理 | 267 | 标签块校验、移除 JSON 响应 schema/回退；含并行新增 regeneration 测试 |
 | 依据计数修正 | 268 | 展开栏“详细解析”依据数改为最终采用数 |
-| 当前 | **268** | 见 §2.1 |
+| Wave 3 | 291 | F1b 语言后校验、F6 四种模式递进/AgentLimits、F7 覆盖审查与一次回退 |
+| 当前 | **291** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
@@ -166,11 +167,11 @@ arm64 真机性能另需复测。
 
 | 项 | 当前值 | 状态/说明 |
 |---|---:|---|
-| 单次分析源文本 | 6,000 字符 | 当前 orchestrator 拒绝超限 |
-| 唯一检索目标 | 120 | 当前 EvidenceBuilder |
-| citation 总数 | 60 | 当前 EvidenceBuilder |
-| 每词每典条数 | 3 | 当前 lookup |
-| 摘要长度 | 400 字符 | 当前 citation snippet |
+| 单次分析源文本 | 6,000 字符 | `AgentLimits.maxSourceChars`；orchestrator 拒绝超限 |
+| 唯一检索目标 | 120 | `AgentLimits.maxTargets`；EvidenceBuilder |
+| citation 总数 | 60 | `AgentLimits.maxEvidenceEntries`；EvidenceBuilder |
+| 每词每典条数 | 3 | `AgentLimits.maxEntriesPerDictionary`；lookup |
+| 摘要长度 | 400 字符 | `AgentLimits.maxSnippetChars`；citation 展示清洗另截断至 240 |
 | 单个 source 的 quote 上限 | 40 | `quote_builder.dart` |
 | 熟悉期每词典样本 | 12 | `DictionaryFamiliarizationService` |
 | UniDic 熟悉样本句 | 4 | `UnidicFamiliarizationService` |
@@ -179,8 +180,8 @@ arm64 真机性能另需复测。
 | 模型额外工具调用 | 0 | 当前固定流水线、模型无工具 |
 | 每词典档案 Markdown | 2,000 字符 | **设计/契约目标；当前代码未强制** |
 | 输入 variants / sources | 4 / 8 | Schema 契约上限；当前 UI 单图 |
-| 每次 run 图片数 | 6 | **F11 计划值；当前 UI 单图** |
-| 覆盖审查 missing / duplicate / fallback | 20 / 10 / 1 | **F7 计划值；当前未实现** |
+| 每次 run 图片数 | 6 | `AgentLimits.maxImagesPerRun`（F11 已实现） |
+| 覆盖审查 missing / duplicate / fallback | 20 / 10 / 1 | `AgentLimits`（F7 已实现，单次回退） |
 | 历史 tool loop | 6 次 / 60s / 90s | **未来参考，不是当前实现** |
 
 ### 8.2 当前 Provider/LLM 限制
@@ -212,9 +213,9 @@ arm64 真机性能另需复测。
 | 默认输出/UI 语言 | 中文（zh） | **2026-11-01 决策**：旧 `follow` 一律映射为 `zh`；禁止按输入假名/拉丁字符推断 |
 | 可选语言 | zh / en / ja | 用户显式设置；`follow` 仅兼容旧配置，解析为 `zh` |
 
-> Wave 2 已实现：默认 `zh`，旧 `follow` 解析为 `zh`，`resolveAgentUiLanguage`
-> 只接收显式设置，输入假名/拉丁字符不再影响 UI 语言；F1b（结果字段语言后校验）
-> 仍属 Wave 3。
+> Wave 2 已实现默认 `zh`、旧 `follow` 解析为 `zh`，`resolveAgentUiLanguage`
+> 只接收显式设置，输入假名/拉丁字符不再影响 UI 语言。Wave 3（F1b）已加入结果
+> 人类可读字段的语言后校验与一次语言修复；修复仍失败时保留结果并显示 warning。
 
 > 契约中的默认值若与本表冲突：以本表作为当前实现值，并修
 > `docs/phase6-agent-contracts.md`；未来 tool loop/coverage 值必须标明 future。
@@ -228,7 +229,7 @@ arm64 真机性能另需复测。
 | Phase 6 P6.1–P6.5 提交起点 | `7be4b81` |
 | Phase 6 文档提交 | `b208456` |
 | 历史快照 banner | `3709d3d` |
-| 当前工作队列 | `docs/agent_docs/device-feedback-2026-10-31.md`（Wave 2 已完成；Wave 3–4 待做） |
+| 当前工作队列 | `docs/agent_docs/device-feedback-2026-10-31.md`（Wave 1–3 已实现；Wave 4 设备回归待做） |
 
 > 历史提交的完整列表在 `git log` 与各 phase status 中；本表只保留当前锚点，
 > 避免每次提交都改多份文档。

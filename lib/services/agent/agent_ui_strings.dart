@@ -276,6 +276,31 @@ class AgentUiStrings {
     'Dictionary lookup failed: $names. The result may be incomplete.',
     '辞書検索に失敗しました：$names。結果が不完全な可能性があります。',
   );
+  String get languageWarning => _pick(
+    '部分内容未按设置语言输出',
+    'Some content was not written in the selected language',
+    '一部の内容が設定した言語で出力されていません',
+  );
+  String get coverageUnavailable => _pick(
+    '覆盖审查不可用，已保留现有资料',
+    'Coverage review was unavailable; the existing evidence was kept',
+    'カバレッジ確認を利用できません。既存の資料を保持しました',
+  );
+  String get coverageUnverifiable => _pick(
+    '覆盖审查返回了无法追溯的查询，已忽略',
+    'The coverage review returned untraceable queries; they were ignored',
+    'カバレッジ確認の追跡できない検索語は無視しました',
+  );
+  String get coverageAtLimit => _pick(
+    '检索已达上限，无法再补充资料',
+    'The evidence limit was reached; no further entries could be added',
+    '検索上限に達したため、これ以上資料を追加できません',
+  );
+  String get coverageNoNew => _pick(
+    '覆盖审查未找到新的词典资料',
+    'The coverage review found no new dictionary evidence',
+    'カバレッジ確認で新しい辞書資料は見つかりませんでした',
+  );
   String get validationPartial => _pick(
     '部分内容未通过校验，已移除无依据/无效引用的部分',
     'Some content failed validation; unsupported or invalid citations were removed',
@@ -497,6 +522,7 @@ class AgentUiStrings {
       'Organizing dictionary evidence',
       '辞書根拠を整理中',
     ),
+    AgentStage.coverage => _pick('补充资料中', 'Checking coverage', '資料を補完中'),
     AgentStage.reasoning => _pick('生成结果', 'Generating', '生成中'),
     AgentStage.validating => _pick('校验依据', 'Validating citations', '根拠を検証中'),
     AgentStage.done => _pick('完成', 'Done', '完了'),
@@ -517,18 +543,24 @@ class AgentUiStrings {
     ],
     AgentUiLanguage.japanese => const <String>['OCR', '検索', '生成', '検証'],
   };
-  String evidenceProgressLabel(int evidenceCount, int citationCount) {
+  String evidenceProgressLabel(
+    int evidenceCount,
+    int citationCount,
+    int maxEvidenceEntries,
+  ) {
     if (citationCount > 0) {
       return _pick(
-        '已检索 $evidenceCount 条词典条目，采用 $citationCount 条依据',
-        '$evidenceCount dictionary entries retrieved, $citationCount citations used',
-        '辞書項目 $evidenceCount 件を検索、根拠 $citationCount 件を採用',
+        '已检索 $evidenceCount / $maxEvidenceEntries 条词典条目，采用 $citationCount 条依据',
+        '$evidenceCount / $maxEvidenceEntries dictionary entries retrieved, '
+            '$citationCount citations used',
+        '辞書項目 $evidenceCount / $maxEvidenceEntries 件を検索、'
+            '根拠 $citationCount 件を採用',
       );
     }
     return _pick(
-      '已检索 $evidenceCount 条词典条目',
-      '$evidenceCount dictionary entries retrieved',
-      '辞書項目 $evidenceCount 件を検索',
+      '已检索 $evidenceCount / $maxEvidenceEntries 条词典条目',
+      '$evidenceCount / $maxEvidenceEntries dictionary entries retrieved',
+      '辞書項目 $evidenceCount / $maxEvidenceEntries 件を検索',
     );
   }
 

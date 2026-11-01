@@ -1,10 +1,10 @@
 # Agent 实机反馈修正计划（2026-10-31）
 
-- 状态：**Wave 1–2 已实现（Wave 2：F8/F1a/F17/F2/F3/F11/F12/F13/F14）；
-  Wave 3–4 未开始；未开始 P6.6/P6.7。**
+- 状态：**Wave 1–3 已实现（Wave 2：F8/F1a/F17/F2/F3/F11/F12/F13/F14；
+  Wave 3：F1b/F6/F7）；Wave 4 设备回归未开始；未开始 P6.6/P6.7。**
 - 来源：用户实机使用 P6.5 后提出的 17 项反馈（本文件按原编号 F1–F17 记录）。
-- 基线：P6.5 固定流水线、应用级 `AgentRunController`；Wave 2 后本次改动
-  `flutter analyze` 无新增问题；当前测试/构建基线见
+- 基线：P6.5 固定流水线、应用级 `AgentRunController`；Wave 3 后
+  `flutter analyze` 无问题；当前测试/构建基线见
   [`docs/project-data.md`](../project-data.md) §2/§5。真实
   arm64/漫画页验收仍未完成；本文件不改变已有验证记录。
 - Wave 1 验证：当前测试/构建结果见
@@ -17,6 +17,15 @@
   迁移、应用级档案队列 gate、跨页思考时间、多图/全屏查看、结果操作行/
   Markdown/重新生成等测试。设备视觉、真实 provider、arm64 与档案管理页
   手工验收仍待 Wave 4。
+- Wave 3 验证（2026-11-01）：`flutter analyze` 无问题；`flutter test` 291 passed；
+  `flutter build apk --debug` 成功。
+  F1b 有中/英/日目标语言字段校验、忽略原文/读音/引用摘要、一次语言修复成功
+  与仍偏离时保留结果+warning 的 unit/orchestrator 测试；F6 有
+  exact→prefix→suffix→incremental 顺序、全局上限立即停止、某模式无新增即停止、
+  每词每典上限和 `AgentLimits`/进度 N/M 的测试；F7 有 coverage JSON 解析、
+  可追溯性过滤、重复条目本地验证、流程 A/B、审查失败保留证据和只回退一次的
+  orchestrator 测试。真实大词典 suffix/incremental 设备冒烟、真实 provider
+  与 arm64 验收仍属 Wave 4。
 - 约束：规则见 `docs/project-rules.md`（R-SEC/R-AGENT/R-DEV），数据/文案见
   `docs/project-data.md`；F15/F16 是用户明确要求的非 Agent 修复，不能借机改动
   查词/OCR 的核心行为。
@@ -75,13 +84,13 @@ Wave 4  回归、设备验收、状态表更新
 
 | ID | 反馈摘要 | 当前状态 | 处理波次 | 依赖 |
 |---|---|---|---|---|
-| F1 | 默认输入/输出中文；设置语言后结果仍不总是目标语言 | partial：Wave 2 已实现默认 `zh`、旧 `follow`→`zh`、文案表与强化的语言契约；结果字段语言后校验/一次修复（F1b）待 Wave 3 | 2（默认/文案）+3（校验） | F17 |
+| F1 | 默认输入/输出中文；设置语言后结果仍不总是目标语言 | fixed：Wave 2 已实现默认 `zh`、旧 `follow`→`zh`、文案表与强化契约；Wave 3（F1b）加入人类可读字段语言后校验、一次语言修复、仍偏离时保留结果并显示 warning | 2（默认/文案）+3（校验） | F17 |
 | F2 | 离开 Agent 页后档案不保存/队列未堆积，查词提前开始 | fixed（应用级 inbox + `awaitingProfile` gate；页面返回按队列确认，不自动 skip；unit/widget 待设备验收） | 2 | F1a、F8 |
 | F3 | 离开页面期间也要计算思考时间 | fixed（`startedAt` 保持应用级 wall-clock；`awaitingProfile` 仍计时；elapsed 回归测试） | 2 | F2 |
 | F4 | 依据气泡改为短胶囊并自动换行 | fixed（unit/widget；设备视觉待验） | 1 | — |
 | F5 | 结果中的 `（q1）` 等标记太抽象 | fixed（unit/widget） | 1 | — |
-| F6 | 查词不能只完全/前方匹配；达到全局上限或搜不到更多才停 | open；当前每目标 exact 后 prefix，`60` 硬编码 | 3 | F6 前先定义 `AgentLimits` |
-| F7 | 查词结束后补做覆盖审查，最多回退一次查词 | open；无覆盖审查 schema/阶段 | 3 | F2、F6 |
+| F6 | 查词不能只完全/前方匹配；达到全局上限或搜不到更多才停 | fixed：`AgentLimits` 单一来源；全局 exact→prefix→suffix→incremental；全局/每词每典上限、无新增即停、进度 N/M；unit 覆盖，设备大词典冒烟待 Wave 4 | 3 | `AgentLimits` |
+| F7 | 查词结束后补做覆盖审查，最多回退一次查词 | fixed：`coverage.v1` 解析/一次修复、可追溯性过滤、流程 A/B、重复本地验证、单次回退、失败 warning；orchestrator 测试覆盖，设备验收待 Wave 4 | 3 | F2、F6 |
 | F8 | Agent 词典选择必须独立保存，不影响查词选择 | fixed（独立 key/模式持久化，不读不写查词偏好；unit 覆盖） | 2 | — |
 | F9 | 词典选择第 4 行露出半行（预留 3.5 行） | fixed（shared widget + widget test；设备视觉待验） | 1 | — |
 | F10 | Provider 表单中文化、DeepSeek/Claude 自动填 Base URL | fixed（widget/unit test；设备保存待验） | 1 | — |
@@ -668,28 +677,32 @@ initial evidence (F6 modes)
 - 测试：日语输入 + 中文设置时 Agent 阶段/按钮全中文；英文设置时同类文案英文；
   `resolveAgentUiLanguage` 不再接收 sourceText。
 
-## 4. 数据结构与阶段增补（Wave 2 已落地，Wave 3 项待做）
+## 4. 数据结构与阶段增补（Wave 2–3 已落地）
 
 ```text
-AgentRunStatus:
-  ... awaitingProfile (F2, 已实现), coverage (F7, 待做) ...
+AgentStage:
+  ... awaitingProfile (F2), coverage (F7) ...
 
 AgentRunSnapshot 新字段:
-  pendingProfileCount        // F2 文案/状态（已实现）
-  retainedResult?            // F14 重新生成期间保留旧结果（已实现）
-  resultRetainedAfterFailure // F14 失败保留（已实现）
-  coverageFallbackUsed       // F7 待做
-  coverageWarnings           // F7 待做
+  pendingProfileCount        // F2 文案/状态
+  retainedResult?            // F14 重新生成期间保留旧结果
+  resultRetainedAfterFailure // F14 失败保留
+  maxEvidenceEntries         // F6 进度 N/M
+  coverageFallbackUsed       // F7 单次回退标记
 
-AgentLimits                  // 唯一上限来源；当前用于 maxImagesPerRun，F6 全量接入待 Wave 3
-AgentProfileProposal         // F2 队列项（已实现）
-AgentDictionaryPreferences   // F8 独立选择（已实现）
-AgentLanguageValidator       // F1b 结果语言检查（Wave 3）
-AgentCoverageReview          // F7 覆盖审查结果（Wave 3）
+AgentRunResult 新字段:
+  warnings                   // F1b/F7 非致命 warning（UI 显示）
+  coverageFallbackUsed       // F7
+
+AgentLimits                  // 唯一上限来源；orchestrator/evidence/UI 共用
+AgentProfileProposal         // F2 队列项
+AgentDictionaryPreferences   // F8 独立选择
+AgentLanguageValidator       // F1b 结果语言检查
+AgentCoverageReview          // F7 覆盖审查结果
 ```
 
-- `AgentStage.awaitingProfile` 已进入状态映射、进度步骤和语言表；`AgentStage.coverage`
-  待 Wave 3。
+- `AgentStage.awaitingProfile` 与 `AgentStage.coverage` 已进入状态映射、进度步骤
+  和语言表；coverage 映射到「检索」进度步骤并显示“补充资料中”。
 - 不新增工具调用；F7 的缺失检查是 orchestrator 的一次结构化 LLM 调用，模型不能
   自行查词典。
 - 不把图片、路径、base64、完整 HTML 发给 provider；F7 输入也只含清洗摘要。
@@ -768,17 +781,21 @@ AgentCoverageReview          // F7 覆盖审查结果（Wave 3）
   解析或完整性失败时只发送一次“正文不变、仅补标签”的格式纠错。旧 JSON 输出
   回退、运行时响应 schema 和 `response_format`/`json_schema` 请求已移除。
 
-Wave 2 验证：本次输出格式清理未新增 `flutter analyze` 问题（工作区另有未跟踪
-regeneration 测试的 2 个 warning）；当前测试/构建结果见
+Wave 2 验证：本次输出格式清理未新增 `flutter analyze` 问题；当前测试/构建结果见
 [`docs/project-data.md`](../project-data.md) §2/§5。设备视觉/真实 provider/
 arm64 验收留到 Wave 4。
 
-### Wave 3：检索完整度与结果语言
+### Wave 3：检索完整度与结果语言（已实现）
 
 1. **F1b** 输出语言字段校验 + 一次语言修复（复用 repair；失败保留结果）。
 2. **F6** `AgentLimits` + exact→prefix→suffix→incremental 递进。
 3. **F7** `agent.coverage.v1` 覆盖审查 + 流程 A/B + 最多一次回退。
 4. 补性能/取消/词典顺序测试；大词典 suffix/incremental 设备冒烟。
+
+实现：`agent_language_validator.dart`、`agent_limits.dart`、
+`evidence_builder.dart`、`coverage_prompts.dart`、`agent_coverage_parser.dart`、
+`coverage_support.dart`、`agent_coverage.dart`。真实大词典 suffix/incremental
+冒烟随 Wave 4 执行，不在自动化结果中冒充已验证。
 
 ### Wave 4：回归与验收
 
@@ -793,15 +810,15 @@ arm64 验收留到 Wave 4。
 
 - [x] F1a 默认中文；日语输入不改变中文 UI/结果语言；设置英文时 Agent 文案与
       prompt 语言契约切换为英文。
-- [ ] F1b 结果人类可读字段语言后校验 + 一次修复；修复失败有可见警告（Wave 3）。
+- [x] F1b 结果人类可读字段语言后校验 + 一次修复；修复失败有可见警告（Wave 3）。
 - [x] F2 离页期间生成继续；返回按队列处理；全部处理前不进入查词；不自动跳过。
 - [x] F3 离页 10 秒返回，思考时间包含离页区间；无第二次 provider 请求（elapsed
       unit + 应用级 `startedAt`）。
 - [x] F4 依据为短胶囊、自动换行、颜色不变；触控目标仍需设备视觉/可点性验收。
 - [x] F5 结果中无 `（q1）` 等内部标记，原文 quote 仍显示。
-- [ ] F6 四种模式按 exact/prefix/suffix/incremental 递进；达全局上限或无新增
+- [x] F6 四种模式按 exact/prefix/suffix/incremental 递进；达全局上限或无新增
       即停止；上限来自 `AgentLimits`。
-- [ ] F7 查词后有一次覆盖审查；未满/已满分别走流程 A/B；最多回退一次；重复条目
+- [x] F7 查词后有一次覆盖审查；未满/已满分别走流程 A/B；最多回退一次；重复条目
       删除前有本地重合校验。
 - [x] F8 Agent/查词词典选择双向隔离且各自持久化。
 - [x] F9 所有词典筛选条第 4 行露出半行（共享 widget 测试）。

@@ -85,6 +85,14 @@ class AgentResultView extends StatelessWidget {
               color: AppColors.warning,
             ),
           ),
+        for (final warning in result.warnings)
+          Text(
+            warning,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: AgentTokens.helper,
+              color: AppColors.warning,
+            ),
+          ),
         if (result.profileWarnings.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sm),
           for (final warning in result.profileWarnings)

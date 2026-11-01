@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/agent_input.dart';
+import 'package:rikai_mobile/core/models/agent/agent_limits.dart';
+import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
 import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
 import 'package:rikai_mobile/core/models/dict_info.dart';
 import 'package:rikai_mobile/core/models/lookup_models.dart';
@@ -44,6 +46,22 @@ const _analysisWithoutCitation = '''
 [TRANSLATION quote="q1"]请多关照。[/TRANSLATION]
 [SEGMENT type="fact" quote="q1"]
 [MEANING]无依据[/MEANING]
+[/SEGMENT]
+''';
+
+const _analysisJapanese = '''
+[TRANSLATION quote="q1"]どういたしまして。[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]正式な依頼です[/MEANING]
+[WORD id="t1"]何卒||なにとぞ|source-1[/WORD]
+[/SEGMENT]
+''';
+
+const _analysisEnglish = '''
+[TRANSLATION quote="q1"]Please treat me well.[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]A formal request expression[/MEANING]
+[WORD id="t1"]何卒||formal request|source-1[/WORD]
 [/SEGMENT]
 ''';
 
@@ -130,6 +148,8 @@ AgentOrchestrator _orchestrator({
     grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
     citations: CitationRegistry(),
     llmFactory: (_) => provider,
+    // Most tests isolate analysis; F7 coverage has dedicated tests below.
+    limits: const AgentLimits(maxCoverageFallback: 0),
   );
 }
 
@@ -353,4 +373,77 @@ void main() {
     expect(result.analysis.unresolved, isNotEmpty);
     expect(provider.requests, hasLength(2));
   });
+
+  test(
+    'wrong-language fields trigger one language repair and use the result',
+    () async {
+      final provider = FakeProvider(
+        responseSequence: <String>[_analysisJapanese, _analysisTagged],
+      );
+
+      final result = await _orchestrator(provider: provider).run(
+        const AgentRunRequest(
+          sessionId: 's1',
+          mode: AgentMode.strict,
+          dictionaries: <DictionaryInfo>[_dictionary],
+          provider: _provider,
+          userText: '何卒',
+        ),
+      );
+
+      expect(result.analysis.translation.single.text, '请多关照。');
+      expect(result.warnings, isEmpty);
+      expect(provider.requests, hasLength(2));
+      final repairPrompt = provider.requests.last.messages
+          .map((message) => message.text)
+          .join('\n');
+      expect(repairPrompt, contains('LANGUAGE CORRECTION TASK'));
+      expect(repairPrompt, contains('Fields needing language correction'));
+    },
+  );
+
+  test(
+    'a still-wrong language repair keeps the result with a warning',
+    () async {
+      final provider = FakeProvider(
+        responseSequence: <String>[_analysisJapanese, _analysisJapanese],
+      );
+
+      final result = await _orchestrator(provider: provider).run(
+        const AgentRunRequest(
+          sessionId: 's1',
+          mode: AgentMode.strict,
+          dictionaries: <DictionaryInfo>[_dictionary],
+          provider: _provider,
+          userText: '何卒',
+        ),
+      );
+
+      expect(result.analysis.translation, isNotEmpty);
+      expect(result.warnings, contains('部分内容未按设置语言输出'));
+      expect(provider.requests, hasLength(2));
+    },
+  );
+
+  test(
+    'an English response language accepts English fields without repair',
+    () async {
+      final provider = FakeProvider(responseText: _analysisEnglish);
+
+      final result = await _orchestrator(provider: provider).run(
+        const AgentRunRequest(
+          sessionId: 's1',
+          mode: AgentMode.strict,
+          dictionaries: <DictionaryInfo>[_dictionary],
+          provider: _provider,
+          userText: '何卒',
+          responseLanguage: AgentResponseLanguage.english,
+        ),
+      );
+
+      expect(result.analysis.translation.single.text, 'Please treat me well.');
+      expect(result.warnings, isEmpty);
+      expect(provider.requests, hasLength(1));
+    },
+  );
 }

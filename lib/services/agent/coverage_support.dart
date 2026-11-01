@@ -1,0 +1,326 @@
+import '../../core/models/agent/agent_coverage.dart';
+import '../../core/models/agent/agent_evidence.dart';
+import '../../core/models/agent/agent_input.dart';
+import '../../core/models/agent/agent_limits.dart';
+import '../../core/utils/text_normalizer.dart';
+
+class AgentCoverageValidation {
+  const AgentCoverageValidation({
+    required this.missing,
+    required this.duplicateGroups,
+    this.droppedMissing = 0,
+  });
+
+  final List<AgentCoverageMissing> missing;
+  final List<AgentCoverageDuplicateGroup> duplicateGroups;
+  final int droppedMissing;
+}
+
+/// Keeps only missing queries that are traceable to the supplied source,
+/// tokens, patterns or already retrieved dictionary entries.
+AgentCoverageValidation validateCoverageReview({
+  required AgentCoverageReview review,
+  required AgentInputEnvelope input,
+  required AgentEvidenceBundle evidence,
+  required AgentLimits limits,
+}) {
+  final validRefs = <String>{
+    for (final source in input.sources) source.id,
+    for (final source in evidence.sources) source.id,
+    for (final source in evidence.sources)
+      for (final token in source.tokens) token.id,
+    for (final pattern in evidence.patterns) pattern.id,
+  };
+  final sourceTexts = <String>[
+    for (final source in evidence.sources)
+      if (source.text.trim().isNotEmpty) source.text,
+  ];
+  final exactTerms = <String>{
+    for (final source in evidence.sources)
+      for (final token in source.tokens) ...<String>[
+        token.surface,
+        token.lemma,
+        token.reading,
+        ...token.lookupCandidates,
+      ],
+    for (final pattern in evidence.patterns) pattern.surface,
+    for (final citation in evidence.citations) ...<String>[
+      citation.entryKey,
+      citation.headword,
+      citation.matchedKey,
+    ],
+  }..removeWhere((term) => term.trim().isEmpty);
+
+  final missing = <AgentCoverageMissing>[];
+  var dropped = 0;
+  for (final item in review.missing) {
+    if (missing.length >= limits.maxCoverageMissing) {
+      dropped++;
+      continue;
+    }
+    final query = item.query.trim();
+    if (query.isEmpty || query.length > 100) {
+      dropped++;
+      continue;
+    }
+    final refs = <String>[
+      for (final ref in item.sourceRefs)
+        if (validRefs.contains(ref)) ref,
+    ];
+    if (refs.isEmpty) {
+      dropped++;
+      continue;
+    }
+    final traceable =
+        exactTerms.contains(query) ||
+        sourceTexts.any((text) => text.contains(query));
+    if (!traceable) {
+      dropped++;
+      continue;
+    }
+    missing.add(
+      AgentCoverageMissing(
+        kind: item.kind,
+        query: query,
+        sourceRefs: List<String>.unmodifiable(refs),
+        reason: item.reason,
+        priority: item.priority.clamp(1, 5),
+      ),
+    );
+  }
+  missing.sort((a, b) => a.priority.compareTo(b.priority));
+
+  return AgentCoverageValidation(
+    missing: List<AgentCoverageMissing>.unmodifiable(missing),
+    duplicateGroups: List<AgentCoverageDuplicateGroup>.unmodifiable(
+      review.duplicateGroups.take(limits.maxCoverageDuplicateGroups),
+    ),
+    droppedMissing: dropped,
+  );
+}
+
+/// Verifies model-suggested duplicate groups locally. Unknown dictionaries,
+/// different entry keys, non-overlapping snippets and denser removals are
+/// rejected; a citation kept by one group is never removed by another.
+Set<String> verifyCoverageDuplicates({
+  required AgentEvidenceBundle evidence,
+  required List<AgentCoverageDuplicateGroup> groups,
+}) {
+  final byDictionaryAndKey = <String, List<AgentCitation>>{};
+  for (final citation in evidence.citations) {
+    for (final key in _citationKeys(citation)) {
+      final normalized = stripLookupKey(key);
+      if (normalized.isEmpty) continue;
+      byDictionaryAndKey
+          .putIfAbsent('${citation.dictionaryId}\u0000$normalized', () => [])
+          .add(citation);
+    }
+  }
+
+  final keptIds = <String>{};
+  final removedIds = <String>{};
+  for (final group in groups) {
+    final keepMatches =
+        byDictionaryAndKey['${group.dictionaryId}\u0000'
+            '${stripLookupKey(group.keepEntryKey)}'] ??
+        const <AgentCitation>[];
+    if (keepMatches.isEmpty) continue;
+    final keep = keepMatches.reduce(
+      (a, b) => a.snippet.length >= b.snippet.length ? a : b,
+    );
+    keptIds.add(keep.id);
+    for (final removeKey in group.removeEntryKeys) {
+      final candidates =
+          byDictionaryAndKey['${group.dictionaryId}\u0000'
+              '${stripLookupKey(removeKey)}'] ??
+          const <AgentCitation>[];
+      for (final candidate in candidates) {
+        if (candidate.id == keep.id) continue;
+        // Keep the denser (longer) snippet; never remove a denser entry.
+        if (candidate.snippet.length > keep.snippet.length) continue;
+        // Different entry keys can still be duplicates (for example
+        // “何卒” and “何卒（副）”), so the local proof is snippet overlap.
+        if (!_mostlyOverlapping(keep.snippet, candidate.snippet)) continue;
+        removedIds.add(candidate.id);
+      }
+    }
+  }
+  removedIds.removeAll(keptIds);
+  return removedIds;
+}
+
+AgentEvidenceBundle pruneCoverageCitations({
+  required AgentEvidenceBundle evidence,
+  required Set<String> removeIds,
+  required AgentLimits limits,
+}) {
+  if (removeIds.isEmpty) return evidence;
+  final citations = evidence.citations
+      .where((citation) => !removeIds.contains(citation.id))
+      .toList(growable: false);
+  return AgentEvidenceBundle(
+    sources: <AgentSourceEvidence>[
+      for (final source in evidence.sources)
+        AgentSourceEvidence(
+          id: source.id,
+          kind: source.kind,
+          text: source.text,
+          tokens: <AgentTokenEvidence>[
+            for (final token in source.tokens)
+              _tokenWithCitations(
+                token,
+                token.citationIds.where((id) => !removeIds.contains(id)),
+              ),
+          ],
+        ),
+    ],
+    patterns: <AgentGrammarPatternEvidence>[
+      for (final pattern in evidence.patterns)
+        AgentGrammarPatternEvidence(
+          id: pattern.id,
+          surface: pattern.surface,
+          tokenIds: pattern.tokenIds,
+          start: pattern.start,
+          end: pattern.end,
+          citationIds: pattern.citationIds
+              .where((id) => !removeIds.contains(id))
+              .toList(growable: false),
+        ),
+    ],
+    citations: _sortedCitations(citations),
+    truncated: evidence.truncated,
+    structureUnavailable: evidence.structureUnavailable,
+    dictionaryIssues: evidence.dictionaryIssues,
+    budget: AgentEvidenceBudget(
+      sourceChars: evidence.budget.sourceChars,
+      uniqueTargets: evidence.budget.uniqueTargets,
+      citations: citations.length,
+      maxTargets: limits.maxTargets,
+      maxCitations: limits.maxEvidenceEntries,
+    ),
+  );
+}
+
+AgentEvidenceBundle mergeCoverageEvidence({
+  required AgentEvidenceBundle evidence,
+  required Map<String, List<AgentCitation>> citationsByQuery,
+  required List<AgentCoverageMissing> missing,
+  required AgentLimits limits,
+}) {
+  final byId = <String, AgentCitation>{
+    for (final citation in evidence.citations) citation.id: citation,
+  };
+  for (final citations in citationsByQuery.values) {
+    for (final citation in citations) {
+      byId.putIfAbsent(citation.id, () => citation);
+    }
+  }
+  final queryIds = <String, Set<String>>{
+    for (final entry in citationsByQuery.entries)
+      entry.key: <String>{for (final citation in entry.value) citation.id},
+  };
+  final additions = <String, Set<String>>{};
+  for (final item in missing) {
+    final ids = queryIds[item.query];
+    if (ids == null || ids.isEmpty) continue;
+    for (final ref in item.sourceRefs) {
+      additions.putIfAbsent(ref, () => <String>{}).addAll(ids);
+    }
+  }
+  final mergedCitations = _sortedCitations(byId.values.toList(growable: false));
+
+  return AgentEvidenceBundle(
+    sources: <AgentSourceEvidence>[
+      for (final source in evidence.sources)
+        AgentSourceEvidence(
+          id: source.id,
+          kind: source.kind,
+          text: source.text,
+          tokens: <AgentTokenEvidence>[
+            for (final token in source.tokens)
+              _tokenWithCitations(token, <String>{
+                ...token.citationIds,
+                ...?additions[token.id],
+              }),
+          ],
+        ),
+    ],
+    patterns: <AgentGrammarPatternEvidence>[
+      for (final pattern in evidence.patterns)
+        AgentGrammarPatternEvidence(
+          id: pattern.id,
+          surface: pattern.surface,
+          tokenIds: pattern.tokenIds,
+          start: pattern.start,
+          end: pattern.end,
+          citationIds: <String>[
+            ...{...pattern.citationIds, ...?additions[pattern.id]},
+          ],
+        ),
+    ],
+    citations: mergedCitations,
+    truncated: evidence.truncated,
+    structureUnavailable: evidence.structureUnavailable,
+    dictionaryIssues: evidence.dictionaryIssues,
+    budget: AgentEvidenceBudget(
+      sourceChars: evidence.budget.sourceChars,
+      uniqueTargets: evidence.budget.uniqueTargets,
+      citations: mergedCitations.length,
+      maxTargets: limits.maxTargets,
+      maxCitations: limits.maxEvidenceEntries,
+    ),
+  );
+}
+
+AgentTokenEvidence _tokenWithCitations(
+  AgentTokenEvidence token,
+  Iterable<String> citationIds,
+) {
+  return AgentTokenEvidence(
+    id: token.id,
+    surface: token.surface,
+    reading: token.reading,
+    lemma: token.lemma,
+    pos: token.pos,
+    start: token.start,
+    end: token.end,
+    content: token.content,
+    lookupCandidates: token.lookupCandidates,
+    citationIds: citationIds.toList(growable: false),
+  );
+}
+
+List<AgentCitation> _sortedCitations(List<AgentCitation> citations) {
+  final sorted = citations.toList(growable: false)
+    ..sort((a, b) {
+      final order = a.dictionaryOrder.compareTo(b.dictionaryOrder);
+      if (order != 0) return order;
+      return a.entryKey.compareTo(b.entryKey);
+    });
+  return sorted;
+}
+
+Set<String> _citationKeys(AgentCitation citation) => <String>{
+  citation.entryKey,
+  citation.headword,
+  citation.matchedKey,
+};
+
+bool _mostlyOverlapping(String a, String b) {
+  final left = stripLookupKey(a);
+  final right = stripLookupKey(b);
+  if (left.isEmpty || right.isEmpty) return false;
+  if (left.contains(right) || right.contains(left)) return true;
+  if (left.length < 2 || right.length < 2) return false;
+  final leftGrams = <String>{
+    for (var index = 0; index < left.length - 1; index++)
+      left.substring(index, index + 2),
+  };
+  final rightGrams = <String>{
+    for (var index = 0; index < right.length - 1; index++)
+      right.substring(index, index + 2),
+  };
+  final intersection = leftGrams.intersection(rightGrams).length;
+  final union = leftGrams.union(rightGrams).length;
+  return union > 0 && intersection / union >= 0.6;
+}

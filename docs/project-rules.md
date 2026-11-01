@@ -138,8 +138,9 @@
 | ID/来源 | 状态 | 说明 |
 |---|---|---|
 | R-AGENT-02 tool loop | future | 只有新 ADR/批准后才可恢复；当前无模型工具 |
-| R-AGENT-14 F7 coverage | future | F6 完成后才做；预算见统一预算常量 |
-| R-AGENT-18 F1/F17 language | implemented | Wave 2：默认 zh、旧 `follow` → zh、禁止输入推断、`AgentUiStrings`；F1b 结果字段后校验仍待 Wave 3 |
+| R-AGENT-14 F7 coverage | implemented | Wave 3：一次 `coverage.v1` 审查 + 最多一次可追溯补充检索；预算来自 `AgentLimits` |
+| F6 lookup completeness | implemented | Wave 3：`AgentLimits` 单一来源；exact→prefix→suffix→incremental；达上限/无新增即停 |
+| R-AGENT-18 F1/F17 language | implemented | Wave 2 默认 zh/文案；Wave 3（F1b）结果字段语言后校验 + 一次修复 + warning |
 | R-AGENT-09 F8 session dictionary | implemented | Wave 2：独立 key/模式持久化，不读写查词偏好 |
 | R-UI-09 F4/F9 | partial | 短胶囊/3.5 行规范已定，设备/窄屏验收待 Wave 4 |
 | F11 多图 | implemented | Wave 2：相机/相册多选、追加、移除；上限 6 见统一预算常量 |

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Small staggered fade for validated result items. It only runs after the
-/// result has passed validation; it never animates raw streamed JSON.
+/// result has passed validation; it never animates raw streamed tagged text.
 class AgentFadeIn extends StatelessWidget {
   const AgentFadeIn({
     super.key,

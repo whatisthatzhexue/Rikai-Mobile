@@ -12,6 +12,7 @@ class AgentProgressView extends StatelessWidget {
     required this.step,
     required this.evidenceCount,
     required this.citationCount,
+    required this.maxEvidenceEntries,
     required this.language,
   });
 
@@ -19,6 +20,7 @@ class AgentProgressView extends StatelessWidget {
   final int step;
   final int evidenceCount;
   final int citationCount;
+  final int maxEvidenceEntries;
   final AgentUiLanguage language;
 
   @override
@@ -27,7 +29,8 @@ class AgentProgressView extends StatelessWidget {
     final labels = agentProgressStepLabels(language);
     final current = step.clamp(0, labels.length);
     return Semantics(
-      label: '${labels[(current < labels.length ? current : labels.length - 1)]} '
+      label:
+          '${labels[(current < labels.length ? current : labels.length - 1)]} '
           '$current/${labels.length}',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -61,6 +64,7 @@ class AgentProgressView extends StatelessWidget {
               agentEvidenceProgressLabel(
                 evidenceCount,
                 citationCount,
+                maxEvidenceEntries,
                 language,
               ),
               style: theme.textTheme.bodySmall?.copyWith(

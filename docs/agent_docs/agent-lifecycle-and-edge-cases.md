@@ -5,8 +5,9 @@
 
 - 状态：**开发规范（要求）**。应用级 `AgentRunController`、provider CancelToken、
   OCR/Evidence 取消、四步进度和编号依据已落地；**应用级档案队列（F2）与
-  `awaitingProfile` gate 已于 Wave 2 实现**。进程死亡持久化、familiarization
-  取消和真实设备“离开页面→返回”验收仍待补；未完成前不要把剩余能力写成已实现。
+  `awaitingProfile` gate 已于 Wave 2 实现；F1b 语言后校验、F6 检索递进和 F7
+  coverage 阶段已于 Wave 3 实现**。进程死亡持久化、familiarization 取消和真实
+  设备“离开页面→返回”验收仍待补；未完成前不要把剩余能力写成已实现。
 - 适用范围：`lib/features/agent/`、`lib/state/`、`lib/services/agent/` 及后续
   P6.6/P6.7 的 Agent UI。
 - 关联：[管线评审](phase6-pipeline-review.md) 的 H4（取消/并发）与 H8（持久化）、
@@ -322,7 +323,8 @@ AgentRunSnapshot {
 - [x] 离页 10 秒再返回：思考时间包含离页区间；无第二次 provider 请求（elapsed/
       gate 测试；设备计时待验）。
 - [x] 任务所选语言为中文、输入为日文时：Agent 本地 UI 与 prompt 语言契约为
-      中文；输入启发式已删除（F1a/F17；结果字段后校验 F1b 待 Wave 3）。
+      中文；输入启发式已删除；结果字段语言后校验与一次修复已实现（F1a/F17/
+      F1b；仍偏离时保留结果并显示 warning）。
 - [ ] 进程死亡模拟（重建 provider/store）：显示 interrupted + 重试，不自动续跑。
 - [ ] 应用切后台/回前台：回前台显示最新 snapshot；不自动重跑。
 - [ ] 网络断开/provider 429/超时：错误卡 + partial + 重试；不整屏清空。

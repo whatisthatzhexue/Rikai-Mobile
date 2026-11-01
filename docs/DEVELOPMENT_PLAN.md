@@ -719,8 +719,8 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 
 ## 11. Phase 6 — Mdict Agent（P6.1–P6.5 已实现）
 
-> 状态：**P6.1–P6.5 核心已实现；2026-10-31 实机反馈 Wave 1–2 已实现，
-> Wave 3–4 待做；P6.6/P6.7 未实现**。最新进度见
+> 状态：**P6.1–P6.5 核心已实现；2026-10-31 实机反馈 Wave 1–3 已实现，
+> Wave 4 设备验收待做；P6.6/P6.7 未实现**。最新进度见
 > `docs/phase6-status.md`；设计细节、开放问题和验收标准见
 > `docs/phase6-agent-design.md`；契约/JSON Schema/状态机见
 > `docs/phase6-agent-contracts.md`。Phase 5 已完成并发布 1.0。v2 采用固定流水线、

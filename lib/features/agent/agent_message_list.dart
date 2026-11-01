@@ -109,6 +109,7 @@ class AgentMessageList extends ConsumerWidget {
               progressStep: run.progressStep,
               evidenceCount: run.evidenceCount,
               citationCount: run.citationCount,
+              maxEvidenceEntries: run.evidenceLimit,
               uiLanguage: uiLanguage,
               strings: strings,
               result: result,

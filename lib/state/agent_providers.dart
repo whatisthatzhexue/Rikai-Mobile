@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/models/agent/agent_limits.dart';
 import '../core/models/agent/agent_profile.dart';
 import '../core/models/agent/agent_provider.dart';
 import '../services/agent/agent_image_picker.dart';
@@ -8,6 +9,12 @@ import '../services/agent/grammar_patterns.dart';
 import '../services/agent/ports/secret_port.dart';
 import '../services/security/secret_store.dart';
 import '../services/storage/agent_store.dart';
+
+/// Request-level policy snapshot. Tests may override it to disable the F7
+/// coverage pass or tighten budgets; production uses the standard policy.
+final agentLimitsProvider = Provider<AgentLimits>(
+  (ref) => AgentLimits.standard,
+);
 
 final agentStoreProvider = Provider<AgentStore>((ref) {
   final store = AgentStore();

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/agent_input.dart';
+import 'package:rikai_mobile/core/models/agent/agent_limits.dart';
 import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
 import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
 import 'package:rikai_mobile/core/models/agent/agent_tool.dart';
@@ -284,6 +285,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(_preferences),
+        agentLimitsProvider.overrideWithValue(
+          const AgentLimits(maxCoverageFallback: 0),
+        ),
         agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
           ({required bool needsOcr, bool Function()? isCancelled}) async =>
@@ -309,6 +313,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(_preferences),
+        agentLimitsProvider.overrideWithValue(
+          const AgentLimits(maxCoverageFallback: 0),
+        ),
         agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
           ({required bool needsOcr, bool Function()? isCancelled}) async =>
@@ -347,6 +354,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(_preferences),
+        agentLimitsProvider.overrideWithValue(
+          const AgentLimits(maxCoverageFallback: 0),
+        ),
         agentProfileRepositoryProvider.overrideWithValue(repository),
         agentRunServicesProvider.overrideWithValue(
           ({required bool needsOcr, bool Function()? isCancelled}) async =>
@@ -377,6 +387,9 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(_preferences),
+          agentLimitsProvider.overrideWithValue(
+            const AgentLimits(maxCoverageFallback: 0),
+          ),
           agentProfileRepositoryProvider.overrideWithValue(repository),
           agentRunServicesProvider.overrideWithValue(
             ({required bool needsOcr, bool Function()? isCancelled}) async =>
@@ -460,6 +473,9 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(_preferences),
+          agentLimitsProvider.overrideWithValue(
+            const AgentLimits(maxCoverageFallback: 0),
+          ),
           agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
           agentProfileRepositoryProvider.overrideWithValue(repository),
           agentRunServicesProvider.overrideWithValue(
@@ -514,6 +530,9 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(_preferences),
+          agentLimitsProvider.overrideWithValue(
+            const AgentLimits(maxCoverageFallback: 0),
+          ),
           agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
           agentProfileRepositoryProvider.overrideWithValue(repository),
           agentRunServicesProvider.overrideWithValue(
@@ -542,6 +561,9 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         sharedPreferencesProvider.overrideWithValue(_preferences),
+        agentLimitsProvider.overrideWithValue(
+          const AgentLimits(maxCoverageFallback: 0),
+        ),
         agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
           ({required bool needsOcr, bool Function()? isCancelled}) async =>

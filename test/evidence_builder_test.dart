@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/agent_input.dart';
+import 'package:rikai_mobile/core/models/agent/agent_limits.dart';
 import 'package:rikai_mobile/core/models/agent/agent_tool.dart';
 import 'package:rikai_mobile/core/models/dict_info.dart';
+import 'package:rikai_mobile/core/models/lookup_match_mode.dart';
 import 'package:rikai_mobile/core/models/lookup_models.dart';
 import 'package:rikai_mobile/core/models/lookup_request.dart';
 import 'package:rikai_mobile/core/models/token.dart';
@@ -96,6 +98,43 @@ class _FakeLookup implements LookupPort {
   }
 }
 
+class _ModeLookup implements LookupPort {
+  _ModeLookup(this.entriesByMode, {this.onLookup});
+
+  final Map<LookupMatchMode, List<String>> entriesByMode;
+  final void Function(LookupRequest request)? onLookup;
+  final List<LookupMatchMode> modes = <LookupMatchMode>[];
+
+  @override
+  Future<LookupResult> lookup(LookupRequest request) async {
+    modes.add(request.matchMode);
+    onLookup?.call(request);
+    final keys = entriesByMode[request.matchMode] ?? const <String>[];
+    return LookupResult(
+      query: request.query,
+      candidates: request.rawCandidates,
+      groups: <DictionaryLookupGroup>[
+        DictionaryLookupGroup(
+          dictionary: request.dictionaries.first,
+          entries: <LookupEntry>[
+            for (final key in keys)
+              LookupEntry(matchedKey: key, headword: key, html: '<b>$key</b>'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<List<String>> suggest({
+    required String prefix,
+    required List<DictionaryInfo> dictionaries,
+    int limit = 10,
+  }) async {
+    return const <String>[];
+  }
+}
+
 Token _token(String surface, int start) {
   final features = List<String>.filled(Token.expectedFeatureCount, '*');
   features[0] = '副詞';
@@ -148,7 +187,7 @@ void main() {
       lookupPort: _FakeLookup(),
       grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
       citations: citations,
-      maxTargets: 1,
+      limits: const AgentLimits(maxTargets: 1),
     );
 
     final bundle = await builder.build(
@@ -161,26 +200,29 @@ void main() {
     expect(bundle.sources.single.tokens.last.citationIds, isEmpty);
   });
 
-  test('a failing dictionary is recorded instead of silently swallowed', () async {
-    final builder = EvidenceBuilder(
-      tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
-      lookupPort: _ThrowingLookup(),
-      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
-      citations: CitationRegistry(),
-    );
+  test(
+    'a failing dictionary is recorded instead of silently swallowed',
+    () async {
+      final builder = EvidenceBuilder(
+        tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
+        lookupPort: _ThrowingLookup(),
+        grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+        citations: CitationRegistry(),
+      );
 
-    final bundle = await builder.build(
-      sources: <AgentSourceInput>[_source('何卒')],
-      dictionaries: const <DictionaryInfo>[_dictionaryA],
-    );
+      final bundle = await builder.build(
+        sources: <AgentSourceInput>[_source('何卒')],
+        dictionaries: const <DictionaryInfo>[_dictionaryA],
+      );
 
-    expect(bundle.dictionaryIssues, hasLength(1));
-    expect(bundle.dictionaryIssues.single.dictionaryId, 'a');
-    expect(
-      bundle.dictionaryIssues.single.code,
-      AgentToolErrorCode.dictionaryLookupFailed.wireName,
-    );
-  });
+      expect(bundle.dictionaryIssues, hasLength(1));
+      expect(bundle.dictionaryIssues.single.dictionaryId, 'a');
+      expect(
+        bundle.dictionaryIssues.single.code,
+        AgentToolErrorCode.dictionaryLookupFailed.wireName,
+      );
+    },
+  );
 
   test('a missing UniDic degrades instead of failing the run', () async {
     final builder = EvidenceBuilder(
@@ -198,5 +240,152 @@ void main() {
     expect(bundle.structureUnavailable, isTrue);
     expect(bundle.sources.single.tokens, isEmpty);
     expect(bundle.citations, isEmpty);
+  });
+
+  test(
+    'looks up every mode in exact→prefix→suffix→incremental order',
+    () async {
+      final lookup = _ModeLookup(<LookupMatchMode, List<String>>{
+        LookupMatchMode.exact: <String>['exact'],
+        LookupMatchMode.prefix: <String>['prefix'],
+        LookupMatchMode.suffix: <String>['suffix'],
+        LookupMatchMode.incremental: <String>['incremental'],
+      });
+      final builder = EvidenceBuilder(
+        tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
+        lookupPort: lookup,
+        grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+        citations: CitationRegistry(),
+        limits: const AgentLimits(maxEntriesPerDictionary: 10),
+      );
+
+      final bundle = await builder.build(
+        sources: <AgentSourceInput>[_source('何卒')],
+        dictionaries: const <DictionaryInfo>[_dictionaryA],
+      );
+
+      expect(lookup.modes, <LookupMatchMode>[
+        LookupMatchMode.exact,
+        LookupMatchMode.prefix,
+        LookupMatchMode.suffix,
+        LookupMatchMode.incremental,
+      ]);
+      expect(bundle.citations, hasLength(4));
+    },
+  );
+
+  test('stops immediately when the global citation limit is reached', () async {
+    final lookup = _ModeLookup(<LookupMatchMode, List<String>>{
+      LookupMatchMode.exact: <String>['exact'],
+      LookupMatchMode.prefix: <String>['prefix'],
+      LookupMatchMode.suffix: <String>['suffix'],
+      LookupMatchMode.incremental: <String>['incremental'],
+    });
+    final builder = EvidenceBuilder(
+      tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
+      lookupPort: lookup,
+      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+      citations: CitationRegistry(),
+      limits: const AgentLimits(
+        maxEvidenceEntries: 2,
+        maxEntriesPerDictionary: 10,
+      ),
+    );
+
+    final bundle = await builder.build(
+      sources: <AgentSourceInput>[_source('何卒')],
+      dictionaries: const <DictionaryInfo>[_dictionaryA],
+    );
+
+    expect(lookup.modes, <LookupMatchMode>[
+      LookupMatchMode.exact,
+      LookupMatchMode.prefix,
+    ]);
+    expect(bundle.citations, hasLength(2));
+    expect(bundle.truncated, isTrue);
+  });
+
+  test('stops after a mode adds no new citation', () async {
+    final lookup = _ModeLookup(<LookupMatchMode, List<String>>{
+      LookupMatchMode.exact: <String>['何卒'],
+      LookupMatchMode.prefix: <String>['何卒'],
+      LookupMatchMode.suffix: <String>['suffix'],
+    });
+    final builder = EvidenceBuilder(
+      tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
+      lookupPort: lookup,
+      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+      citations: CitationRegistry(),
+      limits: const AgentLimits(maxEntriesPerDictionary: 10),
+    );
+
+    final bundle = await builder.build(
+      sources: <AgentSourceInput>[_source('何卒')],
+      dictionaries: const <DictionaryInfo>[_dictionaryA],
+    );
+
+    expect(lookup.modes, <LookupMatchMode>[
+      LookupMatchMode.exact,
+      LookupMatchMode.prefix,
+    ]);
+    expect(bundle.citations, hasLength(1));
+  });
+
+  test('honours the per-target per-dictionary cap across modes', () async {
+    final lookup = _ModeLookup(<LookupMatchMode, List<String>>{
+      LookupMatchMode.exact: <String>['a', 'b', 'c'],
+      LookupMatchMode.prefix: <String>['d'],
+    });
+    final builder = EvidenceBuilder(
+      tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
+      lookupPort: lookup,
+      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+      citations: CitationRegistry(),
+      limits: const AgentLimits(maxEntriesPerDictionary: 3),
+    );
+
+    final bundle = await builder.build(
+      sources: <AgentSourceInput>[_source('何卒')],
+      dictionaries: const <DictionaryInfo>[_dictionaryA],
+    );
+
+    expect(lookup.modes, <LookupMatchMode>[LookupMatchMode.exact]);
+    expect(bundle.citations, hasLength(3));
+  });
+
+  test('cancellation stops between lookup modes', () async {
+    var cancelled = false;
+    final lookup = _ModeLookup(
+      <LookupMatchMode, List<String>>{
+        LookupMatchMode.exact: <String>['exact'],
+        LookupMatchMode.prefix: <String>['prefix'],
+      },
+      onLookup: (request) {
+        if (request.matchMode == LookupMatchMode.exact) cancelled = true;
+      },
+    );
+    final builder = EvidenceBuilder(
+      tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
+      lookupPort: lookup,
+      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+      citations: CitationRegistry(),
+      limits: const AgentLimits(maxEntriesPerDictionary: 10),
+    );
+
+    await expectLater(
+      builder.build(
+        sources: <AgentSourceInput>[_source('何卒')],
+        dictionaries: const <DictionaryInfo>[_dictionaryA],
+        isCancelled: () => cancelled,
+      ),
+      throwsA(
+        isA<AgentCapabilityException>().having(
+          (error) => error.code,
+          'code',
+          AgentToolErrorCode.toolCancelled,
+        ),
+      ),
+    );
+    expect(lookup.modes, <LookupMatchMode>[LookupMatchMode.exact]);
   });
 }

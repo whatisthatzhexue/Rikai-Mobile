@@ -30,6 +30,14 @@ class CitationRegistry {
     _nextId = 1;
   }
 
+  /// Removes citations that were pruned by local duplicate verification. IDs
+  /// are never reused; later citations keep their existing numbers.
+  void removeAll(Iterable<String> ids) {
+    for (final id in ids) {
+      _citations.remove(id);
+    }
+  }
+
   AgentCitation issue({
     required String toolCallId,
     required DictionaryInfo dictionary,

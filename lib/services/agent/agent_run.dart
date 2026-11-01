@@ -3,6 +3,7 @@ import 'package:rikai_ocr/rikai_ocr.dart';
 import '../../core/models/agent/agent_analysis.dart';
 import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
+import '../../core/models/agent/agent_limits.dart';
 import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/agent/agent_quote.dart';
@@ -20,6 +21,7 @@ enum AgentStage {
   awaitingProfile,
   tokenizing,
   evidence,
+  coverage,
   reasoning,
   validating,
   done,
@@ -80,6 +82,8 @@ class AgentRunResult {
     required this.dictionaryProfiles,
     this.profileWarnings = const <String>[],
     this.unavailableProfiles = const <DictionaryProfileIssue>[],
+    this.warnings = const <String>[],
+    this.coverageFallbackUsed = false,
   });
 
   final AgentInputEnvelope input;
@@ -91,6 +95,12 @@ class AgentRunResult {
   final List<String> dictionaryProfiles;
   final List<String> profileWarnings;
   final List<DictionaryProfileIssue> unavailableProfiles;
+
+  /// Non-fatal run warnings (language post-check, coverage review, etc.).
+  final List<String> warnings;
+
+  /// True when the one allowed coverage-review supplementary lookup ran.
+  final bool coverageFallbackUsed;
 
   List<AgentCitation> get citations => evidence.citations;
 
@@ -170,6 +180,7 @@ class AgentRunSnapshot {
     this.progressStep = 0,
     this.evidenceCount = 0,
     this.citationCount = 0,
+    this.maxEvidenceEntries = 0,
     this.pendingProfileCount = 0,
     this.result,
     this.retainedResult,
@@ -196,7 +207,7 @@ class AgentRunSnapshot {
   final AgentRunStatus status;
   final String stageMessage;
 
-  /// Characters received from the provider. The raw stream is JSON and is not
+  /// Characters received from the provider. The raw tagged stream is not
   /// rendered; the UI only shows this progress counter.
   final int receivedChars;
 
@@ -204,7 +215,12 @@ class AgentRunSnapshot {
   final int progressStep;
   final int evidenceCount;
   final int citationCount;
+  final int maxEvidenceEntries;
   final int pendingProfileCount;
+
+  int get evidenceLimit => maxEvidenceEntries > 0
+      ? maxEvidenceEntries
+      : AgentLimits.standard.maxEvidenceEntries;
   final AgentRunResult? result;
 
   /// Previous result kept visible while a regeneration runs. It is never sent
@@ -257,6 +273,7 @@ class AgentRunSnapshot {
     int? progressStep,
     int? evidenceCount,
     int? citationCount,
+    int? maxEvidenceEntries,
     int? pendingProfileCount,
     Object? result = _unset,
     Object? retainedResult = _unset,
@@ -286,6 +303,7 @@ class AgentRunSnapshot {
       progressStep: progressStep ?? this.progressStep,
       evidenceCount: evidenceCount ?? this.evidenceCount,
       citationCount: citationCount ?? this.citationCount,
+      maxEvidenceEntries: maxEvidenceEntries ?? this.maxEvidenceEntries,
       pendingProfileCount: pendingProfileCount ?? this.pendingProfileCount,
       result: identical(result, _unset)
           ? this.result

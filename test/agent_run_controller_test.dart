@@ -103,6 +103,6 @@ void main() {
     expect(find.textContaining('已思考'), findsOneWidget);
     expect(find.textContaining('已接收'), findsNothing);
     expect(find.text('查词'), findsOneWidget);
-    expect(find.textContaining('已检索 5 条'), findsOneWidget);
+    expect(find.textContaining('已检索 5 / 60 条'), findsOneWidget);
   });
 }

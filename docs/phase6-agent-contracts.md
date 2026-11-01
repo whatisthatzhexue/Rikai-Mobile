@@ -12,9 +12,9 @@
 > 标签块完整性（未闭合、错序、越界嵌套、重复单例标签）；格式或完整性失败时只有
 > 一次“保持正文不变、仅补标签”的格式纠错调用。
 >
-> **2026-11-01 语言决策（Wave 2 已实现）**：默认输出/UI 语言为中文（`zh`）；
+> **2026-11-01 语言决策（Wave 2–3 已实现）**：默认输出/UI 语言为中文（`zh`）；
 > 旧 `follow` 映射为 `zh`；禁止按输入假名/拉丁字符推断。§5.2 的默认/文案契约
-> 已落地；F1b 结果字段后校验仍待 Wave 3。
+> 与 F1b 结果字段语言后校验/一次修复均已落地。
 >
 > 规范性 MUST/MUST NOT 规则见 `docs/project-rules.md`；当前预算/上限和固定文案
 > 见 `docs/project-data.md`。本文件只保留 Agent 字段、错误码、状态机和未来
@@ -23,9 +23,9 @@
 - 状态：**设计契约；P6.1–P6.5 核心已实现，P6.6/P6.7 未实现**；与
   `docs/phase6-agent-design.md` v2 配套。实现状态见 `docs/phase6-status.md`。
   **2026-10-31 实机反馈的 F1–F17 修正计划见
-  `docs/agent_docs/device-feedback-2026-10-31.md`；Wave 1–2 已实现（应用级档案
-  队列/语言默认与文案已落地）；覆盖审查 `coverage.v1` 和 F1b 输出语言校验仍是
-  待实现契约，不能写成已支持。**
+  `docs/agent_docs/device-feedback-2026-10-31.md`；Wave 1–3 已实现（应用级档案
+  队列/语言默认与文案、F1b 语言后校验、F6 检索递进、F7 覆盖审查）；Wave 4
+  设备验收仍未完成，不能把真实 provider/arm64/大词典冒烟写成已支持。**
 - 目的：把 Agent 的工具、输入/输出、错误码、状态机和校验规则固定下来，避免实现时
   各自发明字段。机器可读 schema 在 `docs/schemas/agent/`。
 - 版本规则：所有 schema 带 `schema` 常量（如 `rikai.agent.input.v1`）；破坏性字段
@@ -439,7 +439,7 @@ class ToolResult {
 - `model_supplements` 严格模式必须为空/隐藏；宽松模式必须带“模型补充”标签。
 - `reading` 必须匹配 token 读音或 citation 摘要；否则标 `未验证` 或移除。
 
-### 5.1 覆盖审查 `rikai.agent.coverage.v1`（2026-10-31 F7，待实现）
+### 5.1 覆盖审查 `rikai.agent.coverage.v1`（2026-10-31 F7，Wave 3 已实现）
 
 初始证据后调用一次，判断是否缺少词典资料。这是独立的轻量 schema，不直接复用
 较重的 `analysis.v1`。机器可读草案：
@@ -481,9 +481,13 @@ class ToolResult {
 - 未达 citation 上限走流程 A（按 missing 补充检索，模式 exact→prefix→suffix→
   incremental）；已达上限走流程 B（先删可验证重复腾槽位，再走流程 A）。
 - 每个用户请求最多一次覆盖审查 + 一次回退；失败/无重复/无可追溯 query 时保留
-  原证据并显示 warning，不让整次 run 失败。
+  原证据并显示 warning，不让整次 run 失败。`AgentRunResult.warnings` 承载
+  本地化 warning，`coverageFallbackUsed` 标记是否执行过补充检索。
+- 运行时输出为 JSON 文本（`stream:false`，不发 `response_format`/
+  `json_schema`）；解析失败只做一次 JSON 格式修复。模型返回的 coverage
+  建议必须经过本地可追溯性/重复校验，不能直接删除或查询任意词条。
 
-### 5.2 输出语言（2026-10-31 F1；默认/文案 Wave 2 已实现；F1b 待 Wave 3）
+### 5.2 输出语言（2026-10-31 F1；默认/文案 Wave 2、F1b Wave 3 已实现）
 
 - `AgentResponseLanguage` 默认 `zh`；旧 `follow` 迁移为 `zh`，不得按输入假名/
   拉丁字符推断语言。**已实现**。
@@ -493,7 +497,11 @@ class ToolResult {
   sense/grammar explanation/unresolved reason/model supplement），不检查原文
   与 citation 摘要。偏离目标语言时允许一次语言修复；仍偏离则保留结果并显示
   warning，不得丢弃已生成内容。API 无法保证 100% 语言一致，契约不承诺绝对。
-  **F1b，待 Wave 3。**
+  **F1b 已实现**：`AgentLanguageValidator` + `LANGUAGE CORRECTION TASK` 单次
+  修复；校验字段为 translation/segment interpretation/word sense/grammar
+  explanation/option meaning/unresolved reason/model supplement，不检查 quote、
+  词形、读音和 citation 摘要。仍偏离时在 `AgentRunResult.warnings` 写入本地化
+  警告，结果保留。
 
 ## 6. 词典档案 `rikai.dictionary.profile.v1`
 
@@ -611,8 +619,9 @@ idle
   `AgentProfileRegenerationController` 持有：离开页面不会丢失；不同词典可并行，
   同一词典在请求完成前不会重复发起；进度文本列出当前全部活动词典并随新增/
   完成实时更新。生成期间编辑/删除仍可用，仅目标词典的“重新生成”禁用。
-- `coverage` 是 2026-10-31 F7 的一次性覆盖审查；每个请求最多触发一次补充检索，
-  `coverageFallbackUsed=true` 后不得再次回退。**待 Wave 3。**
+- `coverage` 是 2026-10-31 F7 的一次性覆盖审查（Wave 3 已实现）；每个请求最多
+  触发一次补充检索，`coverageFallbackUsed=true` 后不得再次回退。审查失败、
+  schema 无效、query 不可追溯或没有可验证重复时保留原证据并显示 warning。
 - 任何阶段可取消；取消后状态为 `cancelled`，保留已完成的本地结果。
 - 阶段事件带 `run_id, stage, message, progress`；UI 不从页面 State 推断。
 - 重试从失败阶段开始；OCR 可重新识别，provider 可重试，校验失败可做一次修复。

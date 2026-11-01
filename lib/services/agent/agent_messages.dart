@@ -9,6 +9,24 @@ String agentStageMessage(AgentStage stage, AgentUiLanguage language) =>
 String agentRepairingMessage(AgentUiLanguage language) =>
     AgentUiStrings.of(language).repairing;
 
+String agentLanguageWarning(AgentUiLanguage language) =>
+    AgentUiStrings.of(language).languageWarning;
+
+String agentCoverageUnavailable(AgentUiLanguage language) =>
+    AgentUiStrings.of(language).coverageUnavailable;
+
+String agentCoverageUnverifiable(AgentUiLanguage language) =>
+    AgentUiStrings.of(language).coverageUnverifiable;
+
+String agentCoverageAtLimit(AgentUiLanguage language) =>
+    AgentUiStrings.of(language).coverageAtLimit;
+
+String agentCoverageNoNew(AgentUiLanguage language) =>
+    AgentUiStrings.of(language).coverageNoNew;
+
+String agentDictionaryLookupFailed(AgentUiLanguage language, String name) =>
+    AgentUiStrings.of(language).dictionaryLookupFailed(name);
+
 String agentInputRequiredMessage(AgentUiLanguage language) =>
     AgentUiStrings.of(language).inputRequired;
 
@@ -24,10 +42,11 @@ List<String> agentProgressStepLabels(AgentUiLanguage language) =>
 String agentEvidenceProgressLabel(
   int evidenceCount,
   int citationCount,
+  int maxEvidenceEntries,
   AgentUiLanguage language,
 ) => AgentUiStrings.of(
   language,
-).evidenceProgressLabel(evidenceCount, citationCount);
+).evidenceProgressLabel(evidenceCount, citationCount, maxEvidenceEntries);
 
 String agentThinkingFallback(AgentUiLanguage language) =>
     AgentUiStrings.of(language).thinkingFallback;

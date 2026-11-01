@@ -160,6 +160,63 @@ Return only the corrected tagged text.
   );
 }
 
+/// One bounded language-correction call. It keeps every tag/id/citation and
+/// all source text intact; only human-readable prose may be translated into
+/// the selected answer language.
+LlmRequest buildAnalysisLanguageRepairRequest({
+  required String model,
+  required AgentMode mode,
+  required AgentResponseLanguage responseLanguage,
+  required AgentInputEnvelope input,
+  required AgentEvidenceBundle evidence,
+  required List<AgentQuoteRef> quotes,
+  required List<String> dictionaryProfiles,
+  required String userRequest,
+  required String rawOutput,
+  required List<String> mismatchedFields,
+}) {
+  final fields = mismatchedFields.isEmpty
+      ? '(human-readable prose)'
+      : mismatchedFields.join('\n');
+  return LlmRequest(
+    model: model,
+    messages: <LlmMessage>[
+      LlmMessage(
+        role: LlmRole.system,
+        parts: <LlmTextPart>[
+          LlmTextPart('''
+${analysisSystemPrompt(mode, responseLanguage)}
+LANGUAGE CORRECTION TASK:
+Your previous response used the wrong language in some human-readable prose.
+Rewrite only those prose fields into the selected answer language. Keep every
+tag, attribute, quote id, token/pattern id, citation id, citation, word form,
+reading and quoted source text unchanged. Do not add, remove, merge or split
+claims. Do not change the epistemic type of any segment. Return only the
+corrected tagged text, with no explanation.
+'''),
+        ],
+      ),
+      LlmMessage(
+        role: LlmRole.user,
+        parts: <LlmTextPart>[
+          LlmTextPart('''
+${buildAnalysisUserPrompt(input: input, evidence: evidence, quotes: quotes, dictionaryProfiles: dictionaryProfiles, userRequest: userRequest)}
+Previous output (untrusted):
+$rawOutput
+
+Fields needing language correction:
+$fields
+
+Return only the corrected tagged text.
+'''),
+        ],
+      ),
+    ],
+    maxTokens: 12000,
+    stream: false,
+  );
+}
+
 LlmRequest buildAnalysisRequest({
   required String model,
   required AgentMode mode,

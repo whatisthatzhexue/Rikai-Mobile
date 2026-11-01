@@ -19,12 +19,12 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > `sample`/`suggest` acceptance still remain. The review backlog in
 > `docs/agent_docs/phase6-pipeline-review.md` is authoritative for open gaps.
 >
-> **2026-11-01 language decision (implemented in Wave 2)**: the default
+> **2026-11-01 language decision (implemented in Wave 2–3)**: the default
 > output/UI language is Chinese (`zh`); legacy `follow` maps to `zh`;
 > `resolveAgentUiLanguage` takes only the explicit setting and never inspects
 > source text. `AgentUiStrings` supplies Chinese/English/Japanese Agent-area
-> copy. F1b (post-validation of human-readable fields plus one language repair)
-> remains Wave 3 and must not be described as implemented.
+> copy. Wave 3 adds `AgentLanguageValidator` post-validation of human-readable
+> fields plus one language repair with a visible warning when it still differs.
 
 ## Implemented
 
@@ -184,10 +184,11 @@ Summary:
   time across page leave (F3), camera/gallery multi-image input (F11),
   full-screen sent-image viewer (F12), profile manager (F13), result action
   row/copy/edit/regenerate (F14). F1b remains Wave 3.
-- **Wave 3 (evidence)**: global `AgentLimits` and exact → prefix → suffix →
-  incremental lookup (F6); one schema-constrained coverage review with at most
-  one supplementary lookup pass (F7); output-language field validation and one
-  repair (F1b).
+- **Wave 3 (implemented)**: `AgentLanguageValidator` + one language repair
+  (F1b); global `AgentLimits` and exact → prefix → suffix → incremental lookup
+  with immediate cap/no-new stop and N/M progress (F6); one
+  `rikai.agent.coverage.v1` review, traceability filtering, locally verified
+  duplicate pruning, flow A/B and at most one supplementary lookup (F7).
 - F2 must precede F7/F13/F14 profile work. F6 must precede F7. F17 must precede
   all Agent UI localization work. Do not start P6.6/P6.7 from this backlog.
 
@@ -271,14 +272,46 @@ Wave 2 implementation (2026-11-01):
   `docs/project-data.md` §2/§5. Device visual/provider/arm64 acceptance remains
   for Wave 4.
 
+Wave 3 implementation (2026-11-01, F1b/F6/F7):
+
+- **F1b**: `AgentLanguageValidator` checks translation, segment interpretation,
+  word sense, grammar explanation, option meaning, unresolved reason and model
+  supplement; source quotes, word forms, readings and citation snippets are not
+  checked. Allowed source terms/readings/quoted material are stripped before a
+  conservative script-ratio judgment. On mismatch the orchestrator sends one
+  `LANGUAGE CORRECTION TASK` request that keeps tags/ids/citations/quotes and
+  only translates human-readable prose; a structurally valid repaired result is
+  used. A failed or still-mismatched repair keeps the result and adds a
+  localized `warnings` entry rendered in the result view.
+- **F6**: `AgentLimits` (`lib/core/models/agent/agent_limits.dart`) is the single
+  budget source and is injectable through `agentLimitsProvider`. Evidence lookup
+  runs mode-by-mode: all targets exact, then prefix, suffix, incremental. A mode
+  with zero new unique citations stops later modes; the global cap stops
+  immediately; per-target/per-dictionary caps are enforced across modes; duplicate
+  `(dictionaryId, entryKey)` entries are linked, not reissued. Progress uses
+  `已检索 N / M` from the run's limit snapshot.
+- **F7**: After initial evidence, one `rikai.agent.coverage.v1` JSON review (small
+  model, one JSON-format repair). Queries are kept only when traceable to source
+  text, token surface/lemma/reading/candidates, pattern surface or an existing
+  citation key; source refs must exist. Flow A supplements below the cap with
+  the same F6 mode order. Flow B verifies model-suggested same-dictionary
+  duplicate groups locally by snippet overlap, keeps the denser entry, prunes
+  the rest from the bundle/registry, then supplements. At most one review and one
+  fallback per run; failure, untraceable queries, no verified duplicates or no
+  new evidence produce localized warnings and keep the original evidence.
+  `AgentStage.coverage` maps to the lookup progress step; `coverageFallbackUsed`
+  is recorded in the result.
+- Wave 3 verification: `flutter analyze` clean; `flutter test` 291 passed;
+  `flutter build apk --debug` succeeded. Real provider/arm64/large-dictionary
+  smoke remains Wave 4.
+
 Current known gaps:
 
-- F1b (post-validation of human-readable fields + one language repair) is
-  Wave 3.
-- Evidence lookup is still exact→prefix only and the `60` limit is hard-coded
-  in several places (`lib/services/agent/evidence_builder.dart:23-25`,
-  `lib/services/agent/agent_orchestrator.dart:45-47`). This is F6.
-- F7 coverage review remains Wave 3.
+- Wave 4 device acceptance is not done: real provider/API key, arm64 Agent
+  end-to-end, real large-dictionary suffix/incremental smoke, and secure-storage
+  device I/O remain unverified. Automated Wave 3 tests do not prove those.
+- The coverage review uses the small model and JSON text parsed locally; real
+  provider JSON reliability and latency still need device measurement.
 - Process-death recovery of the in-memory profile inbox remains P6.7; the queue
   survives page navigation but not process death.
 
@@ -320,14 +353,18 @@ Wave 2 adds `agent_language_test.dart`, `agent_dictionary_preferences_test.dart`
 `agent_profile_inbox_test.dart`, `agent_profile_regeneration_test.dart` and
 `agent_wave2_ui_test.dart`, plus new queue/gate/regenerate/multi-image cases in
 `agent_lifecycle_test.dart` and `agent_page_test.dart`.
+Wave 3 adds `agent_language_validator_test.dart`, `agent_coverage_test.dart`
+and `agent_coverage_orchestrator_test.dart`, plus lookup-mode/cap cases in
+`evidence_builder_test.dart` and language/coverage cases in
+`agent_orchestrator_test.dart`.
 
 ## Not implemented / next
 
-1. **2026-10-31 device feedback (F1–F17)**: Waves 1–2 are implemented and
-   verified by unit/widget tests; continue with Wave 3 (F1b result-language
-   validation, F6 lookup completeness, F7 coverage review), then Wave 4 device
-   acceptance. **Do not start P6.6/P6.7 until these feedback items are closed
-   or explicitly deferred.**
+1. **2026-10-31 device feedback (F1–F17)**: Waves 1–3 are implemented and
+   verified by unit/widget tests; continue with Wave 4 device acceptance
+   (real provider, arm64, large-dictionary suffix/incremental smoke).
+   **Do not start P6.6/P6.7 until these feedback items are closed or explicitly
+   deferred.**
 2. **P6.6 multi-OCR**: `ocr.consensus` variants, diff/hit-rate scoring,
    dictionary-assisted repair suggestions and the Agent OCR-version UI. The
    current Agent uses one OCR mode per image.

@@ -6,10 +6,11 @@
 > 模型补查，必须先重新批准 tool loop 并补 `LlmMessage` tool_use/tool_result。
 > 同样，`OcrWorkflow` 因无生产调用已删除，OCR 由 `OcrPortAdapter` 直接完成。
 >
-> **2026-11-01 语言决策（Wave 2 已实现）**：默认输出/UI 语言为中文（`zh`）；
+> **2026-11-01 语言决策（Wave 2–3 已实现）**：默认输出/UI 语言为中文（`zh`）；
 > 旧 `follow` 一律映射为 `zh`，禁止按输入假名/拉丁字符推断（F1a/F17 权威）。
 > `resolveAgentUiLanguage` 只接收显式设置；`AgentUiStrings` 提供中/英/日文案。
-> F1b（结果字段语言后校验 + 一次修复）仍待 Wave 3，不得写成已实现。
+> F1b（结果字段语言后校验 + 一次修复）已在 Wave 3 实现；仍偏离时保留结果并显示
+> warning，不承诺模型语言 100% 稳定。
 >
 > 规范性 MUST/MUST NOT 规则见 `docs/project-rules.md`；当前预算/上限和固定文案
 > 见 `docs/project-data.md`。本文保留产品/流程设计细节，不重复规则正文或当前数值。
@@ -400,10 +401,11 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   - 不做无界 n-gram；不做全词典遍历。
 - 每目标按**用户词典顺序**逐本查；每词每典最多 3 条（覆盖多义/同形），摘要
   ≤400 字符；去重 `(dictionaryId, entryKey)`；记录 `dictionaryOrder`。
-  2026-10-31 反馈（F6）改为全局递进：所有 target 先 exact；若唯一 citation 数
-  未达 `AgentLimits.maxEvidenceEntries`（默认 60，禁止散落硬编码），依次跑
-  prefix → suffix → incremental；每个模式只处理尚未满额的 target，若某模式新增
-  为 0 或达到全局上限立即停止。`AgentLimits` 同时控制 UI 的“已检索 N / 上限 M”。
+  2026-10-31 反馈（F6，Wave 3 已实现）为全局递进：所有 target 先 exact；若唯一
+  citation 数未达 `AgentLimits.maxEvidenceEntries`（默认 60，禁止散落硬编码），
+  依次跑 prefix → suffix → incremental；每个模式只处理尚未满额的 target，若某模式
+  新增为 0 或达到全局上限立即停止；达到上限时不再发起下一次模式。`AgentLimits`
+  同时控制 UI 的“已检索 N / 上限 M”。
 - `CitationRegistry.issue(toolCallId, dictionary, entryKey, headword, snippet,
   sourceSpan)` 发放 `source-N`；模型只看到 `source-N`，不能自造。
 - 证据包只含：token ID/文本/读音/词性/offset、语法模式、清洗后的 citation 摘要；
@@ -414,16 +416,19 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   仍可用 MDict 做词级查询但结果标记为不完整；宽松模式可继续，但
   `structural_analysis` 必须标为未验证。分词失败不阻断纯翻译，但不得声称有语法依据。
 
-### 6.3.1 覆盖审查（2026-10-31 反馈 F7）
+### 6.3.1 覆盖审查（2026-10-31 反馈 F7，Wave 3 已实现）
 
 初始证据完成后、最终分析前，用一次轻量 schema LLM 调用判断“还缺哪些词典
 资料”。输出 `rikai.agent.coverage.v1`（见契约 §5.1）：`missing[]` 的 query
 必须可追溯到源文本/token/语法模式/suggest；`duplicate_groups[]` 只是建议。
+运行时以 JSON 文本请求（`stream:false`，不发 `response_format`/`json_schema`），
+解析失败只做一次 JSON 格式修复，仍失败则保留原证据并显示 warning。
 
 - 未达上限（流程 A）：按缺失关键词补充检索，仍按 exact→prefix→suffix→
   incremental，直到上限或无新增。
-- 已达上限（流程 B）：本地先验证“同词典 + 同词条键 + 摘要大部分重合”，删除
-  信息密度低的重复 citation 腾出槽位，再走流程 A；模型不能单独决定删除。
+- 已达上限（流程 B）：本地先验证同词典、摘要大部分重合（字符 bigram 重合或包含
+  关系），保留信息密度较高（摘要更长）的条目并删除其余重复 citation 腾出槽位，
+  再走流程 A；模型不能单独决定删除，跨词典或多个组共享的 keep 不会被删。
 - 每个用户请求最多一次覆盖审查 + 一次回退查词（`coverageFallbackUsed`）；没有
   可验证缺口/重复时直接进入 reasoning，不循环。
 - 覆盖审查失败、schema 无效或 query 不可追溯时只产生 warning，保留原证据继续；
@@ -437,7 +442,7 @@ Stage 0 envelope + Stage 1 evidence + 已确认的 dictionary profiles。输出�
 默认中文；旧 `follow` 不得再按输入假名/拉丁字符推断，统一按中文处理（2026-11-01
 决策；F1a/F17 已在 Wave 2 实现）。模型返回后的人类可读字段需做一次语言校验，
 偏离目标语言时允许一次语言修复；仍偏离则保留结果并显示警告，不得丢弃已生成内容
-（F1b，Wave 3 待实现）。
+（F1b，Wave 3 已实现）。
 
 **2026-11-01 运行时格式**：模型不再输出 JSON，而是输出方括号标签的纯文本块
 （`[TRANSLATION]`、`[SEGMENT]`、`[MEANING]`、`[WORD]`、`[GRAMMAR]`、

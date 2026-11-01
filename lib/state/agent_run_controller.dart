@@ -15,6 +15,7 @@ import '../services/agent/familiarization/dictionary_familiarization_service.dar
 import '../services/agent/familiarization/unidic_familiarization_service.dart';
 import '../services/mdict/mdict_worker.dart';
 import 'agent_profile_inbox.dart';
+import 'agent_providers.dart';
 import 'agent_run_services.dart';
 import 'providers.dart';
 
@@ -108,6 +109,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     }
 
     final token = AgentCancellation();
+    final limits = ref.read(agentLimitsProvider);
     final runId = _nextRunId();
     final sessionId =
         _sessionId ?? 'session-${DateTime.now().microsecondsSinceEpoch}';
@@ -131,6 +133,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       responseLanguage: responseLanguage,
       providerLabel: provider.displayName,
       retainedResult: retainResult,
+      maxEvidenceEntries: limits.maxEvidenceEntries,
       startedAt: startedAt,
       updatedAt: startedAt,
     );
@@ -167,6 +170,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         llmFactory: services.llmFactory,
         dictionaryFamiliarizer: dictionaryFamiliarizer,
         unidicFamiliarizer: unidicFamiliarizer,
+        limits: limits,
       );
 
       final result = await orchestrator.run(
@@ -410,7 +414,8 @@ int _progressStepFor(AgentStage stage, int current) => switch (stage) {
   AgentStage.familiarizing ||
   AgentStage.awaitingProfile ||
   AgentStage.tokenizing ||
-  AgentStage.evidence => 1,
+  AgentStage.evidence ||
+  AgentStage.coverage => 1,
   AgentStage.reasoning => 2,
   AgentStage.validating => 3,
   AgentStage.done => 4,
@@ -424,6 +429,7 @@ AgentRunStatus _statusFor(AgentStage stage) => switch (stage) {
   AgentStage.awaitingProfile => AgentRunStatus.awaitingProfile,
   AgentStage.tokenizing => AgentRunStatus.tokenizing,
   AgentStage.evidence => AgentRunStatus.tokenizing,
+  AgentStage.coverage => AgentRunStatus.tokenizing,
   AgentStage.reasoning => AgentRunStatus.reasoning,
   AgentStage.validating => AgentRunStatus.validating,
   AgentStage.done => AgentRunStatus.done,

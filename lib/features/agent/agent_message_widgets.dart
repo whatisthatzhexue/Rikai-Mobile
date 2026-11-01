@@ -189,6 +189,7 @@ class AgentAssistantBubble extends StatelessWidget {
     required this.progressStep,
     required this.evidenceCount,
     required this.citationCount,
+    this.maxEvidenceEntries = 0,
     required this.uiLanguage,
     required this.strings,
     required this.result,
@@ -213,6 +214,7 @@ class AgentAssistantBubble extends StatelessWidget {
   final int progressStep;
   final int evidenceCount;
   final int citationCount;
+  final int maxEvidenceEntries;
   final AgentUiLanguage uiLanguage;
   final AgentUiStrings strings;
   final AgentRunResult? result;
@@ -334,6 +336,7 @@ class AgentAssistantBubble extends StatelessWidget {
                     step: progressStep,
                     evidenceCount: evidenceCount,
                     citationCount: citationCount,
+                    maxEvidenceEntries: maxEvidenceEntries,
                     language: uiLanguage,
                   ),
                   if (startedAt != null) ...[
@@ -389,6 +392,7 @@ class AgentAssistantBubble extends StatelessWidget {
                   agentEvidenceProgressLabel(
                     evidenceCount,
                     citationCount,
+                    maxEvidenceEntries,
                     uiLanguage,
                   ),
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -446,7 +450,7 @@ class AgentAssistantBubble extends StatelessWidget {
 }
 
 /// Ticking "thinking time" label. Character counts are intentionally not shown:
-/// the provider stream is raw JSON and users should see how long the run has
+/// the provider stream is raw tagged text and users should see how long the run has
 /// been thinking, not internal generation volume.
 class AgentElapsedLabel extends StatefulWidget {
   const AgentElapsedLabel({

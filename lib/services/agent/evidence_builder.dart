@@ -1,5 +1,6 @@
 import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
+import '../../core/models/agent/agent_limits.dart';
 import '../../core/models/agent/agent_tool.dart';
 import '../../core/models/dict_info.dart';
 import '../../core/models/lookup_match_mode.dart';
@@ -13,6 +14,13 @@ import 'ports/agent_capability_exception.dart';
 import 'ports/lookup_port.dart';
 import 'ports/tokenize_port.dart';
 
+const _lookupModes = <LookupMatchMode>[
+  LookupMatchMode.exact,
+  LookupMatchMode.prefix,
+  LookupMatchMode.suffix,
+  LookupMatchMode.incremental,
+];
+
 /// Builds one bounded evidence bundle for all sources in a run.
 class EvidenceBuilder {
   const EvidenceBuilder({
@@ -20,23 +28,23 @@ class EvidenceBuilder {
     required this.lookupPort,
     required this.grammar,
     required this.citations,
-    this.maxTargets = 120,
-    this.maxCitations = 60,
-    this.maxEntriesPerDictionary = 3,
+    this.limits = AgentLimits.standard,
   });
 
   final TokenizePort tokenizePort;
   final LookupPort lookupPort;
   final GrammarPatternCatalog grammar;
   final CitationRegistry citations;
-  final int maxTargets;
-  final int maxCitations;
-  final int maxEntriesPerDictionary;
+  final AgentLimits limits;
+
+  int get maxTargets => limits.maxTargets;
+  int get maxCitations => limits.maxEvidenceEntries;
+  int get maxEntriesPerDictionary => limits.maxEntriesPerDictionary;
 
   Future<AgentEvidenceBundle> build({
     required List<AgentSourceInput> sources,
     required List<DictionaryInfo> dictionaries,
-    int maxSourceChars = 6000,
+    int? maxSourceChars,
     bool Function()? isCancelled,
     void Function(int citations)? onProgress,
   }) async {
@@ -51,6 +59,7 @@ class EvidenceBuilder {
     var truncated = false;
     var structureUnavailable = false;
     final dictionaryIssues = <String, AgentEvidenceDictionaryIssue>{};
+    final sourceCharLimit = maxSourceChars ?? limits.maxSourceChars;
 
     for (final source in sources) {
       final text = _sourceText(source);
@@ -146,75 +155,114 @@ class EvidenceBuilder {
     final selectedTargets = targets.take(maxTargets).toList(growable: false);
     if (targets.length > selectedTargets.length) truncated = true;
 
-    var targetIndex = 0;
-    for (final target in selectedTargets) {
-      if (isCancelled?.call() == true) {
-        throw const AgentCapabilityException(
-          AgentToolErrorCode.toolCancelled,
-          '已取消',
-        );
-      }
-      targetIndex++;
-      final toolCallId = 'evidence-$targetIndex';
-      void recordLookupFailure(DictionaryInfo dictionary, String message) {
-        dictionaryIssues.putIfAbsent(
-          dictionary.id,
-          () => AgentEvidenceDictionaryIssue(
-            dictionaryId: dictionary.id,
-            dictionaryTitle: dictionary.title,
-            code: AgentToolErrorCode.dictionaryLookupFailed.wireName,
-            message: message,
-          ),
-        );
-      }
-
-      final result = await _lookup(
-        target.candidates,
-        dictionaries,
-        LookupMatchMode.exact,
-        onDictionaryError: recordLookupFailure,
+    void recordLookupFailure(DictionaryInfo dictionary, String message) {
+      dictionaryIssues.putIfAbsent(
+        dictionary.id,
+        () => AgentEvidenceDictionaryIssue(
+          dictionaryId: dictionary.id,
+          dictionaryTitle: dictionary.title,
+          code: AgentToolErrorCode.dictionaryLookupFailed.wireName,
+          message: message,
+        ),
       );
-      final fallback = result.hasHits
-          ? result
-          : await _lookup(
-              target.candidates,
-              dictionaries,
-              LookupMatchMode.prefix,
-              onDictionaryError: recordLookupFailure,
-            );
-      final ids = <String>[];
-      for (final group in fallback.groups) {
-        if (group.error.isNotEmpty) {
-          recordLookupFailure(group.dictionary, group.error);
-        }
-        for (final entry in group.entries) {
-          final entryKey = entry.headword.isEmpty
-              ? entry.matchedKey
-              : entry.headword;
-          if (entryKey.isEmpty) continue;
-          final existing = citations.find(group.dictionary.id, entryKey);
-          if (existing != null) {
-            if (!ids.contains(existing.id)) ids.add(existing.id);
-            continue;
-          }
-          if (citations.citations.length >= maxCitations) {
-            truncated = true;
-            break;
-          }
-          final citation = citations.issue(
-            toolCallId: toolCallId,
-            dictionary: group.dictionary,
-            entryKey: entryKey,
-            matchedKey: entry.matchedKey,
-            headword: entry.headword.isEmpty ? entryKey : entry.headword,
-            snippet: htmlToPlainText(entry.html, maxLength: 400),
+    }
+
+    for (var index = 0; index < selectedTargets.length; index++) {
+      selectedTargets[index].toolCallId = 'evidence-${index + 1}';
+    }
+
+    // F6: run one mode across every target before moving to the next mode.
+    // Stop at the global cap, or when a mode adds no new unique citation.
+    var capReached = false;
+    for (final mode in _lookupModes) {
+      if (capReached) break;
+      var modeNew = 0;
+      for (final target in selectedTargets) {
+        if (isCancelled?.call() == true) {
+          throw const AgentCapabilityException(
+            AgentToolErrorCode.toolCancelled,
+            '已取消',
           );
-          ids.add(citation.id);
         }
+        final eligible = <DictionaryInfo>[
+          for (final dictionary in dictionaries)
+            if ((target.perDictionary[dictionary.id] ?? 0) <
+                maxEntriesPerDictionary)
+              dictionary,
+        ];
+        if (eligible.isEmpty) continue;
+
+        final result = await _lookup(
+          target.candidates,
+          eligible,
+          mode,
+          onDictionaryError: recordLookupFailure,
+        );
+        for (final group in result.groups) {
+          if (group.error.isNotEmpty) {
+            recordLookupFailure(group.dictionary, group.error);
+          }
+          var remaining =
+              maxEntriesPerDictionary -
+              (target.perDictionary[group.dictionary.id] ?? 0);
+          if (remaining <= 0) continue;
+          for (final entry in group.entries) {
+            if (remaining <= 0) break;
+            final entryKey = entry.headword.isEmpty
+                ? entry.matchedKey
+                : entry.headword;
+            if (entryKey.isEmpty) continue;
+            final existing = citations.find(group.dictionary.id, entryKey);
+            if (existing != null) {
+              if (target.citationIds.add(existing.id)) {
+                target.perDictionary[group.dictionary.id] =
+                    (target.perDictionary[group.dictionary.id] ?? 0) + 1;
+                remaining--;
+              }
+              continue;
+            }
+            if (citations.citations.length >= maxCitations) {
+              truncated = true;
+              capReached = true;
+              break;
+            }
+            final citation = citations.issue(
+              toolCallId: target.toolCallId,
+              dictionary: group.dictionary,
+              entryKey: entryKey,
+              matchedKey: entry.matchedKey,
+              headword: entry.headword.isEmpty ? entryKey : entry.headword,
+              snippet: htmlToPlainText(
+                entry.html,
+                maxLength: limits.maxSnippetChars,
+              ),
+            );
+            target.citationIds.add(citation.id);
+            target.perDictionary[group.dictionary.id] =
+                (target.perDictionary[group.dictionary.id] ?? 0) + 1;
+            modeNew++;
+            remaining--;
+            onProgress?.call(citations.citations.length);
+            if (citations.citations.length >= maxCitations) {
+              truncated = true;
+              capReached = true;
+              break;
+            }
+          }
+          if (capReached) break;
+        }
+        if (capReached) break;
       }
+      if (capReached) break;
+      if (modeNew == 0) break;
+    }
+
+    final tokensWithCitations = <String, List<String>>{};
+    for (final target in selectedTargets) {
       if (target is _TokenTarget) {
+        final ids = target.citationIds.toList(growable: false);
         for (final tokenId in target.tokenIds) {
-          target.citationIds[tokenId] = ids;
+          tokensWithCitations[tokenId] = ids;
         }
       } else if (target is _PatternTarget) {
         final current = patternEvidence[target.evidenceIndex];
@@ -224,16 +272,11 @@ class EvidenceBuilder {
           tokenIds: current.tokenIds,
           start: current.start,
           end: current.end,
-          citationIds: ids,
+          citationIds: target.citationIds.toList(growable: false),
         );
       }
-      onProgress?.call(citations.citations.length);
     }
 
-    final tokensWithCitations = <String, List<String>>{};
-    for (final target in tokenTargets.values) {
-      tokensWithCitations.addAll(target.citationIds);
-    }
     final finalSources = <AgentSourceEvidence>[
       for (final source in sourceEvidence)
         AgentSourceEvidence(
@@ -258,7 +301,7 @@ class EvidenceBuilder {
         ),
     ];
 
-    if (sourceChars > maxSourceChars) truncated = true;
+    if (sourceChars > sourceCharLimit) truncated = true;
     final sortedCitations = citations.citations.toList(growable: false)
       ..sort((a, b) {
         final order = a.dictionaryOrder.compareTo(b.dictionaryOrder);
@@ -280,6 +323,131 @@ class EvidenceBuilder {
         maxCitations: maxCitations,
       ),
     );
+  }
+
+  /// F7: bounded supplementary lookup for traceable coverage queries. Uses the
+  /// same mode order and per-dictionary cap as [build]. Existing citations are
+  /// linked to the query but do not consume the global citation slots.
+  Future<Map<String, List<AgentCitation>>> lookupExtraQueries({
+    required List<String> queries,
+    required List<DictionaryInfo> dictionaries,
+    required int maxNewCitations,
+    Set<String> excludedKeys = const <String>{},
+    bool Function()? isCancelled,
+    void Function(int citations)? onProgress,
+    void Function(DictionaryInfo dictionary, String message)? onDictionaryError,
+  }) async {
+    final result = <String, List<AgentCitation>>{};
+    final order = <String>[];
+    final seen = <String>{};
+    for (final raw in queries) {
+      final query = raw.trim();
+      if (query.isEmpty || !seen.add(query)) continue;
+      order.add(query);
+      result[query] = <AgentCitation>[];
+    }
+    if (order.isEmpty || dictionaries.isEmpty || maxNewCitations <= 0) {
+      return result;
+    }
+
+    final perQuery = <String, Map<String, int>>{
+      for (final query in order) query: <String, int>{},
+    };
+    final queryIds = <String, Set<String>>{
+      for (final query in order) query: <String>{},
+    };
+    var newCount = 0;
+    var capReached = false;
+
+    for (final mode in _lookupModes) {
+      if (capReached) break;
+      var modeNew = 0;
+      for (var queryIndex = 0; queryIndex < order.length; queryIndex++) {
+        if (isCancelled?.call() == true) {
+          throw const AgentCapabilityException(
+            AgentToolErrorCode.toolCancelled,
+            '已取消',
+          );
+        }
+        final query = order[queryIndex];
+        final counts = perQuery[query]!;
+        final eligible = <DictionaryInfo>[
+          for (final dictionary in dictionaries)
+            if ((counts[dictionary.id] ?? 0) < maxEntriesPerDictionary)
+              dictionary,
+        ];
+        if (eligible.isEmpty) continue;
+        final lookup = await _lookup(
+          <String>[query],
+          eligible,
+          mode,
+          onDictionaryError: onDictionaryError,
+        );
+        for (final group in lookup.groups) {
+          if (group.error.isNotEmpty) {
+            onDictionaryError?.call(group.dictionary, group.error);
+          }
+          var remaining =
+              maxEntriesPerDictionary - (counts[group.dictionary.id] ?? 0);
+          if (remaining <= 0) continue;
+          for (final entry in group.entries) {
+            if (remaining <= 0) break;
+            final entryKey = entry.headword.isEmpty
+                ? entry.matchedKey
+                : entry.headword;
+            if (entryKey.isEmpty) continue;
+            if (excludedKeys.contains(
+              '${group.dictionary.id}\u0000$entryKey',
+            )) {
+              continue;
+            }
+            final existing = citations.find(group.dictionary.id, entryKey);
+            if (existing != null) {
+              if (queryIds[query]!.add(existing.id)) {
+                result[query]!.add(existing);
+                counts[group.dictionary.id] =
+                    (counts[group.dictionary.id] ?? 0) + 1;
+                remaining--;
+              }
+              continue;
+            }
+            if (newCount >= maxNewCitations) {
+              capReached = true;
+              break;
+            }
+            final citation = citations.issue(
+              toolCallId: 'coverage-${queryIndex + 1}',
+              dictionary: group.dictionary,
+              entryKey: entryKey,
+              matchedKey: entry.matchedKey,
+              headword: entry.headword.isEmpty ? entryKey : entry.headword,
+              snippet: htmlToPlainText(
+                entry.html,
+                maxLength: limits.maxSnippetChars,
+              ),
+            );
+            if (queryIds[query]!.add(citation.id)) {
+              result[query]!.add(citation);
+            }
+            counts[group.dictionary.id] =
+                (counts[group.dictionary.id] ?? 0) + 1;
+            remaining--;
+            newCount++;
+            modeNew++;
+            onProgress?.call(citations.citations.length);
+            if (newCount >= maxNewCitations) {
+              capReached = true;
+              break;
+            }
+          }
+          if (capReached) break;
+        }
+        if (capReached) break;
+      }
+      if (capReached) break;
+      if (modeNew == 0) break;
+    }
+    return result;
   }
 
   Future<LookupResult> _lookup(
@@ -318,9 +486,12 @@ class EvidenceBuilder {
 }
 
 abstract class _LookupTarget {
-  const _LookupTarget();
-
   List<String> get candidates;
+
+  var toolCallId = '';
+
+  final Set<String> citationIds = <String>{};
+  final Map<String, int> perDictionary = <String, int>{};
 }
 
 class _TokenTarget extends _LookupTarget {
@@ -334,11 +505,10 @@ class _TokenTarget extends _LookupTarget {
   final List<String> candidates;
   final List<String> tokenIds;
   final bool content;
-  final Map<String, List<String>> citationIds = <String, List<String>>{};
 }
 
 class _PatternTarget extends _LookupTarget {
-  const _PatternTarget({required this.evidenceIndex, required this.candidates});
+  _PatternTarget({required this.evidenceIndex, required this.candidates});
 
   final int evidenceIndex;
   @override

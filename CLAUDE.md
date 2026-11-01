@@ -284,8 +284,8 @@ OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）�
 ## 3. 当前状态
 
 Phase 0–5 已全部完成并发布 1.0（验收记录见 `docs/project-history.md` 与各
-`phase*-status.md`）。Phase 6 P6.1–P6.5 已实现；2026-10-31 实机反馈 Wave 1–2
-已实现，Wave 3–4（F1b/F6/F7 与设备验收）待做；P6.6/P6.7 未实现。当前进度、
+`phase*-status.md`）。Phase 6 P6.1–P6.5 已实现；2026-10-31 实机反馈 Wave 1–3
+（F1b/F6/F7）已实现，Wave 4 设备回归验收待做；P6.6/P6.7 未实现。当前进度、
 验证记录与工作队列只维护在以下文档，本文件不再复述：
 
 - 实现进度与验证记录：`docs/phase6-status.md`
@@ -299,8 +299,9 @@ Phase 0–5 已全部完成并发布 1.0（验收记录见 `docs/project-history
 设计与契约先读 `docs/phase6-agent-design.md`、`docs/phase6-agent-contracts.md`；
 规则边界见 §2 第 9 条，实现进度见 `docs/phase6-status.md`。剩余工作：
 
-- 按 `docs/agent_docs/device-feedback-2026-10-31.md` 完成 Wave 3–4（F1b 结果语言
-  后校验、F6 检索完整度、F7 覆盖审查、设备回归验收）；F6 完成前不做 F7。
+- 按 `docs/agent_docs/device-feedback-2026-10-31.md` 完成 Wave 4 设备回归验收
+  （真实 provider/API Key、arm64 Agent 端到端、大词典 suffix/incremental 冒烟、
+  secure storage 设备 I/O）；Wave 1–3 的自动化测试不能替代设备验收。
 - P6.6 多 OCR 版本/词典辅助修复：多版本冲突必须让用户选择，不能静默覆盖，
   也不能把图片发给模型。
 - P6.7 annotation DSL/Markdown/ruby/pitch、Agent 会话历史 UI、发布打磨。
@@ -440,7 +441,7 @@ third_party/overlay-translator/                               # Apache 许可/�
 third_party/paddleocr4android/                                # MIT 许可/可选后端说明
 ```
 
-Phase 6 新增（P6.1–P6.5 已创建；`ocr_consensus.dart`、annotation、
+Phase 6 新增（P6.1–P6.5 与 Wave 3 已创建；`ocr_consensus.dart`、annotation、
 markdown_renderer 等 P6.6/P6.7 文件待建）：
 
 ```text
@@ -450,8 +451,13 @@ lib/services/agent/providers/                                 # OpenAI-compatibl
 lib/services/agent/familiarization/                           # 词典/UniDic 档案采样、生成、缓存
 lib/services/agent/agent_orchestrator.dart                    # 固定 Stage 流水线
 lib/services/agent/evidence_builder.dart                      # token/语法/ citation 证据包
-lib/services/agent/citation_registry.dart                     # orchestrator 发放 source-N
+lib/services/agent/citation_registry.dart                     # orchestrator 发放 source-N（可删除覆盖重复）
 lib/services/agent/agent_validator.dart                       # schema/quote/order/strict 校验
+lib/services/agent/agent_language_validator.dart              # F1b 结果人类字段语言后校验
+lib/services/agent/coverage_prompts.dart                      # F7 coverage JSON 请求/一次修复
+lib/services/agent/agent_coverage_parser.dart                 # F7 coverage JSON 解析/字段校验
+lib/services/agent/coverage_support.dart                      # F7 可追溯性/重复验证/证据合并
+lib/core/models/agent/agent_limits.dart                       # F6/F7 预算单一来源
 lib/services/agent/ocr_consensus.dart                         # 按需多 OCR/词典辅助修复
 lib/services/agent/annotation/                                # 注音/标注安全 DSL 与统一渲染（P6.7）
 lib/services/agent/markdown_renderer.dart                     # Markdown/ruby/声调安全渲染（P6.7）
