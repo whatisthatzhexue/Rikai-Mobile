@@ -18,6 +18,12 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > emulator (key never logged); arm64/real manga-page and real-dictionary
 > `sample`/`suggest` acceptance still remain. The review backlog in
 > `docs/agent_docs/phase6-pipeline-review.md` is authoritative for open gaps.
+>
+> **2026-11-01 language decision**: the default output/UI language is Chinese
+> (`zh`); legacy `follow` maps to `zh`; input-script language inference is
+> forbidden. The current code still defaults to `follow` and infers in
+> `resolveAgentUiLanguage`; F1/F17 implementation remains open for Wave 2. Do
+> not describe the decision as implemented.
 
 ## Implemented
 
@@ -114,8 +120,10 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 - **Visible generation**: Agent page shows the current stage, a four-step
   progress list (OCR → lookup → generate → validate), live retrieved-entry/
   citation counts, and a thinking-time label. Stage text and the timer follow
-  the response-language setting (`follow` infers Japanese from kana, English
-  from Latin-only input, otherwise Chinese). Raw streamed JSON, reasoning text
+  the response-language setting. Legacy behavior (`follow` inferred Japanese
+  from kana, English from Latin-only input, otherwise Chinese) is superseded by
+  the 2026-11-01 decision: default `zh`, no input heuristic; implementation is
+  pending. Raw streamed JSON, reasoning text
   and character counts are never rendered. Validated result items fade in one by
   one after validation; there is no streaming JSON partial display. Citations
   are numbered “依据1/依据2…” and consolidated once per segment instead of after
@@ -204,9 +212,11 @@ Current behavior that differs from the target:
   `AgentRunController` returns `skipOnce` when no handler is attached
   (`lib/state/agent_run_controller.dart:205-220`), so a profile generated while
   the user is away is not saved and tokenizing can start. This is F2.
-- The default answer language is still `follow`, and `resolveAgentUiLanguage`
-  still infers Japanese/English from the input
-  (`lib/services/agent/agent_messages.dart:7-29`). This is F1/F17.
+- **Implementation gap (decision already fixed)**: the default answer language
+  is still `follow`, and `resolveAgentUiLanguage` still infers Japanese/English
+  from the input (`lib/services/agent/agent_messages.dart:7-29`). The
+  2026-11-01 decision requires default `zh` and no input heuristic; this is
+  F1/F17 for Wave 2.
 - Agent dictionary selection is still seeded from the lookup preference and is
   not independently persisted (`lib/features/agent/agent_page.dart:52-58`).
   This is F8.

@@ -8,7 +8,8 @@
 > （Material 3 主题）。页面中不得硬编码颜色、字号、间距、圆角。
 >
 > 本文件是**视觉数值**的唯一权威；UI 的 MUST/MUST NOT 规则见
-> `docs/project-rules.md` §5，固定用户文案见 `docs/project-data.md` §7。
+> `docs/project-rules.md` §5，固定用户文案见 `docs/project-data.md` §7，
+> 实现误区见 `docs/project_tips.md`。
 > 页面/测试只引用 token 与文案表，不复制具体数值/文案。
 
 ## 1. 视觉方向
@@ -284,7 +285,8 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 - citation 使用短胶囊并自动换行，颜色保持浅蓝底蓝字；不改成词典筛选的深蓝选中态。
 - 用户气泡图片可点击打开照片集同款黑底全屏查看器；多图逐张可点。
 - 结果底部操作行固定为“循环 → 复制”；用户气泡长按“复制/修改”。
-- Agent 功能区本地文案由显式回答语言决定（默认中文），禁止输入启发式；详见
+- Agent 功能区本地文案由显式回答语言决定（默认中文；2026-11-01 决策：旧
+  `follow` 映射为 `zh`，禁止输入启发式）；详见
   `docs/agent_docs/device-feedback-2026-10-31.md` 的 F1/F17。
 
 **布局与交互**

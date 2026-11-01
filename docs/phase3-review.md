@@ -6,8 +6,8 @@
 - 范围：`git diff HEAD` 覆盖的已跟踪改动 + 全部未跟踪的 Phase 3 文件
   （`packages/rikai_ocr` 原生实现、`lib/services/ocr/*`、`lib/features/capture/*`、
   `lib/features/settings/model_page.dart`、`assets/models/manifest.json`、测试）。
-- 依据：`CLAUDE.md`（§2 架构决策、§5 项目误区、§7 验证方式）、`docs/design-tokens.md`、
-  `docs/phase3-status.md`、`docs/models.md`。
+- 依据：`CLAUDE.md`（§2 架构决策、§7 验证方式）、`docs/project_tips.md`（误区）、
+  `docs/design-tokens.md`、`docs/phase3-status.md`、`docs/models.md`。
 - 基线验证：`flutter analyze` -> No issues found；`flutter test` -> 97 tests passed。
 - 说明：本次审查**没有修改任何代码**，以下问题全部待修复；行号以当前工作树为准。
 - **Implementation status (2026-10-29)**: H1–H3, M1–M7 and L1–L10 have been
@@ -239,7 +239,7 @@
 - 问题：manifest 是随包资产，损坏属于永久失败；该 provider 没有像
   `mecabServiceProvider` / `mdictServiceProvider` 那样设置 `retry: (_, __) => null`。
   Riverpod 3 默认重试会带来约 30 秒的后台重试，而 UI 已经显示错误、不会因后来成功
-  而刷新（`CLAUDE.md` §5.7 #28 记录过同类坑）。
+  而刷新（`docs/project_tips.md` T-028 记录过同类坑）。
 - 建议修复：设置 `retry: (_, __) => null`，或让 UI 在重试成功后刷新。
 - 状态：待修复
 
@@ -328,7 +328,7 @@
 
 - `DBPostprocessor` 角点排序与 `minAreaRect` 的顺序等价（LT/RT/RB/LB），与
   PaddleOCR 的 `get_mini_boxes` 一致。
-- 共享 `OrtEnvironment` 不在任何引擎 `close()` 中关闭，符合 `CLAUDE.md` §5.1 #4。
+- 共享 `OrtEnvironment` 不在任何引擎 `close()` 中关闭，符合 `docs/project_tips.md` T-004。
 - `CtcDictionary` 对真实 18,383 键解析正确（U+3000 保留、`''''` 转义处理）。
 - 各 Bitmap recycle 路径无重复回收；检测/识别输入通道与 mean/std 正确。
 - 模型二进制均被 `.gitignore` 覆盖（`**/*.onnx`），没有入库。

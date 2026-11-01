@@ -4,11 +4,11 @@
 > 开发数据统计和固定 UI 文案以本文件为准。其他文档只引用本文件对应小节，不再
 > 复制具体数值；历史 phase 文档可以保留“当时值”，但必须标注为历史快照。
 > 规范性 MUST/MUST NOT 规则见 `docs/project-rules.md`；视觉数值见
-> `docs/design-tokens.md`。
+> `docs/design-tokens.md`；误区/踩坑见 `docs/project_tips.md`。
 >
 > - last_verified: 2026-11-01
 > - last_verified_code_commit: `c6094b5`（`fix: OCR模型页面操作逻辑修正`）
-> - last_doc_sync: 2026-11-01（引用结构整理，不改变代码验证结果）
+> - last_doc_sync: 2026-11-01（引用结构整理；补记 Agent 语言默认值决策，不改变代码验证结果）
 > - 设备基线: `Medium_Phone_API_36.1`（x86_64 模拟器，API 36）；无 arm64 真机
 > - 维护规则：数据变化时只改本文件，并同步更新 `last_verified`/
 >   `last_verified_code_commit`；其他文档的引用链接不需要改。不要把本文件自身的
@@ -161,7 +161,7 @@ arm64 真机性能另需复测。
 > 这些文案目前也出现在设计/契约/测试里；修改时只改本表，并同步 UI 实现/测试的
 > 引用。历史评审中的旧文案保留为历史记录，不作为当前值。
 
-## 8. Agent / Provider / 图片处理限制
+## 8. Agent / Provider / 语言与图片处理限制
 
 ### 8.1 当前 Agent 限制
 
@@ -209,6 +209,16 @@ arm64 真机性能另需复测。
 > `docs/design-tokens.md` 为权威；本文件不复制这些 token，只记录跨模块使用的
 > 处理/业务数值。
 
+### 8.4 Agent 语言默认值
+
+| 项 | 权威值 | 说明 |
+|---|---|---|
+| 默认输出/UI 语言 | 中文（zh） | **2026-11-01 决策**：旧 `follow` 一律映射为 `zh`；禁止按输入假名/拉丁字符推断 |
+| 可选语言 | zh / en / ja | 用户显式设置；`follow` 仅兼容旧配置，解析为 `zh` |
+
+> 当前代码仍默认 `follow`，`resolveAgentUiLanguage` 仍有输入启发式；F1/F17
+> 的实现待 Wave 2。权威规则见 `docs/project-rules.md` R-AGENT-18。
+
 > 契约中的默认值若与本表冲突：以本表作为当前实现值，并修
 > `docs/phase6-agent-contracts.md`；未来 tool loop/coverage 值必须标明 future。
 
@@ -232,6 +242,8 @@ arm64 真机性能另需复测。
   文件重复。
 - **当前数据**：测试/设备/性能/构建/环境/预算/固定文案引用本文件，不复制数字。
 - **视觉数值**：字号、间距、颜色、圆角、组件尺寸以 `design-tokens.md` 为准。
+- **误区/踩坑**：历史经验与解决方案统一引用 `docs/project_tips.md` 的 `T-###`，
+  不在本文件或阶段文档复制误区正文。
 - **Agent 字段/错误码/Schema**：以 `phase6-agent-contracts.md` /
   `docs/schemas/agent/` 为准；未来 tool loop/coverage 必须标 future。
 - **模型 URL/SHA**：以 `assets/models/manifest.json` 为准；本文件只记录统计值。

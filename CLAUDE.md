@@ -1,25 +1,159 @@
 # CLAUDE.md — Rikai-Mobile handoff
 
-> 给下一个 agent 的工作交接。先读本文件，再读 `docs/DEVELOPMENT_PLAN.md`（MVP 计划）、
-> `docs/phase5-status.md`（Phase 5 完成记录）、`docs/phase4.5-status.md`
-> （OCR 收敛结果，已关闭）、`docs/phase4-status.md`（Phase 4 基线）、
-> `docs/phase6-agent-design.md`（Phase 6 设计 v2；P6.1–P6.5 已实现，P6.6/P6.7
-> 未实现）、`docs/phase6-agent-contracts.md`（契约/schema）、
-> `docs/phase6-status.md`（当前实现记录）、`docs/project-data.md`（测试/环境/开发
-> 数据/固定文案的单一来源）、`docs/project-rules.md`（正面/反面项目规则的单一
-> 来源）和 `docs/agent_docs/`（Agent 管线评审、已知问题与生命周期规范，开发 Agent
-> 前必读）。
+> 给下一个 agent 的工作交接。本文件只保留项目摘要、架构决策、当前状态、关键文件与
+> 构建/验证命令；文档用途和查阅时机统一在 §0 维护。
 > 用户使用中文沟通；代码/标识符用英文。
+
+## 0. 文档导航（先读这里）
+
+> **权威层级**：规则 → `docs/project-rules.md`；当前数据/文案 →
+> `docs/project-data.md`；视觉数值 → `docs/design-tokens.md`；误区/踩坑 →
+> `docs/project_tips.md`；Agent 字段/错误码 → `docs/phase6-agent-contracts.md` +
+> `docs/schemas/agent/`；架构决策 → `docs/adr/`；历史阶段 → `docs/phase*-status.md`。
+> 冲突时按此层级修正低权威文档。正文只保留具体小节指针（如
+> `docs/project-data.md` §6），不重复文档用途说明。
 >
-> **Agent 开发提醒**：开发或修改 Phase 6 词典助手前，必须先读
-> `docs/agent_docs/`（尤其 `device-feedback-2026-10-31.md`、`phase6-pipeline-review.md` 与
-> `agent-lifecycle-and-edge-cases.md`），优先解决其中列出的高优先级管线和实机反馈；
-> 2026-10-31 的 F1–F17 未关闭前，不要在 P6.6/P6.7 上继续叠加新功能，也不要把
-> 未实现能力写成已支持。
->
-> **数据/规则引用规则**：测试数、设备结果、性能、环境版本、预算和固定 UI 文案
-> 统一以 `docs/project-data.md` 为准；正面/反面 MUST/MUST NOT 规则统一以
-> `docs/project-rules.md` 为准。其他文档只引用，不复制当前数值或规则正文。
+> **Agent 开发门禁**：开发/修改 Phase 6 词典助手前，按
+> `docs/agent_docs/README.md` 的必读顺序阅读；2026-10-31 的 F1–F17 未关闭前，
+> 不在 P6.6/P6.7 上继续叠加新功能，也不把未实现能力写成已支持。
+
+`docs/project-rules.md`：
+内容：正面/反面 MUST/MUST NOT 规则的单一权威源，按 `R-<域>-<序号>` 编号；
+覆盖产品/隐私/架构/Agent/UI/开发/文档治理。
+何时查看：实现或审查任何功能前；判断某做法是否允许；文档冲突时。
+
+`docs/project-data.md`：
+内容：测试数量/设备结果/性能/构建产物/环境版本/开发数据统计/固定 UI 文案/
+Agent 预算的单一事实源。
+何时查看：需要任何当前数值、环境版本、固定文案或预算；更新测试/设备/构建
+记录时。
+
+`docs/design-tokens.md`：
+内容：UI 强制规范（颜色/字号/间距/圆角/组件/转场/Agent 对话式 UI）；实现入口
+为 `lib/core/theme/app_tokens.dart`。
+何时查看：新增或修改任何 UI 前；检查页面是否硬编码颜色/字号/间距。
+
+`docs/project_tips.md`：
+内容：项目误区/踩坑与解决方案（`T-001`–`T-129`），含症状 → 处理速查附录。
+何时查看：遇到报错、异常行为或准备重复试错前；接手 OCR/UniDic/MDict/采集/UI/
+Agent 改动前。**今后的误区只在该文件新增。**
+
+`docs/DEVELOPMENT_PLAN.md`：
+内容：MVP 阶段计划与范围。
+何时查看：确认当前阶段目标/边界；规划新阶段前。
+
+`docs/phase0-status.md`：
+内容：Phase 0 基建（vendored MeCab、`rikai_ocr` 骨架、ORT、模型 manifest、
+许可）的验证记录。
+何时查看：追溯 Phase 0 实现细节；历史值不作当前值。
+
+`docs/phase1-status.md`：
+内容：Phase 1（UniDic/MeCab、权限、阅读器、真实词典）验证记录。
+何时查看：追溯 UniDic/MeCab 与权限实现；历史值不作当前值。
+
+`docs/phase2-status.md`：
+内容：Phase 2（MDict worker、查词/渲染/词典管理）验证记录。
+何时查看：追溯 MDict/WebView 实现；历史值不作当前值。
+
+`docs/phase3-status.md`：
+内容：Phase 3（横向 PaddleOCR、拍照、模型管理）验证记录。
+何时查看：追溯横向 OCR/采集实现；历史值不作当前值。
+
+`docs/phase3.5-status.md`：
+内容：Phase 3.5（采集/导入/语料/模型目录修复）验证记录。
+何时查看：追溯采集与词典导入的修复来源；历史值不作当前值。
+
+`docs/phase4-status.md`：
+内容：Phase 4（纵向 MangaOCR、自动方向、设备合成测试）验证记录。
+何时查看：追溯纵向 OCR/方向路由实现；历史值不作当前值。
+
+`docs/phase4.5-status.md`：
+内容：Phase 4.5 OCR 质量/性能收敛与第二轮设备反馈（已完成，2026-10-30
+关闭）。
+何时查看：追溯 OCR 懒加载/方向/双引擎评分与设备反馈修复；历史值不作当前值。
+
+`docs/phase5-status.md`：
+内容：Phase 5（首次引导、语料/历史、设置、发布打磨）完成记录。
+何时查看：追溯引导/语料/发布实现；历史值不作当前值。
+
+`docs/phase6-agent-design.md`：
+内容：Phase 6 词典助手设计 v2（固定流水线、模型无工具、隐私边界、任务工作流）。
+何时查看：开发/修改 Agent 前；确认产品与流水线设计。
+
+`docs/phase6-agent-contracts.md`：
+内容：Agent 契约/schema/状态机/错误码/请求与响应字段。
+何时查看：改 Agent DTO/provider/schema/validator 前；核对字段与错误码。
+
+`docs/phase6-status.md`：
+内容：Phase 6 当前实现记录（P6.1–P6.5、Wave 进展、已知差距）。
+何时查看：确认 Agent 已实现/未实现范围；更新进度时。
+
+`docs/agent_docs/README.md`：
+内容：Agent 文档导航与硬规则（开发前必读顺序）。
+何时查看：开发 Agent 前先读；需要当前评审/生命周期文档入口。
+
+`docs/agent_docs/device-feedback-2026-10-31.md`：
+内容：2026-10-31 实机反馈 F1–F17 的修正方案、依赖与执行波次；当前优先工作
+队列。
+何时查看：开发 Agent 或安排下一步前；决定 Wave 顺序时。
+
+`docs/agent_docs/phase6-pipeline-review.md`：
+内容：Agent 管线评审与已知问题（含 file:line 证据）。
+何时查看：排查 Agent 管线问题；作为历史 gap 证据，不作当前任务清单。
+
+`docs/agent_docs/agent-lifecycle-and-edge-cases.md`：
+内容：Agent 运行生命周期、离开/返回页面、取消、并发、进程死亡等规范。
+何时查看：改 Agent 运行状态/取消/并发逻辑前。
+
+`docs/agent_docs/agent-maintainability-review.md`：
+内容：Agent 代码可维护性评审（死抽象、god 文件、controller/测试、schema 债务）。
+何时查看：重构 Agent 前；评估维护成本时。
+
+`docs/agent_docs/non-agent-regression-review.md`：
+内容：Agent 以外功能的回归检查（旧 integration test 文案、帮助页、构建风险）。
+何时查看：Agent 改动后做非 Agent 回归前。
+
+`docs/schemas/agent/`：
+内容：Agent JSON Schema（input/evidence/analysis/quote/profile/coverage/
+tool-result）。
+何时查看：改请求/响应结构或校验器前。
+
+`docs/adr/`：
+内容：四个架构决策（ONNX OCR、UniDic 原地读取、MDict `dict_reader`、Agent
+能力边界）。
+何时查看：质疑/修改核心架构前；需要决策理由时。
+
+`docs/dev-setup.md`：
+内容：构建/环境/数据/缓存/集成测试命令与排障步骤。
+何时查看：搭环境、跑设备测试、处理 Gradle/权限/模型目录问题。
+
+`docs/phase3-review.md`：
+内容：Phase 3 代码评审与修复清单（H/M/L）。
+何时查看：追溯 Phase 3/3.5 修复来源；不要当当前任务清单。
+
+`docs/models.md`：
+内容：OCR 模型来源/许可/下载与目录说明。
+何时查看：处理模型下载/校验/导入/许可前。
+
+`docs/licenses.md`：
+内容：第三方许可与来源汇总。
+何时查看：新增依赖/模型/词典或发布前。
+
+`THIRD_PARTY_NOTICES.md` / `NOTICE`：
+内容：第三方代码/模型/许可证与修改说明。
+何时查看：发布、许可审查或修改第三方代码前。
+
+`assets/fonts/README.md`：
+内容：HarmonyOS Sans 字体下载与放置说明（字体不入库）。
+何时查看：构建报缺字体或需要切换字体前。
+
+`assets/models/manifest.json`：
+内容：OCR 模型文件名/URL/SHA-256/角色清单（不含模型本体）。
+何时查看：改模型下载/校验/导入逻辑前。
+
+`项目初始文档.txt`：
+内容：2026-10 中期 UI/功能修正的原始需求记录（历史）。
+何时查看：追溯当时的中期 UI 修正来源；不要当作当前规则。
 
 ## 1. 项目是什么
 
@@ -37,7 +171,7 @@ Phase 6（`docs/phase6-agent-design.md`，**设计 v2；P6.1–P6.5 已实现，
 未实现**；契约见 `docs/phase6-agent-contracts.md`）增加「词典助手」：可选地调用
 用户配置的远程文本 LLM（DeepSeek/Claude 等），把本地 OCR、UniDic、MDict 作为
 schema 化证据；采用固定流水线，模型无工具调用（2026-10-31 决策）。图片仅在本机
-OCR，禁止视觉上云（固定隐私文案见 `project-data.md` §7）；
+OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）；
 核心离线功能不得依赖该 Agent。实现进度见 `docs/phase6-status.md`。
 **2026-10-31 实机反馈 F1–F17 的修正计划见
 `docs/agent_docs/device-feedback-2026-10-31.md`；未完成前优先按该文档执行，不要
@@ -87,7 +221,7 @@ OCR，禁止视觉上云（固定隐私文案见 `project-data.md` §7）；
   右下角的复制按钮仍为「复制」。识别方向、旋转、模型设置、页码导航贴近页面
   底部，页码箭头中心与左下/右下角按钮中心同高。
   主页按 Column 顺序排列：使用前须知 → 功能按钮区 → 边界说明；不再把
-  按钮在剩余空间垂直居中（按钮数量/文案见 `project-data.md` §7）。Phase 6
+  按钮在剩余空间垂直居中（按钮数量/文案见 `docs/project-data.md` §7）。Phase 6
   功能按钮已接入；后续调整按钮布局仍须先更新
   设计 token/小屏滚动规则，不能直接硬编码。语料列表为两列紧凑卡片（完整 contain 照片 + 最多 3 行 OCR +
   日期 + 右上删除 + 右下复制）；点开后进入「语料」详情：照片/分词、照片右下
@@ -135,14 +269,14 @@ OCR，禁止视觉上云（固定隐私文案见 `project-data.md` §7）；
    应用必须自己创建**私有** `mecabrc`，并通过 `Mecab.create(..., options: '-r "<私有rc路径>"')`
    传入。`options` 字符串由 `generateArgs()` 按空格/双引号解析。
    该方式已在 Android x86_64 模拟器 + 真实大型 UniDic 上验证成功（见
-   `docs/phase1-status.md`；数据规模见 `project-data.md` §6），不需要改 C++ 的
+   `docs/phase1-status.md`；数据规模见 `docs/project-data.md` §6），不需要改 C++ 的
    `rcPath` 参数。
    **注意**：UniDic 的 feature 行是带双引号的 CSV，例如
    `"動詞%F2@1,形容詞%F4@-2"`；不能直接 `split(',')`，必须用
    `lib/services/mecab/mecab_output_parser.dart`。
 5. **MDict**：`dict_reader` 1.6.1（MIT），长生命周期 worker isolate。
    - 开发测试词典为 MDict v2.0、UTF-8、zlib、未加密；条目数/大小见
-     `project-data.md` §6；
+     `docs/project-data.md` §6；
    - `locateAll` 命中后必须解析 `@@@LINK=目标` 重定向，再渲染；
    - 不支持 LZO / record block 加密 / checksum；导入时要预检并给出明确错误。
 6. **词典 HTML 渲染**：离线 `flutter_inappwebview`，禁用 JS 与网络，HTML 清洗后加载；
@@ -389,7 +523,7 @@ OCR，禁止视觉上云（固定隐私文案见 `project-data.md` §7）；
   当前测试/构建/设备基线见 `docs/project-data.md` §2/§3/§5；x86_64 模拟器已用
   真实相册图片 + 用户配置的 DeepSeek 跑通“实时思考/生成 → 中文译文/逐句/原文/
   词典依据”。
-- Phase 6 未完成：**2026-10-31 实机反馈 Wave 2–4**（默认中文/UI 语言、应用级
+- Phase 6 未完成：**2026-10-31 实机反馈 Wave 2–4**（默认中文/UI 语言（决策已定、实现待做）、应用级
   档案确认队列、多图、结果操作行、检索完整度/覆盖审查等；Wave 1 的 F4/F5/F9/
   F10/F15/F16 已实现，设备手工验收待 Wave 4；测试/构建基线见
   `docs/project-data.md` §2/§5）、
@@ -419,14 +553,14 @@ OCR，禁止视觉上云（固定隐私文案见 `project-data.md` §7）；
 实现与验收记录见 §3、§6 和 `docs/phase1-status.md`。不要重写：
 
 - 私有 `mecabrc` + `-r` 已在 Android 实测成功；
-- 大型 UniDic 外部存储 mmap 可用（数据规模见 `project-data.md` §6）；
+- 大型 UniDic 外部存储 mmap 可用（数据规模见 `docs/project-data.md` §6）；
 - 29 字段映射与引号 CSV 解析已由真实词典验证；
 - All Files Access 原生通道已实现。
 
 ### 已完成：ORT 模型冒烟（PaddleOCR）
 
 - 主机 Python ORT 与 Android x86_64 合成图片冒烟均通过；模型形状、字符表
-  数量、耗时与置信度见 `project-data.md` §4/§6。
+  数量、耗时与置信度见 `docs/project-data.md` §4/§6。
 - MangaOCR encoder/decoder 已在 Phase 4 完成设备冒烟（合成竖排气泡
   `これはテストです`）；模型许可未声明，不随包分发。
 
@@ -518,6 +652,8 @@ Phase 5 已完成并发布；Phase 6 P6.1–P6.5 已实现，P6.6/P6.7 待做。
 - 固定流水线、模型无工具（2026-10-31 决策并删除死工具层）：orchestrator 预取
   OCR/分词/逐词查词；模型只做理解、推断和引用已有证据，不自行补查。OCR/采样/
   UniDic profile 全部由 orchestrator 调用。
+- 语言：默认输出/UI 中文（zh）；旧 `follow` 映射为 `zh`；禁止按输入假名/拉丁
+  字符推断（2026-11-01 决策；F1/F17 代码待改，见 `docs/phase6-status.md`）。
 - 能力接口化：窄 Port（Ocr/Tokenize/Lookup/DictionarySample/Llm/Secret）包住现有
   `OcrService`/`MecabService`/`MdictService`；提取纯 `LookupGateway`，UI 与 Agent
   共用查词内核，不复制查词逻辑。`OcrWorkflow` 无生产调用，已于 2026-10-31 删除。
@@ -539,701 +675,18 @@ Phase 5 已完成并发布；Phase 6 P6.1–P6.5 已实现，P6.6/P6.7 待做。
   SharedPreferences/日志、执行模型生成的任意代码、把 P6.6/P6.7 未实现的能力
   描述成已支持。
 
-## 5. 项目误区 → 解决方案（重要）
+## 5. 项目误区 → 解决方案
 
-> 每条先写“误区/表现”，再写“正确做法”。遇到相似问题直接照做，不要重复试错。
-> 本节保留**阶段实现陷阱/历史经验**；长期有效的 MUST/MUST NOT 规则以
-> `docs/project-rules.md` 为准，本节与其冲突时以后者为准。
-
-### 5.1 架构与 OCR
-
-1. **误区：把 PaddleOCR4Android 的 Paddle-Lite/OpenCV/NDK r21 模块塞进 Flutter。**
-   - 正确做法：MVP 统一 ONNX Runtime；横向用 PP-OCRv5 ONNX，纵向用 manga-ocr ONNX。
-   - PaddleOCR4Android 只保留在 `third_party/paddleocr4android/` 作为可选后端说明；
-     二期若接入，做成独立 AAR + `OcrBackend`，不要改主插件依赖。
-2. **误区：把 `.nb` 模型给 ONNX Runtime，或把 ONNX 给 Paddle-Lite。**
-   - 正确做法：模型格式由 `assets/models/manifest.json` 固定；`.nb` 只属于 Paddle-Lite，
-     ONNX 只属于 ORT；不要混用，也不要改扩展名伪装。
-3. **误区：用 `flutter_html` 渲染 MDict 词条。**
-   - 正确做法：用 `flutter_inappwebview` 离线 WebView；词典 CSS/表格/MDD 图片需要完整
-     浏览器布局。若 WebView 有问题，修 WebView 配置（本地文件、CSS 注入、资源重写），
-     不要退回 `flutter_html`。
-4. **误区：各 OCR 引擎 `close()` 时关闭共享 `OrtEnvironment`。**
-   - 正确做法：`OrtEnvironment` 做应用级单例；引擎只关闭自己的 `OrtSession`。
-     upstream `PaddleOcrEngine.close()` 有关闭共享环境的问题，抽取时必须修掉；
-     R8 keep `ai.onnxruntime.**`。
-5. **误区：在 x86_64 模拟器上评估 OCR 性能。**
-   - 正确做法：模拟器只做功能冒烟；性能、内存、竖排质量用 arm64 真机，记录到
-     `docs/phase0-status.md` 或阶段状态文档。
-
-### 5.2 UniDic / MeCab
-
-6. **误区：`mecab_for_dart` 要求 `<dicdir>/mecabrc`，于是往用户 UniDic 目录写文件。**
-   - 正确做法：已 patch `packages/mecab_for_dart/src/dart_ffi.cpp`：只有该文件存在时才传
-     `-r <dicdir>/mecabrc`。应用在**私有目录**创建 `mecabrc`，用
-     `Mecab.create(dictDir: path, options: '-r "<私有rc路径>"')` 传入。
-   - 该方式已在 Android x86_64 模拟器 + 真实大型 UniDic 上验证成功（规模见
-     `project-data.md` §6）；
-     不需要改 C++ 的 `rcPath` 参数，**不要**写用户目录。
-7. **误区：把 UniDic 复制到 app 存储“更稳”。**
-   - 正确做法：用户明确选择原地路径；不要默认复制大型 UniDic（规模见
-     `project-data.md` §6）。
-   - 权限不足：引导 All Files Access，或让用户放到
-     `/sdcard/Android/data/com.rikai.mobile/files/`。
-   - 外部存储 mmap 失败：记录具体错误并**询问用户**，不要静默改成复制方案。
-8. **误区：硬编码 29 字段并假设所有 UniDic 版本一致；或用 `split(',')` 解析 feature。**
-   - 正确做法：解析前校验字段数；按下述索引映射；字段数异常时降级为
-     “可点击、无注音”，记录日志，不崩溃。当前 2025.12 版本为 29 字段。
-   - **重要**：UniDic 的 feature 行是带双引号的 CSV，字段内可含逗号，例如
-     `"動詞%F2@1,形容詞%F4@-2"`。直接用 `TokenNode.features`（朴素 split）会把
-     助動詞/助詞解析成 30–31 字段。必须用
-     `lib/services/mecab/mecab_output_parser.dart` 的引号感知解析器。
-   - 索引：0-3 pos1-4；4 cType；5 cForm；6 lForm/語彙素読み；7 lemma；8 orth；
-     9 pron；10 orthBase；11 pronBase；12 goshu；20 kana；21 kanaBase；
-     24-26 accent；27 lid；28 lemma_id。
-9. **误区：注音直接用 `lemma` 或 `pron`。**
-   - 正确做法：优先 `kana`(20)，回退 `pron`(9) → `lForm`(6) → `surface`；
-     片假名转平假名。未知词可从 MDict 词条提取读音作为 P2 兜底。
-10. **误区：在根包用 `dart run` 跑 MeCab/MDict 主机脚本。**
-    - 正确做法：根包依赖 `mecab_for_dart`，Windows 上会触发 native-assets hook 并失败。
-      主机脚本放到隔离 Dart 包（只依赖 `dict_reader`），例如把
-      `tool/spike_mdict.dart` 复制到临时包再跑；Android 上的 MeCab 验证在 app 内做。
-
-### 5.3 MDict
-
-11. **误区：`locateAll` 返回的就是最终 HTML。**
-    - 正确做法：读取后先匹配 `^@@@LINK=(.+)$`，最多解析 3 层并防环，再清洗/渲染。
-      真实测试词典的 `東京`、`食べる` 都是重定向；已用 `tool/spike_mdict.dart` 验证。
-    - 参考实现：
-
-      ```dart
-      Future<({String key, String html})> resolve(
-        DictReader reader,
-        RecordOffsetInfo hit, [
-        int depth = 0,
-      ]) async {
-        final html = await reader.readOneMdx(hit);
-        final m = RegExp(r'^@@@LINK=(.+)$').firstMatch(html.trim());
-        if (m != null && depth < 3) {
-          final next = await reader.locate(m.group(1)!);
-          if (next != null) return resolve(reader, next, depth + 1);
-        }
-        return (key: hit.keyText, html: html);
-      }
-      ```
-
-12. **误区：启动时打开所有词典并常驻。**
-    - 正确做法：懒初始化 + 长生命周期 worker isolate；只打开启用的词典。
-      大词典的初始化耗时/内存见 `project-data.md` §4/§6；需要时用
-      `exportCache/importCache` 或 SQLite key 索引，不要在主 isolate 初始化。
-13. **误区：用已废弃的 `init()`。**
-    - 正确做法：用 `dict_reader` 1.6.1 的 `initDict()`。不支持 LZO / record block
-      加密 / v3 时，在导入预检阶段明确报错，不要等运行时崩溃。
-14. **误区：WebView 直接加载词典 HTML。**
-    - 正确做法：`package:html` 清洗 `<script>/<iframe>/<object>/<embed>/<form>`、
-      `on*` 事件、`javascript:` URL；注入外部 CSS；MDD 资源按需提取到缓存并重写
-      `src` 为本地 `file://`。
-    - WebView 设置：`javaScriptEnabled: false`、`blockNetworkLoads: true`、仅本地文件；
-      `shouldOverrideUrlLoading` 拦截 `entry://` 与外部 URL。
-
-### 5.4 Android / 权限 / 构建
-
-15. **误区：`permission_handler` 可以处理“所有文件访问”。**
-    - 正确做法：当前 `permission_handler_android 14.1.0` 的 Kotlin DSL 与
-      Gradle/Kotlin 组合编译失败，已移除。改用原生 MethodChannel：
-      - `Build.VERSION.SDK_INT >= 30`：
-        `Environment.isExternalStorageManager()` 检查；
-        未授权时跳转
-        `Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION` +
-        `Uri.parse("package:$packageName")`。
-      - Android 10 及以下：申请 `READ_EXTERNAL_STORAGE`。
-      - Manifest 已声明 `MANAGE_EXTERNAL_STORAGE`、`READ_EXTERNAL_STORAGE`
-        （maxSdk 32）、`requestLegacyExternalStorage`。
-      - 已实现于 `android/app/src/main/kotlin/com/rikai/mobile/MainActivity.kt`
-        和 `lib/services/storage/permission_service.dart`（channel
-        `rikai/storage_permission`），设备端测试已验证。
-16. **误区：路径有中文就加 `subst` / `overridePathCheck` / `kotlin.incremental=false`。**
-    - 正确做法：项目已在 `C:\Projects\Rikai-Mobile`（ASCII），这些配置已从
-      `android/gradle.properties` 删除，不要恢复；直接构建即可。
-17. **误区：Gradle `metadata.bin` 错误只能删整个缓存/重装。**
-    - 正确做法：
-
-      ```powershell
-      cd C:\Projects\Rikai-Mobile\android
-      .\gradlew --stop
-      $c = "$env:USERPROFILE\.gradle\caches\8.14"
-      Move-Item "$c\kotlin-dsl" "$c\kotlin-dsl.bak"
-      Move-Item "$c\groovy-dsl" "$c\groovy-dsl.bak"
-      Move-Item "$c\transforms" "$c\transforms.bak"
-      Move-Item "$c\generated-gradle-jars" "$c\generated-gradle-jars.bak"
-      Move-Item "$c\dependencies-accessors" "$c\dependencies-accessors.bak"
-      ```
-
-      保留 `modules-2`；再用 `.\gradlew :app:assembleDebug --no-daemon` 诊断。
-18. **误区：NDK 用 Flutter 默认或随意降级。**
-    - 正确做法：`android/app/build.gradle.kts` 固定 NDK/compileSdk/targetSdk/
-      minSdk，具体值见 `docs/project-data.md` §1（`jni` 插件要求）；不要降 NDK。
-19. **误区：release 构建随时可跑、很快。**
-    - 正确做法：release 需要 arm64 + R8，耗时数分钟；用户曾中断一次，需要时先确认。
-      命令：`flutter build apk --release --target-platform android-arm64 --split-per-abi`。
-      Debug APK ~260MB 不代表 release 大小。
-20. **误区：未要求就 commit/push/reset。**
-    - 正确做法：先 `git status`；只改代码/文档；不 commit/push；不覆盖用户未提交改动；
-      结束时报告未提交文件。
-
-### 5.5 许可 / 仓库 / 范围
-
-21. **误区：模型/词典可以随仓库提交。**
-    - 正确做法：`.gitignore` 已覆盖模型/词典/UniDic；只提交
-      `assets/models/manifest.json` 和许可证。用
-      `git check-ignore -v unidic mdicts`、`git ls-files | grep -E '\.(onnx|nb|mdx|mdd)$'`
-      验证；模型下载到 `getExternalFilesDir()/models/`。
-22. **误区：MangaOCR 权重是 Apache-2.0，可以打包。**
-    - 正确做法：`l0wgear/manga-ocr-2025-onnx` 模型卡未声明许可；只下载/本地导入，
-      不随包分发；下载前显示警告；保留 `NOTICE` 说明。
-      `kha-white/manga-ocr-base` 是 Apache-2.0，但仅作为可选转换来源。
-23. **误区：删除 `unidic/`、`mdicts/`、两个上游 clone 来“清理仓库”。**
-    - 正确做法：它们被 `.gitignore` 忽略，是开发数据/参考；不要删除。
-      用户自备数据不提交；`overlay-translator/`、`PaddleOCR4Android/` 仅作参考。
-24. **误区：把 Phase 6 的在线 Agent 当成“给项目加 LLM/云 OCR”或反过来继续声称纯离线。**
-    - 正确做法：MVP/核心仍锁定 Android 单端、离线 OCR/分词/词典；不引入 iOS、
-      ML Kit 或云 OCR/云翻译。Phase 6 是**可选的用户配置文本 LLM Agent**：
-      必须单独批准，默认不联网，图片不上传，不使用 provider 视觉，不把 API Key
-      写入仓库/日志；未实现前 README/CLAUDE 只能写 planned/design。
-25. **误区：恢复旧包名/旧 MainActivity。**
-    - 正确做法：统一 `com.rikai.mobile`；唯一入口是
-      `android/app/src/main/kotlin/com/rikai/mobile/MainActivity.kt`；
-      旧 `com/rikai/rikai_mobile/MainActivity.kt` 只是注释，不要恢复类。
-
-### 5.6 症状 → 处理速查
-
-| 症状/报错 | 直接处理 |
-|---|---|
-| `Could not read workspace metadata ... metadata.bin` / 缺 transform workspace | 停 daemon，移走 `kotlin-dsl`/`groovy-dsl`/`transforms` 等脚本缓存（§5.4 #17），保留 `modules-2` |
-| `Your project path contains non-ASCII characters` 或 shader 写入失败 | 确认项目在 `C:\Projects\Rikai-Mobile`；不要恢复旧 path 配置 |
-| `permission_handler_android ... Unresolved reference: kotlin/compilerOptions` | 不要重装/降级插件；移除 permission_handler，用原生 MethodChannel（§5.4 #15） |
-| MeCab 初始化返回 null / 报 rc 文件错误 | 检查 UniDic 5 个文件；创建私有 `mecabrc`；传 `-r <私有路径>`；确认 Android 可读路径 |
-| `dict_reader` 读取后页面只显示 `@@@LINK=...` | 解析重定向（§5.3 #11），最多 3 层 |
-| WebView 空白或图片缺失 | 检查 `loadDataWithBaseUrl` 的 base URL、MDD 提取路径、`src` 重写、本地文件权限；确认 JS 关闭不影响布局 |
-| `dart run` 在根包失败并出现 Visual Studio 安装清单 | 根包 native-assets hook（MeCab）在 Windows 失败；改用隔离 Dart 包跑主机脚本（§5.2 #10） |
-| Debug APK 很大（~260MB） | 正常：全 ABI + debug。需要时构建 arm64 release；不要把 debug 大小当 release |
-| 词典/模型/UniDic 出现在 `git status` | 立即 `git check-ignore -v` 检查规则；不要提交；只保留 manifest/许可证 |
-| `flutter analyze` 报 vendored `mecab_for_dart` 的 lint | 该包 `analysis_options.yaml` 已关闭相关 lint；不要改上游源码或删除包 |
-| UniDic 加载后 OOM/卡死 | 确认 64 位；不要整体读入内存；检查 mmap/路径；记录设备内存；不要默认复制 |
-| adb/flutter 收到的 `/sdcard/...` 变成 `C:/GitBash/sdcard/...` | Git Bash 路径转换；`export MSYS_NO_PATHCONV=1`（§5.7 #26） |
-| 集成测试 `allFilesAccess=false` 或 `Cannot open file` | `flutter test` 重装应用丢失 appops；在测试运行期间循环重新授权（§5.7 #27） |
-| 助動詞/助詞 feature 数为 30/31、注音为空 | 引号内逗号被误拆；用 `mecab_output_parser.dart`（§5.2 #8） |
-| 分词失败后 loading 永不结束 | Riverpod 3 默认重试；给 provider 设 `retry: (_, __) => null`（§5.7 #28） |
-| MDict 查词命中但 WebView 图片空白 | 用 `mdd_key.dart` 生成 key 变体，资源写入缓存并重写为 `file://`（§5.7 #32） |
-| 词条页空白 / CSS 图片不加载 | 使用 `InAppWebViewInitialData` + file base URL、`allowFileAccess: true`（§5.7 #33） |
-| 词典 HTML 注入或外部资源加载 | `EntryRenderer` 清洗 + 禁用 JS/网络；不要绕过（§5.7 #34） |
-| 假名/全角查询无命中 | 使用 `text_normalizer.dart` 的 NFKC/假名/stripkey 候选 |
-| 构建报 `unable to find asset ... HarmonyOS_Sans_SC_Regular.ttf` | 字体不入库；按 `assets/fonts/README.md` 下载到指定路径 |
-| 用户选择 MDX 后词典被复制到 cache、同目录 MDD 找不到 | 不要用 `file_picker.pickFiles`；用 `getDirectoryPath` 选择文件夹后列出 `.mdx`（§5.7 #36） |
-| 启动页一直转圈/词典首次跳转慢 | 检查 `BootstrapApp` 的 warmup 与 timeout；词典应通过启动预热常驻 worker（§5.7 #37） |
-| 搜索结果点击后显示其他词典内容 | 传单条 `DictionaryLookupGroup(entries:[entry])`；≥2 条才给“查看全部”（§5.7 #38） |
-| 设备测试后手动安装 app-debug.apk 停在系统启动图 | 集成测试覆盖了 app-debug.apk；重新 `flutter build apk --debug` 再安装（§5.8 #40） |
-| 某个页面顶栏还是白底/深色字 | 不要页面局部覆盖 AppBar；全局 `AppTheme` 已统一深蓝白字（§5.8 #41） |
-| 设置页灰色提示被截断/太小 | 提示改为输入框外独立 14sp Text；不要用 `helperText` 单行显示（§5.8 #42） |
-| 查词结果词典名/条目数太小 | 16sp 同色；词条标题 24sp；摘要 14sp（§5.8 #45） |
-| 页面跳转时顶栏发白/页面互相淡入淡出 | 不要用默认 Material 转场；全局 `SlideOverPageTransitionsBuilder` 右滑覆盖（§5.8 #48） |
-| 阅读器输入区/结果区出现灰白色块分界或缺少收边 | 阅读面与工具区均白底；工具区仅加 1px `divider` 底边；输入框 `filled: false`（§5.8 #49） |
-| 阅读分词结果发灰、看不清 | 内容词蓝700、功能词/标点近黑、振假名品牌蓝；禁用 textSecondary（§5.8 #50） |
-| 查词弹层右上角关闭叉多余/ありがとう重复显示读音 | 移除关闭叉；仅 `hasDistinctReading` 时显示蓝字读音（§5.8 #51） |
-| adb push 模型到 Android/data 后 app 报 permission denied | 先让 app 创建目录；或 push 到 /sdcard/Download 配合集成测试 All Files Access（§5.9 #52） |
-| 模型路径变成 `C:/GitBash/sdcard/...` / `Creation failed path='C:'` | Git Bash 转换了 `--dart-define`；`export MSYS_NO_PATHCONV=1`（§5.9 #53） |
-| file_picker 报 `platform` getter 不存在 | v13 静态 API；`FilePicker.pickFiles()` 返回 `List<PlatformFile>`（§5.9 #54） |
-| PP-OCR 字符表解析为空/首字丢失 | 不要 trim U+3000；CtcDictionary 只去 CR/LF（§5.9 #55） |
-| OCR 全错/输出乱码 | 检查 BGR 通道、检测/识别 mean/std、EXIF 方向、模型 keys 索引（§5.9 #58） |
-| 相机页黑屏/无预览 | 确认 `CAMERA` 权限、`availableCameras` 非空、预览宽高交换与 `BoxFit.cover`（§5.10 #59） |
-| 照片集删除/保存按钮位置不对 | 按钮固定在**整个画面**左下/右下角；不要放回照片区 Stack（§5.10 #60） |
-| 照片集/多选页出现重复“多选/全选/保存” | 标题栏只保留一个“多选”；多选页标题用“选择照片”，删除/保存只保留图标（§5.10 #61） |
-| 照片集仍有“分析句子”/不显示分词 | 删除分析按钮；配置 UniDic 后自动分词并用 ReaderBlock 渲染，未配置显示原文（§5.10 #62） |
-| 照片区不能放大/不能查看细节 | 下边缘拖拽调整高度；点击照片打开 InteractiveViewer 全屏查看（§5.10 #63） |
-| MDict 导入弹结果框/列表尾部有英文 | 扫描行只显示中文状态；导入完成直接返回，失败只用 `RikaiToast`（§5.10 #64） |
-| 本地导入仍提示缺少 det.onnx/rec.onnx | 上游文件名为 inference.onnx/inference.yml；按大小+角色匹配（§5.10 #65） |
-| 模型目录切换后仍读旧文件 | 保存设置后 manager 回调读取新路径；默认迁移校验后再保存（§5.10 #66） |
-| 返回照片集或多选页又重跑 OCR | 模式存会话、指纹存 OcrService；命中缓存直接渲染，多选只补缺失（§5.10 #67） |
-| 主页使用前须知仍在按钮下方 | 按“须知 → 功能按钮区 → 边界说明”的 Column 顺序排列，不再垂直居中；数量/文案见 project-data §7（§5.10 #68） |
-| 语料仍是缩略图/点击进文本阅读 | 大照片完整 contain + 右上删除 + OCR + 日期；点击进语料详情（§5.10 #69） |
-| 语料详情只显示 OCR 或只显示分词 | 两段都显示；OCR 原文 + ReaderBlock 分词，可点词查词（§5.10 #70） |
-
-### 5.7 Phase 1 设备实测经验（2026-10-27）
-
-26. **误区：在 Git Bash 里直接传 `/sdcard/...` 给 adb 或 `--dart-define`。**
-    - 正确做法：MSYS 会把路径改写成 `C:/GitBash/sdcard/...`。运行前
-      `export MSYS_NO_PATHCONV=1`，对 `adb push`、`adb shell`、`flutter test` 都适用。
-27. **误区：`flutter test integration_test/... -d ...` 跑完仍保留应用与权限。**
-    - 正确做法：该命令测试前安装、测试后卸载应用，`MANAGE_EXTERNAL_STORAGE`
-      appops 随之丢失。用同一 shell 的后台循环在应用出现后反复执行
-      `adb shell appops set com.rikai.mobile MANAGE_EXTERNAL_STORAGE allow`；
-      集成测试会轮询最多 120 秒等待 UniDic 可读。命令见 `docs/dev-setup.md`。
-28. **误区：忽略 Riverpod 3 的默认 retry。**
-    - 正确做法：Riverpod 3 默认指数退避重试失败 provider；无效 UniDic 会反复初始化，
-      spinner 永不结束。`mecabServiceProvider` 已设 `retry: (_, __) => null`；
-      其它加载大文件/原生资源的 provider 也应显式关闭。
-29. **误区：外部存储 mmap 不可用。**
-    - 正确做法：已在 x86_64 API 36 模拟器验证 `/sdcard/Download` mmap 可用；
-      `MecabService.open` ~246ms。arm64 真机仍需复测。
-30. **误区：widget 测试里用 `pumpAndSettle` 等待真实文件 I/O 或权限通道。**
-    - 正确做法：mock `rikai/storage_permission`；真实文件 I/O 用 `tester.runAsync`
-      让出事件循环，否则无限 spinner 会让 `pumpAndSettle` 超时。
-31. **误区：把 HarmonyOS Sans 字体提交到仓库，或页面里硬编码颜色/字号。**
-    - 正确做法：`assets/fonts/*.ttf` 已被 `.gitignore` 忽略；用户按
-      `assets/fonts/README.md` 自行下载。UI 必须使用
-      `lib/core/theme/app_tokens.dart` 与 `AppTheme.light()`，禁止散落
-      `Color(0x...)`/`fontSize: 数字`（阅读区用户字号除外）；规范见
-      `docs/design-tokens.md`。
-32. **误区：把 MDD key 直接当作 HTML 的 `src` 交给 `DictReader.locate`。**
-    - 正确做法：HTML 常写 `JC_Z24Z/A471.png`，MDD 实际 key 是
-      `\JC_Z24Z\A471.png`。必须用 `lib/services/mdict/mdd_key.dart` 生成
-      前导反斜杠、斜杠/反斜杠、file:// 与 percent-encoded 变体。
-33. **误区：WebView 直接加载原始 MDict HTML，或用字符串 loadData 而没有
-      file base URL。**
-    - 正确做法：`EntryRenderer` 清洗后，用 `InAppWebViewInitialData` +
-      `baseUrl: WebUri('file://.../<dictId>/')`；`allowFileAccess: true`、
-      `javaScriptEnabled: false`、`blockNetworkLoads: true`。MDD 图片先写入
-      缓存目录并重写为绝对 `file://` URL，否则 Android WebView 图片空白。
-34. **误区：只移除 `</style>` 就算清理了词典 CSS。**
-    - 正确做法：CSS 注入前移除 `</style>`、`<script>` 等标签序列
-      （`EntryRenderer._stripStyleClose`），防止字典 CSS 逃逸出 `<style>`。
-      同时清洗 `on*`、`srcdoc`、`srcset`、`javascript:`/`vbscript:`/
-      `data:text/html`，并阻断网络图片。
-35. **误区：用 dictionary 原始文件名/中文路径做设备集成测试，或在搜索
-      loading 时用 `pumpAndSettle`。**
-    - 正确做法：把测试词典以 ASCII 名 push 为
-      `/sdcard/Download/rikai-mdict/{dict.mdx,dict.mdd,dict.css}`（MDX/MDD
-      必须同 basename 才会自动发现）；`flutter test` 会重装应用，需后台
-      循环重授 All Files Access；搜索/词条页有持续动画时用定时
-      `tester.pump` 轮询，不要 `pumpAndSettle`。
-36. **误区：用 `file_picker.pickFiles` 选择用户的 .mdx，然后把返回路径存起来。**
-    - 正确做法：该版本的 Android 文件选择会把文件**复制到应用 cache**，
-      同目录 MDD 不会一起复制，违反原地读取。用
-      `FilePicker.getDirectoryPath` 让用户选文件夹，再在 Dart 中列出该目录的
-      `.mdx` 并确认；UniDic 同理只选目录。
-37. **误区：每次打开词条都重新初始化词典/重新渲染 HTML。**
-    - 正确做法：`BootstrapApp` 在启动页对 `enabledDictionariesProvider` 调用
-      `MdictService.warmUp`（worker 常驻）；`EntryRenderCache` 以
-      dictionaryId + 词条 HTML 哈希做内存 LRU；revalidate/remove 时失效。
-38. **误区：点击一个搜索结果却把该词的所有词典/词条都显示出来。**
-    - 正确做法：单条点击只传 `DictionaryLookupGroup(entries: [entry])`；
-      同词典结果 ≥2 条时显示“查看全部（N 条）”，点击只传该词典的完整 group。
-      `entry://` 链接取第一个结果。
-39. **误区：改主页顶栏时直接改全局 `AppBarTheme`，导致设置/词条页也变深蓝。**
-    - 正确做法（已被 2026-10-28 二次要求覆盖）：现在**所有页面**统一深蓝
-      AppBar + 白字；不要再按页面单独设白底。详见 §5.8 #41。
-
-### 5.8 2026-10-28 UI/启动二次修正经验
-
-40. **误区：设备集成测试后直接安装 `build/app/outputs/flutter-apk/app-debug.apk` 手动验收。**
-    - 表现：应用停在系统启动图，Dart isolate 空闲、无 Flutter 首帧；
-      VM service 里出现 `ext.flutter.integrationTest`，缺少
-      `ext.flutter.debugDumpApp` 等框架扩展。
-    - 正确做法：`flutter test integration_test/...` 会用测试入口覆盖
-      `app-debug.apk`；手动安装前必须重新 `flutter build apk --debug`。
-      这是启动图卡死的首要排查项，不要误判为业务代码死锁。
-41. **误区：只在主页设置深蓝顶栏，其他页面保留白色 AppBar。**
-    - 正确做法：`AppBarTheme` 全局深蓝 `header` + 白字/白图标、
-      `systemOverlayStyle: light`、无底部分割线；页面不要局部覆盖颜色。
-      词条页 TabBar 位于深蓝顶栏内，使用白色 label/indicator，不要用品牌蓝。
-42. **误区：设置页用 Card 包住输入框和操作按钮；把长提示塞进
-    `InputDecoration.helperText`。**
-    - 正确做法：白底扁平分区；TextField/按钮直接放在页面上；提示用输入框外
-      独立 14sp Text，允许换行；用户不可变信息（外部私有目录）用 16sp 纯文本；
-      长权限说明用自定义 Row/Column，而非可能截断的 ListTile subtitle。
-43. **误区：主页功能按钮沿用首版的 40sp/左对齐/亮品牌蓝。**
-    - 正确做法：按钮背景与顶栏相同 `AppColors.header`；图标+文字整体居中；
-      文字 32sp（40sp 的 80%）；抽屉 `Drawer.shape` 使用直角。
-44. **误区：帮助/著作权继续用 Card/ListTile 小字。**
-    - 正确做法：白底纯文本；正文 16sp、栏目标题 18sp、每栏之间 Divider；
-      不嵌套卡片。
-45. **误区：查词结果沿用 12sp 的 titleSmall/labelSmall，且用 ListTile 承载
-    24sp 标题。**
-    - 正确做法：词典名/条目数 16sp 同色（与“查看全部”一致）；词条标题 24sp；
-      摘要 14sp；用自定义 Card+InkWell+Column，避免大字号被 ListTile 裁切。
-46. **误区：切换字体时只改 `ThemeData(fontFamily:)`，组件主题仍写死
-    HarmonyOS。**
-    - 正确做法：`AppTheme.light(fontFamily:)` 必须把 family 写入 AppBar、
-      按钮、对话框、SnackBar、弹层、输入框、ListTile、TabBar 等所有显式
-      TextStyle；系统字体时传 null。`ThemeData` 没有 `fontFamily` getter，
-      测试检查 `textTheme.*.fontFamily`。
-47. **误区：手动编辑 flutter_launcher_icons 生成的 mipmap，或把图标/字体
-    混在一起提交。**
-    - 正确做法：修改 `assets/Rikai_Icon.jpg` 后运行
-      `dart run flutter_launcher_icons`；图标源提交，字体不入库；原生启动图
-      使用 `drawable-nodpi/launch_icon.png`，Android 12+ 系统启动图使用
-      adaptive icon（圆形遮罩属正常）。
-48. **误区：页面跳转沿用 Material 默认的淡入/缩放转场。**
-    - 表现：旧页与新页交叉淡化，深蓝顶栏在过渡瞬间发白，出现白色瑕疵。
-    - 正确做法：`AppTheme.light()` 的 `pageTransitionsTheme` 在全部平台使用
-      `SlideOverPageTransitionsBuilder`：新页面从右侧滑入覆盖旧页面，旧页面
-      静止、无淡入淡出/缩放。不要给单个页面自定义转场；`Navigator.push`
-      的 `MaterialPageRoute` 与 go_router 都会继承全局主题。
-49. **误区：阅读器工具区没有浅色收边，或为了收边把工具区改成灰色底带。**
-    - 表现：输入框/分词/复制区域与长文分词列表之间缺少自然分隔，或出现
-      用户不想要的灰色底带；用户明确要求**保留白色工具区**，只保留细边。
-    - 正确做法：阅读面、结果列表与工具区均为 `AppColors.surface` 白色；
-      工具区底边仅 1px `AppColors.divider` 细线（`reader-controls-surface`
-      的 `Border.bottom`）；`TextField` 设 `filled: false`，不额外铺色块。
-      不要为了分隔感把工具区改成 `background`。
-50. **误区：阅读器功能词、标点和振假名使用 `textSecondary` 灰色。**
-    - 正确做法：内容词蓝50底 + 蓝700；功能词/标点透明底 + `textPrimary`
-      近黑；振假名品牌蓝 `primary`。阅读器内不使用灰色文字，靠蓝色/黑色/
-      字重建立层级；对应规范见 `docs/design-tokens.md` §3.2/TokenChip。
-51. **误区：查词弹层保留右上角关闭叉；词形与读音相同仍显示蓝字读音。**
-    - 正确做法：阅读页查词弹层可下滑/上滑/点击遮罩关闭，移除关闭 IconButton；
-      仅在 `token.hasDistinctReading` 为 true 时显示蓝色读音行，
-      `ありがとう（ありがとう）` 这类重复读音只保留黑色词形。
-
-### 5.9 2026-10-28 Phase 3 OCR 经验
-
-52. **误区：用 `adb push` 往 `/sdcard/Android/data/<pkg>/files/models` 塞模型，
-    然后直接让 app 读取。**
-    - 表现：`FileSystemException: Exists failed ... Permission denied (errno 13)`，
-      因为目录是 shell 所有，FUSE 下 app 不能遍历。
-    - 正确做法：先启动 app/模型页让 app 自己创建目录，再 push 文件到该
-      app-owned 目录；或用应用内下载/本地导入。集成测试使用
-      `/sdcard/Download/rikai-models` + All Files Access，避免该问题。
-53. **误区：在 Git Bash 里给 `flutter build --dart-define=...=/sdcard/...` 传
-    Android 路径。**
-    - 表现：Dart 端看到 `C:/GitBash/sdcard/...`，模型页报 `Creation failed,
-      path = 'C:'`。
-    - 正确做法：`export MSYS_NO_PATHCONV=1` 后再 build/test；对 adb push、
-      `flutter test --dart-define` 同样适用。
-54. **误区：按旧版 file_picker API 写 `FilePicker.platform.pickFiles()` 并读
-    `result.files`。**
-    - 正确做法：v13 是静态 API：`FilePicker.pickFiles()` 直接返回
-      `List<PlatformFile>`（取消为空列表）；目录选择用
-      `FilePicker.getDirectoryPath()`。详见 `docs/dev-setup.md`。
-55. **误区：解析 PP-OCRv5 的 `keys.yml` 时用 `trim()`/`rstrip()`。**
-    - 表现：字符表变空或 CTC 首字符丢失；该字典第一个 key 是 **U+3000**
-      全角空格，Kotlin 的 `trim()`/Python 的 `rstrip()` 会将其删掉。
-    - 正确做法：按行处理时只去掉 `\r`/`\n`，YAML 标量只去掉 ASCII 空格；
-      `CtcDictionary.kt` 已按此实现，输出 class 数见 `project-data.md` §6。
-56. **误区：每个 OCR 引擎 close 时关闭 `OrtEnvironment`，或把竖排请求静默
-    当横排处理。**
-    - 正确做法：`OcrRuntime.environment` 应用级单例，不随引擎关闭；
-      Phase 4 的 `vertical` 使用独立的 MangaOCR 引擎，手动竖向缺模型时必须
-      返回 `MODEL_MISSING`，不得静默伪装成横向；只有 `auto` 允许在 MangaOCR
-      缺失时回退 Paddle 横向。
-57. **误区：以为 image_picker 需要 Android CAMERA 权限。**
-    - 正确做法：它通过系统相机 Intent 取图，Manifest 只需已有
-      `<uses-feature camera required=false>`；不要额外申请 CAMERA，
-      否则反而会因为未授权导致相机 Intent 失败。
-58. **误区：把 PaddleOCR 识别输入按 RGB 顺序送入模型。**
-    - 正确做法：PaddleOCR 训练使用 OpenCV BGR；Bitmap 是 RGBA，必须在
-      `bitmapToNchw` 中按 B/G/R 写三个通道，并按 0.485/0.456/0.406、
-      0.229/0.224/0.225 归一化检测输入；识别输入用 0.5/0.5。
-
-### 5.10 2026-10-29 Phase 3.5 采集/导入/语料经验
-
-59. **误区：继续用 `image_picker` 的系统相机 Intent 冒充实时拍照页。**
-    - 正确做法：实时预览必须引入 `camera` 插件并声明 CAMERA 权限；预览用
-      `FittedBox` + 交换 `previewSize` 的宽高 + `BoxFit.cover`。应用进入后台
-      或打开照片集/阅读页时 dispose 相机，返回时重建；不要用
-      `permission_handler`。
-60. **误区：把照片集的删除/保存按钮放在照片区域内部，或把保存做成白底。**
-    - 正确做法：用户要求它们固定在**整个画面**左下/右下角；照片区只放照片。
-      不再在底部额外预留 64dp；识别方向、旋转、模型设置、页码导航贴近页面
-      底部，`CapturePageNavigation` 固定 52dp 高、底边距 12，使页码箭头中心与
-      52dp 删除/保存按钮中心同高。
-      两者统一使用 `CaptureRoundButton`（52dp、24dp 图标），删除为错误色、
-      保存为深蓝 `header` + 白图标；白底按钮在照片背景下对比不足。
-      均二次确认；保存写入 `HistoryStore`（照片副本 + OCR 文本 + blocks + 模式/时间）。
-61. **误区：在照片集正文再放一个“多选”或“全选”，或再加一行保存文字按钮。**
-    - 正确做法：照片集标题栏只保留一个「多选」；多选页标题改为「选择照片」，
-      正文只显示已选数量，全选放标题栏；删除/保存沿用同一
-      `CaptureRoundButton` 图标，不再放“保存到语料库（后续支持）”等重复文字。
-62. **误区：照片集保留“分析句子”按钮，把分词错误塞进结果区，或把复制放标题栏。**
-    - 正确做法：用户要求删除分析按钮；已配置 UniDic 时 OCR 完成后自动分词，
-      直接使用 `ReaderBlock`/`buildReaderLines` 按文本阅读页渲染，点词打开查词弹层。
-      未配置时显示 OCR 原文；分词失败用**红色横幅叠在照片顶部、标题栏下方**，
-      带白字“重试”，不能占用/推挤 OCR 结果区。
-      复制按钮改为照片显示区右下角的深蓝 `header` 长条（白字白图标，文案
-      「复制文本」）；
-      标题栏只留字号/注音菜单和“多选”。字号/注音使用与阅读页同一个
-      `ReaderOptionsMenu`（16/20/24/28 + 显示注音）。
-63. **误区：照片区高度写死；拖拽指示条是白线外套灰色胶囊；拖拽有 slop 不跟手。**
-    - 正确做法：照片区下边缘提供 40dp 拖拽热区，指示条必须是**纯白单色**
-      44×4dp（不要深色胶囊/描边）；向下拖动扩大照片区（默认 250、最小 120，
-      给结果/操作区留空间）。必须用 `Listener` 直接处理 pointer down/move/up，
-      以 drag 起点的绝对位移计算高度，不能再用 `onVerticalDragUpdate` 的
-      delta+slop（会慢半拍）。点击照片进入黑底全屏 `InteractiveViewer`，
-      支持双指缩放与平移，参考系统画册。
-64. **误区：MDict 批量导入完成弹结果对话框，或扫描时显示 MDD/CSS、Instance of 等英文。**
-    - 正确做法：扫描行只显示路径、大小和中文状态（可导入/已存在/不支持），
-      不追加 `MDD n · CSS n` 等英文尾注，也不显示原始英文异常；扫描进度不显示
-      文件名。词典标题若是 `Instance of ...`/`Exception ...` 等 Dart 调试文本，
-      用 `displayDictionaryTitle` 回退文件名。词典管理的资源标签使用
-      “资源/样式/无资源”。导入结束后直接返回词典管理页；仅在失败/取消时用
-      非阻塞 `RikaiToast` 报告数量，不要弹“导入结果”对话框。
-65. **误区：本地导入模型按 manifest 的 det.onnx/rec.onnx 精确文件名匹配。**
-    - 正确做法：上游下载常为两个 `inference.onnx` + `inference.yml`；按
-      文件大小、扩展名和角色映射，命中已安装文件时只补缺失项；先写
-      `.importing` 校验再替换，失败清理临时文件。
-66. **误区：改模型目录只改 UI 文本，或先保存路径再迁移失败。**
-    - 正确做法：先校验新目录读写/空间；默认复制并逐文件校验后再保存设置
-      和删除旧文件，支持“仅切换”；目录失效时保留设置并提供重新选择，
-      不崩溃、不清空其他设置。
-67. **误区：每次从模型设置/多选/其它页面返回照片集都重新 OCR。**
-    - 正确做法：OCR 缓存键是“照片 + 模式 + 模型指纹”，模式存在
-      `CaptureSessionState.mode`（会话级，不得因页面重建重置为自动）。
-      `OcrService.fingerprint` 在应用会话内保留；照片集先用它查缓存并直接渲染，
-      无需 `ensureReady`。模型设置返回时只有指纹变化才清缓存并 `force`
-      重新识别；指纹不变必须 `_refreshCurrent(force:false)`。多选页传入
-      `initialFingerprint`，进入时先查缓存，只补识别缺失照片；全部命中时
-      不要显示/闪一下进度。
-68. **误区：主页功能按钮仍在最上方，使用前须知在下方；或继续把按钮组垂直居中。**
-    - 正确做法：按 Column 顺序排列“使用前须知 → 功能按钮区 → 边界说明”
-      （小屏可滚动；按钮数量/文案见 `project-data.md` §7）。保持深蓝 `header`、
-      32sp、按钮内容居中，但不再做整组垂直居中。
-69. **误区：语料页沿用 72dp 缩略图和右侧小删除按钮；点击语料仍跳文本阅读页。**
-    - 正确做法：语料列表与详情标题栏右上角都提供 `ReaderOptionsMenu`；分词
-      按 `readerFontSize` 渲染。语料列表用与照片集多选页一致的两列紧凑卡片：
-      完整 contain 照片 + 最多 3 行 OCR + 日期 + 右上错误色圆形删除 + 右下
-      「复制」。点击进入 `/corpus-detail`（`CorpusDetailPage`）：照片/分词，
-      照片右下「复制文本」，语料间页码，标题「语料」，左下删除；不重复显示
-      OCR 原文和日期；无多选/方向/模型设置/保存。该页只使用本机图片、
-      `HistoryStore`、MeCab/MDict，不得联网。
-70. **误区：语料详情把 OCR 原文和分词结果都堆在长页面里。**
-    - 正确做法：详情只显示分词结果（`ReaderBlock`，可点词查词）；未配置
-      UniDic/失败时给中文说明/重试。翻页/删除后重新分析当前语料，旧分析用
-      token 丢弃。
-71. **误区：加入 MangaOCR 后仍只按 PaddleOCR 文件计算照片集缓存指纹。**
-    - 正确做法：使用 `OcrRuntimePaths` + `fingerprintForPaths`，指纹包含
-      Paddle、已安装的 MangaOCR（encoder/decoder/vocab）和 orientation 文件；
-      可选模型缺失时写入 `manga=off` / `orientation=off`，安装/删除后必须使
-      照片集缓存失效，否则 auto/vertical 会复用旧横向结果。
-72. **误区：可选 MangaOCR/orientation 加载失败就让整个 OCR 初始化失败。**
-    - 正确做法：Paddle 为必需；MangaOCR/orientation 独立加载，失败只记录
-      `mangaError`/能力状态。横向 OCR 必须继续可用；只有手动 `vertical` 才
-      返回 `MODEL_MISSING`/`MODEL_INVALID`，`auto` 在缺少 Manga 时回退横向。
-73. **误区：用框高宽比单独判断竖向，方形字框组成的单列会误判为横排。**
-    - 正确做法：`TextLayoutHeuristic` 额外识别“x 中心接近、y 连续堆叠”的
-      方形框列（≥3 个、纵向跨度 ≥2.5 倍框高），作为竖向候选；仍由 MangaOCR
-      处理。不要把它误当成横排 logo。
-74. **误区：textline 180° 模型在只有一条文本行时永远不触发。**
-    - 正确做法：两行以上要求 ≥2 个 180° 投票且占比 ≥0.6；只有一条高置信
-      （≥0.99）180° 行时允许单独触发。旋转 180° 后必须重新跑 DBNet，不能只
-      旋转识别用的 crop；坐标仍以旋转后的图像为准。
-
-### 5.11 Phase 6 词典助手（设计阶段陷阱）
-
-75. **误区：把图片/base64 或图片路径发给 LLM，让模型“顺便看看图”。**
-    - 正确做法：图片只在本机走 OCR；provider 请求体只能包含文本、分词/词典
-      查词结果和 schema。捕获请求测试必须断言没有图片字段/base64；严禁调用
-      provider 的视觉能力。
-76. **误区：严格模式没有词典依据时让模型补充一个“看起来合理”的答案。**
-    - 正确做法：严格模式的事实性陈述必须有真实词典 citation；没有依据就明确
-      说明未找到，不得编造词义/读音/翻译。宽松模式的模型补充必须与词典事实
-      分开标注，不能混在一起。
-77. **误区：把模型输出里的 `[来源1]` 直接当可信来源打开。**
-    - 正确做法：citation ID 由 orchestrator 根据真实词典查词结果发放并校验；
-      伪造/越界/失效 citation 只按普通文本显示，不能打开任意词典页。
-78. **误区：API Key 放进 SharedPreferences、URL、日志或崩溃报告。**
-    - 正确做法：使用 Android Keystore/安全存储；日志/导出/错误信息脱敏；提供
-      清除 Key 和配置的入口；仓库中不得出现真实 Key。
-79. **误区：每次新会话都重新让 Agent 探查词典。**
-    - 正确做法：词典熟悉文档按词典路径/stat、UniDic 版本和 schema/prompt 版本
-      缓存；用户确认后复用；词典变化/用户重置时失效。不要把熟悉文档写入用户的
-      UniDic/MDict 目录。
-80. **误区：允许 Agent 生成并直接执行任意 Dart/JS/Python 伪代码。**
-    - 正确做法：转换成受验证的安全 DSL（白名单字段/样式），支持预览、用户确认、
-      版本/回滚；统一 annotation engine 作用于所有 UniDic token 展示。禁止文件/
-      网络/反射/任意代码执行。
-81. **误区：为了 Phase 6 提前调整主页功能按钮/改文案，或把 planned 写成已实现。**
-    - 正确做法：P6.5 已接入功能按钮并更新 README/CLAUDE/设计 token/测试；
-      P6.6/P6.7 的新 UI 仍必须先补 token 与测试，不能把未实现能力写成已支持。
-
-### 5.12 Phase 4.5 OCR 收敛经验
-
-82. **误区：每次 `ensureReady` 都重新创建全部可选 session / 全量 SHA-256。**
-    - 正确做法：Paddle 必需；Manga/orientation 懒加载；readiness 先 stat；
-      SHA 只对下载/导入/迁移等写入路径执行，并按
-      path+size+mtime 缓存。不要把 `mangaReady` 当成 session loaded。
-83. **误区：每次 auto 都跑 doc orientation，或在正方形/正常竖排页上旋转整图。**
-    - 正确做法：只在图像长宽比与 DBNet 布局矛盾时运行；高置信 90/270 才旋转；
-      旋转后必须重新 DBNet；textline 180° 只在 auto 横向。
-84. **误区：auto 同时跑两个引擎/输出 mixed 结果，或让低置信度 Manga 直接返回。**
-    - 正确做法：auto 只返回 `paddle_v5` 或 `manga_ocr` 之一；Manga 平均置信度
-      低于 0.75 时回退 Paddle。模式切换必须强制重新识别，不能复用旧模式缓存。
-85. **误区：MangaOCR 固定 gap/padding，且不过滤低置信度噪声。**
-    - 正确做法：gap/padding 按检测框中位尺寸缩放；清除控制/替换字符；低于保守
-      阈值的 bubble 丢弃。不要为了提高召回保留明显乱码。
-86. **误区：照片旋转直接改设备原图，或旋转后仍用旧 OCR 缓存。**
-    - 正确做法：只旋转 `CaptureStorage` 私有会话副本 90°；清该照片 OCR 缓存、
-      evict `FileImage`、重新识别；设备原图不变。
-87. **误区：把 MDX/MDD 的 `Encrypted: 2` 当成加密词典直接拒绝。**
-    - 正确做法：`Encrypted: 2` 是 dict_reader 可读的 record-block 布局；只有
-      `Encrypted: 1` 和 v3 仍拒绝。MDD 缺失时 worker 可发现同目录同名 `.mdd`，
-      `../`/`./` 资源前缀由 `mddKeyCandidates` 归一化。
-88. **误区：外部路径直接校验/扫描，失败后才让用户找设置。**
-    - 正确做法：选择或使用 `/sdcard`、`/storage` 等沙盒外路径前调用
-      `ensurePathAccess`；未授权时弹窗并跳到系统“所有文件访问”页面。应用专属
-      外部目录不需要该权限。
-89. **误区：退出模型下载页就取消下载；或取消时删除 `.part`。**
-    - 正确做法：默认后台继续，退出弹窗提供“同时停止下载”（默认不勾选）；
-      `.part` 保留并用 HTTP Range 续传；设置页“清除模型缓存”只删临时文件。
-90. **误区：EntryPage 退出时让 platform WebView 参与整个 pop 动画。**
-    - 正确做法：监听 route reverse，把 WebView 换成页面底色；转场 220ms/180ms。
-      WebView 退出闪帧和大部分卡顿来自 platform view 参与长动画。
-91. **误区：认为 MDict 音频只需要保留 `sound://` 链接。**
-    - 正确做法：`EntryRenderer` 解析 `sound://key` 到 MDD 资源，写成缓存文件并
-      插入本地 `<audio controls>`；`mddKeyCandidates` 同时去掉 `sound://` 前缀。
-      WebView 需 `allowFileAccess` 和 `allowFileAccessFromFileURLs: true`，JS
-      仍保持关闭。`日本語文型辞典 三语音频版` 的 `00048.aac` 已在 x86_64
-      模拟器通过 `mdict_audio_android_test.dart` 验证（资源/结果见
-      `project-data.md` §3），渲染出本地 `<audio>`；扬声器出声仍需真机确认。
-92. **误区：把词典选择/查词结果放在 SearchPage/LookupSheet 的 State。**
-    - 正确做法：选择与模式放全局 `lookupPreferencesProvider` 并持久化；
-      查询词/结果放 app-lifetime `lookupSearchProvider`。两个界面共用选择，
-      切换页面不丢结果；外部修改选择后已有查询要自动刷新。
-93. **误区：选中词典时改变字体粗细/宽度来强调。**
-    - 正确做法：只改背景/边框/文字色，保持同一字重和固定行高；否则 Wrap 会
-      重新换行，词典位置漂移并让结果区上下抖动。筛选条预留 3.5 行（第 4 行
-      半可见），其余在筛选条内部纵向滚动。
-94. **误区：继续用 SnackBar 显示“已保存”等轻提示。**
-    - 正确做法：用根 Overlay 的 `RikaiToast` + `IgnorePointer`，否则底部气泡会
-      拦截其覆盖区域的点击。
-95. **误区：竖排页只跑 MangaOCR，或只用平均置信度决定引擎。**
-    - 正确做法：同时跑 MangaOCR 与 PaddleOCR，用 `OcrTextQuality` 综合置信度、
-      假名覆盖、有效字符和重复噪声评分；Paddle 需明显胜出（分差 >0.04）才
-      切换。最佳主候选 <0.80 时才尝试 ±90° Paddle；真实图片扫描结果见
-      `project-data.md` §3，旋转未胜出，所以不要无条件增加两轮旋转。最终只
-      返回一个引擎，手动 vertical 缺 Manga 仍报错。
-96. **误区：把 OCR 块之间的空格原样交给 UniDic。**
-    - 正确做法：`composeOcrText` 去掉日文之间的空格和日文标点两侧空格，保留
-      拉丁词间空格和换行。否则 UniDic 会把复合词拆成单字。
-97. **误区：长分词结果用 `ListView(children: [...])` 或保留默认滚动条。**
-    - 正确做法：用 `ListView.builder`/`SliverList.builder` 懒加载，并在这类
-      变高 token 列表上用 `NoScrollbarBehavior`；默认滚动条的估算高度会随
-      行高变化而抖动。
-98. **误区：批量导入扫描完后仍保留“应用会递归……”和“扫描完成”，挤压词典列表。**
-    - 正确做法：说明只在结果列表为空时显示；探测完成把 `_status` 清空，
-      把高度让给 `Expanded` 的词典列表。
-99. **误区：手动添加 MDict 对话框的路径输入框 `autofocus: true`。**
-    - 正确做法：`autofocus: false`，打开对话框前后清理焦点；选择文件夹返回后
-      再次 `unfocus`，避免键盘遮挡横屏对话框。
-100. **误区：把“每词典词条上限”的 5 个选项直接放进无滚动的 AlertDialog Column。**
-     - 正确做法：`ConstrainedBox(maxHeight: screen.height * 0.55)` +
-       `SingleChildScrollView`，保证竖屏/横屏都能选到“10 条”。
-101. **误区：照片拖拽最小高度仍是 120dp，图片永远无法完全让位给结果。**
-     - 正确做法：允许照片高度到 0；`PhotoPane` 在 `height <= captureResizeHandle`
-       时隐藏图片和 overlays，只渲染 40dp 拖拽条，拖拽起点用有效高度，
-       这样下拉可以连续恢复图片。照片集和语料详情共用该行为。
-102. **误区：查词筛选条继续显示“查询词典”标题行和模式切换。**
-     - 正确做法：筛选条从 Chip 开始；模式胶囊放 SearchPage AppBar，或
-       LookupSheet 标题行与词条标题同 y 居中。选中态不得改变 Chip 宽度。
-103. **误区：阅读页隐藏工具栏后无法恢复，或恢复图标不在原 x 位置。**
-     - 正确做法：分词结果出现后显示灰色“隐藏输入框”；隐藏时记录状态，
-       在 AppBar 下方左侧用同 inset 的 visibility 图标恢复；隐藏期间结果
-       列表占用全部剩余高度。
-104. **误区：UniDic 路径只能填精确目录。**
-     - 正确做法：`UnidicValidator.discover` 递归查找 matrix.bin 并只保留通过
-       完整校验的目录；一个有效自动使用，多个用字体选择式列表（最后文件夹名为
-       标题、完整路径为副标题）。不要信任未通过 validate 的 matrix.bin。
-105. **误区：OCR 模型目录选到 `paddle_v5` 就认为路径无效。**
-     - 正确做法：`OcrModelManager.resolveModelsRoot` 把 `paddle_v5`/`manga_ocr`/
-       `orientation` 或含单模型文件的目录解析回父级 models 根目录；再校验/迁移。
-106. **误区：照片集所有照片共用一个 OCR 模式。**
-     - 正确做法：`CapturePhoto.mode` 每张独立、默认 auto；照片集、保存、多选页、
-       缓存键全部用当前照片的 mode。切换照片不得触发其他模式照片重识别。
-107. **误区：OCR 进行中禁用所有照片操作。**
-     - 正确做法：保存到语料库可继续禁用；但单张删除和多选删除必须可用，删除前
-       先取消 OCR。旋转锁只包住文件旋转和清缓存，完成后释放，允许连续打断 OCR。
-108. **误区：查词只有完全匹配。**
-     - 正确做法：全局 `LookupMatchMode`（增量/完全/前方/后方）+ 标题栏书籍图标
-       菜单；所有查词/点词页面显示。前方用词典前缀索引，后缀/增量在 worker
-       扫描并缓存 key 列表，每词典默认最多 50 个 fuzzy 结果；查词页增量模式
-       输入 300ms 防抖自动查询。
-109. **误区：查词搜索框在加载时换成小尺寸 spinner。**
-     - 正确做法：空闲和查询中都使用同一个 IconButton 尺寸，只替换 icon；
-       否则输入框高度变化会让整个结果区抖动。
-110. **误区：AppBar 上的多选/单选沿用浅色主题。**
-     - 正确做法：`DictionarySelectionModeToggle(onDark: true)` 未选中文字/边框
-       为白色，选中为白底深蓝字；弹层内用浅色版本。
-111. **误区：找不到 OCR 模型时显示底层文件错误。**
-     - 正确做法：结果区写“未找到可用的 OCR 模型”，并提示点击页面下方
-       「模型设置」；不要要求用户自己找模型文件。
-112. **误区：长分词列表卡顿只靠去掉滚动条。**
-     - 正确做法：懒加载 + 去滚动条 + 去掉每个 TokenChip 的 Material/InkWell；
-       变高列表滚动时仍会按估算范围补建行，TokenChip 图层越少越稳。
-
-### 5.13 Phase 6 v2 设计期陷阱
-
-113. **误区：把图片路径、文件名、base64 或 EXIF 放进 provider 请求。**
-     - 正确做法：OCR 只在端侧执行；provider 只收到不含路径的文本 JSON
-       （`{image_id, ocr_text}`）。当前没有模型工具或 `ocr.recognize` 工具面；
-       测试捕获请求体断言无图片/路径/base64。
-114. **误区：把 MDict 原始 HTML、MDD 图片/音频或完整词条发给模型。**
-     - 正确做法：用 `htmlToPlainText` + sanitizer 生成摘要（长度上限见
-       `project-data.md` §8）；去路径、
-       base64、MDD/MDX、音频/图片引用。完整词条只在用户点击 citation 时走现有
-       WebView，不进入 provider。
-115. **误区：让模型决定先查哪本词典、如何合并/重排结果。**
-     - 正确做法：词典顺序唯一来源是 `DictionaryInfo.order`；编排器按该顺序预取并
-       排序证据，模型只看到 `source-N`。同一词条多词典命中分别保留，不合并。
-116. **误区：长文本直接截断后继续分析，或预算超限时静默丢弃内容。**
-     - 正确做法：超过源文本预算（见 `project-data.md` §8）先让用户选段；超预算设置 `truncated=true` 并在 UI
-       明示“未分析的部分不会出现在结果中”，不静默截断。
-117. **误区：词典熟悉档案未经用户确认就保存，或写进用户 UniDic/MDict 目录。**
-     - 正确做法：只有“保存并信任”才写应用私有 SQLite；支持本次跳过/不再询问；
-       档案只存结构与短样例，按文件 stat + schema/prompt 版本失效。
-118. **误区：多个 OCR 版本自动选一个覆盖原文，或让模型直接改写 OCR 文本。**
-     - 正确做法：默认单版本；冲突时展示差异和依据，用户点“采用”才生成新
-       `SourceVersion(origin: dictionary_repair)`；模型建议必须带 citation 或标
-       “模型猜测”，不得覆盖原文引用。
-119. **误区：把 Agent 会话词典选择写回全局 `lookupPreferencesProvider`。**
-     - 正确做法：会话选择初始继承全局后快照，只写会话表；查词页/阅读弹层继续用
-       全局偏好，互不影响。模式切换和词典选择只能由用户 UI 修改，模型无权改。
-120. **误区：信任模型自报的 `citations_used`/`literal`，或把未知 citation 当可点
-       来源。**
-     - 正确做法：citation 只由 `CitationRegistry` 发放；`citations_used` 从各 claim
-       的 `citation_ids` 重新汇总；`literal` 由 quote 填充；伪造/越界只显示为普通
-       文本，不导航。原文 quote 必须通过 `analysis_text` substring 校验。
-
-### 5.14 Phase 5 语料/引导经验
-
-122. **误区：首次启动直接进入主页，或给旧用户也强制弹引导。**
-     - 正确做法：路由初始位置由 `onboardingCompleted` 决定；新安装进入
-       `/onboarding`，已有 UniDic 路径的旧安装视为已完成；设置页可复位并重新打开。
-       引导里的“跳过”必须可用，`开始使用` 需要先勾选许可确认。
-123. **误区：阅读页只能看不能保存，或保存文本时伪造照片路径。**
-     - 正确做法：使用 `HistoryStore.saveText`，`image_path` 存空字符串；语料卡片/
-       详情对空路径显示「文本语料」占位和复制按钮，不渲染 `Image.file`。
-124. **误区：直接把照片原文件复制进语料，导致存储膨胀或方向错误。**
-     - 正确做法：`HistoryStore` 在保存时烘焙 EXIF、最长边限制 2048、JPEG 85；
-       无法解码的格式回退为原样复制，保存不能因转换失败而失败。
-125. **误区：自动保存每次 OCR/每次进页面都写一条。**
-     - 正确做法：默认关闭；开启后仅在**新识别结果**时写入，并用
-       photo id + mode + text 做会话内去重；缓存命中不重复保存。
-126. **误区：清空语料只删数据库行，图片副本留在磁盘。**
-     - 正确做法：`HistoryStore.clear` 同时删除所有 `image_path` 和 corpus/images
-       目录内的文件；设置/语料页二次确认后调用并 invalidate 列表。
-127. **误区：清缓存时删除用户词典或已安装模型。**
-     - 正确做法：设置里的“清除词典资源缓存”只删
-       `getApplicationCacheDirectory()/mdict` 并失效渲染 LRU；“清除模型缓存”
-       只删 `.part`/`.importing`；用户词典/UniDic/已安装模型不得触碰。
-128. **误区：用 `SharedPreferences` 的无前缀 key 写测试。**
-     - 正确做法：`setMockInitialValues` 使用 `flutter.` 前缀（如
-       `flutter.app_onboarding_completed`）；现有 widget 测试必须显式种入
-       已完成引导，否则会停在 `/onboarding`。
-129. **误区：为桌面 SQLite 单测添加 `sqflite_common_ffi` dev 依赖。**
-     - 现象：`flutter build apk` 在 native-assets 阶段尝试从 GitHub 下载
-       `libsqlite3.*.android.so`，本机 GitHub 不可达，直接构建失败（即使只是
-       dev dependency）。
-     - 正确做法：不要加入该依赖；HistoryStore 的测试只覆盖纯函数（图片压缩、
-       block JSON），UI 保存用 fake `HistoryStore`。若将来必须测数据库，先解决
-       sqlite3 的 no-download/system 配置并验证 Android 构建。
-130. **误区：debug/集成测试后直接 `flutter build apk --release`。**
-     - 现象：`GeneratedPluginRegistrant.java` 仍包含 `integration_test`，release
-       编译报 `パッケージdev.flutter.plugins.integration_testは存在しません`。
-     - 正确做法：先跑一次
-       `flutter build apk --release --target-platform android-arm64
-       --split-per-abi --config-only` 重新生成 release 注册文件，再跑正式 release
-       build；`flutter clean` 不一定能解决。不要改注册文件本身。
+> **已迁移**：原 §5.1–§5.14 的 129 条误区/解决方案已移至
+> `docs/project_tips.md`（`T-001`–`T-129`）。**今后的误区只在该文件新增**；
+> 本文件不再保留误区正文。
+>
+> 何时查看：遇到报错/异常行为/准备重复试错前；先查
+> `docs/project_tips.md` 附录 A 的症状表，再按 `T-###` 阅读完整条目。
 
 ## 6. 关键文件
+
+> 文档用途/查阅时机见 §0；以下只列代码、模型清单与开发数据路径。
 
 ```text
 lib/main.dart, lib/bootstrap.dart, lib/app.dart               # 启动页 / go_router
@@ -1308,24 +761,6 @@ integration_test/ocr_android_test.dart                        # 横向/倾斜/�
 android/app/src/main/kotlin/com/rikai/mobile/MainActivity.kt  # 权限 MethodChannel 原生侧
 android/app/src/main/AndroidManifest.xml                      # 文件权限
 android/app/build.gradle.kts                                  # SDK/NDK 见 project-data §1
-docs/DEVELOPMENT_PLAN.md                                      # MVP 计划（Phase 6 见设计 v2/契约）
-docs/design-tokens.md                                         # UI 强制规范
-assets/fonts/README.md                                        # 字体下载说明（字体不入库）
-docs/phase0-status.md, docs/phase1-status.md,
-docs/phase2-status.md, docs/phase3-status.md,
-docs/phase3.5-status.md, docs/phase4-status.md               # 阶段验证结果
-docs/phase4.5-status.md                                      # OCR 收敛（已完成）
-docs/phase5-status.md                                        # 语料/引导/发布进展
-docs/phase6-agent-design.md                                  # Phase 6 设计 v2
-docs/phase6-agent-contracts.md                               # Phase 6 契约/schema/状态机
-docs/phase6-status.md                                        # Phase 6 实现记录（P6.1–P6.5）
-docs/project-data.md                                         # 测试/环境/数据/固定文案单一来源
-docs/project-rules.md                                        # 正面/反面项目规则单一来源
-docs/agent_docs/                                             # Agent 管线评审/已知问题（开发前必读）
-docs/agent_docs/device-feedback-2026-10-31.md                # F1–F17 实机反馈修正计划/波次
-docs/schemas/agent/                                          # Agent JSON Schema
-docs/dev-setup.md                                             # 构建/数据/缓存/集成测试
-docs/adr/                                                     # 四个架构决策（含 0004 Agent 边界）
 tool/spike_mdict.dart                                         # MDict 主机 spike
 integration_test/mecab_android_test.dart                      # 设备端 MeCab/权限/UI 测试
 integration_test/mdict_android_test.dart                      # 设备端 MDict/渲染/UI 测试
@@ -1373,7 +808,7 @@ C:\Projects\Rikai-Mobile\mdicts\講談社 日本語大辞典 第二版 双解版
 
 - 环境/版本/测试/性能基线统一见 `docs/project-data.md` §1–§5；以下只保留构建/
   设备测试命令与历史验证记录，不再重复当前数值。NDK 由
-  `android/app/build.gradle.kts` 固定，数值见 `project-data.md` §1。
+  `android/app/build.gradle.kts` 固定，数值见 `docs/project-data.md` §1。
 - 构建命令（在 `C:\Projects\Rikai-Mobile`）：
 
 ```powershell

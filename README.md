@@ -11,8 +11,9 @@ hardening are pending.
 
 > Current test/device/performance/build/environment data lives in
 > [docs/project-data.md](docs/project-data.md). Normative MUST/MUST NOT rules
-> live in [docs/project-rules.md](docs/project-rules.md). Other documents link
-> to them instead of copying current values or rule text.
+> live in [docs/project-rules.md](docs/project-rules.md). Pitfalls and proven
+> fixes live in [docs/project_tips.md](docs/project_tips.md). Other documents
+> link to them instead of copying current values, rule text or pitfall text.
 
 ## Status
 
@@ -127,8 +128,9 @@ Phase 6 P6.1–P6.5 core is implemented; 主页功能按钮的数量、顺序和
   that open the existing entry page. Provider settings are available under
   Settings → 词典助手.
 
-Still pending: the 2026-10-31 real-device feedback backlog (Chinese-first
-language, app-level dictionary-profile confirmation queue, multi-image input,
+Still pending: the 2026-10-31 real-device feedback backlog (implement the
+confirmed Chinese-first default and remove input-script inference, app-level
+dictionary-profile confirmation queue, multi-image input,
 lookup completeness/coverage review and related UI), then P6.6 multi-OCR
 variants/dictionary-assisted repair and P6.7 annotation DSL/Markdown/ruby/pitch/
 history/release polish. Real-network provider calls, secure-storage device I/O,
@@ -194,6 +196,7 @@ build contains the P6.1–P6.5 Agent/provider implementation; P6.6/P6.7 and the
 - [Project rules](docs/project-rules.md)
 - [Project data (single source)](docs/project-data.md)
 - [Design tokens](docs/design-tokens.md)
+- [Project tips (pitfalls)](docs/project_tips.md)
 - [Phase 0 status](docs/phase0-status.md)
 - [Phase 1 status](docs/phase1-status.md)
 - [Phase 2 status](docs/phase2-status.md)

@@ -28,6 +28,8 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
 11. [../phase6-status.md](../phase6-status.md) —— 当前实现记录。
 12. [../adr/0004-agent-capability-boundary.md](../adr/0004-agent-capability-boundary.md)
     —— 能力边界决策。
+13. [../project_tips.md](../project_tips.md) —— 项目误区/踩坑与已验证解决方式；
+    遇到 Agent 管线、UI、构建或设备异常时先查 `T-###`。
 
 ## 硬规则
 

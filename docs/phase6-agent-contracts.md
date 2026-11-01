@@ -4,6 +4,9 @@
 > `ToolResult`、`unidic.tokenize`、`mdict.lookup`、`mdict.suggest`、预算/可见性）
 > 仅作为未来契约保留；`lib/services/agent/tools/` 已删除，模型请求不携带 tools。
 >
+> **2026-11-01 语言决策**：默认输出/UI 语言为中文（`zh`）；旧 `follow` 映射为
+> `zh`；禁止按输入假名/拉丁字符推断。§5.2 是已确认契约，代码实现仍待 F1/F17。
+>
 > 规范性 MUST/MUST NOT 规则见 `docs/project-rules.md`；当前预算/上限和固定文案
 > 见 `docs/project-data.md`。本文件只保留 Agent 字段、错误码、状态机和未来
 > tool 契约，不重复规则正文或当前实现数值。
@@ -439,7 +442,7 @@ class ToolResult {
 - 每个用户请求最多一次覆盖审查 + 一次回退；失败/无重复/无可追溯 query 时保留
   原证据并显示 warning，不让整次 run 失败。
 
-### 5.2 输出语言（2026-10-31 F1，待实现）
+### 5.2 输出语言（2026-10-31 F1；2026-11-01 决策确认，代码待实现）
 
 - `AgentResponseLanguage` 默认 `zh`；旧 `follow` 迁移为 `zh`，不得按输入假名/
   拉丁字符推断语言。

@@ -379,7 +379,7 @@ DB 增加 onUpgrade。
   build”；`README.md:175-177` 又说“current build contains no Agent/provider
   implementation”；与 `README.md:17-22, 97-129` 的 P6.1–P6.5 已实现矛盾。
 - **CLAUDE.md**：`CLAUDE.md:45-48` 仍说主页“当前四个按钮、未实施前不得新增第五
-  个”，而 `CLAUDE.md:78` 与 §5.11/§5.12 已按五个按钮描述；Phase 6 状态段落也
+  个”，而 `CLAUDE.md` §1 与 `project_tips.md` T-081 已按五个按钮描述；Phase 6 状态段落也
   已说五个。需要统一。
 - **共享 OcrWorkflow**：README/ADR/CLAUDE 声称 UI 与 Agent 共用
   `OcrWorkflow`；实际 `lib/services/ocr/ocr_workflow.dart` 只有定义，无生产

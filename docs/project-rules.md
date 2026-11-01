@@ -4,13 +4,14 @@
 > 只引用规则 ID 或链接本文件，不再复制规则正文。
 >
 > - 数据/数字/固定文案：`docs/project-data.md`
+> - 误区/踩坑与解决方案：`docs/project_tips.md`
 > - UI 视觉数值：`docs/design-tokens.md`
 > - Agent 字段/错误码/Schema：`docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > - 架构决策：`docs/adr/`
 > - 历史阶段记录：`docs/phase*-status.md`（只代表当时状态）
 >
 > 最后同步：2026-11-01。规则变更只改本文件；数据变更只改 `project-data.md`；
-> 视觉数值变更只改 `design-tokens.md`。
+> 视觉数值变更只改 `design-tokens.md`；误区变更只改 `project_tips.md`。
 
 ## 0. 权威层级与写法
 
@@ -20,7 +21,9 @@
 4. **Agent 字段/错误码/状态机**：`docs/phase6-agent-contracts.md` + `docs/schemas/agent/`。
 5. **架构决策**：`docs/adr/`。
 6. **历史阶段**：`docs/phase*-status.md`；允许保留“当时值”，不得当作当前规则/数据。
-7. `README.md`、`CLAUDE.md` 及其他文档只做摘要和引用；与上面冲突时以上面为准并修正
+7. **误区/踩坑**：`docs/project_tips.md`；只记录历史经验与解决方式，不复制
+   MUST/MUST NOT 规则或当前数值。
+8. `README.md`、`CLAUDE.md` 及其他文档只做摘要和引用；与上面冲突时以上面为准并修正
    摘要。
 
 规则表中的 **MUST** = 必须；**MUST NOT** = 禁止；**SHOULD** = 建议但允许有记录
@@ -45,32 +48,32 @@
 | R-SEC-01 | MUST | Provider 请求只能是文本 JSON；不得含图片、base64、路径、文件名或 EXIF | `assertNoImagePayload` + 请求体测试 | `phase6-agent-contracts` §11 |
 | R-SEC-02 | MUST | 不得把完整 MDict HTML、MDD 图片/音频或整条词条发给模型 | 只发 `htmlToPlainText` 清洗摘要（≤400 字符） | `phase6-agent-design` §8.2 |
 | R-SEC-03 | MUST | API Key 只放 `flutter_secure_storage`/Android Keystore | 禁止 SharedPreferences/SQLite/URL/仓库 | `secret_store.dart`、`adr/0004` |
-| R-SEC-04 | MUST | 日志、错误、崩溃报告不得含 Key、完整请求体、图片路径 | 日志/错误脱敏测试 | `provider_http.dart`、`CLAUDE.md` §5.13 |
+| R-SEC-04 | MUST | 日志、错误、崩溃报告不得含 Key、完整请求体、图片路径 | 日志/错误脱敏测试 | `provider_http.dart`、`project_tips.md` T-078/T-113 |
 | R-SEC-05 | MUST NOT | 不执行模型生成的代码、HTML、JS 或任意脚本 | UI 只渲染安全纯文本/结构化组件 | `phase6-agent-design` §14 |
 | R-SEC-06 | MUST | citation 只能指向 orchestrator 发放的真实词典结果 | 伪造/越界 citation 只显示为文本 | `citation_registry.dart`、`agent_validator.dart` |
 | R-SEC-07 | MUST | 所有用户可见错误必须是中文可读文案，不含原生异常/路径/堆栈/Key | 错误映射测试 | `agent_error_mapper.dart` |
-| R-SEC-08 | MUST | Provider 由用户自行配置；不内置或代管任何 Key | 仓库/CI/测试不出现真实 Key | `CLAUDE.md` §5.13 |
-| R-SEC-09 | MUST | 外部路径必须先确认 All Files Access；应用专属外部目录除外 | `ensurePathAccess` + 权限引导 | `CLAUDE.md` §5.12、`settings` |
-| R-SEC-10 | MUST | 用户 UniDic/MDict 目录只读；不得写入 `mecabrc`、缓存或档案 | 私有 `mecabrc`/私有 SQLite | `adr/0002`、`CLAUDE.md` §5.2 |
+| R-SEC-08 | MUST | Provider 由用户自行配置；不内置或代管任何 Key | 仓库/CI/测试不出现真实 Key | `project_tips.md` T-078 |
+| R-SEC-09 | MUST | 外部路径必须先确认 All Files Access；应用专属外部目录除外 | `ensurePathAccess` + 权限引导 | `project_tips.md` T-088、`settings` |
+| R-SEC-10 | MUST | 用户 UniDic/MDict 目录只读；不得写入 `mecabrc`、缓存或档案 | 私有 `mecabrc`/私有 SQLite | `adr/0002`、`project_tips.md` T-006/T-007 |
 
 ## 3. 架构与集成（R-ARCH）
 
 | ID | 级别 | 规则 | 反例 / 验证 | 权威细节 |
 |---|---|---|---|---|
 | R-ARCH-01 | MUST | OCR 统一使用 ONNX Runtime | 不引入第二套推理运行时 | `adr/0001` |
-| R-ARCH-02 | MUST NOT | 不引入 Paddle-Lite/OpenCV/NDK r21/`.nb` 模型 | 不编译 `PaddleOCR4Android` 核心 | `adr/0001`、`CLAUDE.md` §5.1 |
+| R-ARCH-02 | MUST NOT | 不引入 Paddle-Lite/OpenCV/NDK r21/`.nb` 模型 | 不编译 `PaddleOCR4Android` 核心 | `adr/0001`、`project_tips.md` T-001 |
 | R-ARCH-03 | MUST | 横向 PaddleOCR、纵向 MangaOCR；auto 只返回一个引擎 | mixed 结果 / 按区域混合禁止 | `CLAUDE.md` §2.10 |
 | R-ARCH-04 | MUST | 手动 vertical 缺 MangaOCR 必须报 `MODEL_MISSING`；不能静默走横向 | 错误码测试 | `ocr_service.dart` |
 | R-ARCH-05 | MUST | 可选模型懒加载；横向模式不得创建 Manga session；readiness 先 stat | 懒加载测试 | `phase4.5-status`、`ocr_service.dart` |
 | R-ARCH-06 | MUST | 90/270 旋转后必须重新 DBNet；textline 180° 只在 auto 横向 | OCR 设备套件 | `phase4.5-status` |
-| R-ARCH-07 | MUST | UniDic/MDict 原地读取，不复制；MCab 用私有 `mecabrc` | 1.3GB 复制/写用户目录禁止 | `adr/0002`、`CLAUDE.md` §5.2 |
+| R-ARCH-07 | MUST | UniDic/MDict 原地读取，不复制；MCab 用私有 `mecabrc` | 1.3GB 复制/写用户目录禁止 | `adr/0002`、`project_tips.md` T-006/T-007 |
 | R-ARCH-08 | MUST | UniDic feature 行必须用引号感知 CSV 解析；字段异常降级为可点击/无注音 | 不用 `split(',')` | `mecab_output_parser.dart` |
-| R-ARCH-09 | MUST | MDict 走长生命周期 worker isolate；`@@@LINK` 最多 3 层；`Encrypted:2` 允许，LZO/v3 拒绝 | 设备 MDict 测试 | `adr/0003`、`CLAUDE.md` §5.3 |
-| R-ARCH-10 | MUST | MDict HTML 在离线 WebView 渲染；禁 JS/网络；清洗 HTML；MDD 重写为 `file://`；禁止 `flutter_html` | 注入/网络测试 | `entry_renderer.dart`、`CLAUDE.md` §5.3 |
+| R-ARCH-09 | MUST | MDict 走长生命周期 worker isolate；`@@@LINK` 最多 3 层；`Encrypted:2` 允许，LZO/v3 拒绝 | 设备 MDict 测试 | `adr/0003`、`project_tips.md` T-011/T-013 |
+| R-ARCH-10 | MUST | MDict HTML 在离线 WebView 渲染；禁 JS/网络；清洗 HTML；MDD 重写为 `file://`；禁止 `flutter_html` | 注入/网络测试 | `entry_renderer.dart`、`project_tips.md` T-014 |
 | R-ARCH-11 | MUST | 模型运行时下载/本地导入；精确 URL/SHA 以 `assets/models/manifest.json` 为准；不提交模型 | `git check-ignore` | `models.md`、`manifest.json` |
-| R-ARCH-12 | MUST | 字体不入库；用户按 `assets/fonts/README.md` 下载 | 构建缺失字体只提示下载 | `CLAUDE.md` §1/§5.5 |
+| R-ARCH-12 | MUST | 字体不入库；用户按 `assets/fonts/README.md` 下载 | 构建缺失字体只提示下载 | `CLAUDE.md` §1、`project_tips.md` T-031 |
 | R-ARCH-13 | MUST | 查词逻辑由 `LookupGateway` 共享；UI 与 Agent 不复制查词选择/排序 | 代码审查 | `lookup_gateway.dart` |
-| R-ARCH-14 | MUST | 不删除 `unidic/`、`mdicts/`、`third_party` 参考数据来“清理仓库” | 仓库卫生检查 | `CLAUDE.md` §5.5 |
+| R-ARCH-14 | MUST | 不删除 `unidic/`、`mdicts/`、`third_party` 参考数据来“清理仓库” | 仓库卫生检查 | `project_tips.md` T-023 |
 
 ## 4. Agent 流水线（R-AGENT）
 
@@ -93,7 +96,7 @@
 | R-AGENT-15 | MUST | F1–F17/P6.6/P6.7 未完成前，不把这些能力写成已支持 | 文档/UI 审查 | `device-feedback`、`phase6-status` |
 | R-AGENT-16 | MUST | 运行状态归应用级 `AgentRunController`；离开页面不取消；返回恢复最新进度；只有显式“停止”才取消 | 生命周期测试 | `agent-lifecycle-and-edge-cases` |
 | R-AGENT-17 | MUST | 真实 provider/API Key、secure storage、真实词典 sample/suggest、arm64 Agent 未验收前不得声称已验证 | 状态文档 | `phase6-status` |
-| R-AGENT-18 | MUST | 模型输出语言/UI 语言由显式设置决定，不再按输入文本启发式推断（F1/F17） | 语言测试 | `device-feedback` F1/F17；当前 partial |
+| R-AGENT-18 | MUST | 默认输出/UI 语言为中文（zh）；旧 `follow` 必须映射为 `zh`；禁止按输入文本的假名/拉丁字符推断语言（F1/F17） | 日语输入 + 默认设置 → 中文 UI/结果；旧 `follow` → 中文；不得读取 `sourceText` 推断 | `project-data` §8.4；`device-feedback` F1/F17 |
 
 ## 5. UI / UX（R-UI）
 
@@ -120,13 +123,13 @@
 |---|---|---|---|---|
 | R-DEV-01 | MUST | 固定 minSdk/compileSdk/targetSdk/NDK，禁止降级 | 检查 `build.gradle.kts` | `project-data` §1 |
 | R-DEV-02 | MUST | 阶段结束跑 `flutter analyze`、`flutter test`、debug build；数据只写 `project-data` | CI/本地验证 | `project-data` §2/§5 |
-| R-DEV-03 | MUST NOT | 用户未明确要求时不得 commit/reset/push，不覆盖未提交改动 | `git status` 检查 | `CLAUDE.md` §5.4 |
-| R-DEV-04 | MUST NOT | 模型/字体/词典/UniDic/API Key 不入库 | `.gitignore`/`git ls-files` | `CLAUDE.md` §5.5 |
+| R-DEV-03 | MUST NOT | 用户未明确要求时不得 commit/reset/push，不覆盖未提交改动 | `git status` 检查 | `project_tips.md` T-020 |
+| R-DEV-04 | MUST NOT | 模型/字体/词典/UniDic/API Key 不入库 | `.gitignore`/`git ls-files` | `project_tips.md` T-021/T-022 |
 | R-DEV-05 | MUST | 分发前替换 release debug keystore | 检查 `build.gradle.kts` TODO | `phase5-status` |
-| R-DEV-06 | MUST | 集成测试后手动安装前重新 debug build；release 前先 `--config-only` | 构建检查 | `CLAUDE.md` §5.8/§5.14 |
-| R-DEV-07 | MUST | 所有文件访问用原生 MethodChannel，不用 `permission_handler` | Android 审查 | `CLAUDE.md` §5.4 |
-| R-DEV-08 | MUST NOT | 不添加 `sqflite_common_ffi`（会触发 Android native-assets 下载失败） | 依赖审查 | `CLAUDE.md` §5.14 |
-| R-DEV-09 | MUST | 主机 MeCab/MDict 脚本放隔离 Dart 包，不在根包 `dart run` | 开发流程 | `CLAUDE.md` §5.2 |
+| R-DEV-06 | MUST | 集成测试后手动安装前重新 debug build；release 前先 `--config-only` | 构建检查 | `project_tips.md` T-040/T-129 |
+| R-DEV-07 | MUST | 所有文件访问用原生 MethodChannel，不用 `permission_handler` | Android 审查 | `project_tips.md` T-015 |
+| R-DEV-08 | MUST NOT | 不添加 `sqflite_common_ffi`（会触发 Android native-assets 下载失败） | 依赖审查 | `project_tips.md` T-128 |
+| R-DEV-09 | MUST | 主机 MeCab/MDict 脚本放隔离 Dart 包，不在根包 `dart run` | 开发流程 | `project_tips.md` T-010 |
 | R-DEV-10 | MUST | 模型下载/导入必须有许可确认、SHA-256、断点续传；清理只删临时文件 | 模型页/测试 | `models.md`、`phase4.5-status` |
 
 ## 7. 文档、数据与文案治理（R-DOC）
@@ -139,8 +142,9 @@
 | R-DOC-04 | MUST | Agent 字段/错误码/状态机只在 contracts/schemas 维护 | 在 design/README 另立字段表 | `phase6-agent-contracts`、`docs/schemas/agent` |
 | R-DOC-05 | MUST | ADR 只记录决策；phase status 只记录当时快照，不得写当前规则/数据 | 在 phase 文档更新当前值 | `docs/adr/`、`docs/phase*-status.md` |
 | R-DOC-06 | MUST | `README.md`/`CLAUDE.md` 只做摘要和引用；发现与权威文档冲突时修正摘要 | 摘要复制冲突数值/规则 | `README`、`CLAUDE.md` |
-| R-DOC-07 | MUST | 冲突处理：规则→本文件；数据→project-data；视觉→design-tokens；字段→contracts；历史→phase；修复低权威文档 | 任意文档冲突 | 本文件 §0 |
+| R-DOC-07 | MUST | 冲突处理：规则→本文件；数据→project-data；视觉→design-tokens；字段→contracts；误区→project-tips；历史→phase；修复低权威文档 | 任意文档冲突 | 本文件 §0 |
 | R-DOC-08 | MUST | 数据变更更新 `last_verified`/`last_verified_code_commit`；规则变更更新本文件版本/日期；历史值标注“历史值” | 文档审查 | `project-data` 头部 |
+| R-DOC-09 | MUST | 误区/踩坑与解决方案只在 `project_tips.md` 维护（`T-###`）；其他文档只引用 T-ID/链接 | 在 CLAUDE/README/status 新增误区正文 | `project_tips.md` |
 
 ## 8. 当前未来/部分规则
 
@@ -150,7 +154,7 @@
 |---|---|---|
 | R-AGENT-02 tool loop | future | 只有新 ADR/批准后才可恢复；当前无模型工具 |
 | R-AGENT-14 F7 coverage | future | F6 完成后才做；预算见 `project-data` §8 |
-| R-AGENT-18 F1/F17 language | partial | 已确定显式设置原则，完整语言表/校验待 Wave 2–3 |
+| R-AGENT-18 F1/F17 language | partial | 2026-11-01 决策：默认 zh、旧 `follow` → zh、禁止输入推断；代码仍默认 `follow`/仍有输入启发式，待 Wave 2 |
 | R-AGENT-09 F8 session dictionary | partial | 当前写隔离已满足，独立持久化待 Wave 2 |
 | R-UI-09 F4/F9 | partial | 短胶囊/3.5 行规范已定，设备/窄屏验收待 Wave 1/4 |
 | F11 多图 | future | 当前 UI 单图；上限 6 见 `project-data` §8 |
@@ -164,4 +168,6 @@
 4. Agent 字段/错误码变化：只改 contracts/schemas + 代码/测试。
 5. 其他文档：只加/改引用链接；发现重复时删除旧正文，保留一句“规则见
    `project-rules.md` / 数据见 `project-data.md`”。
-6. 历史 phase 文档：保留当时值，标注“历史值/历史快照”，不要用当前值回填。
+6. 误区/经验变化：只改 `project_tips.md`，追加 `T-###` 并同步附录 A；不要复制到
+   `CLAUDE.md`/README/phase status。
+7. 历史 phase 文档：保留当时值，标注“历史值/历史快照”，不要用当前值回填。

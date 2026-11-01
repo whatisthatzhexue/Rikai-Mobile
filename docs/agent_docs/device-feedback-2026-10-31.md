@@ -14,6 +14,9 @@
 - 约束：规则见 `docs/project-rules.md`（R-SEC/R-AGENT/R-DEV），数据/文案见
   `docs/project-data.md`；F15/F16 是用户明确要求的非 Agent 修复，不能借机改动
   查词/OCR 的核心行为。
+- **2026-11-01 语言决策**：F1/F17 的“默认中文（zh）、旧 `follow` 映射为 zh、
+  禁止按输入假名/拉丁字符推断”已确认；下表的 `open` 只表示实现未完成，不再
+  重新讨论默认值。
 
 关联文档：
 
@@ -66,7 +69,7 @@ Wave 4  回归、设备验收、状态表更新
 
 | ID | 反馈摘要 | 当前状态 | 处理波次 | 依赖 |
 |---|---|---|---|---|
-| F1 | 默认输入/输出中文；设置语言后结果仍不总是目标语言 | open；默认 `follow`，无结果语言校验 | 2（默认/文案）+3（校验） | F17 |
+| F1 | 默认输入/输出中文；设置语言后结果仍不总是目标语言 | open；决策已确认：默认 `zh`、旧 `follow`→`zh`、禁止输入推断；代码仍 `follow`，无结果语言校验 | 2（默认/文案）+3（校验） | F17 |
 | F2 | 离开 Agent 页后档案不保存/队列未堆积，查词提前开始 | open；页面 detach 后按 `skipOnce` 继续 | 2 | F1a、F8 |
 | F3 | 离开页面期间也要计算思考时间 | 待验证；`startedAt` 已在应用级 snapshot，页面标签为 wall-clock，缺回归测试 | 2 | F2 |
 | F4 | 依据气泡改为短胶囊并自动换行 | fixed（unit/widget；设备视觉待验） | 1 | — |
@@ -82,7 +85,7 @@ Wave 4  回归、设备验收、状态表更新
 | F14 | AI 结果底部循环/复制；用户气泡长按复制/修改 | open；无操作行、无结果 Markdown、无编辑重发 | 2 | F2、F13 |
 | F15 | 词条内跳转只查当前词条所在词典，完全匹配后取首个 | fixed（unit；设备词条跳转待验） | 1 | —（非 Agent） |
 | F16 | OCR 模型后台下载，返回模型页仍显示进度 | fixed（controller unit；设备下载页待验） | 1 | —（非 Agent） |
-| F17 | Agent 本地 UI 文案跟随输出语言，禁用输入启发式 | open；`resolveAgentUiLanguage` 按假名/拉丁推断 | 2 | F1a |
+| F17 | Agent 本地 UI 文案跟随输出语言，禁用输入启发式 | open；决策已确认：禁止输入推断；代码 `resolveAgentUiLanguage` 仍按假名/拉丁推断 | 2 | F1a |
 
 ## 2. 共同基础设施（先定义，避免每项各造一套）
 
@@ -132,7 +135,7 @@ maxCoverageFallback        1    // F7 每个用户请求最多回退一次
 
 ### F1｜默认中文，并提高输出语言稳定性
 
-现状：
+当前实现（待改）：
 
 - `AppSettings.agentResponseLanguage` 默认 `'follow'`
   （`lib/services/storage/settings_store.dart:20-21`）。
@@ -143,10 +146,10 @@ maxCoverageFallback        1    // F7 每个用户请求最多回退一次
 - prompt 只有 `AgentResponseLanguage.instruction` 的软约束
   （`lib/core/models/agent/agent_profile.dart:50-57`），没有结果语言校验。
 
-方案：
+方案（默认语言决策已于 2026-11-01 确认；结果语言校验仍待实现）：
 
 1. 默认值改为 `zh`；`SettingsStore.load()` 对缺失值使用 `zh`。已有
-   `follow` 建议一次性迁移为 `zh`，从 Agent 设置移除“跟随输入”；如需保留枚举，
+   `follow` 一律迁移为 `zh`，从 Agent 设置移除“跟随输入”；如需保留枚举，
    仅用于读取旧配置，解析时直接映射到中文。
 2. system prompt 增加明确的“输出语言契约”：所有人类可读字段用目标语言；日语仅
    出现在原文引用、词形/读音/词典例句中；不得把日语原文当作用户解释。
@@ -637,18 +640,18 @@ initial evidence (F6 modes)
 
 ### F17｜本地 UI 文案跟随输出语言，禁用输入启发式
 
-现状：
+当前实现（待改）：
 
 - `resolveAgentUiLanguage(setting, sourceText)` 在 `follow` 下按假名/拉丁推断，
   会把“输入日语、想翻成中文”的用户误判为日文 UI
   （`lib/services/agent/agent_messages.dart:7-29`）。
 - Agent 页面/结果页仍有大量硬编码中文（如“严格模式”“查看诊断”“原文”“逐句理解”）。
 
-方案：
+方案（2026-11-01 已确认）：
 
 - `AgentUiLanguage` 只由显式 `AgentResponseLanguage` 决定：
   - `zh → chinese`，`en → english`，`ja → japanese`；
-  - 旧 `follow` → 中文（或从设置移除，见 F1）；**绝不读取输入文本**。
+  - 旧 `follow` → 中文（2026-11-01 决策；或从设置移除，见 F1）；**绝不读取输入文本**。
 - 新增 `AgentUiStrings` 集中管理 Agent 功能区文案：AppBar、会话设置、词典选择、
   composer、阶段/进度/思考时间、错误卡、结果区标题、citation/证据、熟悉期 sheet、
   Agent 设置页按钮/说明。默认中文，en/ja 提供对应表。
