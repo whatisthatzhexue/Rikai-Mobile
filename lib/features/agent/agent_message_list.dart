@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -10,8 +11,9 @@ import '../../core/models/agent/agent_tool.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/ui/no_scrollbar_behavior.dart';
 import '../../core/ui/rikai_toast.dart';
-import '../../services/agent/agent_messages.dart';
+import '../../services/agent/agent_result_markdown.dart';
 import '../../services/agent/agent_run.dart';
+import '../../services/agent/agent_ui_strings.dart';
 import 'agent_actions.dart';
 import 'agent_evidence_panel.dart';
 import 'agent_message_widgets.dart';
@@ -36,6 +38,8 @@ class AgentMessageList extends ConsumerWidget {
     required this.run,
     required this.onRetry,
     required this.onLooseRetry,
+    required this.onRegenerate,
+    required this.onEditMessage,
   });
 
   final ScrollController scrollController;
@@ -44,15 +48,15 @@ class AgentMessageList extends ConsumerWidget {
   final AgentRunSnapshot run;
   final VoidCallback onRetry;
   final VoidCallback onLooseRetry;
+  final VoidCallback onRegenerate;
+  final VoidCallback onEditMessage;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final result = run.result;
-    final uiLanguage = resolveAgentUiLanguage(
-      run.responseLanguage,
-      run.sentText,
-    );
+    final result = run.result ?? run.retainedResult;
+    final uiLanguage = resolveAgentUiLanguage(run.responseLanguage);
+    final strings = AgentUiStrings.of(uiLanguage);
     return ScrollConfiguration(
       behavior: const NoScrollbarBehavior(),
       child: ListView(
@@ -68,12 +72,33 @@ class AgentMessageList extends ConsumerWidget {
             AgentEmptyState(
               hasProvider: providers.isNotEmpty,
               onSettings: () => context.push('/agent-settings'),
+              strings: strings,
+            ),
+          if (run.pendingProfileCount > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+              child: Text(
+                strings.pendingProfiles(run.pendingProfileCount),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: AgentTokens.helper,
+                  color: AppColors.warning,
+                ),
+              ),
             ),
           if (run.sentText.isNotEmpty || run.sentImage)
             AgentUserBubble(
               text: run.sentText,
               hasImage: run.sentImage,
               imagePaths: run.sentImagePaths,
+              strings: strings,
+              onLongPress: run.sentText.isEmpty
+                  ? null
+                  : () => _showUserMessageActions(
+                      context,
+                      run.sentText,
+                      strings,
+                      onEditMessage,
+                    ),
             ),
           if (run.isRunning ||
               result != null ||
@@ -85,7 +110,9 @@ class AgentMessageList extends ConsumerWidget {
               mode: run.mode,
               running: run.isRunning,
               cancelled: run.status == AgentRunStatus.cancelled,
-              error: run.errorMessage,
+              error: run.errorMessage == null
+                  ? null
+                  : strings.errorMessageFor(run.errorCode, run.errorMessage!),
               errorDetail: run.errorDetail,
               stageMessage: run.stageMessage,
               startedAt: run.startedAt,
@@ -94,7 +121,9 @@ class AgentMessageList extends ConsumerWidget {
               evidenceCount: run.evidenceCount,
               citationCount: run.citationCount,
               uiLanguage: uiLanguage,
+              strings: strings,
               result: result,
+              resultRetainedAfterFailure: run.resultRetainedAfterFailure,
               onRetry: providers.isEmpty ? null : onRetry,
               onLooseRetry:
                   providers.isNotEmpty &&
@@ -103,16 +132,23 @@ class AgentMessageList extends ConsumerWidget {
                   ? onLooseRetry
                   : null,
               onSettings: () => context.push('/agent-settings'),
+              onRegenerate: run.result == null || providers.isEmpty
+                  ? null
+                  : onRegenerate,
+              onCopy: run.result == null
+                  ? null
+                  : () => _copyResult(context, run.result!, strings),
             ),
           if (result != null)
             AgentEvidencePanel(
               result: result,
+              strings: strings,
               onCitationTap: (citation) =>
                   unawaited(openAgentCitation(context, ref, citation)),
               onRetryProfile: (issue) {
                 final selectedProvider = provider;
                 if (selectedProvider == null) {
-                  RikaiToast.show(context, '请先配置模型');
+                  RikaiToast.show(context, strings.modelRequired);
                   return;
                 }
                 unawaited(
@@ -128,5 +164,62 @@ class AgentMessageList extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _showUserMessageActions(
+    BuildContext context,
+    String text,
+    AgentUiStrings strings,
+    VoidCallback onEdit,
+  ) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Text(
+                strings.userMessageMenu,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontSize: AgentTokens.evidenceTitle,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy_outlined, size: AppSizes.icon),
+              title: Text(strings.copy),
+              onTap: () => Navigator.of(context).pop('copy'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined, size: AppSizes.icon),
+              title: Text(strings.edit),
+              onTap: () => Navigator.of(context).pop('edit'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted) return;
+    if (action == 'copy') {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (context.mounted) RikaiToast.show(context, strings.copyDone);
+    } else if (action == 'edit') {
+      onEdit();
+    }
+  }
+
+  Future<void> _copyResult(
+    BuildContext context,
+    AgentRunResult result,
+    AgentUiStrings strings,
+  ) async {
+    final markdown = buildAgentResultMarkdown(result, strings);
+    await Clipboard.setData(ClipboardData(text: markdown));
+    if (context.mounted) RikaiToast.show(context, strings.copyDone);
   }
 }

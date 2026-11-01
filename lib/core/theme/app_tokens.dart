@@ -187,6 +187,8 @@ abstract final class AgentTokens {
   static const double imageThumbnail = 64;
   static const double sentImageWidth = 160;
   static const double sentImageHeight = 120;
+  static const double actionIcon = 20;
+  static const double actionTapTarget = 40;
 }
 
 /// Slides a new page in from the right and leaves the previous page in place.

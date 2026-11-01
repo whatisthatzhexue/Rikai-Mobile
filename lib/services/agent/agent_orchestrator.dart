@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import '../../core/models/agent/agent_analysis.dart';
 import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
-import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/agent/agent_quote.dart';
 import '../../core/models/agent/agent_tool.dart';
@@ -68,6 +67,7 @@ class AgentOrchestrator {
   Future<AgentRunResult> run(
     AgentRunRequest request, {
     ProfileConfirmationCallback? onProfile,
+    AgentProfileReviewCallback? onProfilesGenerated,
     AgentStageCallback? onStage,
     AgentCancellation? cancellation,
     void Function(String accumulated)? onTextDelta,
@@ -75,10 +75,7 @@ class AgentOrchestrator {
     void Function(int citations)? onEvidenceProgress,
   }) async {
     var stage = AgentStage.prepare;
-    var uiLanguage = resolveAgentUiLanguage(
-      request.responseLanguage,
-      request.userText,
-    );
+    var uiLanguage = resolveAgentUiLanguage(request.responseLanguage);
     void notify(AgentStage next, String message) {
       stage = next;
       onStage?.call(next, message);
@@ -125,19 +122,6 @@ class AgentOrchestrator {
 
       notify(AgentStage.ocr, agentStageMessage(AgentStage.ocr, uiLanguage));
       final envelope = await _buildInput(request, cancellation: cancellation);
-      if (request.responseLanguage == AgentResponseLanguage.follow) {
-        final followText = envelope.sources
-            .map(
-              (source) => source.isImage
-                  ? source.selectedVariant?.text ?? ''
-                  : source.text,
-            )
-            .join(' ');
-        uiLanguage = resolveAgentUiLanguage(
-          AgentResponseLanguage.follow,
-          followText,
-        );
-      }
       final totalChars = envelope.sources.fold<int>(
         0,
         (sum, source) =>
@@ -173,19 +157,67 @@ class AgentOrchestrator {
         );
         checkCancelled();
         try {
-          final batch = await familiarizer.ensureMany(
+          final generation = await familiarizer.generateMany(
             request.dictionaries,
-            confirm: onProfile,
+            runId: request.runId,
           );
-          for (final result in batch.results) {
+          for (final result in generation.results) {
             if (result.markdown.isNotEmpty &&
                 (result.action == FamiliarizationAction.reuse ||
                     result.action == FamiliarizationAction.created)) {
               profiles.add(result.markdown);
             }
           }
-          profileWarnings.addAll(batch.warnings);
-          unavailableProfiles.addAll(batch.issues);
+          profileWarnings.addAll(generation.warnings);
+          unavailableProfiles.addAll(generation.issues);
+
+          final proposals = generation.proposals;
+          if (proposals.isNotEmpty && onProfilesGenerated != null) {
+            notify(
+              AgentStage.awaitingProfile,
+              agentStageMessage(AgentStage.awaitingProfile, uiLanguage),
+            );
+            checkCancelled();
+            final decisions = await onProfilesGenerated(
+              request.runId,
+              proposals,
+            );
+            for (var index = 0; index < proposals.length; index++) {
+              final proposal = proposals[index];
+              final decision = index < decisions.length
+                  ? decisions[index]
+                  : ProfileConfirmation(
+                      action: ProfileConfirmationAction.skipOnce,
+                      markdown: proposal.markdown,
+                    );
+              // The inbox persists the decision before releasing this future.
+              // Only a saved profile is added to this run's prompt.
+              if (decision.action == ProfileConfirmationAction.save) {
+                final markdown = decision.markdown.trim().isEmpty
+                    ? proposal.markdown
+                    : decision.markdown.trim();
+                if (markdown.isNotEmpty) profiles.add(markdown);
+              }
+            }
+          } else if (proposals.isNotEmpty && onProfile != null) {
+            // Direct callers/tests may resolve inline; the app controller uses
+            // the app-level inbox callback above.
+            for (final proposal in proposals) {
+              final decision = await onProfile(
+                proposal.profile,
+                proposal.markdown,
+              );
+              final result = await familiarizer.persistDecision(
+                proposal,
+                decision.action,
+                decision.markdown,
+              );
+              if (result.markdown.isNotEmpty &&
+                  result.action == FamiliarizationAction.created) {
+                profiles.add(result.markdown);
+              }
+            }
+          }
         } on AgentCapabilityException catch (error) {
           // A profile is an aid, not a gate. Keep going with raw evidence and
           // show the failure to the user instead of blocking the whole run.

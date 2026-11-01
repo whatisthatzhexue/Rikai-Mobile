@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models/agent/agent_evidence.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../services/agent/agent_run.dart';
+import '../../services/agent/agent_ui_strings.dart';
 import '../../services/agent/familiarization/dictionary_familiarization_service.dart'
     show DictionaryProfileIssue;
 import 'agent_result_view.dart';
@@ -13,11 +14,13 @@ class AgentEvidencePanel extends StatelessWidget {
     required this.result,
     required this.onCitationTap,
     required this.onRetryProfile,
+    required this.strings,
   });
 
   final AgentRunResult result;
   final ValueChanged<AgentCitation> onCitationTap;
   final ValueChanged<DictionaryProfileIssue> onRetryProfile;
+  final AgentUiStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +43,7 @@ class AgentEvidencePanel extends StatelessWidget {
             AppSpacing.md,
           ),
           title: Text(
-            '详细解析 · 依据 ${result.citations.length} 条',
+            strings.detailedAnalysis(result.citations.length),
             style: theme.textTheme.bodyMedium?.copyWith(
               fontSize: AgentTokens.helper,
               color: AppColors.primary,
@@ -51,6 +54,7 @@ class AgentEvidencePanel extends StatelessWidget {
               result: result,
               onCitationTap: onCitationTap,
               onRetryProfile: onRetryProfile,
+              strings: strings,
             ),
           ],
         ),

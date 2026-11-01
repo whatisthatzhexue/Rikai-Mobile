@@ -46,6 +46,7 @@ class _RecordingRunController extends AgentRunController {
     required String unidicPath,
     required AgentResponseLanguage responseLanguage,
     required AgentProfileLanguage profileLanguage,
+    AgentRunResult? retainResult,
   }) async {
     startCalled = true;
     sentText = userText;
@@ -85,10 +86,7 @@ void main() {
           enabledDictionariesProvider.overrideWithValue([_dictionary]),
           agentRunControllerProvider.overrideWith(() => controller),
         ],
-        child: MaterialApp(
-          theme: AppTheme.light(),
-          home: const AgentPage(),
-        ),
+        child: MaterialApp(theme: AppTheme.light(), home: const AgentPage()),
       ),
     );
     await tester.pumpAndSettle();

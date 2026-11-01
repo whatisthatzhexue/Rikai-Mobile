@@ -1,9 +1,9 @@
 # Agent 实机反馈修正计划（2026-10-31）
 
-- 状态：**Wave 1 已实现（F4/F5/F9/F10/F15/F16）；Wave 2–4 未开始；
-  未开始 P6.6/P6.7。**
+- 状态：**Wave 1–2 已实现（Wave 2：F8/F1a/F17/F2/F3/F11/F12/F13/F14）；
+  Wave 3–4 未开始；未开始 P6.6/P6.7。**
 - 来源：用户实机使用 P6.5 后提出的 17 项反馈（本文件按原编号 F1–F17 记录）。
-- 基线：P6.5 固定流水线、应用级 `AgentRunController`；Wave 1 后
+- 基线：P6.5 固定流水线、应用级 `AgentRunController`；Wave 2 后
   `flutter analyze` 无问题；当前测试/构建基线见
   [`docs/project-data.md`](../project-data.md) §2/§5。真实
   arm64/漫画页验收仍未完成；本文件不改变已有验证记录。
@@ -11,6 +11,11 @@
   [`docs/project-data.md`](../project-data.md) §2/§5。
   F4/F5/F9/F10 有 widget/unit 覆盖；F15 有请求范围 unit 测试；F16 有
   controller 进度/取消测试。设备手工验收仍待 Wave 4。
+- Wave 2 验证：`flutter analyze` 无问题；`flutter test` 231 passed；
+  `flutter build apk --debug` 成功。新增 F8 隔离持久化、语言/旧 `follow`
+  迁移、应用级档案队列 gate、跨页思考时间、多图/全屏查看、结果操作行/
+  Markdown/重新生成等测试。设备视觉、真实 provider、arm64 与档案管理页
+  手工验收仍待 Wave 4。
 - 约束：规则见 `docs/project-rules.md`（R-SEC/R-AGENT/R-DEV），数据/文案见
   `docs/project-data.md`；F15/F16 是用户明确要求的非 Agent 修复，不能借机改动
   查词/OCR 的核心行为。
@@ -69,23 +74,23 @@ Wave 4  回归、设备验收、状态表更新
 
 | ID | 反馈摘要 | 当前状态 | 处理波次 | 依赖 |
 |---|---|---|---|---|
-| F1 | 默认输入/输出中文；设置语言后结果仍不总是目标语言 | open；决策已确认：默认 `zh`、旧 `follow`→`zh`、禁止输入推断；代码仍 `follow`，无结果语言校验 | 2（默认/文案）+3（校验） | F17 |
-| F2 | 离开 Agent 页后档案不保存/队列未堆积，查词提前开始 | open；页面 detach 后按 `skipOnce` 继续 | 2 | F1a、F8 |
-| F3 | 离开页面期间也要计算思考时间 | 待验证；`startedAt` 已在应用级 snapshot，页面标签为 wall-clock，缺回归测试 | 2 | F2 |
+| F1 | 默认输入/输出中文；设置语言后结果仍不总是目标语言 | partial：Wave 2 已实现默认 `zh`、旧 `follow`→`zh`、文案表与强化的语言契约；结果字段语言后校验/一次修复（F1b）待 Wave 3 | 2（默认/文案）+3（校验） | F17 |
+| F2 | 离开 Agent 页后档案不保存/队列未堆积，查词提前开始 | fixed（应用级 inbox + `awaitingProfile` gate；页面返回按队列确认，不自动 skip；unit/widget 待设备验收） | 2 | F1a、F8 |
+| F3 | 离开页面期间也要计算思考时间 | fixed（`startedAt` 保持应用级 wall-clock；`awaitingProfile` 仍计时；elapsed 回归测试） | 2 | F2 |
 | F4 | 依据气泡改为短胶囊并自动换行 | fixed（unit/widget；设备视觉待验） | 1 | — |
 | F5 | 结果中的 `（q1）` 等标记太抽象 | fixed（unit/widget） | 1 | — |
 | F6 | 查词不能只完全/前方匹配；达到全局上限或搜不到更多才停 | open；当前每目标 exact 后 prefix，`60` 硬编码 | 3 | F6 前先定义 `AgentLimits` |
 | F7 | 查词结束后补做覆盖审查，最多回退一次查词 | open；无覆盖审查 schema/阶段 | 3 | F2、F6 |
-| F8 | Agent 词典选择必须独立保存，不影响查词选择 | partial；写隔离已满足，但仍从查词偏好初始化且无独立持久化 | 2 | — |
+| F8 | Agent 词典选择必须独立保存，不影响查词选择 | fixed（独立 key/模式持久化，不读不写查词偏好；unit 覆盖） | 2 | — |
 | F9 | 词典选择第 4 行露出半行（预留 3.5 行） | fixed（shared widget + widget test；设备视觉待验） | 1 | — |
 | F10 | Provider 表单中文化、DeepSeek/Claude 自动填 Base URL | fixed（widget/unit test；设备保存待验） | 1 | — |
-| F11 | 上传照片按钮先选相机/相册，支持多选、依次追加 | open；仅相册单选 | 2 | F12 可复用 |
-| F12 | 发送后的图片可点开，全屏缩放同照片集 | open；用户气泡缩略图不可点 | 2 | F11 |
-| F13 | 标题栏管理全部词典档案：删除/修改/重新生成/多选 | open；无档案管理 UI，历史按钮仍占位 | 2 | F2 |
-| F14 | AI 结果底部循环/复制；用户气泡长按复制/修改 | open；无操作行、无结果 Markdown、无编辑重发 | 2 | F2、F13 |
+| F11 | 上传照片按钮先选相机/相册，支持多选、依次追加 | fixed（底部相机/相册菜单、多图追加、可移除、6 张上限；widget 覆盖） | 2 | F12 可复用 |
+| F12 | 发送后的图片可点开，全屏缩放同照片集 | fixed（复用 `PhotoViewerPage`；widget 覆盖点击导航） | 2 | F11 |
+| F13 | 标题栏管理全部词典档案：删除/修改/重新生成/多选 | fixed（`/agent-profiles`；列表/状态/编辑/重新生成/批量删除/待确认入口；设备验收待 Wave 4） | 2 | F2 |
+| F14 | AI 结果底部循环/复制；用户气泡长按复制/修改 | fixed（操作行、Markdown 复制、长按复制/编辑、从熟悉步骤重新生成并保留旧结果；unit/widget） | 2 | F2、F13 |
 | F15 | 词条内跳转只查当前词条所在词典，完全匹配后取首个 | fixed（unit；设备词条跳转待验） | 1 | —（非 Agent） |
 | F16 | OCR 模型后台下载，返回模型页仍显示进度 | fixed（controller unit；设备下载页待验） | 1 | —（非 Agent） |
-| F17 | Agent 本地 UI 文案跟随输出语言，禁用输入启发式 | open；决策已确认：禁止输入推断；代码 `resolveAgentUiLanguage` 仍按假名/拉丁推断 | 2 | F1a |
+| F17 | Agent 本地 UI 文案跟随输出语言，禁用输入启发式 | fixed（`AgentUiStrings` 中文/英文/日文表；`resolveAgentUiLanguage` 只接收显式设置；单元/UI 测试） | 2 | F1a |
 
 ## 2. 共同基础设施（先定义，避免每项各造一套）
 
@@ -662,26 +667,28 @@ initial evidence (F6 modes)
 - 测试：日语输入 + 中文设置时 Agent 阶段/按钮全中文；英文设置时同类文案英文；
   `resolveAgentUiLanguage` 不再接收 sourceText。
 
-## 4. 数据结构与阶段增补（实施时同步契约）
+## 4. 数据结构与阶段增补（Wave 2 已落地，Wave 3 项待做）
 
 ```text
 AgentRunStatus:
-  ... awaitingProfile (F2), coverage (F7 可选) ...
+  ... awaitingProfile (F2, 已实现), coverage (F7, 待做) ...
 
 AgentRunSnapshot 新字段:
-  pendingProfileCount        // F2 文案/状态
-  coverageFallbackUsed       // F7 防止二次回退
-  coverageWarnings           // F7 非致命提示
-  retainedResult?            // F14 重新生成期间保留旧结果
+  pendingProfileCount        // F2 文案/状态（已实现）
+  retainedResult?            // F14 重新生成期间保留旧结果（已实现）
+  resultRetainedAfterFailure // F14 失败保留（已实现）
+  coverageFallbackUsed       // F7 待做
+  coverageWarnings           // F7 待做
 
-AgentLimits                  // 唯一上限来源，见 §2.1
-AgentProfileProposal         // F2 队列项
-AgentDictionaryPreferences   // F8 独立选择
-AgentLanguageValidator       // F1 结果语言检查
-AgentCoverageReview          // F7 覆盖审查结果
+AgentLimits                  // 唯一上限来源；当前用于 maxImagesPerRun，F6 全量接入待 Wave 3
+AgentProfileProposal         // F2 队列项（已实现）
+AgentDictionaryPreferences   // F8 独立选择（已实现）
+AgentLanguageValidator       // F1b 结果语言检查（Wave 3）
+AgentCoverageReview          // F7 覆盖审查结果（Wave 3）
 ```
 
-- `AgentStage.coverage`/`awaitingProfile` 必须进入状态映射、进度步骤和语言表。
+- `AgentStage.awaitingProfile` 已进入状态映射、进度步骤和语言表；`AgentStage.coverage`
+  待 Wave 3。
 - 不新增工具调用；F7 的缺失检查是 orchestrator 的一次结构化 LLM 调用，模型不能
   自行查词典。
 - 不把图片、路径、base64、完整 HTML 发给 provider；F7 输入也只含清洗摘要。
@@ -709,18 +716,28 @@ AgentCoverageReview          // F7 覆盖审查结果
 
 每项完成后 `flutter analyze`；本波结束跑 `flutter test`。
 
-### Wave 2：Agent 状态、语言、生命周期（串行）
+### Wave 2：Agent 状态、语言、生命周期（已实现）
 
-1. **F8** Agent 独立词典选择 provider（不读查词偏好）。
-2. **F1a/F17** 默认中文、移除 follow 输入推断、Agent 文案表。
-3. **F2** 应用级档案队列 + `awaitingProfile` gate + 页面返回恢复。
-4. **F3** 离开/返回思考时间回归测试。
-5. **F11** 相机/相册底部菜单 + 多图追加。
-6. **F12** 图片全屏查看（复用 `PhotoViewerPage`）。
-7. **F13** 词典档案管理页（列表/修改/删除/重新生成/多选）。
-8. **F14** 结果操作行、Markdown 复制、用户气泡复制/修改、从熟悉步骤重新生成。
+1. **F8** `AgentDictionaryPreferences` 独立 key/模式持久化，不读不写查词偏好。
+2. **F1a/F17** 默认 `zh`、旧 `follow` 迁移为 `zh`、`resolveAgentUiLanguage`
+   不再接收输入文本；`AgentUiStrings` 提供中/英/日文案表，Agent 页/设置/结果/
+   档案 sheet 均按显式输出语言取文案。
+3. **F2** `AgentProfileInboxController` 应用级队列；熟悉期拆为
+   `generateMany` + `persistDecision`；run 在 `awaitingProfile` 等待，页面
+   detach 不再 `skipOnce`；返回页面按队列显示 sheet；取消时队列以 skip 释放。
+4. **F3** `startedAt` 保持应用级；`awaitingProfile` 仍算运行中并计时；新增
+   elapsed 回归测试。
+5. **F11** 底部“拍照/从相册选择”、`pickMultiImage`、按选择顺序追加、单张移除、
+   `AgentLimits.maxImagesPerRun=6`。
+6. **F12** 用户气泡缩略图点击复用 `PhotoViewerPage`。
+7. **F13** 新增 `/agent-profiles`：列表、已信任/已拒绝/待确认/已失效、
+   编辑 Markdown、单条/批量重新生成、多选删除。
+8. **F14** AI 结果操作行（循环→复制 Markdown）、用户气泡长按复制/编辑、
+   `regenerate()` 从熟悉步骤重跑并保留旧结果直到新结果成功。
 
 说明：F2 完成前不得推进 F7/F13/F14 的档案相关部分；F13 先于 F14 的循环重生成。
+Wave 2 验证：`flutter analyze` 无问题、231 tests passed、debug APK 构建成功；
+设备视觉/真实 provider/arm64 验收留到 Wave 4。
 
 ### Wave 3：检索完整度与结果语言
 
@@ -740,30 +757,32 @@ AgentCoverageReview          // F7 覆盖审查结果
 
 ## 6. 验收清单（按反馈逐项）
 
-- [ ] F1 默认中文；日语输入不改变中文 UI/结果语言；设置英文时结果和 Agent 文案
-      为英文；语言修复失败有可见警告。
-- [ ] F2 离页期间生成继续；返回按队列处理；全部处理前不进入查词；不自动跳过。
-- [ ] F3 离页 10 秒返回，思考时间包含离页区间；无第二次 provider 请求。
+- [x] F1a 默认中文；日语输入不改变中文 UI/结果语言；设置英文时 Agent 文案与
+      prompt 语言契约切换为英文。
+- [ ] F1b 结果人类可读字段语言后校验 + 一次修复；修复失败有可见警告（Wave 3）。
+- [x] F2 离页期间生成继续；返回按队列处理；全部处理前不进入查词；不自动跳过。
+- [x] F3 离页 10 秒返回，思考时间包含离页区间；无第二次 provider 请求（elapsed
+      unit + 应用级 `startedAt`）。
 - [x] F4 依据为短胶囊、自动换行、颜色不变；触控目标仍需设备视觉/可点性验收。
 - [x] F5 结果中无 `（q1）` 等内部标记，原文 quote 仍显示。
 - [ ] F6 四种模式按 exact/prefix/suffix/incremental 递进；达全局上限或无新增
       即停止；上限来自 `AgentLimits`。
 - [ ] F7 查词后有一次覆盖审查；未满/已满分别走流程 A/B；最多回退一次；重复条目
       删除前有本地重合校验。
-- [ ] F8 Agent/查词词典选择双向隔离且各自持久化。
+- [x] F8 Agent/查词词典选择双向隔离且各自持久化。
 - [x] F9 所有词典筛选条第 4 行露出半行（共享 widget 测试）。
 - [x] F10 表单无 Provider/Base URL/small/complex 英文；DeepSeek/Claude 自动填地址；
       自定义地址不被覆盖（preset 逻辑/表单测试）。
-- [ ] F11 相机/相册底部菜单；多选/连续追加；上限可配。
-- [ ] F12 用户气泡图片可点开全屏缩放。
-- [ ] F13 标题栏档案管理；修改/删除/重新生成/多选/确认。
-- [ ] F14 结果操作行循环→复制；Markdown 无 raw JSON/reasoning；用户气泡可复制/
+- [x] F11 相机/相册底部菜单；多选/连续追加；上限可配。
+- [x] F12 用户气泡图片可点开全屏缩放。
+- [x] F13 标题栏档案管理；修改/删除/重新生成/多选/确认。
+- [x] F14 结果操作行循环→复制；Markdown 无 raw JSON/reasoning；用户气泡可复制/
       修改并从修改处重发。
 - [x] F15 词条内链接只用当前词典 + exact + 首个结果；请求范围已有 unit 测试，
       设备词条跳转待验。
 - [x] F16 下载状态提升为应用级 controller；进度/取消有 unit 测试，返回模型页
       仍显示进度待设备验收；取消仍保留 `.part`（原有下载测试）。
-- [ ] F17 Agent 本地文案由显式输出语言决定，输入启发式已删除。
+- [x] F17 Agent 本地文案由显式输出语言决定，输入启发式已删除。
 
 ## 7. 风险与边界
 

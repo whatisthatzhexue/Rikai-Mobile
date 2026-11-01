@@ -11,12 +11,13 @@ import '../../core/models/dict_info.dart';
 import 'agent_validator.dart';
 import 'ports/llm_port.dart';
 import 'familiarization/dictionary_familiarization_service.dart'
-    show DictionaryProfileIssue;
+    show AgentProfileProposal, DictionaryProfileIssue, ProfileConfirmation;
 
 enum AgentStage {
   prepare,
   ocr,
   familiarizing,
+  awaitingProfile,
   tokenizing,
   evidence,
   reasoning,
@@ -41,6 +42,7 @@ class AgentImageInput {
 class AgentRunRequest {
   const AgentRunRequest({
     required this.sessionId,
+    this.runId = '',
     required this.mode,
     required this.dictionaries,
     required this.provider,
@@ -49,10 +51,13 @@ class AgentRunRequest {
     this.images = const <AgentImageInput>[],
     this.allowFamiliarization = true,
     this.unidicPath = '',
-    this.responseLanguage = AgentResponseLanguage.follow,
+    this.responseLanguage = AgentResponseLanguage.chinese,
   });
 
   final String sessionId;
+
+  /// Internal run identity used by the app-level profile inbox.
+  final String runId;
   final AgentMode mode;
   final List<DictionaryInfo> dictionaries;
   final AgentProviderConfig provider;
@@ -119,11 +124,20 @@ class AgentCancellation extends LlmCancelToken {}
 
 typedef AgentStageCallback = void Function(AgentStage stage, String message);
 
+/// Resolves every generated profile as a batch. The app-level inbox holds the
+/// proposals until the user acts, so an absent page never implies a skip.
+typedef AgentProfileReviewCallback =
+    Future<List<ProfileConfirmation>> Function(
+      String runId,
+      List<AgentProfileProposal> proposals,
+    );
+
 enum AgentRunStatus {
   idle,
   preparing,
   ocr,
   familiarizing,
+  awaitingProfile,
   tokenizing,
   reasoning,
   validating,
@@ -146,7 +160,10 @@ class AgentRunSnapshot {
     this.progressStep = 0,
     this.evidenceCount = 0,
     this.citationCount = 0,
+    this.pendingProfileCount = 0,
     this.result,
+    this.retainedResult,
+    this.resultRetainedAfterFailure = false,
     this.errorMessage,
     this.errorCode,
     this.retryable = false,
@@ -155,7 +172,7 @@ class AgentRunSnapshot {
     this.sentImage = false,
     this.sentImagePaths = const <String>[],
     this.mode = AgentMode.strict,
-    this.responseLanguage = AgentResponseLanguage.follow,
+    this.responseLanguage = AgentResponseLanguage.chinese,
     this.providerLabel = '',
     this.startedAt,
     this.finishedAt,
@@ -177,7 +194,13 @@ class AgentRunSnapshot {
   final int progressStep;
   final int evidenceCount;
   final int citationCount;
+  final int pendingProfileCount;
   final AgentRunResult? result;
+
+  /// Previous result kept visible while a regeneration runs. It is never sent
+  /// to the provider again and is replaced only by a successful new run.
+  final AgentRunResult? retainedResult;
+  final bool resultRetainedAfterFailure;
   final String? errorMessage;
   final AgentToolErrorCode? errorCode;
   final bool retryable;
@@ -199,6 +222,7 @@ class AgentRunSnapshot {
     AgentRunStatus.preparing ||
     AgentRunStatus.ocr ||
     AgentRunStatus.familiarizing ||
+    AgentRunStatus.awaitingProfile ||
     AgentRunStatus.tokenizing ||
     AgentRunStatus.reasoning ||
     AgentRunStatus.validating => true,
@@ -223,7 +247,10 @@ class AgentRunSnapshot {
     int? progressStep,
     int? evidenceCount,
     int? citationCount,
+    int? pendingProfileCount,
     Object? result = _unset,
+    Object? retainedResult = _unset,
+    bool? resultRetainedAfterFailure,
     Object? errorMessage = _unset,
     Object? errorCode = _unset,
     bool? retryable,
@@ -249,9 +276,15 @@ class AgentRunSnapshot {
       progressStep: progressStep ?? this.progressStep,
       evidenceCount: evidenceCount ?? this.evidenceCount,
       citationCount: citationCount ?? this.citationCount,
+      pendingProfileCount: pendingProfileCount ?? this.pendingProfileCount,
       result: identical(result, _unset)
           ? this.result
           : result as AgentRunResult?,
+      retainedResult: identical(retainedResult, _unset)
+          ? this.retainedResult
+          : retainedResult as AgentRunResult?,
+      resultRetainedAfterFailure:
+          resultRetainedAfterFailure ?? this.resultRetainedAfterFailure,
       errorMessage: identical(errorMessage, _unset)
           ? this.errorMessage
           : errorMessage as String?,

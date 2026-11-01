@@ -4,8 +4,9 @@
 > `ToolResult`、`unidic.tokenize`、`mdict.lookup`、`mdict.suggest`、预算/可见性）
 > 仅作为未来契约保留；`lib/services/agent/tools/` 已删除，模型请求不携带 tools。
 >
-> **2026-11-01 语言决策**：默认输出/UI 语言为中文（`zh`）；旧 `follow` 映射为
-> `zh`；禁止按输入假名/拉丁字符推断。§5.2 是已确认契约，代码实现仍待 F1/F17。
+> **2026-11-01 语言决策（Wave 2 已实现）**：默认输出/UI 语言为中文（`zh`）；
+> 旧 `follow` 映射为 `zh`；禁止按输入假名/拉丁字符推断。§5.2 的默认/文案契约
+> 已落地；F1b 结果字段后校验仍待 Wave 3。
 >
 > 规范性 MUST/MUST NOT 规则见 `docs/project-rules.md`；当前预算/上限和固定文案
 > 见 `docs/project-data.md`。本文件只保留 Agent 字段、错误码、状态机和未来
@@ -14,8 +15,9 @@
 - 状态：**设计契约；P6.1–P6.5 核心已实现，P6.6/P6.7 未实现**；与
   `docs/phase6-agent-design.md` v2 配套。实现状态见 `docs/phase6-status.md`。
   **2026-10-31 实机反馈的 F1–F17 修正计划见
-  `docs/agent_docs/device-feedback-2026-10-31.md`；其中覆盖审查 `coverage.v1`、
-  输出语言校验和应用级档案队列仍是待实现契约，不能写成已支持。**
+  `docs/agent_docs/device-feedback-2026-10-31.md`；Wave 1–2 已实现（应用级档案
+  队列/语言默认与文案已落地）；覆盖审查 `coverage.v1` 和 F1b 输出语言校验仍是
+  待实现契约，不能写成已支持。**
 - 目的：把 Agent 的工具、输入/输出、错误码、状态机和校验规则固定下来，避免实现时
   各自发明字段。机器可读 schema 在 `docs/schemas/agent/`。
 - 版本规则：所有 schema 带 `schema` 常量（如 `rikai.agent.input.v1`）；破坏性字段
@@ -442,16 +444,17 @@ class ToolResult {
 - 每个用户请求最多一次覆盖审查 + 一次回退；失败/无重复/无可追溯 query 时保留
   原证据并显示 warning，不让整次 run 失败。
 
-### 5.2 输出语言（2026-10-31 F1；2026-11-01 决策确认，代码待实现）
+### 5.2 输出语言（2026-10-31 F1；默认/文案 Wave 2 已实现；F1b 待 Wave 3）
 
 - `AgentResponseLanguage` 默认 `zh`；旧 `follow` 迁移为 `zh`，不得按输入假名/
-  拉丁字符推断语言。
+  拉丁字符推断语言。**已实现**。
 - system prompt 要求所有人类可读字段使用目标语言；日语仅用于原文 quote、词形、
-  读音、词典例句。
+  读音、词典例句。**已实现**；`AgentUiStrings` 同步 Agent 本地文案。
 - 结果后校验只检查人类可读字段（translation/segments interpretation/word
   sense/grammar explanation/unresolved reason/model supplement），不检查原文
   与 citation 摘要。偏离目标语言时允许一次语言修复；仍偏离则保留结果并显示
   warning，不得丢弃已生成内容。API 无法保证 100% 语言一致，契约不承诺绝对。
+  **F1b，待 Wave 3。**
 
 ## 6. 词典档案 `rikai.dictionary.profile.v1`
 
@@ -550,9 +553,10 @@ idle
 - `awaitingProfile` 只在需要熟悉且仍有未处理档案时出现；**必须由用户显式处理
   （信任/本次跳过/不再询问）全部已生成档案后，才进入 tokenizing**。页面离开、
   重建或 dismiss sheet 不得自动 skip；`unavailable` 档案无确认内容，记录 issue
-  后不阻塞。队列属于应用级 controller，不属于 `AgentPage`。
+  后不阻塞。队列属于应用级 controller，不属于 `AgentPage`。**Wave 2 已实现**
+  （`AgentProfileInboxController` + `DictionaryFamiliarizationService.generateMany`）。
 - `coverage` 是 2026-10-31 F7 的一次性覆盖审查；每个请求最多触发一次补充检索，
-  `coverageFallbackUsed=true` 后不得再次回退。
+  `coverageFallbackUsed=true` 后不得再次回退。**待 Wave 3。**
 - 任何阶段可取消；取消后状态为 `cancelled`，保留已完成的本地结果。
 - 阶段事件带 `run_id, stage, message, progress`；UI 不从页面 State 推断。
 - 重试从失败阶段开始；OCR 可重新识别，provider 可重试，校验失败可做一次修复。

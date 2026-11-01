@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/agent/agent_input.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/theme/page_route.dart';
 import '../../services/agent/agent_messages.dart';
 import '../../services/agent/agent_run.dart';
+import '../../services/agent/agent_ui_strings.dart';
+import '../capture/photo_viewer_page.dart';
 import 'agent_progress_view.dart';
 
 class AgentUserBubble extends StatelessWidget {
@@ -15,121 +18,159 @@ class AgentUserBubble extends StatelessWidget {
     required this.text,
     required this.hasImage,
     this.imagePaths = const <String>[],
+    required this.strings,
+    this.onLongPress,
   });
 
   final String text;
   final bool hasImage;
   final List<String> imagePaths;
+  final AgentUiStrings strings;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Align(
       alignment: Alignment.centerRight,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.md),
-        constraints: BoxConstraints(
-          maxWidth:
-              MediaQuery.sizeOf(context).width * AgentTokens.messageMaxWidth,
-        ),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: const BoxDecoration(
-          color: AgentTokens.userSurface,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(AgentTokens.bubbleRadius),
-            topRight: Radius.circular(AgentTokens.bubbleRadius),
-            bottomLeft: Radius.circular(AgentTokens.bubbleRadius),
-            bottomRight: Radius.circular(AgentTokens.bubbleTailRadius),
+      child: GestureDetector(
+        onLongPress: onLongPress,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: AppSpacing.md),
+          constraints: BoxConstraints(
+            maxWidth:
+                MediaQuery.sizeOf(context).width * AgentTokens.messageMaxWidth,
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (text.isNotEmpty)
-              Text(
-                text,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontSize: AgentTokens.body,
-                  color: AppColors.textPrimary,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: const BoxDecoration(
+            color: AgentTokens.userSurface,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(AgentTokens.bubbleRadius),
+              topRight: Radius.circular(AgentTokens.bubbleRadius),
+              bottomLeft: Radius.circular(AgentTokens.bubbleRadius),
+              bottomRight: Radius.circular(AgentTokens.bubbleTailRadius),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (text.isNotEmpty)
+                Text(
+                  text,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontSize: AgentTokens.body,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-              ),
-            if (hasImage)
-              Padding(
-                padding: EdgeInsets.only(top: text.isEmpty ? 0 : AppSpacing.xs),
-                child: imagePaths.isEmpty
-                    ? Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.image_outlined,
-                            size: AppSizes.icon,
-                            color: AppColors.textSecondary,
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          Text(
-                            '图片（仅本机 OCR）',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontSize: AgentTokens.helper,
+              if (hasImage)
+                Padding(
+                  padding: EdgeInsets.only(
+                    top: text.isEmpty ? 0 : AppSpacing.xs,
+                  ),
+                  child: imagePaths.isEmpty
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.image_outlined,
+                              size: AppSizes.icon,
                               color: AppColors.textSecondary,
                             ),
-                          ),
-                        ],
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Semantics(
-                            label: '已发送图片 ${imagePaths.length} 张',
-                            image: true,
-                            child: Wrap(
-                              spacing: AppSpacing.xs,
-                              runSpacing: AppSpacing.xs,
-                              children: [
-                                for (final path in imagePaths)
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(
-                                      AppRadius.sm,
-                                    ),
-                                    child: Image.file(
-                                      File(path),
-                                      width: AgentTokens.sentImageWidth,
-                                      height: AgentTokens.sentImageHeight,
-                                      fit: BoxFit.cover,
-                                      errorBuilder:
-                                          (context, error, stackTrace) =>
-                                              Container(
-                                                width:
-                                                    AgentTokens.sentImageWidth,
-                                                height:
-                                                    AgentTokens.sentImageHeight,
-                                                color: AppColors.surfaceMuted,
-                                                alignment: Alignment.center,
-                                                child: const Icon(
-                                                  Icons.broken_image_outlined,
-                                                  size: AppSizes.icon,
+                            const SizedBox(width: AppSpacing.xs),
+                            Text(
+                              strings.imageOnly,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontSize: AgentTokens.helper,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Semantics(
+                              label: strings.sentImages(imagePaths.length),
+                              image: true,
+                              child: Wrap(
+                                spacing: AppSpacing.xs,
+                                runSpacing: AppSpacing.xs,
+                                children: [
+                                  for (
+                                    var index = 0;
+                                    index < imagePaths.length;
+                                    index++
+                                  )
+                                    Semantics(
+                                      button: true,
+                                      label:
+                                          '${strings.imageOnly} ${index + 1}',
+                                      child: GestureDetector(
+                                        key: ValueKey(
+                                          'agent-sent-image-$index',
+                                        ),
+                                        onTap: () => openAgentImageViewer(
+                                          context,
+                                          imagePaths[index],
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            AppRadius.sm,
+                                          ),
+                                          child: Image.file(
+                                            File(imagePaths[index]),
+                                            width: AgentTokens.sentImageWidth,
+                                            height: AgentTokens.sentImageHeight,
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (
+                                                  context,
+                                                  error,
+                                                  stackTrace,
+                                                ) => Container(
+                                                  width: AgentTokens
+                                                      .sentImageWidth,
+                                                  height: AgentTokens
+                                                      .sentImageHeight,
+                                                  color: AppColors.surfaceMuted,
+                                                  alignment: Alignment.center,
+                                                  child: const Icon(
+                                                    Icons.broken_image_outlined,
+                                                    size: AppSizes.icon,
+                                                  ),
                                                 ),
-                                              ),
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: AppSpacing.xxs),
-                          Text(
-                            '图片仅在本机 OCR，不会上传',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontSize: AgentTokens.helper,
-                              color: AppColors.textSecondary,
+                            const SizedBox(height: AppSpacing.xxs),
+                            Text(
+                              strings.imageLocalOnly,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontSize: AgentTokens.helper,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-              ),
-          ],
+                          ],
+                        ),
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
+}
+
+void openAgentImageViewer(BuildContext context, String path) {
+  Navigator.of(context).push(
+    RikaiPageRoute<void>(
+      builder: (context) => PhotoViewerPage(imagePath: path),
+    ),
+  );
 }
 
 class AgentAssistantBubble extends StatelessWidget {
@@ -149,10 +190,14 @@ class AgentAssistantBubble extends StatelessWidget {
     required this.evidenceCount,
     required this.citationCount,
     required this.uiLanguage,
+    required this.strings,
     required this.result,
     required this.onRetry,
     required this.onLooseRetry,
     required this.onSettings,
+    this.resultRetainedAfterFailure = false,
+    this.onRegenerate,
+    this.onCopy,
   });
 
   final ThemeData theme;
@@ -169,22 +214,27 @@ class AgentAssistantBubble extends StatelessWidget {
   final int evidenceCount;
   final int citationCount;
   final AgentUiLanguage uiLanguage;
+  final AgentUiStrings strings;
   final AgentRunResult? result;
   final VoidCallback? onRetry;
   final VoidCallback? onLooseRetry;
   final VoidCallback onSettings;
+  final bool resultRetainedAfterFailure;
+  final VoidCallback? onRegenerate;
+  final VoidCallback? onCopy;
 
   @override
   Widget build(BuildContext context) {
     final modelLabel =
-        '${providerLabel.isEmpty ? '模型' : providerLabel} · ${mode == AgentMode.strict ? '严格' : '宽松'}';
+        '${providerLabel.isEmpty ? strings.model : providerLabel} · '
+        '${mode == AgentMode.strict ? strings.strictShort : strings.looseShort}';
     final summary = result == null
         ? ''
         : result!.analysis.translation.isNotEmpty
         ? result!.analysis.translation.map((item) => item.text).join('\n')
         : result!.analysis.segments.isNotEmpty
         ? result!.analysis.segments.first.interpretation
-        : '已生成结果，请展开详细解析。';
+        : strings.assistantFallback;
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -216,13 +266,42 @@ class AgentAssistantBubble extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xs),
             if (error != null)
-              AgentErrorCard(
-                message: error!,
-                detail: errorDetail,
-                onAction: onRetry ?? onSettings,
-                actionLabel: onRetry == null ? '去设置' : '重试',
-                onSecondary: onLooseRetry,
-                secondaryLabel: '宽松重试',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AgentErrorCard(
+                    message: error!,
+                    detail: errorDetail,
+                    onAction: onRetry ?? onSettings,
+                    actionLabel: onRetry == null
+                        ? strings.goSettings
+                        : strings.retry,
+                    onSecondary: onLooseRetry,
+                    secondaryLabel: strings.looseRetry,
+                    strings: strings,
+                  ),
+                  if (resultRetainedAfterFailure) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      strings.resultRetainedAfterFailure,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: AgentTokens.helper,
+                        color: AppColors.warning,
+                      ),
+                    ),
+                  ],
+                  if (result != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      summary,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontSize: AgentTokens.body,
+                        height: 1.5,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ],
               )
             else if (running)
               Column(
@@ -264,6 +343,16 @@ class AgentAssistantBubble extends StatelessWidget {
                       language: uiLanguage,
                     ),
                   ],
+                  if (result != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      strings.retainedResult,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: AgentTokens.helper,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
                 ],
               )
             else if (cancelled)
@@ -272,10 +361,7 @@ class AgentAssistantBubble extends StatelessWidget {
                   Expanded(
                     child: Text(
                       stageMessage.isEmpty
-                          ? agentStageMessage(
-                              AgentStage.cancelled,
-                              uiLanguage,
-                            )
+                          ? agentStageMessage(AgentStage.cancelled, uiLanguage)
                           : stageMessage,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontSize: AgentTokens.helper,
@@ -284,7 +370,7 @@ class AgentAssistantBubble extends StatelessWidget {
                     ),
                   ),
                   if (onRetry != null)
-                    TextButton(onPressed: onRetry, child: const Text('重试')),
+                    TextButton(onPressed: onRetry, child: Text(strings.retry)),
                 ],
               )
             else
@@ -315,6 +401,41 @@ class AgentAssistantBubble extends StatelessWidget {
                 startedAt: startedAt!,
                 finishedAt: finishedAt,
                 language: uiLanguage,
+              ),
+            ],
+            if (!running &&
+                result != null &&
+                (onRegenerate != null || onCopy != null)) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (onRegenerate != null)
+                      IconButton(
+                        tooltip: strings.regenerateResult,
+                        onPressed: onRegenerate,
+                        iconSize: AgentTokens.actionIcon,
+                        constraints: const BoxConstraints(
+                          minWidth: AgentTokens.actionTapTarget,
+                          minHeight: AgentTokens.actionTapTarget,
+                        ),
+                        icon: const Icon(Icons.refresh),
+                      ),
+                    if (onCopy != null)
+                      IconButton(
+                        tooltip: strings.copyResultMarkdown,
+                        onPressed: onCopy,
+                        iconSize: AgentTokens.actionIcon,
+                        constraints: const BoxConstraints(
+                          minWidth: AgentTokens.actionTapTarget,
+                          minHeight: AgentTokens.actionTapTarget,
+                        ),
+                        icon: const Icon(Icons.copy_outlined),
+                      ),
+                  ],
+                ),
               ),
             ],
           ],
@@ -398,6 +519,7 @@ class AgentErrorCard extends StatelessWidget {
     required this.detail,
     required this.onAction,
     required this.actionLabel,
+    required this.strings,
     this.onSecondary,
     this.secondaryLabel = '',
   });
@@ -406,6 +528,7 @@ class AgentErrorCard extends StatelessWidget {
   final String detail;
   final VoidCallback onAction;
   final String actionLabel;
+  final AgentUiStrings strings;
   final VoidCallback? onSecondary;
   final String secondaryLabel;
 
@@ -449,7 +572,7 @@ class AgentErrorCard extends StatelessWidget {
                 tilePadding: EdgeInsets.zero,
                 childrenPadding: const EdgeInsets.only(bottom: AppSpacing.xs),
                 title: Text(
-                  '查看诊断',
+                  strings.viewDiagnostics,
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: AgentTokens.citationChip,
                     color: AppColors.textSecondary,
@@ -493,10 +616,12 @@ class AgentEmptyState extends StatelessWidget {
     super.key,
     required this.hasProvider,
     required this.onSettings,
+    required this.strings,
   });
 
   final bool hasProvider;
   final VoidCallback onSettings;
+  final AgentUiStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -517,7 +642,7 @@ class AgentEmptyState extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            '词典助手',
+            strings.emptyTitle,
             style: theme.textTheme.titleMedium?.copyWith(
               fontSize: AgentTokens.section,
               fontWeight: FontWeight.w600,
@@ -525,8 +650,7 @@ class AgentEmptyState extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            '输入日文或选择图片；图片只在本机 OCR，不会上传。'
-            '结果会附带可点击的词典依据。',
+            strings.emptyBody,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               fontSize: AgentTokens.helper,
@@ -535,11 +659,13 @@ class AgentEmptyState extends StatelessWidget {
           ),
           if (!hasProvider) ...[
             const SizedBox(height: AppSpacing.md),
-            OutlinedButton(onPressed: onSettings, child: const Text('去配置模型')),
+            OutlinedButton(
+              onPressed: onSettings,
+              child: Text(strings.goConfigureModel),
+            ),
           ],
         ],
       ),
     );
   }
 }
-

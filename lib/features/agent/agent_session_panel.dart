@@ -4,6 +4,7 @@ import '../../core/models/agent/agent_input.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/dict_info.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../services/agent/agent_ui_strings.dart';
 import '../lookup/dictionary_filter_bar.dart';
 
 Widget buildAgentSessionBar(
@@ -11,10 +12,13 @@ Widget buildAgentSessionBar(
   required AgentMode mode,
   required String providerName,
   required bool expanded,
+  required AgentUiStrings strings,
   required VoidCallback onToggle,
 }) {
   final theme = Theme.of(context);
-  final modeLabel = mode == AgentMode.strict ? '严格' : '宽松';
+  final modeLabel = mode == AgentMode.strict
+      ? strings.strictShort
+      : strings.looseShort;
   return Material(
     color: AgentTokens.supplementSurface,
     child: InkWell(
@@ -27,7 +31,7 @@ Widget buildAgentSessionBar(
             children: [
               Expanded(
                 child: Text(
-                  '本会话设置 · $modeLabel · $providerName',
+                  '${strings.sessionSettings} · $modeLabel · $providerName',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -37,9 +41,7 @@ Widget buildAgentSessionBar(
                 ),
               ),
               Icon(
-                expanded
-                    ? Icons.keyboard_arrow_up
-                    : Icons.keyboard_arrow_down,
+                expanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
                 size: AppSizes.icon,
                 color: AppColors.textSecondary,
               ),
@@ -66,6 +68,7 @@ Widget buildAgentSessionPanel(
   required ValueChanged<String> onToggleDictionary,
   required VoidCallback onSelectAll,
   required VoidCallback onOpenSettings,
+  required AgentUiStrings strings,
 }) {
   final theme = Theme.of(context);
   return ConstrainedBox(
@@ -81,12 +84,12 @@ Widget buildAgentSessionPanel(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (providers.isEmpty)
-            ProviderEmptyBanner(onTap: onOpenSettings)
+            ProviderEmptyBanner(onTap: onOpenSettings, strings: strings)
           else
             DropdownButtonFormField<String>(
               initialValue: provider?.id,
-              decoration: const InputDecoration(
-                labelText: '模型',
+              decoration: InputDecoration(
+                labelText: strings.model,
                 isDense: true,
               ),
               items: <DropdownMenuItem<String>>[
@@ -100,9 +103,15 @@ Widget buildAgentSessionPanel(
             ),
           const SizedBox(height: AppSpacing.sm),
           SegmentedButton<AgentMode>(
-            segments: const <ButtonSegment<AgentMode>>[
-              ButtonSegment(value: AgentMode.strict, label: Text('严格模式')),
-              ButtonSegment(value: AgentMode.loose, label: Text('宽松模式')),
+            segments: <ButtonSegment<AgentMode>>[
+              ButtonSegment(
+                value: AgentMode.strict,
+                label: Text(strings.strictMode),
+              ),
+              ButtonSegment(
+                value: AgentMode.loose,
+                label: Text(strings.looseMode),
+              ),
             ],
             selected: <AgentMode>{mode},
             showSelectedIcon: false,
@@ -114,7 +123,7 @@ Widget buildAgentSessionPanel(
           Row(
             children: [
               Text(
-                '本次词典',
+                strings.sessionDictionaries,
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontSize: AgentTokens.evidenceTitle,
                   fontWeight: FontWeight.w600,
@@ -131,7 +140,7 @@ Widget buildAgentSessionPanel(
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.xs),
               child: Text(
-                '尚未添加可用的 MDict 词典',
+                strings.noDictionaries,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontSize: AgentTokens.helper,
                   color: AppColors.textSecondary,
@@ -153,9 +162,14 @@ Widget buildAgentSessionPanel(
 }
 
 class ProviderEmptyBanner extends StatelessWidget {
-  const ProviderEmptyBanner({super.key, required this.onTap});
+  const ProviderEmptyBanner({
+    super.key,
+    required this.onTap,
+    required this.strings,
+  });
 
   final VoidCallback onTap;
+  final AgentUiStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +184,7 @@ class ProviderEmptyBanner extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '尚未配置模型',
+            strings.noProviderTitle,
             style: theme.textTheme.titleSmall?.copyWith(
               fontSize: AgentTokens.evidenceTitle,
               fontWeight: FontWeight.w600,
@@ -178,14 +192,17 @@ class ProviderEmptyBanner extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xxs),
           Text(
-            '配置 API Key 后才能使用词典助手；图片仍只在本机 OCR，不会上传。',
+            strings.noProviderBody,
             style: theme.textTheme.bodyMedium?.copyWith(
               fontSize: AgentTokens.helper,
               color: AppColors.textSecondary,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          OutlinedButton(onPressed: onTap, child: const Text('去配置模型')),
+          OutlinedButton(
+            onPressed: onTap,
+            child: Text(strings.goConfigureModel),
+          ),
         ],
       ),
     );

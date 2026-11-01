@@ -277,7 +277,7 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 | 无依据标注 | `agentNoCitation` | 14sp，`textSecondary` + warning 图标，不隐藏 |
 | 输入区最多行数 | `agentComposerMaxLines` | 5 行后内部滚动；发送按钮位置固定 |
 
-**2026-10-31 实机反馈补充（未实现，实施时同步 token/测试）**
+**2026-10-31 实机反馈补充（Wave 1–2 已实现，设备视觉验收待 Wave 4）**
 
 - 所有词典选择界面（查词、阅读弹层、Agent）预留 3.5 行；第 4 行半可见。
 - citation 使用短胶囊并自动换行，颜色保持浅蓝底蓝字；不改成词典筛选的深蓝选中态。
@@ -285,7 +285,8 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 - 结果底部操作行固定为“循环 → 复制”；用户气泡长按“复制/修改”。
 - Agent 功能区本地文案由显式回答语言决定（默认中文；2026-11-01 决策：旧
   `follow` 映射为 `zh`，禁止输入启发式）；详见
-  `docs/agent_docs/device-feedback-2026-10-31.md` 的 F1/F17。
+  `docs/agent_docs/device-feedback-2026-10-31.md` 的 F1/F17。结果字段语言后校验
+  仍待 F1b（Wave 3）。
 
 **布局与交互**
 

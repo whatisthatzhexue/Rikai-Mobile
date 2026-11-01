@@ -13,6 +13,8 @@ import 'package:rikai_mobile/core/models/lookup_models.dart';
 import 'package:rikai_mobile/core/models/lookup_request.dart';
 import 'package:rikai_mobile/core/models/token.dart';
 import 'package:rikai_mobile/services/agent/agent_run.dart';
+import 'package:rikai_mobile/services/agent/familiarization/dictionary_familiarization_service.dart';
+import 'package:rikai_mobile/services/agent/familiarization/profile_fingerprint.dart';
 import 'package:rikai_mobile/services/agent/familiarization/profile_repository.dart';
 import 'package:rikai_mobile/services/agent/grammar_patterns.dart';
 import 'package:rikai_mobile/services/agent/ports/agent_capability_exception.dart';
@@ -22,6 +24,8 @@ import 'package:rikai_mobile/services/agent/ports/lookup_port.dart';
 import 'package:rikai_mobile/services/agent/ports/ocr_port.dart';
 import 'package:rikai_mobile/services/agent/ports/tokenize_port.dart';
 import 'package:rikai_mobile/services/agent/providers/fake_provider.dart';
+import 'package:rikai_mobile/state/agent_profile_inbox.dart';
+import 'package:rikai_mobile/state/agent_providers.dart';
 import 'package:rikai_mobile/state/agent_run_controller.dart';
 import 'package:rikai_mobile/state/agent_run_services.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
@@ -165,6 +169,48 @@ class _FakeSample implements DictionarySamplePort {
   }
 }
 
+class _BlockingSecondAnalysisProvider implements LlmPort {
+  int calls = 0;
+  final Completer<void> secondCall = Completer<void>();
+
+  @override
+  Stream<LlmEvent> stream(
+    LlmRequest request, {
+    LlmCancelToken? cancellation,
+  }) async* {
+    calls++;
+    if (calls == 2) await secondCall.future;
+    yield LlmEvent(
+      type: LlmEventType.textDelta,
+      text: jsonEncode(_analysisJson),
+    );
+    yield LlmEvent.done();
+  }
+}
+
+class _FailingSecondAnalysisProvider implements LlmPort {
+  int calls = 0;
+
+  @override
+  Stream<LlmEvent> stream(
+    LlmRequest request, {
+    LlmCancelToken? cancellation,
+  }) async* {
+    calls++;
+    if (calls == 2) {
+      throw const AgentCapabilityException(
+        AgentToolErrorCode.providerUnavailable,
+        '模型服务暂时不可用',
+      );
+    }
+    yield LlmEvent(
+      type: LlmEventType.textDelta,
+      text: jsonEncode(_analysisJson),
+    );
+    yield LlmEvent.done();
+  }
+}
+
 class _CancelAwareProvider implements LlmPort {
   int calls = 0;
   final Completer<void> _cancelled = Completer<void>();
@@ -204,14 +250,34 @@ class _CancelAwareProvider implements LlmPort {
   }
 }
 
-AgentRunServices _services(LlmPort llm) {
+class _AutoSkipInbox extends AgentProfileInboxController {
+  @override
+  Future<List<ProfileConfirmation>> waitForAll(
+    String runId,
+    List<AgentProfileProposal> proposals,
+  ) async {
+    return <ProfileConfirmation>[
+      for (final proposal in proposals)
+        ProfileConfirmation(
+          action: ProfileConfirmationAction.skipOnce,
+          markdown: proposal.markdown,
+        ),
+    ];
+  }
+}
+
+AgentRunServices _services(
+  LlmPort llm, {
+  DictionaryProfileRepository? profileRepository,
+}) {
   return AgentRunServices(
     ocrPort: _FakeOcr(),
     tokenizePort: _FakeTokenize(),
     lookupPort: _FakeLookup(),
     samplePort: _FakeSample(),
     grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
-    profileRepository: InMemoryDictionaryProfileRepository(),
+    profileRepository:
+        profileRepository ?? InMemoryDictionaryProfileRepository(),
     unidicRepository: InMemoryUnidicProfileRepository(),
     llmFactory: (_) => llm,
     cancelOcr: () async {},
@@ -247,6 +313,7 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
+        agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
           ({required bool needsOcr, bool Function()? isCancelled}) async =>
               _services(provider),
@@ -270,6 +337,7 @@ void main() {
     final provider = _CancelAwareProvider();
     final container = ProviderContainer(
       overrides: [
+        agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
           ({required bool needsOcr, bool Function()? isCancelled}) async =>
               _services(provider),
@@ -298,9 +366,181 @@ void main() {
     expect(snapshot.sentText, '何卒');
   });
 
+  test(
+    'a generated profile gates tokenizing until the app inbox resolves it',
+    () async {
+      final provider = FakeProvider(
+        responseSequence: <String>[
+          jsonEncode(_profileJson),
+          jsonEncode(_analysisJson),
+        ],
+      );
+      final repository = InMemoryDictionaryProfileRepository();
+      final container = ProviderContainer(
+        overrides: [
+          agentProfileRepositoryProvider.overrideWithValue(repository),
+          agentRunServicesProvider.overrideWithValue(
+            ({required bool needsOcr, bool Function()? isCancelled}) async =>
+                _services(provider, profileRepository: repository),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(agentRunControllerProvider.notifier);
+
+      final future = controller.start(
+        userText: '何卒',
+        images: const <AgentImageInput>[],
+        dictionaries: const <DictionaryInfo>[_dictionary],
+        provider: _provider,
+        mode: AgentMode.strict,
+        unidicPath: '',
+        responseLanguage: AgentResponseLanguage.chinese,
+        profileLanguage: AgentProfileLanguage.chinese,
+      );
+
+      final inbox = container.read(agentProfileInboxProvider.notifier);
+      for (
+        var attempt = 0;
+        attempt < 100 &&
+            container.read(agentProfileInboxProvider).pending.isEmpty;
+        attempt++
+      ) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      final pending = container.read(agentProfileInboxProvider).pending;
+      expect(pending, hasLength(1));
+      expect(
+        container.read(agentRunControllerProvider).status,
+        AgentRunStatus.awaitingProfile,
+      );
+      // Only the profile-generation request ran; tokenizing/analysis is gated.
+      expect(provider.requests, hasLength(1));
+      expect(await repository.load('dict_a'), isNull);
+
+      await inbox.resolve(
+        pending.single.id,
+        const ProfileConfirmation(
+          action: ProfileConfirmationAction.save,
+          markdown: 'trusted profile',
+        ),
+      );
+      await future;
+      final snapshot = container.read(agentRunControllerProvider);
+
+      expect(snapshot.status, AgentRunStatus.done);
+      expect(provider.requests, hasLength(2));
+      expect((await repository.load('dict_a'))?.markdown, 'trusted profile');
+      expect(container.read(agentProfileInboxProvider).pending, isEmpty);
+    },
+  );
+
+  test(
+    'regenerate keeps the previous result visible until the new one wins',
+    () async {
+      final provider = _BlockingSecondAnalysisProvider();
+      final repository = InMemoryDictionaryProfileRepository();
+      final fingerprint = await dictionaryProfileFingerprint(
+        _dictionary,
+        promptVersion: dictionaryProfilePromptVersion,
+        schemaVersion: dictionaryProfileSchemaVersion,
+        language: AgentProfileLanguage.chinese,
+      );
+      await repository.save(
+        StoredDictionaryProfile(
+          dictionaryId: 'dict_a',
+          title: 'A',
+          fingerprint: fingerprint,
+          markdown: 'trusted profile',
+          status: DictionaryProfileStatus.confirmed,
+          modelId: 'small',
+          promptVersion: dictionaryProfilePromptVersion,
+          schemaVersion: dictionaryProfileSchemaVersion,
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
+          agentProfileRepositoryProvider.overrideWithValue(repository),
+          agentRunServicesProvider.overrideWithValue(
+            ({required bool needsOcr, bool Function()? isCancelled}) async =>
+                _services(provider, profileRepository: repository),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(agentRunControllerProvider.notifier);
+
+      final first = await _runToCompletion(container, controller);
+      expect(first.status, AgentRunStatus.done);
+      expect(first.result, isNotNull);
+
+      final regeneration = controller.regenerate();
+      final during = container.read(agentRunControllerProvider);
+      expect(during.result, isNull);
+      expect(during.retainedResult, same(first.result));
+      expect(during.isRunning, isTrue);
+
+      provider.secondCall.complete();
+      await regeneration;
+      final after = container.read(agentRunControllerProvider);
+      expect(after.status, AgentRunStatus.done);
+      expect(after.result, isNotNull);
+      expect(after.retainedResult, isNull);
+      expect(provider.calls, 2);
+    },
+  );
+
+  test(
+    'a failed regeneration restores the previous result with a notice',
+    () async {
+      final provider = _FailingSecondAnalysisProvider();
+      final repository = InMemoryDictionaryProfileRepository();
+      final fingerprint = await dictionaryProfileFingerprint(
+        _dictionary,
+        promptVersion: dictionaryProfilePromptVersion,
+        schemaVersion: dictionaryProfileSchemaVersion,
+        language: AgentProfileLanguage.chinese,
+      );
+      await repository.save(
+        StoredDictionaryProfile(
+          dictionaryId: 'dict_a',
+          title: 'A',
+          fingerprint: fingerprint,
+          markdown: 'trusted profile',
+          status: DictionaryProfileStatus.confirmed,
+        ),
+      );
+      final container = ProviderContainer(
+        overrides: [
+          agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
+          agentProfileRepositoryProvider.overrideWithValue(repository),
+          agentRunServicesProvider.overrideWithValue(
+            ({required bool needsOcr, bool Function()? isCancelled}) async =>
+                _services(provider, profileRepository: repository),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(agentRunControllerProvider.notifier);
+
+      final first = await _runToCompletion(container, controller);
+      expect(first.result, isNotNull);
+
+      await controller.regenerate();
+      final after = container.read(agentRunControllerProvider);
+      expect(after.status, AgentRunStatus.error);
+      expect(after.result, same(first.result));
+      expect(after.retainedResult, isNull);
+      expect(after.resultRetainedAfterFailure, isTrue);
+      expect(provider.calls, 2);
+    },
+  );
+
   test('immediate validation error keeps the sent text', () async {
     final container = ProviderContainer(
       overrides: [
+        agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
           ({required bool needsOcr, bool Function()? isCancelled}) async =>
               _services(FakeProvider()),

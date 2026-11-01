@@ -29,8 +29,10 @@ enum AgentProfileLanguage {
 }
 
 /// Language of the Agent's answer, separate from the profile language.
+///
+/// The default is Chinese. Legacy `follow` values are migrated to Chinese when
+/// reading stored settings; input-script inference is never used.
 enum AgentResponseLanguage {
-  follow('follow', '跟随输入'),
   chinese('zh', '中文'),
   english('en', 'English'),
   japanese('ja', '日本語');
@@ -41,19 +43,31 @@ enum AgentResponseLanguage {
   final String label;
 
   static AgentResponseLanguage fromWire(Object? value) {
+    // 'follow' was removed on 2026-11-01. Existing installs migrate to zh.
+    if (value == 'follow') return AgentResponseLanguage.chinese;
     for (final item in AgentResponseLanguage.values) {
       if (item.wireName == value) return item;
     }
-    return AgentResponseLanguage.follow;
+    return AgentResponseLanguage.chinese;
   }
 
   String get instruction => switch (this) {
-    AgentResponseLanguage.follow =>
-      'Answer in the same language as the user request; if it is mixed or '
-          'unclear, use Simplified Chinese.',
-    AgentResponseLanguage.chinese => 'Answer in Simplified Chinese.',
-    AgentResponseLanguage.english => 'Answer in English.',
-    AgentResponseLanguage.japanese => 'Answer in Japanese.',
+    AgentResponseLanguage.chinese =>
+      'Write every human-readable field (translation, interpretation, word '
+          'senses, grammar explanations, unresolved reasons and supplements) '
+          'in Simplified Chinese. Japanese may appear only in quoted source '
+          'text, word forms, readings and dictionary examples. Do not answer '
+          'in Japanese merely because the source text is Japanese.',
+    AgentResponseLanguage.english =>
+      'Write every human-readable field (translation, interpretation, word '
+          'senses, grammar explanations, unresolved reasons and supplements) '
+          'in English. Japanese may appear only in quoted source text, word '
+          'forms, readings and dictionary examples.',
+    AgentResponseLanguage.japanese =>
+      'Write every human-readable field (translation, interpretation, word '
+          'senses, grammar explanations, unresolved reasons and supplements) '
+          'in Japanese. Quoted source text, word forms and readings keep their '
+          'original form.',
   };
 }
 
@@ -249,6 +263,7 @@ class StoredDictionaryProfile {
     required this.fingerprint,
     required this.markdown,
     required this.status,
+    this.title = '',
     this.profile,
     this.confirmedAt,
     this.modelId = '',
@@ -257,6 +272,7 @@ class StoredDictionaryProfile {
   });
 
   final String dictionaryId;
+  final String title;
   final String fingerprint;
   final String markdown;
   final DictionaryProfileStatus status;
@@ -267,6 +283,29 @@ class StoredDictionaryProfile {
   final int schemaVersion;
 
   bool get isConfirmed => status == DictionaryProfileStatus.confirmed;
+
+  String get displayTitle =>
+      title.trim().isEmpty ? (profile?.title ?? dictionaryId) : title.trim();
+
+  StoredDictionaryProfile copyWith({
+    String? title,
+    String? markdown,
+    DictionaryProfileStatus? status,
+    DateTime? confirmedAt,
+  }) {
+    return StoredDictionaryProfile(
+      dictionaryId: dictionaryId,
+      title: title ?? this.title,
+      fingerprint: fingerprint,
+      markdown: markdown ?? this.markdown,
+      status: status ?? this.status,
+      profile: profile,
+      confirmedAt: confirmedAt ?? this.confirmedAt,
+      modelId: modelId,
+      promptVersion: promptVersion,
+      schemaVersion: schemaVersion,
+    );
+  }
 }
 
 /// Deterministic UniDic observations. This is not a dictionary lookup profile.

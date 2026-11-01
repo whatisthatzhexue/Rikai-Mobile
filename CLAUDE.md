@@ -161,6 +161,11 @@ MDict/MDD 音频/OCR 设备集成测试的完整命令。
 内容：OCR 模型文件名/URL/SHA-256/角色清单（不含模型本体）。
 何时查看：改模型下载/校验/导入逻辑前。
 
+`docs/archive/capture-redesign-requirements.md`：
+内容：2026-10-28 词典导入/查词/OCR/拍照重构的原始需求记录（已归档；当前 UI 以
+`docs/design-tokens.md` 与 `docs/project-data.md` §7 为准）。
+何时查看：追溯 Phase 3.5/4/5 的需求来源；不要当作当前规则。
+
 `项目初始文档.txt`：
 内容：2026-10 中期 UI/功能修正的原始需求记录（历史）。
 何时查看：追溯当时的中期 UI 修正来源；不要当作当前规则。
@@ -240,7 +245,7 @@ OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）�
 8. **MangaOCR 模型**：默认从 `l0wgear/manga-ocr-2025-onnx` 下载；模型卡许可未声明，
    **不得随包分发/不得提交**，下载前显示提示，支持本地导入。原项目 kha-white 是
    Apache-2.0，但当前下载源不是。INT8 draft 解码器 MVP 不做。
-9. **Phase 6 词典助手（设计边界；P6.1–P6.5 已实现，P6.6/P6.7 未实现）**：
+9. **Phase 6 词典助手（设计边界）**：
    - 核心 OCR/UniDic/MDict 仍在本机；Agent 是可选在线模块，只有用户配置
      API Key/provider 并主动发送请求时才联网。
    - 图片只能经本机 OCR；严禁把图片作为 LLM 视觉输入或调用 provider 的图像能力。
@@ -278,72 +283,30 @@ OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）�
 
 ## 3. 当前状态
 
-Phase 0–5 已全部完成：Phase 4.5 于 2026-10-30 通过 arm64/真实设备验收，Phase 5 于
-2026-10-30 由用户在冷启动模拟器确认并发布 1.0。详细阶段流水、修复过程和历史提交
-见 `docs/project-history.md`；当前测试/设备/性能/构建数据见
-`docs/project-data.md` §2–§5。
+Phase 0–5 已全部完成并发布 1.0（验收记录见 `docs/project-history.md` 与各
+`phase*-status.md`）。Phase 6 P6.1–P6.5 已实现；2026-10-31 实机反馈 Wave 1–2
+已实现，Wave 3–4（F1b/F6/F7 与设备验收）待做；P6.6/P6.7 未实现。当前进度、
+验证记录与工作队列只维护在以下文档，本文件不再复述：
 
-- **Phase 6 P6.1–P6.5 已完成核心实现**：能力 Ports、LookupGateway/
-  MDict sample/suggest、Provider 适配与 secure storage、词典/UniDic
-  熟悉期、Orchestrator/证据/quote/校验、Agent 页面/Provider 设置/主页新增入口。
-  x86_64 模拟器已用真实相册图片 + 用户配置的 DeepSeek 跑通“实时思考/生成 →
-  中文译文/逐句/原文/词典依据”。
-- **Phase 6 未完成**：2026-10-31 实机反馈 Wave 2–4（默认中文/UI 语言（决策已定、
-  实现待做）、应用级档案确认队列、多图、结果操作行、检索完整度/覆盖审查等；
-  Wave 1 的 F4/F5/F9/F10/F15/F16 已实现，设备手工验收待 Wave 4）、P6.6 多 OCR
-  版本/词典辅助修复、P6.7 annotation DSL/Markdown/ruby/pitch、Agent 会话历史 UI、
-  真实 provider/API Key 与真实词典 sample/suggest 设备验收。详见
-  `docs/agent_docs/device-feedback-2026-10-31.md` 和 `docs/phase6-status.md`。
-
-**下一步：**
-
-- Phase 6：按 `docs/agent_docs/device-feedback-2026-10-31.md` 的 Wave 2–4 处理
-  实机反馈；F2（档案队列）完成前不做 F7/F13/F14 的档案相关部分，F6 完成前不做
-  F7。之后再做 P6.6/P6.7；未实现能力不得写成已支持。
-- 分发前：release 仍使用 debug keystore，替换正式签名；Phase 5 可选增强
-  （语料缩略图、更多空/错误态、无障碍细化）。
-- 本开发环境只有 x86_64 模拟器 `Medium_Phone_API_36.1`；Phase 5 UI 已在冷启动
-  模拟器确认，OCR 性能/真实漫画质量仍需 arm64 真机复测。
-- 本机模拟器 DNS 无法解析 hf-mirror/Hugging Face，因此“应用内实网下载模型”
-  尚未在设备验证；主机 curl 成功，Dart 本地 HTTP 测试已覆盖 Range 续传/校验。
-- MangaOCR 仍未移植上游 mask/panel/free-text 全流水线，也没有 cross-bubble
-  batching/INT8 draft/密集页 tiling；90/270 已实现整图旋转，但真实页仍需调参。
+- 实现进度与验证记录：`docs/phase6-status.md`
+- F1–F17 状态、Wave 计划与验收：`docs/agent_docs/device-feedback-2026-10-31.md`
+- 测试/设备/性能/构建数据：`docs/project-data.md` §2–§5
 
 ## 4. 未完成事项（按优先级）
 
-### Phase 6：Mdict Agent（P6.1–P6.5 已实现，P6.6/P6.7 未实现）
+### Phase 6：Mdict Agent
 
-先读 `docs/phase6-agent-design.md`、`docs/phase6-agent-contracts.md` 和
-`docs/phase6-status.md`；本节只给交接摘要，细节以设计/契约/状态文档为准。
+设计与契约先读 `docs/phase6-agent-design.md`、`docs/phase6-agent-contracts.md`；
+规则边界见 §2 第 9 条，实现进度见 `docs/phase6-status.md`。剩余工作：
 
-- 主页功能按钮已接入（数量/固定文案见 `docs/project-data.md` §7）。
-- Agent 使用本地 OCR/UniDic/MDict 能力 + 用户配置的远程 LLM；DeepSeek/Claude/
-  OpenAI-compatible 均通过 provider 适配层，不依赖 provider 的视觉能力。
-- 固定流水线、模型无工具（2026-10-31 决策并删除死工具层）：orchestrator 预取
-  OCR/分词/逐词查词；模型只做理解、推断和引用已有证据，不自行补查。OCR/采样/
-  UniDic profile 全部由 orchestrator 调用。
-- 语言：默认输出/UI 中文（zh）；旧 `follow` 映射为 `zh`；禁止按输入假名/拉丁
-  字符推断（2026-11-01 决策；F1/F17 代码待改，见 `docs/phase6-status.md`）。
-- 能力接口化：窄 Port（Ocr/Tokenize/Lookup/DictionarySample/Llm/Secret）包住现有
-  `OcrService`/`MecabService`/`MdictService`；提取纯 `LookupGateway`，UI 与 Agent
-  共用查词内核，不复制查词逻辑。`OcrWorkflow` 已于 2026-10-31 删除。
-- 任务工作流（翻译/解释）：Step -1 词典熟悉（采样→LLM 归纳→用户确认→本地缓存）→
-  Step 0 图片仅本机 OCR，按 `{image_id, ocr_text}` JSON 发送（禁止图片/base64/路径）→
-  Step 1 UniDic 分词 + MDict 逐词/语法检索 → Step 2 结合语境推断（严格模式每个
-  候选都要 citation）→ Step 3 结果+依据。回答必须引用原文；词典输出顺序严格按
-  `DictionaryInfo.order`；每会话词典选择独立于查词全局偏好，不回写全局。
-- 泛化（P6.6 待实现）：Agent 可调用多种本机 OCR 策略并结合 UniDic/MDict 修复；
-  多个版本冲突时必须让用户选择，不能静默覆盖，也不能把图片发给模型。
-- citation/quote/词典顺序由 orchestrator 发放并校验；模型自造/越界 citation 只按
-  普通文本显示，不能打开任意词条。
-- API Key 用 `flutter_secure_storage`/Android Keystore；不进 SharedPreferences/
-  日志/导出。
-- 已实现顺序：Ports/Tools → Provider/Secret → 熟悉期 → Orchestrator/Validator →
-  Agent UI/Provider 设置/主页功能入口。待做：多 OCR（P6.6）→ annotation DSL/
-  Markdown/ruby/pitch/历史 UI/发布（P6.7）。
-- 禁止：把图片/base64/路径发给 LLM、把 provider 当云 OCR、把 API Key 放仓库/
-  SharedPreferences/日志、执行模型生成的任意代码、把 P6.6/P6.7 未实现的能力
-  描述成已支持。
+- 按 `docs/agent_docs/device-feedback-2026-10-31.md` 完成 Wave 3–4（F1b 结果语言
+  后校验、F6 检索完整度、F7 覆盖审查、设备回归验收）；F6 完成前不做 F7。
+- P6.6 多 OCR 版本/词典辅助修复：多版本冲突必须让用户选择，不能静默覆盖，
+  也不能把图片发给模型。
+- P6.7 annotation DSL/Markdown/ruby/pitch、Agent 会话历史 UI、发布打磨。
+
+设备验收项见下文「真机/网络验收」；禁止事项（图片/密钥/未实现能力）见
+`docs/project-rules.md` R-AGENT/R-SEC。
 
 ### 分发前
 
@@ -355,7 +318,9 @@ Phase 0–5 已全部完成：Phase 4.5 于 2026-10-30 通过 arm64/真实设备
 - 真实 provider/API Key、secure storage 设备 I/O、真实词典 `sample`/`suggest`
   和 arm64 Agent 端到端仍未验收；不要把它们描述成已验证。
 - 在可访问 hf-mirror 的设备上验证 PaddleOCR/MangaOCR/orientation 下载、断点续传、
-  镜像回退、本地导入与许可确认；确认模型目录与删除流程。
+  镜像回退、本地导入与许可确认；确认模型目录与删除流程。本机模拟器 DNS 无法解析
+  hf-mirror/Hugging Face，应用内实网下载尚未在设备验证（主机 curl 成功，Dart
+  本地 HTTP 测试已覆盖 Range 续传/校验）。
 - 相机/照片集/多选/语料做 arm64 真机回归，重点验证 MangaOCR 竖排质量、连续多
   气泡页性能/内存，以及真实的 180°/90° 旋转照片；本机仅 x86_64。
 
@@ -367,7 +332,10 @@ Phase 0–5 已全部完成：Phase 4.5 于 2026-10-30 通过 arm64/真实设备
 - 横排/竖排/倒置/90°/270° 真实页面回归；
 - 真实漫画多气泡/多面板顺序、振假名噪声、低置信度垃圾文本；
 - 首次 auto/vertical 冷启动仍有 Manga session 创建成本（数值见 `project-data` §4）；
-- 视情况继续做 panel grouping、cross-bubble batching、密集页 tiling。
+- MangaOCR 尚未移植上游 mask/panel/free-text 全流水线，也没有 cross-bubble
+  batching/INT8 draft；视情况继续做 panel grouping、cross-bubble batching、
+  密集页 tiling。90/270 整图旋转已实现，但真实页仍需调参。新增 OCR 优化
+  （mask/panel、cross-bubble batching、INT8 draft、tiling）应作为独立增强并补回归。
 
 ### 不要重写已验证路径
 
@@ -533,24 +501,8 @@ flutter build apk --debug
 
 1. 运行 `git status`；不要覆盖未提交改动，不要擅自 commit/reset，除非用户明确要求。
    历史提交锚点见 `docs/project-history.md`。
-2. Phase 5 已结束（2026-10-30 用户确认并发布 1.0）；不要再把它当进行中。分发前
-   替换 release debug keystore；可选增强只有语料缩略图/空错误态/无障碍。
-3. Phase 6 P6.1–P6.5 已实现（见 `docs/phase6-status.md`）；下一步先按
-   `docs/agent_docs/device-feedback-2026-10-31.md` 的 Wave 2–4 处理实机反馈
-   F1–F17，再继续 P6.6 多 OCR 版本/词典辅助修复，最后做 P6.7 annotation DSL/
-   Markdown/ruby/pitch/历史 UI/发布。不要重写已验证的 Paddle 横向路径或 MangaOCR
-   基础流水线；新增 OCR 优化（mask/panel、cross-bubble batching、INT8 draft、
-   tiling）应作为独立增强并补回归。
-4. Phase 6 的真实 provider/API Key、secure storage 设备 I/O、真实词典
-   `sample`/`suggest` 和 arm64 Agent 端到端仍未验收；不要把它们描述成已验证。
-5. 进行实网模型下载验证（本机模拟器 DNS 不可用）：在可访问 hf-mirror 的设备上
-   验证 PaddleOCR/MangaOCR/orientation 下载、断点续传、镜像回退、本地导入与许可
-   确认；确认模型目录与删除流程。
-6. 进行相机/照片集/多选/语料的 arm64 真机回归，重点验证 MangaOCR 竖排质量、
-   连续多气泡页性能/内存，以及真实的 180°/90° 旋转照片；本机仅 x86_64。
-7. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
-   颜色/字号，字体与模型文件不入库。Phase 6 的功能按钮/Agent UI 也必须先补
-   token，不能直接改既有页面。
-8. 每个阶段结束运行 analyze/test/debug build；当前测试数量、设备套件结果与构建
-   产物见 `docs/project-data.md` §2/§3/§5，不要在阶段文档中重复具体数字；
-   设备端测试命令见 `docs/dev-setup.md`。
+2. 按 §4 的优先级推进；不要重写已验证的 Paddle 横向路径或 MangaOCR 基础流水线。
+3. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
+   颜色/字号，字体与模型文件不入库。Phase 6 的功能按钮/Agent UI 必须先补 token。
+4. 每个阶段结束运行 analyze/test/debug build；测试数量、设备结果与构建产物见
+   `docs/project-data.md` §2/§3/§5；设备端测试命令见 `docs/dev-setup.md`。

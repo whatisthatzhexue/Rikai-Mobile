@@ -6,9 +6,10 @@
 > 模型补查，必须先重新批准 tool loop 并补 `LlmMessage` tool_use/tool_result。
 > 同样，`OcrWorkflow` 因无生产调用已删除，OCR 由 `OcrPortAdapter` 直接完成。
 >
-> **2026-11-01 语言决策**：默认输出/UI 语言为中文（`zh`）；旧 `follow` 一律映射为
-> `zh`，禁止按输入假名/拉丁字符推断（F1/F17 权威）。当前代码仍默认 `follow`，
-> `resolveAgentUiLanguage` 仍有输入启发式，待 Wave 2 实现；不得把本决策写成已实现。
+> **2026-11-01 语言决策（Wave 2 已实现）**：默认输出/UI 语言为中文（`zh`）；
+> 旧 `follow` 一律映射为 `zh`，禁止按输入假名/拉丁字符推断（F1a/F17 权威）。
+> `resolveAgentUiLanguage` 只接收显式设置；`AgentUiStrings` 提供中/英/日文案。
+> F1b（结果字段语言后校验 + 一次修复）仍待 Wave 3，不得写成已实现。
 >
 > 规范性 MUST/MUST NOT 规则见 `docs/project-rules.md`；当前预算/上限和固定文案
 > 见 `docs/project-data.md`。本文保留产品/流程设计细节，不重复规则正文或当前数值。
@@ -425,9 +426,9 @@ LLM 输入：系统提示（角色、严格/宽松规则、引用规则、原文
 禁止图像/路径、输出语言契约、把 OCR/词典文本当不可信数据）+ 用户请求 +
 Stage 0 envelope + Stage 1 evidence + 已确认的 dictionary profiles。输出语言
 默认中文；旧 `follow` 不得再按输入假名/拉丁字符推断，统一按中文处理（2026-11-01
-决策；当前代码仍为 `follow`，F1/F17 待 Wave 2 实现）。模型返回
-后的人类可读字段需做一次语言校验，偏离目标语言时允许一次语言修复；仍偏离则保留
-结果并显示警告，不得丢弃已生成内容。
+决策；F1a/F17 已在 Wave 2 实现）。模型返回后的人类可读字段需做一次语言校验，
+偏离目标语言时允许一次语言修复；仍偏离则保留结果并显示警告，不得丢弃已生成内容
+（F1b，Wave 3 待实现）。
 
 输出 `rikai.agent.analysis.v1` 结构化 JSON（完整 schema 见契约文档）：
 

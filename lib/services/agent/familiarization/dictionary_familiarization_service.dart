@@ -84,6 +84,55 @@ class FamiliarizationBatchResult {
   final List<DictionaryProfileIssue> issues;
 }
 
+/// A generated profile waiting for an explicit user decision.
+///
+/// The app-level inbox holds these proposals so navigating away cannot turn a
+/// missing decision into an automatic skip. Nothing is written to the profile
+/// store until [DictionaryFamiliarizationService.persistDecision] is called.
+class AgentProfileProposal {
+  AgentProfileProposal({
+    required this.id,
+    required this.dictionary,
+    required this.fingerprint,
+    required this.profile,
+    required this.markdown,
+    this.runId = '',
+    this.modelId = '',
+    this.promptVersion = 1,
+    this.schemaVersion = 1,
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  final String id;
+  final DictionaryInfo dictionary;
+  final String fingerprint;
+  final DictionaryProfile profile;
+  final String markdown;
+  final String runId;
+  final String modelId;
+  final int promptVersion;
+  final int schemaVersion;
+  final DateTime createdAt;
+
+  String get dictionaryId => dictionary.id;
+  String get title => dictionary.title;
+}
+
+class FamiliarizationGeneration {
+  const FamiliarizationGeneration({
+    required this.results,
+    required this.proposals,
+    this.warnings = const <String>[],
+    this.issues = const <DictionaryProfileIssue>[],
+  });
+
+  /// Reused, declined and unavailable results. Pending drafts are proposals.
+  final List<FamiliarizationResult> results;
+  final List<AgentProfileProposal> proposals;
+  final List<String> warnings;
+  final List<DictionaryProfileIssue> issues;
+}
+
 /// Generates and caches one dictionary profile after explicit user consent.
 class DictionaryFamiliarizationService {
   const DictionaryFamiliarizationService({
@@ -135,12 +184,55 @@ class DictionaryFamiliarizationService {
   /// Confirmed/declined profiles are reused locally. If the batch request or
   /// JSON parse fails, the run continues with warnings instead of spending
   /// one request per dictionary.
+  ///
+  /// `confirm` is retained for callers that resolve the decision inline. The
+  /// Agent run splits generation and decision into [generateMany] +
+  /// [persistDecision] so a page detach can never skip a profile.
   Future<FamiliarizationBatchResult> ensureMany(
     List<DictionaryInfo> dictionaries, {
     ProfileConfirmationCallback? confirm,
     bool force = false,
+    String runId = '',
+  }) async {
+    final generation = await generateMany(
+      dictionaries,
+      force: force,
+      runId: runId,
+    );
+    final results = <FamiliarizationResult>[...generation.results];
+    for (final proposal in generation.proposals) {
+      if (confirm == null) {
+        results.add(
+          FamiliarizationResult(
+            action: FamiliarizationAction.pending,
+            draft: proposal.profile,
+            markdown: proposal.markdown,
+          ),
+        );
+        continue;
+      }
+      final decision = await confirm(proposal.profile, proposal.markdown);
+      results.add(
+        await persistDecision(proposal, decision.action, decision.markdown),
+      );
+    }
+    return FamiliarizationBatchResult(
+      results: results,
+      warnings: generation.warnings,
+      issues: generation.issues,
+    );
+  }
+
+  /// Samples and generates profiles without asking for consent or writing a
+  /// profile. All generated items are returned so the app-level inbox can show
+  /// the complete pending queue.
+  Future<FamiliarizationGeneration> generateMany(
+    List<DictionaryInfo> dictionaries, {
+    bool force = false,
+    String runId = '',
   }) async {
     final results = <FamiliarizationResult>[];
+    final proposals = <AgentProfileProposal>[];
     final warnings = <String>[];
     final issues = <DictionaryProfileIssue>[];
     final pending = <DictionaryInfo>[];
@@ -182,7 +274,11 @@ class DictionaryFamiliarizationService {
     }
 
     if (pending.isEmpty) {
-      return FamiliarizationBatchResult(results: results, issues: issues);
+      return FamiliarizationGeneration(
+        results: results,
+        proposals: proposals,
+        issues: issues,
+      );
     }
 
     final samples = <String, DictionarySample>{};
@@ -214,13 +310,15 @@ class DictionaryFamiliarizationService {
         .where((dictionary) => samples.containsKey(dictionary.id))
         .toList(growable: false);
     if (sampled.isEmpty) {
-      return FamiliarizationBatchResult(
+      return FamiliarizationGeneration(
         results: results,
+        proposals: proposals,
         warnings: warnings,
         issues: issues,
       );
     }
 
+    var proposalSerial = 0;
     for (final batch in _splitBatches(sampled, samples)) {
       final batchSamples = <DictionarySample>[
         for (final dictionary in batch) samples[dictionary.id]!,
@@ -338,61 +436,44 @@ class DictionaryFamiliarizationService {
           continue;
         }
         final markdown = profileToMarkdown(draft, profileLanguage);
-        if (confirm == null) {
-          results.add(
-            FamiliarizationResult(
-              action: FamiliarizationAction.pending,
-              draft: draft,
-              markdown: markdown,
-            ),
-          );
-          continue;
-        }
-        final decision = await confirm(draft, markdown);
-        switch (decision.action) {
-          case ProfileConfirmationAction.save:
-            final stored = await _saveConfirmed(
-              dictionary: dictionary,
-              draft: draft,
-              markdown: decision.markdown.trim().isEmpty
-                  ? markdown
-                  : decision.markdown.trim(),
-              fingerprint: fingerprints[dictionary.id]!,
-            );
-            results.add(
-              FamiliarizationResult(
-                action: FamiliarizationAction.created,
-                stored: stored,
-                draft: draft,
-                markdown: stored.markdown,
-              ),
-            );
-          case ProfileConfirmationAction.decline:
-            final stored = await _saveDeclined(
-              dictionary: dictionary,
-              fingerprint: fingerprints[dictionary.id]!,
-            );
-            results.add(
-              FamiliarizationResult(
-                action: FamiliarizationAction.declined,
-                stored: stored,
-              ),
-            );
-          case ProfileConfirmationAction.skipOnce:
-            results.add(
-              FamiliarizationResult(
-                action: FamiliarizationAction.skipped,
-                draft: draft,
-                markdown: markdown,
-              ),
-            );
-        }
+        proposalSerial++;
+        proposals.add(
+          AgentProfileProposal(
+            id:
+                'profile-${DateTime.now().microsecondsSinceEpoch}-'
+                '$proposalSerial-${dictionary.id}',
+            dictionary: dictionary,
+            fingerprint: fingerprints[dictionary.id]!,
+            profile: draft,
+            markdown: markdown,
+            runId: runId,
+            modelId: _smallModel,
+            promptVersion: promptVersion,
+            schemaVersion: schemaVersion,
+          ),
+        );
       }
     }
-    return FamiliarizationBatchResult(
+    return FamiliarizationGeneration(
       results: results,
+      proposals: proposals,
       warnings: warnings,
       issues: issues,
+    );
+  }
+
+  /// Writes the user's explicit decision. `skipOnce` deliberately writes
+  /// nothing and can be retried on the next run.
+  Future<FamiliarizationResult> persistDecision(
+    AgentProfileProposal proposal,
+    ProfileConfirmationAction action,
+    String markdown,
+  ) {
+    return persistAgentProfileDecision(
+      repository: _repository,
+      proposal: proposal,
+      action: action,
+      markdown: markdown,
     );
   }
 
@@ -418,46 +499,63 @@ class DictionaryFamiliarizationService {
     if (current.isNotEmpty) batches.add(current);
     return batches;
   }
+}
 
-  Future<StoredDictionaryProfile> _saveConfirmed({
-    required DictionaryInfo dictionary,
-    required DictionaryProfile draft,
-    required String markdown,
-    required String fingerprint,
-  }) async {
-    final stored = StoredDictionaryProfile(
-      dictionaryId: dictionary.id,
-      fingerprint: fingerprint,
-      markdown: markdown,
-      status: DictionaryProfileStatus.confirmed,
-      profile: draft,
-      confirmedAt: DateTime.now(),
-      modelId: _smallModel,
-      promptVersion: promptVersion,
-      schemaVersion: schemaVersion,
-    );
-    await _repository.save(stored);
-    return stored;
+/// Applies an explicit user decision to a generated proposal without depending
+/// on a live LLM/sample port. Used by both the Agent run and the profile
+/// manager.
+Future<FamiliarizationResult> persistAgentProfileDecision({
+  required DictionaryProfileRepository repository,
+  required AgentProfileProposal proposal,
+  required ProfileConfirmationAction action,
+  required String markdown,
+}) async {
+  final dictionary = proposal.dictionary;
+  switch (action) {
+    case ProfileConfirmationAction.save:
+      final stored = StoredDictionaryProfile(
+        dictionaryId: dictionary.id,
+        title: dictionary.title,
+        fingerprint: proposal.fingerprint,
+        markdown: markdown.trim().isEmpty ? proposal.markdown : markdown.trim(),
+        status: DictionaryProfileStatus.confirmed,
+        profile: proposal.profile,
+        confirmedAt: DateTime.now(),
+        modelId: proposal.modelId,
+        promptVersion: proposal.promptVersion,
+        schemaVersion: proposal.schemaVersion,
+      );
+      await repository.save(stored);
+      return FamiliarizationResult(
+        action: FamiliarizationAction.created,
+        stored: stored,
+        draft: proposal.profile,
+        markdown: stored.markdown,
+      );
+    case ProfileConfirmationAction.decline:
+      final stored = StoredDictionaryProfile(
+        dictionaryId: dictionary.id,
+        title: dictionary.title,
+        fingerprint: proposal.fingerprint,
+        markdown: '',
+        status: DictionaryProfileStatus.declined,
+        confirmedAt: DateTime.now(),
+        modelId: proposal.modelId,
+        promptVersion: proposal.promptVersion,
+        schemaVersion: proposal.schemaVersion,
+      );
+      await repository.save(stored);
+      return FamiliarizationResult(
+        action: FamiliarizationAction.declined,
+        stored: stored,
+      );
+    case ProfileConfirmationAction.skipOnce:
+      return FamiliarizationResult(
+        action: FamiliarizationAction.skipped,
+        draft: proposal.profile,
+        markdown: proposal.markdown,
+      );
   }
-
-  Future<StoredDictionaryProfile> _saveDeclined({
-    required DictionaryInfo dictionary,
-    required String fingerprint,
-  }) async {
-    final stored = StoredDictionaryProfile(
-      dictionaryId: dictionary.id,
-      fingerprint: fingerprint,
-      markdown: '',
-      status: DictionaryProfileStatus.declined,
-      confirmedAt: DateTime.now(),
-      modelId: _smallModel,
-      promptVersion: promptVersion,
-      schemaVersion: schemaVersion,
-    );
-    await _repository.save(stored);
-    return stored;
-  }
-
 }
 
 void _agentDebug(String message) {

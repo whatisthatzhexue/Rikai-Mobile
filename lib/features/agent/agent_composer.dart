@@ -3,17 +3,20 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_tokens.dart';
+import '../../services/agent/agent_ui_strings.dart';
 
 Widget buildAgentComposer(
   BuildContext context, {
   required TextEditingController controller,
-  required String? imagePath,
+  required FocusNode focusNode,
+  required List<String> imagePaths,
   required bool running,
   required bool canSend,
   required VoidCallback onPickImage,
-  required VoidCallback onRemoveImage,
+  required ValueChanged<String> onRemoveImage,
   required VoidCallback onSend,
   required VoidCallback onStop,
+  required AgentUiStrings strings,
 }) {
   final theme = Theme.of(context);
   return Container(
@@ -29,38 +32,79 @@ Widget buildAgentComposer(
     ),
     child: Column(
       children: [
-        if (imagePath != null)
+        if (imagePaths.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                  child: Image.file(
-                    File(imagePath),
-                    width: AgentTokens.imageThumbnail,
-                    height: AgentTokens.imageThumbnail,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stack) => const Icon(
-                      Icons.broken_image_outlined,
-                      size: AgentTokens.imageThumbnail,
-                    ),
-                  ),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  children: [
+                    for (var index = 0; index < imagePaths.length; index++)
+                      Stack(
+                        key: ValueKey('agent-composer-image-$index'),
+                        clipBehavior: Clip.none,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                            child: Image.file(
+                              File(imagePaths[index]),
+                              width: AgentTokens.imageThumbnail,
+                              height: AgentTokens.imageThumbnail,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stack) =>
+                                  Container(
+                                    width: AgentTokens.imageThumbnail,
+                                    height: AgentTokens.imageThumbnail,
+                                    color: AppColors.surfaceMuted,
+                                    alignment: Alignment.center,
+                                    child: const Icon(
+                                      Icons.broken_image_outlined,
+                                      size: AppSizes.icon,
+                                    ),
+                                  ),
+                            ),
+                          ),
+                          Positioned(
+                            top: -6,
+                            right: -6,
+                            child: Semantics(
+                              button: true,
+                              label: strings.removeImage,
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: running
+                                    ? null
+                                    : () => onRemoveImage(imagePaths[index]),
+                                child: Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.textPrimary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 14,
+                                    color: AppColors.onHeader,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    '图片仅在本机 OCR，不会上传',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontSize: AgentTokens.helper,
-                      color: AppColors.textSecondary,
-                    ),
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  strings.imageLocalOnly,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: AgentTokens.helper,
+                    color: AppColors.textSecondary,
                   ),
-                ),
-                IconButton(
-                  tooltip: '移除图片',
-                  onPressed: running ? null : onRemoveImage,
-                  icon: const Icon(Icons.close, size: AppSizes.icon),
                 ),
               ],
             ),
@@ -69,7 +113,7 @@ Widget buildAgentComposer(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             IconButton(
-              tooltip: '选择图片',
+              tooltip: strings.pickImage,
               onPressed: running ? null : onPickImage,
               icon: const Icon(
                 Icons.add_photo_alternate_outlined,
@@ -79,14 +123,15 @@ Widget buildAgentComposer(
             Expanded(
               child: TextField(
                 controller: controller,
+                focusNode: focusNode,
                 minLines: 1,
                 maxLines: AgentTokens.composerMaxLines,
                 textInputAction: TextInputAction.newline,
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontSize: AgentTokens.body,
                 ),
-                decoration: const InputDecoration(
-                  hintText: '输入问题，或粘贴文本…',
+                decoration: InputDecoration(
+                  hintText: strings.inputHint,
                   filled: false,
                   isDense: true,
                 ),

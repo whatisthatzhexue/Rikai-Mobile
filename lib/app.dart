@@ -6,6 +6,7 @@ import 'core/theme/app_tokens.dart';
 import 'core/theme/unfocus_route_observer.dart';
 import 'state/providers.dart';
 import 'features/agent/agent_page.dart';
+import 'features/agent/agent_profiles_page.dart';
 import 'features/capture/capture_page.dart';
 import 'features/capture/photo_set_page.dart';
 import 'features/corpus/corpus_detail_page.dart';
@@ -100,6 +101,11 @@ GoRouter _createRouter({String initialLocation = '/'}) {
       GoRoute(
         path: '/agent',
         pageBuilder: (context, state) => _page(state, const AgentPage()),
+      ),
+      GoRoute(
+        path: '/agent-profiles',
+        pageBuilder: (context, state) =>
+            _page(state, const AgentProfilesPage()),
       ),
       GoRoute(
         path: '/agent-settings',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/agent/agent_profile.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../services/agent/agent_ui_strings.dart';
 import '../../services/agent/familiarization/dictionary_familiarization_service.dart';
 
 /// Shows the generated dictionary profile and requires explicit confirmation.
@@ -9,14 +10,20 @@ Future<ProfileConfirmation?> showFamiliarizationSheet(
   BuildContext context, {
   required DictionaryProfile profile,
   required String markdown,
+  required AgentUiStrings strings,
+  bool editOnly = false,
 }) {
   return showModalBottomSheet<ProfileConfirmation>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: AppColors.surface,
-    builder: (context) =>
-        _FamiliarizationSheet(profile: profile, initialMarkdown: markdown),
+    builder: (context) => _FamiliarizationSheet(
+      profile: profile,
+      initialMarkdown: markdown,
+      strings: strings,
+      editOnly: editOnly,
+    ),
   );
 }
 
@@ -24,10 +31,14 @@ class _FamiliarizationSheet extends StatefulWidget {
   const _FamiliarizationSheet({
     required this.profile,
     required this.initialMarkdown,
+    required this.strings,
+    required this.editOnly,
   });
 
   final DictionaryProfile profile;
   final String initialMarkdown;
+  final AgentUiStrings strings;
+  final bool editOnly;
 
   @override
   State<_FamiliarizationSheet> createState() => _FamiliarizationSheetState();
@@ -74,15 +85,14 @@ class _FamiliarizationSheetState extends State<_FamiliarizationSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '词典档案 · ${widget.profile.title}',
+                  widget.strings.profileTitle(widget.profile.title),
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontSize: AppTypography.sectionHeading,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  '这是模型根据少量样本生成的词典使用说明。请确认后再用于后续回答；'
-                  '你可以直接编辑下面的文字。',
+                  widget.strings.profileSheetBody,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontSize: AppTypography.helper,
                     color: AppColors.textSecondary,
@@ -104,10 +114,10 @@ class _FamiliarizationSheetState extends State<_FamiliarizationSheet> {
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontSize: AgentTokens.body,
                 ),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   filled: false,
-                  hintText: '词典档案',
-                  border: OutlineInputBorder(),
+                  hintText: widget.strings.profileHint,
+                  border: const OutlineInputBorder(),
                 ),
               ),
             ),
@@ -124,33 +134,50 @@ class _FamiliarizationSheetState extends State<_FamiliarizationSheet> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SizedBox(
-                    height: AppSizes.control,
-                    child: FilledButton(
-                      onPressed: () => _finish(ProfileConfirmationAction.save),
-                      child: const Text('保存并信任'),
+                  if (widget.editOnly) ...[
+                    SizedBox(
+                      height: AppSizes.control,
+                      child: FilledButton(
+                        onPressed: () =>
+                            _finish(ProfileConfirmationAction.save),
+                        child: Text(widget.strings.save),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () =>
-                              _finish(ProfileConfirmationAction.skipOnce),
-                          child: const Text('本次跳过'),
-                        ),
+                    const SizedBox(height: AppSpacing.xs),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: Text(widget.strings.cancel),
+                    ),
+                  ] else ...[
+                    SizedBox(
+                      height: AppSizes.control,
+                      child: FilledButton(
+                        onPressed: () =>
+                            _finish(ProfileConfirmationAction.save),
+                        child: Text(widget.strings.saveAndTrust),
                       ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () =>
-                              _finish(ProfileConfirmationAction.decline),
-                          child: const Text('不再询问'),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () =>
+                                _finish(ProfileConfirmationAction.skipOnce),
+                            child: Text(widget.strings.skipOnce),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () =>
+                                _finish(ProfileConfirmationAction.decline),
+                            child: Text(widget.strings.decline),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),

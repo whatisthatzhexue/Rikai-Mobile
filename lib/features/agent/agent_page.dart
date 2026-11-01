@@ -3,24 +3,25 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../../core/models/agent/agent_input.dart';
+import '../../core/models/agent/agent_limits.dart';
 import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/dict_info.dart';
-import '../../core/models/dictionary_selection.dart';
+import '../../core/theme/app_tokens.dart';
 import '../../core/ui/rikai_toast.dart';
 import '../../services/agent/agent_run.dart';
-import '../../services/agent/familiarization/dictionary_familiarization_service.dart';
+import '../../services/agent/agent_ui_strings.dart';
+import '../../state/agent_dictionary_preferences.dart';
+import '../../state/agent_profile_inbox.dart';
 import '../../state/agent_providers.dart';
 import '../../state/agent_run_controller.dart';
-import '../../state/lookup_preferences.dart';
 import '../../state/providers.dart';
-import 'agent_actions.dart';
 import 'agent_composer.dart';
 import 'agent_message_list.dart';
 import 'agent_session_panel.dart';
+import 'familiarization_sheet.dart';
 
 class AgentPage extends ConsumerStatefulWidget {
   const AgentPage({super.key});
@@ -29,51 +30,56 @@ class AgentPage extends ConsumerStatefulWidget {
   ConsumerState<AgentPage> createState() => _AgentPageState();
 }
 
+class _PickedImage {
+  const _PickedImage({required this.id, required this.path});
+
+  final String id;
+  final String path;
+}
+
 class _AgentPageState extends ConsumerState<AgentPage> {
   final TextEditingController _input = TextEditingController();
-  final ImagePicker _picker = ImagePicker();
+  final FocusNode _inputFocus = FocusNode();
   final ScrollController _messagesScroll = ScrollController();
   late final AgentRunController _runController;
-  late final ProfileConfirmationCallback _profileHandler;
-  Set<String>? _selectedIds;
-  DictionarySelectionMode _selectionMode = DictionarySelectionMode.multi;
   AgentMode _mode = AgentMode.strict;
   String? _selectedProviderId;
-  String? _imagePath;
+  List<_PickedImage> _images = <_PickedImage>[];
   bool _settingsExpanded = false;
+  bool _profileSheetOpen = false;
+  int _imageSerial = 0;
 
   @override
   void initState() {
     super.initState();
     _runController = ref.read(agentRunControllerProvider.notifier);
-    _profileHandler = (profile, markdown) =>
-        confirmAgentProfile(context, profile, markdown);
-    _runController.attachProfileHandler(_profileHandler);
-    final enabled = ref.read(enabledDictionariesProvider);
-    final preferences = ref.read(lookupPreferencesProvider);
-    _selectedIds = preferences
-        .selectedDictionaries(enabled)
-        .map((dictionary) => dictionary.id)
-        .toSet();
-    _selectionMode = preferences.mode;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _processProfileInbox();
+    });
   }
 
   @override
   void dispose() {
-    // Leaving the page only unsubscribes; the run keeps going at app scope.
-    _runController.detachProfileHandler(_profileHandler);
+    // Leaving the page only unsubscribes; the run and profile inbox keep going
+    // at application scope.
     _input.dispose();
+    _inputFocus.dispose();
     _messagesScroll.dispose();
     super.dispose();
   }
 
-  List<DictionaryInfo> _selectedDictionaries(List<DictionaryInfo> enabled) {
-    final ids = _selectedIds;
-    if (ids == null) return enabled;
-    return enabled
-        .where((dictionary) => ids.contains(dictionary.id))
-        .toList(growable: false);
+  AgentUiStrings _stringsFor(
+    AgentRunSnapshot run,
+    AgentResponseLanguage setting,
+  ) {
+    final language = run.hasConversation ? run.responseLanguage : setting;
+    return AgentUiStrings.of(resolveAgentUiLanguage(language));
   }
+
+  List<DictionaryInfo> _selectedDictionaries(
+    List<DictionaryInfo> enabled,
+    AgentDictionaryPreferences preferences,
+  ) => preferences.selectedDictionaries(enabled);
 
   AgentProviderConfig? _provider(List<AgentProviderConfig> providers) {
     if (providers.isEmpty) return null;
@@ -83,48 +89,137 @@ class _AgentPageState extends ConsumerState<AgentPage> {
     return providers.first;
   }
 
-  void _toggleDictionary(String id, List<DictionaryInfo> enabled) {
-    final current = _selectedIds ?? enabled.map((item) => item.id).toSet();
-    final next = <String>{...current};
-    if (_selectionMode == DictionarySelectionMode.single) {
-      next
-        ..clear()
-        ..add(id);
-    } else if (!next.add(id)) {
-      next.remove(id);
-    }
-    setState(() => _selectedIds = next);
-  }
-
-  void _selectAll(List<DictionaryInfo> enabled) {
-    setState(() {
-      _selectedIds = enabled.map((dictionary) => dictionary.id).toSet();
+  void _scheduleProfileInbox() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_processProfileInbox());
     });
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _processProfileInbox() async {
+    if (!mounted || _profileSheetOpen) return;
+    final proposal = ref.read(agentProfileInboxProvider).first;
+    if (proposal == null) return;
+    _profileSheetOpen = true;
     try {
-      final file = await _picker.pickImage(source: ImageSource.gallery);
-      if (file == null || !mounted) return;
-      setState(() => _imagePath = file.path);
-    } catch (_) {
-      if (mounted) RikaiToast.show(context, '无法选择图片');
+      final run = ref.read(agentRunControllerProvider);
+      final settings = ref.read(appSettingsProvider);
+      final strings = _stringsFor(
+        run,
+        AgentResponseLanguage.fromWire(settings.agentResponseLanguage),
+      );
+      final decision = await showFamiliarizationSheet(
+        context,
+        profile: proposal.profile,
+        markdown: proposal.markdown,
+        strings: strings,
+      );
+      if (!mounted || decision == null) {
+        // Closing the sheet keeps the proposal pending; it must never imply a
+        // skip. It is shown again on the next page entry or queue change.
+        return;
+      }
+      await ref
+          .read(agentProfileInboxProvider.notifier)
+          .resolve(proposal.id, decision);
+      _scheduleProfileInbox();
+    } finally {
+      _profileSheetOpen = false;
     }
   }
 
+  Future<void> _showImageSourceMenu(AgentUiStrings strings) async {
+    final source = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(
+                Icons.photo_camera_outlined,
+                size: AppSizes.icon,
+              ),
+              title: Text(strings.takePhoto),
+              onTap: () => Navigator.of(context).pop('camera'),
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.photo_library_outlined,
+                size: AppSizes.icon,
+              ),
+              title: Text(strings.chooseFromGallery),
+              onTap: () => Navigator.of(context).pop('gallery'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || source == null) return;
+    await _pickImages(fromCamera: source == 'camera', strings: strings);
+  }
+
+  Future<void> _pickImages({
+    required bool fromCamera,
+    required AgentUiStrings strings,
+  }) async {
+    final limit = AgentLimits.standard.maxImagesPerRun;
+    final remaining = limit - _images.length;
+    if (remaining <= 0) {
+      RikaiToast.show(context, strings.imageLimitReached(limit));
+      return;
+    }
+    try {
+      final picker = ref.read(agentImagePickerProvider);
+      final picked = fromCamera
+          ? await picker.pickFromCamera()
+          : await picker.pickFromGallery();
+      if (!mounted || picked.isEmpty) return;
+      final accepted = picked.take(remaining).toList(growable: false);
+      setState(() {
+        for (final path in accepted) {
+          _imageSerial++;
+          _images.add(_PickedImage(id: 'local-$_imageSerial', path: path));
+        }
+      });
+      if (picked.length > remaining) {
+        RikaiToast.show(context, strings.imageLimitReached(limit));
+      }
+    } catch (_) {
+      if (mounted) RikaiToast.show(context, strings.pickImageFailed);
+    }
+  }
+
+  void _removeImage(String path) {
+    setState(() {
+      final next = <_PickedImage>[..._images];
+      final index = next.indexWhere((image) => image.path == path);
+      if (index >= 0) next.removeAt(index);
+      _images = next;
+    });
+  }
+
   Future<void> _send() async {
-    if (ref.read(agentRunControllerProvider).isRunning) return;
+    final run = ref.read(agentRunControllerProvider);
+    if (run.isRunning) return;
+    final settings = ref.read(appSettingsProvider);
+    final strings = _stringsFor(
+      run,
+      AgentResponseLanguage.fromWire(settings.agentResponseLanguage),
+    );
     FocusScope.of(context).unfocus();
     final text = _input.text.trim();
-    final imagePath = _imagePath;
-    if (text.isEmpty && imagePath == null) {
-      RikaiToast.show(context, '请输入文字或选择图片');
+    final imagePaths = _images.map((image) => image.path).toList();
+    if (text.isEmpty && imagePaths.isEmpty) {
+      RikaiToast.show(context, strings.inputRequired);
       return;
     }
     final enabled = ref.read(enabledDictionariesProvider);
-    final dictionaries = _selectedDictionaries(enabled);
+    final preferences = ref.read(agentDictionaryPreferencesProvider);
+    final dictionaries = _selectedDictionaries(enabled, preferences);
     if (dictionaries.isEmpty) {
-      RikaiToast.show(context, '请至少选择一本词典');
+      RikaiToast.show(context, strings.dictionaryRequired);
       return;
     }
     final providers =
@@ -132,17 +227,18 @@ class _AgentPageState extends ConsumerState<AgentPage> {
         const <AgentProviderConfig>[];
     final provider = _provider(providers);
     if (provider == null) {
-      RikaiToast.show(context, '请先在设置中配置模型');
+      RikaiToast.show(context, strings.modelRequired);
       return;
     }
-    final settings = ref.read(appSettingsProvider);
-    final run = _runController.start(
+    final started = _runController.start(
       userText: text,
-      images: imagePath == null
-          ? const <AgentImageInput>[]
-          : <AgentImageInput>[
-              AgentImageInput(id: 'img-1', localPath: imagePath),
-            ],
+      images: <AgentImageInput>[
+        for (var index = 0; index < imagePaths.length; index++)
+          AgentImageInput(
+            id: 'local-${index + 1}',
+            localPath: imagePaths[index],
+          ),
+      ],
       dictionaries: dictionaries,
       provider: provider,
       mode: _mode,
@@ -155,16 +251,14 @@ class _AgentPageState extends ConsumerState<AgentPage> {
       ),
     );
     // A request only leaves the composer after the controller accepted it.
-    // Immediate validation errors (for example an empty model name) keep the
-    // user's text/image so nothing typed is lost.
     if (ref.read(agentRunControllerProvider).isRunning) {
       setState(() {
         _input.clear();
-        _imagePath = null;
+        _images = <_PickedImage>[];
         _settingsExpanded = false;
       });
     }
-    unawaited(run);
+    unawaited(started);
   }
 
   void _retry() {
@@ -173,6 +267,10 @@ class _AgentPageState extends ConsumerState<AgentPage> {
 
   void _retryLoose() {
     unawaited(_runController.retry(mode: AgentMode.loose));
+  }
+
+  void _regenerate() {
+    unawaited(_runController.regenerate());
   }
 
   void _cancel() {
@@ -184,9 +282,25 @@ class _AgentPageState extends ConsumerState<AgentPage> {
     _runController.newSession();
     setState(() {
       _input.clear();
-      _imagePath = null;
-      final enabled = ref.read(enabledDictionariesProvider);
-      _selectedIds = enabled.map((dictionary) => dictionary.id).toSet();
+      _images = <_PickedImage>[];
+    });
+  }
+
+  void _editCurrentMessage() {
+    final run = ref.read(agentRunControllerProvider);
+    if (run.sentText.isEmpty) return;
+    _input
+      ..text = run.sentText
+      ..selection = TextSelection.collapsed(offset: run.sentText.length);
+    setState(() {
+      _images = <_PickedImage>[
+        for (var index = 0; index < run.sentImagePaths.length; index++)
+          _PickedImage(id: 'edit-$index', path: run.sentImagePaths[index]),
+      ];
+      _settingsExpanded = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _inputFocus.requestFocus();
     });
   }
 
@@ -197,9 +311,20 @@ class _AgentPageState extends ConsumerState<AgentPage> {
     final providers =
         providersAsync.asData?.value ?? const <AgentProviderConfig>[];
     final provider = _provider(providers);
-    final selected = _selectedDictionaries(enabled);
-    final selectedIds = selected.map((dictionary) => dictionary.id).toSet();
+    final preferences = ref.watch(agentDictionaryPreferencesProvider);
+    final selectedIds = _selectedDictionaries(
+      enabled,
+      preferences,
+    ).map((dictionary) => dictionary.id).toSet();
     final run = ref.watch(agentRunControllerProvider);
+    final settings = ref.watch(appSettingsProvider);
+    final strings = _stringsFor(
+      run,
+      AgentResponseLanguage.fromWire(settings.agentResponseLanguage),
+    );
+    ref.listen(agentProfileInboxProvider, (previous, next) {
+      if (next.pending.isNotEmpty) _scheduleProfileInbox();
+    });
     ref.listen(agentRunControllerProvider, (previous, next) {
       if (previous?.status != next.status ||
           previous?.stageMessage != next.stageMessage ||
@@ -213,20 +338,25 @@ class _AgentPageState extends ConsumerState<AgentPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('词典助手'),
+        title: Text(strings.appTitle),
         actions: [
           IconButton(
-            tooltip: '新会话',
+            tooltip: strings.newSession,
             onPressed: running ? null : _newSession,
             icon: const Icon(Icons.add_comment_outlined),
           ),
           IconButton(
-            tooltip: '历史记录',
-            onPressed: () => RikaiToast.show(context, '历史记录将在 P6.7 提供'),
+            tooltip: strings.profiles,
+            onPressed: () => context.push('/agent-profiles'),
+            icon: const Icon(Icons.library_books_outlined),
+          ),
+          IconButton(
+            tooltip: strings.history,
+            onPressed: () => RikaiToast.show(context, strings.historyPending),
             icon: const Icon(Icons.history),
           ),
           IconButton(
-            tooltip: '模型设置',
+            tooltip: strings.settings,
             onPressed: () => context.push('/agent-settings'),
             icon: const Icon(Icons.tune),
           ),
@@ -239,8 +369,9 @@ class _AgentPageState extends ConsumerState<AgentPage> {
             buildAgentSessionBar(
               context,
               mode: _mode,
-              providerName: provider?.displayName ?? '未配置模型',
+              providerName: provider?.displayName ?? strings.unconfiguredModel,
               expanded: _settingsExpanded,
+              strings: strings,
               onToggle: () =>
                   setState(() => _settingsExpanded = !_settingsExpanded),
             ),
@@ -252,15 +383,21 @@ class _AgentPageState extends ConsumerState<AgentPage> {
                 mode: _mode,
                 enabled: enabled,
                 selectedIds: selectedIds,
-                selectionMode: _selectionMode,
+                selectionMode: preferences.mode,
                 running: running,
+                strings: strings,
                 onProviderChanged: (value) =>
                     setState(() => _selectedProviderId = value),
                 onModeChanged: (value) => setState(() => _mode = value),
-                onSelectionModeChanged: (value) =>
-                    setState(() => _selectionMode = value),
-                onToggleDictionary: (id) => _toggleDictionary(id, enabled),
-                onSelectAll: () => _selectAll(enabled),
+                onSelectionModeChanged: (value) => ref
+                    .read(agentDictionaryPreferencesProvider.notifier)
+                    .setMode(value),
+                onToggleDictionary: (id) => ref
+                    .read(agentDictionaryPreferencesProvider.notifier)
+                    .toggle(id, enabled),
+                onSelectAll: () => ref
+                    .read(agentDictionaryPreferencesProvider.notifier)
+                    .selectAll(),
                 onOpenSettings: () => context.push('/agent-settings'),
               ),
             Expanded(
@@ -271,16 +408,20 @@ class _AgentPageState extends ConsumerState<AgentPage> {
                 run: run,
                 onRetry: _retry,
                 onLooseRetry: _retryLoose,
+                onRegenerate: _regenerate,
+                onEditMessage: _editCurrentMessage,
               ),
             ),
             buildAgentComposer(
               context,
               controller: _input,
-              imagePath: _imagePath,
+              focusNode: _inputFocus,
+              imagePaths: _images.map((image) => image.path).toList(),
               running: running,
               canSend: providers.isNotEmpty,
-              onPickImage: _pickImage,
-              onRemoveImage: () => setState(() => _imagePath = null),
+              strings: strings,
+              onPickImage: () => _showImageSourceMenu(strings),
+              onRemoveImage: _removeImage,
               onSend: _send,
               onStop: _cancel,
             ),

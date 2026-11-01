@@ -5,6 +5,7 @@ import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_quote.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../services/agent/agent_run.dart';
+import '../../services/agent/agent_ui_strings.dart';
 import '../../services/agent/familiarization/dictionary_familiarization_service.dart'
     show DictionaryProfileIssue;
 import 'agent_fade_in.dart';
@@ -14,11 +15,13 @@ class AgentResultView extends StatelessWidget {
     super.key,
     required this.result,
     required this.onCitationTap,
+    required this.strings,
     this.onRetryProfile,
   });
 
   final AgentRunResult result;
   final ValueChanged<AgentCitation> onCitationTap;
+  final AgentUiStrings strings;
   final ValueChanged<DictionaryProfileIssue>? onRetryProfile;
 
   @override
@@ -53,7 +56,7 @@ class AgentResultView extends StatelessWidget {
       children: [
         if (result.evidence.truncated)
           Text(
-            '部分内容超出预算，未全部分析',
+            strings.resultTruncated,
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: AgentTokens.helper,
               color: AppColors.warning,
@@ -61,7 +64,7 @@ class AgentResultView extends StatelessWidget {
           ),
         if (result.evidence.structureUnavailable)
           Text(
-            '结构分析不可用（未配置 UniDic）；本次只提供译文和词典依据',
+            strings.structureUnavailable,
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: AgentTokens.helper,
               color: AppColors.warning,
@@ -69,9 +72,11 @@ class AgentResultView extends StatelessWidget {
           ),
         if (result.evidence.dictionaryIssues.isNotEmpty)
           Text(
-            '词典查询失败：'
-            '${result.evidence.dictionaryIssues.map((issue) => issue.dictionaryTitle).join('、')}'
-            '，结果可能不完整',
+            strings.dictionaryLookupFailed(
+              result.evidence.dictionaryIssues
+                  .map((issue) => issue.dictionaryTitle)
+                  .join('、'),
+            ),
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: AgentTokens.helper,
               color: AppColors.warning,
@@ -79,7 +84,7 @@ class AgentResultView extends StatelessWidget {
           ),
         if (!result.validation.valid)
           Text(
-            '部分内容未通过校验，已移除无依据/无效引用的部分',
+            strings.validationPartial,
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: AgentTokens.helper,
               color: AppColors.warning,
@@ -89,7 +94,7 @@ class AgentResultView extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           for (final warning in result.profileWarnings)
             Text(
-              '词典档案未使用：$warning',
+              strings.profileWarning(warning),
               style: theme.textTheme.bodySmall?.copyWith(
                 fontSize: AgentTokens.helper,
                 color: AppColors.warning,
@@ -104,7 +109,7 @@ class AgentResultView extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    '${issue.title}：无档案（${issue.reason}），已按通用规则检索',
+                    strings.noProfile(issue.title, issue.reason),
                     style: theme.textTheme.bodySmall?.copyWith(
                       fontSize: AgentTokens.helper,
                       color: AppColors.warning,
@@ -114,14 +119,14 @@ class AgentResultView extends StatelessWidget {
                 if (onRetryProfile != null)
                   TextButton(
                     onPressed: () => onRetryProfile!(issue),
-                    child: const Text('重试此词典'),
+                    child: Text(strings.retryThisDictionary),
                   ),
               ],
             ),
         ],
         if (result.quotes.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.md),
-          _SectionTitle('原文'),
+          _SectionTitle(strings.originalText),
           for (final quote in result.quotes)
             Container(
               margin: const EdgeInsets.only(top: AppSpacing.xs),
@@ -141,7 +146,7 @@ class AgentResultView extends StatelessWidget {
         ],
         if (result.analysis.segments.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.md),
-          _SectionTitle('逐句理解'),
+          _SectionTitle(strings.segmentUnderstanding),
           for (final (index, segment) in result.analysis.segments.indexed)
             AgentFadeIn(
               index: index,
@@ -151,28 +156,30 @@ class AgentResultView extends StatelessWidget {
                 citations: citations,
                 citationNumbers: citationNumbers,
                 onCitationTap: onCitationTap,
+                strings: strings,
               ),
             ),
         ],
         if (result.analysis.interpretations.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.md),
-          _SectionTitle('可能的理解'),
+          _SectionTitle(strings.possibleUnderstandings),
           for (final interpretation in result.analysis.interpretations)
             _InterpretationBlock(
               interpretation: interpretation,
               citations: citations,
               citationNumbers: citationNumbers,
               onCitationTap: onCitationTap,
+              strings: strings,
             ),
         ],
         if (result.analysis.unresolved.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.md),
-          _SectionTitle('未解决'),
+          _SectionTitle(strings.unresolvedTitle),
           for (final unresolved in result.analysis.unresolved)
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.xs),
               child: Text(
-                _unresolvedReason(unresolved),
+                _unresolvedReason(unresolved, strings),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontSize: AgentTokens.helper,
                   color: AppColors.warning,
@@ -182,7 +189,7 @@ class AgentResultView extends StatelessWidget {
         ],
         if (result.analysis.modelSupplements.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.md),
-          _SectionTitle('模型补充'),
+          _SectionTitle(strings.modelSupplements),
           for (final supplement in result.analysis.modelSupplements)
             Container(
               margin: const EdgeInsets.only(top: AppSpacing.xs),
@@ -202,7 +209,7 @@ class AgentResultView extends StatelessWidget {
         ],
         if (orders.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.md),
-          _SectionTitle('词典依据'),
+          _SectionTitle(strings.dictionaryEvidence),
           for (final (index, order) in orders.indexed)
             AgentFadeIn(
               index: index,
@@ -210,6 +217,7 @@ class AgentResultView extends StatelessWidget {
                 citations: grouped[order]!,
                 citationNumbers: citationNumbers,
                 onCitationTap: onCitationTap,
+                strings: strings,
               ),
             ),
         ],
@@ -243,6 +251,7 @@ class _SegmentBlock extends StatelessWidget {
     required this.citations,
     required this.citationNumbers,
     required this.onCitationTap,
+    required this.strings,
   });
 
   final AgentSegment segment;
@@ -250,6 +259,7 @@ class _SegmentBlock extends StatelessWidget {
   final Map<String, AgentCitation> citations;
   final Map<String, int> citationNumbers;
   final ValueChanged<AgentCitation> onCitationTap;
+  final AgentUiStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -293,6 +303,7 @@ class _SegmentBlock extends StatelessWidget {
           _ClaimBadge(
             epistemic: segment.epistemic,
             confidence: segment.confidence,
+            strings: strings,
           ),
           for (final note in segment.wordNotes)
             Padding(
@@ -330,6 +341,7 @@ class _SegmentBlock extends StatelessWidget {
                       citation: citations[id]!,
                       number: citationNumbers[id]!,
                       onTap: onCitationTap,
+                      strings: strings,
                     ),
                 ],
               ),
@@ -341,31 +353,36 @@ class _SegmentBlock extends StatelessWidget {
 }
 
 class _ClaimBadge extends StatelessWidget {
-  const _ClaimBadge({required this.epistemic, required this.confidence});
+  const _ClaimBadge({
+    required this.epistemic,
+    required this.confidence,
+    required this.strings,
+  });
 
   final AgentEpistemic epistemic;
   final double confidence;
+  final AgentUiStrings strings;
 
   @override
   Widget build(BuildContext context) {
     final (label, background, foreground) = switch (epistemic) {
       AgentEpistemic.dictionaryFact => (
-        '词典事实',
+        strings.epistemicDictionaryFact,
         AppColors.blue50,
         AppColors.blue700,
       ),
       AgentEpistemic.structuralAnalysis => (
-        '结构分析',
+        strings.epistemicStructural,
         AppColors.surfaceMuted,
         AppColors.textPrimary,
       ),
       AgentEpistemic.contextInference => (
-        '语境推断',
+        strings.epistemicInference,
         AppColors.surfaceMuted,
         AppColors.warning,
       ),
       AgentEpistemic.translation => (
-        '模型译文',
+        strings.epistemicTranslation,
         AppColors.surfaceMuted,
         AppColors.textSecondary,
       ),
@@ -392,7 +409,7 @@ class _ClaimBadge extends StatelessWidget {
           ),
         ),
         Text(
-          '置信度 ${(confidence.clamp(0, 1) * 100).round()}%',
+          strings.confidence((confidence.clamp(0, 1) * 100).round()),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             fontSize: AgentTokens.badge,
             color: AppColors.textSecondary,
@@ -409,12 +426,14 @@ class _InterpretationBlock extends StatelessWidget {
     required this.citations,
     required this.citationNumbers,
     required this.onCitationTap,
+    required this.strings,
   });
 
   final AgentInterpretation interpretation;
   final Map<String, AgentCitation> citations;
   final Map<String, int> citationNumbers;
   final ValueChanged<AgentCitation> onCitationTap;
+  final AgentUiStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -440,6 +459,7 @@ class _InterpretationBlock extends StatelessWidget {
                 citation: citations[id]!,
                 number: citationNumbers[id]!,
                 onTap: onCitationTap,
+                strings: strings,
               ),
         ],
       ),
@@ -452,11 +472,13 @@ class _EvidenceGroup extends StatelessWidget {
     required this.citations,
     required this.citationNumbers,
     required this.onCitationTap,
+    required this.strings,
   });
 
   final List<AgentCitation> citations;
   final Map<String, int> citationNumbers;
   final ValueChanged<AgentCitation> onCitationTap;
+  final AgentUiStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -480,7 +502,8 @@ class _EvidenceGroup extends StatelessWidget {
             AppSpacing.md,
           ),
           title: Text(
-            '${dictionary.dictionaryTitle} · ${citations.length} 条',
+            '${dictionary.dictionaryTitle} · '
+            '${strings.evidenceEntryCount(citations.length)}',
             style: theme.textTheme.bodyMedium?.copyWith(
               fontSize: AgentTokens.evidenceTitle,
               color: AppColors.textPrimary,
@@ -513,6 +536,7 @@ class _EvidenceGroup extends StatelessWidget {
                             citation: citation,
                             number: citationNumbers[citation.id] ?? 0,
                             onTap: onCitationTap,
+                            strings: strings,
                           ),
                         ],
                       ),
@@ -537,15 +561,17 @@ class _EvidenceGroup extends StatelessWidget {
   }
 }
 
-String _unresolvedReason(AgentUnresolved unresolved) {
+String _unresolvedReason(AgentUnresolved unresolved, AgentUiStrings strings) {
   final trimmed = unresolved.reason.trim();
-  if (trimmed.isEmpty) return '未解决';
+  if (trimmed.isEmpty) return strings.unresolvedFallback;
   // Quote IDs are an internal trace; never show `（q1）` to the user.
   final withoutQuoteId = trimmed.replaceFirst(
     RegExp(r'\s*[（(]\s*q\d+\s*[）)]\s*$'),
     '',
   );
-  return withoutQuoteId.trim().isEmpty ? '未解决' : withoutQuoteId.trim();
+  return withoutQuoteId.trim().isEmpty
+      ? strings.unresolvedFallback
+      : withoutQuoteId.trim();
 }
 
 class _CitationChip extends StatelessWidget {
@@ -553,17 +579,19 @@ class _CitationChip extends StatelessWidget {
     required this.citation,
     required this.number,
     required this.onTap,
+    required this.strings,
   });
 
   final AgentCitation citation;
   final int number;
   final ValueChanged<AgentCitation> onTap;
+  final AgentUiStrings strings;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: '查看依据$number ${citation.headword}',
+      label: strings.citationSemantics(number, citation.headword),
       child: GestureDetector(
         onTap: () => onTap(citation),
         child: Container(
@@ -581,7 +609,7 @@ class _CitationChip extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                '依据$number',
+                strings.citationLabel(number),
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: AgentTokens.citationChip,
                   color: AgentTokens.citationText,

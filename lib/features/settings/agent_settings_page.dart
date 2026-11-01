@@ -5,6 +5,7 @@ import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/ui/rikai_toast.dart';
+import '../../services/agent/agent_ui_strings.dart';
 import '../../services/security/secret_store.dart';
 import '../../state/agent_providers.dart';
 import '../../state/providers.dart';
@@ -17,8 +18,13 @@ class AgentSettingsPage extends ConsumerWidget {
     final theme = Theme.of(context);
     final settings = ref.watch(appSettingsProvider);
     final providersAsync = ref.watch(agentProvidersProvider);
+    final strings = AgentUiStrings.of(
+      resolveAgentUiLanguage(
+        AgentResponseLanguage.fromWire(settings.agentResponseLanguage),
+      ),
+    );
     return Scaffold(
-      appBar: AppBar(title: const Text('词典助手设置')),
+      appBar: AppBar(title: Text(strings.settingsTitle)),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg,
@@ -28,15 +34,14 @@ class AgentSettingsPage extends ConsumerWidget {
         ),
         children: [
           Text(
-            '词典档案语言',
+            strings.profileLanguageTitle,
             style: theme.textTheme.titleMedium?.copyWith(
               fontSize: AppTypography.sectionHeading,
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            '模型生成的词典用途/结构说明使用哪种语言；日文词条与读音保持原文。'
-            '默认中文。切换语言后会重新生成未匹配的档案。',
+            strings.profileLanguageBody,
             style: theme.textTheme.bodyMedium?.copyWith(
               fontSize: AppTypography.helper,
               color: AppColors.textSecondary,
@@ -45,8 +50,8 @@ class AgentSettingsPage extends ConsumerWidget {
           const SizedBox(height: AppSpacing.sm),
           DropdownButtonFormField<String>(
             initialValue: settings.agentProfileLanguage,
-            decoration: const InputDecoration(
-              labelText: '档案主体语言',
+            decoration: InputDecoration(
+              labelText: strings.profileLanguageLabel,
               isDense: true,
             ),
             items: <DropdownMenuItem<String>>[
@@ -63,19 +68,16 @@ class AgentSettingsPage extends ConsumerWidget {
               final confirmed = await showDialog<bool>(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: const Text('重新生成词典档案？'),
-                  content: const Text(
-                    '切换档案语言后，已有词典档案会失效，并在下次分析时重新生成。'
-                    '是否继续？',
-                  ),
+                  title: Text(strings.profileLanguageTitle),
+                  content: Text(strings.profileLanguageBody),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(false),
-                      child: const Text('取消'),
+                      child: Text(strings.cancel),
                     ),
                     FilledButton(
                       onPressed: () => Navigator.of(context).pop(true),
-                      child: const Text('继续'),
+                      child: Text(strings.save),
                     ),
                   ],
                 ),
@@ -89,7 +91,10 @@ class AgentSettingsPage extends ConsumerWidget {
           const SizedBox(height: AppSpacing.sm),
           DropdownButtonFormField<String>(
             initialValue: settings.agentResponseLanguage,
-            decoration: const InputDecoration(labelText: '回答语言', isDense: true),
+            decoration: InputDecoration(
+              labelText: strings.answerLanguageLabel,
+              isDense: true,
+            ),
             items: <DropdownMenuItem<String>>[
               for (final language in AgentResponseLanguage.values)
                 DropdownMenuItem(
@@ -106,15 +111,14 @@ class AgentSettingsPage extends ConsumerWidget {
           ),
           const Divider(height: AppSpacing.xxl),
           Text(
-            '模型服务',
+            strings.modelServicesTitle,
             style: theme.textTheme.titleMedium?.copyWith(
               fontSize: AppTypography.sectionHeading,
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'API Key 只保存在 Android 安全存储中，不会写入 SharedPreferences、'
-            '日志或导出文件。图片仍只在本机 OCR，不会上传。',
+            strings.secretBody,
             style: theme.textTheme.bodyMedium?.copyWith(
               fontSize: AppTypography.helper,
               color: AppColors.textSecondary,
@@ -127,7 +131,7 @@ class AgentSettingsPage extends ConsumerWidget {
               child: LinearProgressIndicator(minHeight: 2),
             ),
             error: (error, stack) => Text(
-              '读取模型配置失败',
+              strings.providerLoadFailed,
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontSize: AppTypography.helper,
                 color: AppColors.error,
@@ -142,8 +146,7 @@ class AgentSettingsPage extends ConsumerWidget {
                       vertical: AppSpacing.md,
                     ),
                     child: Text(
-                      '还没有配置模型。添加一个 DeepSeek、Claude 或其他 '
-                      'OpenAI 兼容服务后即可使用词典助手。',
+                      strings.noProviders,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         fontSize: AppTypography.helper,
                         color: AppColors.textSecondary,
@@ -153,8 +156,11 @@ class AgentSettingsPage extends ConsumerWidget {
                 for (final provider in providers) ...[
                   _ProviderRow(
                     provider: provider,
-                    onEdit: () => _editProvider(context, ref, provider),
-                    onDelete: () => _deleteProvider(context, ref, provider),
+                    strings: strings,
+                    onEdit: () =>
+                        _editProvider(context, ref, provider, strings),
+                    onDelete: () =>
+                        _deleteProvider(context, ref, provider, strings),
                   ),
                   const Divider(height: 1, color: AppColors.divider),
                 ],
@@ -162,8 +168,8 @@ class AgentSettingsPage extends ConsumerWidget {
                 SizedBox(
                   height: AppSizes.control,
                   child: FilledButton(
-                    onPressed: () => _editProvider(context, ref, null),
-                    child: const Text('添加模型服务'),
+                    onPressed: () => _editProvider(context, ref, null, strings),
+                    child: Text(strings.addProvider),
                   ),
                 ),
               ],
@@ -178,10 +184,12 @@ class AgentSettingsPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     AgentProviderConfig? existing,
+    AgentUiStrings strings,
   ) async {
     final result = await showDialog<AgentProviderDraft>(
       context: context,
-      builder: (context) => _ProviderDialog(initial: existing),
+      builder: (context) =>
+          _ProviderDialog(initial: existing, strings: strings),
     );
     if (result == null) return;
     final id =
@@ -191,7 +199,7 @@ class AgentSettingsPage extends ConsumerWidget {
       id: id,
       kind: result.kind,
       displayName: result.displayName.trim().isEmpty
-          ? '未命名模型服务'
+          ? strings.unnamedProvider
           : result.displayName.trim(),
       baseUrl: result.baseUrl.trim(),
       smallModel: result.smallModel.trim(),
@@ -208,27 +216,28 @@ class AgentSettingsPage extends ConsumerWidget {
     }
     ref.read(selectedAgentProviderProvider.notifier).select(id);
     ref.invalidate(agentProvidersProvider);
-    if (context.mounted) RikaiToast.show(context, '模型配置已保存');
+    if (context.mounted) RikaiToast.show(context, strings.providerSaved);
   }
 
   Future<void> _deleteProvider(
     BuildContext context,
     WidgetRef ref,
     AgentProviderConfig provider,
+    AgentUiStrings strings,
   ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('删除模型服务'),
-        content: Text('确定删除「${provider.displayName}」及其 API Key 吗？'),
+        title: Text(strings.deleteProviderTitle),
+        content: Text(strings.deleteProviderBody(provider.displayName)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
+            child: Text(strings.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('删除'),
+            child: Text(strings.delete),
           ),
         ],
       ),
@@ -239,18 +248,20 @@ class AgentSettingsPage extends ConsumerWidget {
         .read(secretStoreProvider)
         .delete(agentProviderSecretKey(provider.id));
     ref.invalidate(agentProvidersProvider);
-    if (context.mounted) RikaiToast.show(context, '已删除模型服务');
+    if (context.mounted) RikaiToast.show(context, strings.providerDeleted);
   }
 }
 
 class _ProviderRow extends StatelessWidget {
   const _ProviderRow({
     required this.provider,
+    required this.strings,
     required this.onEdit,
     required this.onDelete,
   });
 
   final AgentProviderConfig provider;
+  final AgentUiStrings strings;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
@@ -275,21 +286,21 @@ class _ProviderRow extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xxs),
                 Text(
-                  '接口地址：${provider.baseUrl}',
+                  '${strings.providerBaseUrl}：${provider.baseUrl}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: AppTypography.helper,
                     color: AppColors.textSecondary,
                   ),
                 ),
                 Text(
-                  '复杂模型：${provider.complexModel}',
+                  '${strings.providerComplexModelSummary}：${provider.complexModel}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: AppTypography.helper,
                     color: AppColors.textSecondary,
                   ),
                 ),
                 Text(
-                  '简单模型：${provider.smallModel}',
+                  '${strings.providerSmallModelSummary}：${provider.smallModel}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontSize: AppTypography.helper,
                     color: AppColors.textSecondary,
@@ -299,12 +310,12 @@ class _ProviderRow extends StatelessWidget {
             ),
           ),
           IconButton(
-            tooltip: '编辑',
+            tooltip: strings.profileEdit,
             onPressed: onEdit,
             icon: const Icon(Icons.edit_outlined, size: AppSizes.icon),
           ),
           IconButton(
-            tooltip: '删除',
+            tooltip: strings.delete,
             onPressed: onDelete,
             icon: const Icon(
               Icons.delete_outline,
@@ -337,9 +348,10 @@ class AgentProviderDraft {
 }
 
 class _ProviderDialog extends StatefulWidget {
-  const _ProviderDialog({this.initial});
+  const _ProviderDialog({this.initial, required this.strings});
 
   final AgentProviderConfig? initial;
+  final AgentUiStrings strings;
 
   @override
   State<_ProviderDialog> createState() => _ProviderDialogState();
@@ -414,7 +426,9 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   Widget build(BuildContext context) {
     final editing = widget.initial != null;
     return AlertDialog(
-      title: Text(editing ? '编辑模型服务' : '添加模型服务'),
+      title: Text(
+        editing ? widget.strings.editProvider : widget.strings.addProvider,
+      ),
       content: ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.sizeOf(context).height * 0.65,
@@ -426,13 +440,20 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             children: [
               DropdownButtonFormField<AgentProviderPreset>(
                 initialValue: _preset,
-                decoration: const InputDecoration(
-                  labelText: '服务商',
+                decoration: InputDecoration(
+                  labelText: widget.strings.providerPreset,
                   isDense: true,
                 ),
                 items: <DropdownMenuItem<AgentProviderPreset>>[
                   for (final preset in AgentProviderPreset.values)
-                    DropdownMenuItem(value: preset, child: Text(preset.label)),
+                    DropdownMenuItem(
+                      value: preset,
+                      child: Text(
+                        preset == AgentProviderPreset.custom
+                            ? widget.strings.otherCompatibleProvider
+                            : preset.label,
+                      ),
+                    ),
                 ],
                 onChanged: (value) {
                   if (value != null) _changePreset(value);
@@ -442,8 +463,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               TextField(
                 key: const ValueKey('agent-provider-name'),
                 controller: _name,
-                decoration: const InputDecoration(
-                  labelText: '名称',
+                decoration: InputDecoration(
+                  labelText: widget.strings.providerName,
                   isDense: true,
                 ),
               ),
@@ -453,7 +474,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 controller: _baseUrl,
                 keyboardType: TextInputType.url,
                 decoration: InputDecoration(
-                  labelText: '接口地址',
+                  labelText: widget.strings.providerBaseUrl,
                   hintText: 'https://api.deepseek.com/',
                   errorText: _baseUrlError,
                   isDense: true,
@@ -463,8 +484,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               TextField(
                 key: const ValueKey('agent-provider-small-model'),
                 controller: _smallModel,
-                decoration: const InputDecoration(
-                  labelText: '快速模型',
+                decoration: InputDecoration(
+                  labelText: widget.strings.providerSmallModel,
                   isDense: true,
                 ),
               ),
@@ -472,8 +493,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               TextField(
                 key: const ValueKey('agent-provider-complex-model'),
                 controller: _complexModel,
-                decoration: const InputDecoration(
-                  labelText: '高精度模型',
+                decoration: InputDecoration(
+                  labelText: widget.strings.providerComplexModel,
                   isDense: true,
                 ),
               ),
@@ -482,14 +503,14 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 controller: _apiKey,
                 obscureText: true,
                 decoration: InputDecoration(
-                  labelText: '接口密钥（API Key）',
-                  hintText: editing ? '留空则不修改' : '',
+                  labelText: widget.strings.providerApiKey,
+                  hintText: editing ? widget.strings.providerApiKeyKeep : '',
                   isDense: true,
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
-                '快速模型用于词典档案和资料检查。',
+                widget.strings.providerSmallModelHelp,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: AppTypography.helper,
                   color: AppColors.textSecondary,
@@ -498,7 +519,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               ),
               const SizedBox(height: AppSpacing.xxs),
               Text(
-                '高精度模型用于最终解析。',
+                widget.strings.providerComplexModelHelp,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: AppTypography.helper,
                   color: AppColors.textSecondary,
@@ -512,9 +533,9 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('取消'),
+          child: Text(widget.strings.cancel),
         ),
-        FilledButton(onPressed: _save, child: const Text('保存')),
+        FilledButton(onPressed: _save, child: Text(widget.strings.save)),
       ],
     );
   }

@@ -2,7 +2,8 @@
 
 Rikai-Mobile is built on the following open-source projects and models. This
 file is a summary; the authoritative license texts are in `assets/licenses/`
-and `third_party/*/LICENSE`.
+and `third_party/*/LICENSE` (repository files, not bundled into the app; the
+in-app license page shows a summary).
 
 ## Adapted code
 

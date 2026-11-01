@@ -14,6 +14,7 @@ import '../services/agent/citation_registry.dart';
 import '../services/agent/familiarization/dictionary_familiarization_service.dart';
 import '../services/agent/familiarization/unidic_familiarization_service.dart';
 import '../services/mdict/mdict_worker.dart';
+import 'agent_profile_inbox.dart';
 import 'agent_run_services.dart';
 
 /// Owns the current Agent run at application scope. `AgentPage` is only a
@@ -21,7 +22,6 @@ import 'agent_run_services.dart';
 /// the OCR/tokenize/lookup/provider work or loses its progress.
 class AgentRunController extends Notifier<AgentRunSnapshot> {
   AgentCancellation? _cancellation;
-  ProfileConfirmationCallback? _profileHandler;
   _RunInputs? _lastInputs;
   String? _sessionId;
   int _runSerial = 0;
@@ -31,14 +31,13 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   Future<void> Function()? _cancelOcr;
 
   @override
-  AgentRunSnapshot build() => AgentRunSnapshot.idle;
-
-  void attachProfileHandler(ProfileConfirmationCallback handler) {
-    _profileHandler = handler;
-  }
-
-  void detachProfileHandler(ProfileConfirmationCallback handler) {
-    if (identical(_profileHandler, handler)) _profileHandler = null;
+  AgentRunSnapshot build() {
+    ref.listen(agentProfileInboxProvider, (previous, next) {
+      if (state.isRunning && state.pendingProfileCount != next.pendingCount) {
+        state = state.copyWith(pendingProfileCount: next.pendingCount);
+      }
+    });
+    return AgentRunSnapshot.idle;
   }
 
   Future<void> start({
@@ -50,6 +49,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     required String unidicPath,
     required AgentResponseLanguage responseLanguage,
     required AgentProfileLanguage profileLanguage,
+    AgentRunResult? retainResult,
   }) async {
     if (state.isRunning) return;
     final text = userText.trim();
@@ -74,12 +74,13 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     // Keep the request even when validation fails immediately: the page should
     // not lose the user's text/image and retry must be able to replay it.
     _lastInputs = inputs;
-    _uiLanguage = resolveAgentUiLanguage(responseLanguage, text);
+    _uiLanguage = resolveAgentUiLanguage(responseLanguage);
     if (text.isEmpty && images.isEmpty) {
       _setImmediateError(
         agentInputRequiredMessage(_uiLanguage),
         _uiLanguage,
         inputs,
+        retainResult: retainResult,
       );
       return;
     }
@@ -88,6 +89,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         agentDictionaryRequiredMessage(_uiLanguage),
         _uiLanguage,
         inputs,
+        retainResult: retainResult,
       );
       return;
     }
@@ -99,13 +101,15 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         agentModelRequiredMessage(_uiLanguage),
         _uiLanguage,
         inputs,
+        retainResult: retainResult,
       );
       return;
     }
 
     final token = AgentCancellation();
     final runId = _nextRunId();
-    final sessionId = _sessionId ?? 'session-${DateTime.now().microsecondsSinceEpoch}';
+    final sessionId =
+        _sessionId ?? 'session-${DateTime.now().microsecondsSinceEpoch}';
     _sessionId = sessionId;
     _cancellation = token;
     _textChars = 0;
@@ -125,6 +129,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       mode: mode,
       responseLanguage: responseLanguage,
       providerLabel: provider.displayName,
+      retainedResult: retainResult,
       startedAt: startedAt,
       updatedAt: startedAt,
     );
@@ -166,6 +171,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       final result = await orchestrator.run(
         AgentRunRequest(
           sessionId: sessionId,
+          runId: runId,
           mode: mode,
           dictionaries: inputs.dictionaries,
           provider: provider,
@@ -202,22 +208,11 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
           _reasoningChars = value.length;
           _publishProgress(token);
         },
-        onProfile: (profile, markdown) async {
-          final handler = _profileHandler;
-          if (handler == null) {
-            return ProfileConfirmation(
-              action: ProfileConfirmationAction.skipOnce,
-              markdown: markdown,
-            );
-          }
-          try {
-            return await handler(profile, markdown);
-          } catch (_) {
-            return ProfileConfirmation(
-              action: ProfileConfirmationAction.skipOnce,
-              markdown: markdown,
-            );
-          }
+        // The app-level inbox owns the decision futures. If the page is not
+        // mounted, the run stays in `awaitingProfile`; it never auto-skips.
+        onProfilesGenerated: (runId, proposals) {
+          final inbox = ref.read(agentProfileInboxProvider.notifier);
+          return inbox.waitForAll(runId, proposals);
         },
       );
       if (!_isActive(token)) return;
@@ -228,9 +223,12 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         progressStep: 4,
         evidenceCount: result.evidence.citations.length,
         citationCount: result.validation.citationsUsed.length,
+        pendingProfileCount: 0,
         receivedChars: 0,
         errorMessage: null,
         errorDetail: '',
+        retainedResult: null,
+        resultRetainedAfterFailure: false,
         finishedAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -255,6 +253,26 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       unidicPath: inputs.unidicPath,
       responseLanguage: inputs.responseLanguage,
       profileLanguage: inputs.profileLanguage,
+      retainResult: state.result ?? state.retainedResult,
+    );
+  }
+
+  /// Re-runs from the familiarization stage with the same request snapshot.
+  /// The previous result stays visible until the new run succeeds; a failure
+  /// restores it and flags [AgentRunSnapshot.resultRetainedAfterFailure].
+  Future<void> regenerate() async {
+    final inputs = _lastInputs;
+    if (inputs == null || state.isRunning) return;
+    await start(
+      userText: inputs.userText,
+      images: inputs.images,
+      dictionaries: inputs.dictionaries,
+      provider: inputs.provider,
+      mode: inputs.mode,
+      unidicPath: inputs.unidicPath,
+      responseLanguage: inputs.responseLanguage,
+      profileLanguage: inputs.profileLanguage,
+      retainResult: state.result ?? state.retainedResult,
     );
   }
 
@@ -264,11 +282,18 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     final token = _cancellation;
     if (token == null || token.isCancelled || !state.isRunning) return;
     token.cancel();
+    final runId = state.runId;
+    if (runId != null) {
+      ref.read(agentProfileInboxProvider.notifier).cancelRun(runId);
+    }
     final cancelOcr = _cancelOcr;
     if (cancelOcr != null) unawaited(cancelOcr());
     state = state.copyWith(
       status: AgentRunStatus.cancelled,
       stageMessage: agentStageMessage(AgentStage.cancelled, _uiLanguage),
+      result: state.retainedResult,
+      retainedResult: null,
+      pendingProfileCount: 0,
       finishedAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -283,6 +308,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     _cancelOcr = null;
     _textChars = 0;
     _reasoningChars = 0;
+    ref.read(agentProfileInboxProvider.notifier).clearAll();
     state = AgentRunSnapshot.idle;
   }
 
@@ -315,6 +341,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     AgentToolErrorCode? code,
   ]) {
     if (!_isActive(token)) return;
+    final retained = state.retainedResult;
     state = state.copyWith(
       status: AgentRunStatus.error,
       stageMessage: message,
@@ -322,6 +349,10 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       errorCode: code,
       retryable: code == null || _isRetryable(code),
       errorDetail: detail,
+      result: retained,
+      retainedResult: null,
+      resultRetainedAfterFailure: retained != null,
+      pendingProfileCount: 0,
       finishedAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -330,8 +361,9 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   void _setImmediateError(
     String message,
     AgentUiLanguage language,
-    _RunInputs inputs,
-  ) {
+    _RunInputs inputs, {
+    AgentRunResult? retainResult,
+  }) {
     _uiLanguage = language;
     state = AgentRunSnapshot(
       status: AgentRunStatus.error,
@@ -346,6 +378,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       mode: inputs.mode,
       responseLanguage: inputs.responseLanguage,
       providerLabel: inputs.provider.displayName,
+      result: retainResult,
+      resultRetainedAfterFailure: retainResult != null,
       finishedAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -370,6 +404,7 @@ bool _isRetryable(AgentToolErrorCode code) => switch (code) {
 int _progressStepFor(AgentStage stage, int current) => switch (stage) {
   AgentStage.prepare || AgentStage.ocr => 0,
   AgentStage.familiarizing ||
+  AgentStage.awaitingProfile ||
   AgentStage.tokenizing ||
   AgentStage.evidence => 1,
   AgentStage.reasoning => 2,
@@ -382,6 +417,7 @@ AgentRunStatus _statusFor(AgentStage stage) => switch (stage) {
   AgentStage.prepare => AgentRunStatus.preparing,
   AgentStage.ocr => AgentRunStatus.ocr,
   AgentStage.familiarizing => AgentRunStatus.familiarizing,
+  AgentStage.awaitingProfile => AgentRunStatus.awaitingProfile,
   AgentStage.tokenizing => AgentRunStatus.tokenizing,
   AgentStage.evidence => AgentRunStatus.tokenizing,
   AgentStage.reasoning => AgentRunStatus.reasoning,

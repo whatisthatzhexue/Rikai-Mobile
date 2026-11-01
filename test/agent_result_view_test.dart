@@ -7,6 +7,7 @@ import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
 import 'package:rikai_mobile/features/agent/agent_result_view.dart';
 import 'package:rikai_mobile/services/agent/agent_run.dart';
+import 'package:rikai_mobile/services/agent/agent_ui_strings.dart';
 import 'package:rikai_mobile/services/agent/agent_validator.dart';
 
 const _citation = AgentCitation(
@@ -108,6 +109,7 @@ void main() {
             child: AgentResultView(
               result: _result,
               onCitationTap: (citation) => tapped = citation,
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
             ),
           ),
         ),

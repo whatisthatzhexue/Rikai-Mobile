@@ -719,7 +719,8 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 
 ## 11. Phase 6 — Mdict Agent（P6.1–P6.5 已实现）
 
-> 状态：**P6.1–P6.5 核心已实现；P6.6/P6.7 未实现**。最新进度见
+> 状态：**P6.1–P6.5 核心已实现；2026-10-31 实机反馈 Wave 1–2 已实现，
+> Wave 3–4 待做；P6.6/P6.7 未实现**。最新进度见
 > `docs/phase6-status.md`；设计细节、开放问题和验收标准见
 > `docs/phase6-agent-design.md`；契约/JSON Schema/状态机见
 > `docs/phase6-agent-contracts.md`。Phase 5 已完成并发布 1.0。v2 采用固定流水线、
@@ -751,7 +752,8 @@ P6.5 已接入功能按钮并更新主页测试；后续 P6.6/P6.7 UI 仍须先�
 - **界面**：采用对话式 Agent 布局（首屏消息区约 80%，小屏 ≥70%；固定底部输入区、
   流式/停止、错误卡保留内容、证据默认折叠「依据 N 条」、本会话设置默认收起）；
   视觉规范以 `docs/design-tokens.md` 的“Phase 6 Agent 对话式界面 v2”为准。P6.5
-  已实现基础对话式布局；状态条、历史、无障碍 200% 等完整 v2 验收待补。
+  已实现基础对话式布局；Wave 2 已补多图输入/全屏查看/结果操作行/用户消息
+  复制编辑；历史、无障碍 200% 等完整 v2 验收待补。
 - **接口层**：现有 OCR/UniDic/MDict 服务外包一层窄 Port（`OcrPort`、
   `TokenizePort`、`LookupPort`、`DictionarySamplePort`、`LlmPort`、`SecretPort`）；
   模型不接触工具；OCR/采样/UniDic profile 全部由 orchestrator 调用。

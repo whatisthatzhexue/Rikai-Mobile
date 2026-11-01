@@ -4,7 +4,9 @@
 > R-PROD/R-SEC/R-DEV；当前数据见 `project-data.md`。
 
 The authoritative attribution summary is [../THIRD_PARTY_NOTICES.md]. License
-texts used by the in-app license page are under `assets/licenses/`.
+texts are kept in `assets/licenses/` in the repository for attribution and
+distribution; they are not bundled into the app. The in-app license page shows
+a hardcoded summary (`lib/features/settings/copyright_page.dart`).
 
 - overlay-translator (OCR core): Apache-2.0, Copyright 2026 ciddwd
   (`third_party/overlay-translator/LICENSE`, `NOTICE`, `MODIFICATIONS.md`).

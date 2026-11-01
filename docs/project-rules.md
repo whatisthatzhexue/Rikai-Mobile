@@ -139,10 +139,10 @@
 |---|---|---|
 | R-AGENT-02 tool loop | future | 只有新 ADR/批准后才可恢复；当前无模型工具 |
 | R-AGENT-14 F7 coverage | future | F6 完成后才做；预算见统一预算常量 |
-| R-AGENT-18 F1/F17 language | partial | 2026-11-01 决策：默认 zh、旧 `follow` → zh、禁止输入推断；代码仍默认 `follow`/仍有输入启发式，待 Wave 2 |
-| R-AGENT-09 F8 session dictionary | partial | 当前写隔离已满足，独立持久化待 Wave 2 |
-| R-UI-09 F4/F9 | partial | 短胶囊/3.5 行规范已定，设备/窄屏验收待 Wave 1/4 |
-| F11 多图 | future | 当前 UI 单图；上限 6 见统一预算常量 |
+| R-AGENT-18 F1/F17 language | implemented | Wave 2：默认 zh、旧 `follow` → zh、禁止输入推断、`AgentUiStrings`；F1b 结果字段后校验仍待 Wave 3 |
+| R-AGENT-09 F8 session dictionary | implemented | Wave 2：独立 key/模式持久化，不读写查词偏好 |
+| R-UI-09 F4/F9 | partial | 短胶囊/3.5 行规范已定，设备/窄屏验收待 Wave 4 |
+| F11 多图 | implemented | Wave 2：相机/相册多选、追加、移除；上限 6 见统一预算常量 |
 | P6.6/P6.7 | future | 在 F1–F17 关闭前不开始 |
 
 ## 9. 变更流程

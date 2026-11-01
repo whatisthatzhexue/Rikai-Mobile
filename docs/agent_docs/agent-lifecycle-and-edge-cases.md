@@ -4,10 +4,9 @@
 > 文案见 [`../project-data.md`](../project-data.md)。本文只描述生命周期细节。
 
 - 状态：**开发规范（要求）**。应用级 `AgentRunController`、provider CancelToken、
-  OCR/Evidence 取消、四步进度和编号依据已落地；**2026-10-31 实机反馈要求把词典
-  档案确认改为应用级队列（F2），当前实现仍是页面回调 + 离开后 skip-once，属于
-  待修问题**。进程死亡持久化、familiarization 取消和“离开页面→返回”的 widget
-  测试仍待补。未完成前不要把剩余能力写成已实现。
+  OCR/Evidence 取消、四步进度和编号依据已落地；**应用级档案队列（F2）与
+  `awaitingProfile` gate 已于 Wave 2 实现**。进程死亡持久化、familiarization
+  取消和真实设备“离开页面→返回”验收仍待补；未完成前不要把剩余能力写成已实现。
 - 适用范围：`lib/features/agent/`、`lib/state/`、`lib/services/agent/` 及后续
   P6.6/P6.7 的 Agent UI。
 - 关联：[管线评审](phase6-pipeline-review.md) 的 H4（取消/并发）与 H8（持久化）、
@@ -226,19 +225,25 @@ AgentRunSnapshot {
 
 ## 8. 当前实现进度与剩余差距（必须知道）
 
-应用级 `AgentRunController` 已落地（`lib/state/agent_run_controller.dart:35`），
-`AgentPage` 通过 `agentRunControllerProvider` 订阅 snapshot（`agent_page.dart:54,
-357`）；`dispose()` 只 `detachProfileHandler` 和释放输入/滚动控制器，不再取消
-run（`agent_page.dart:63-68`）。因此“离开页面继续生成、返回恢复最新进展”的
+应用级 `AgentRunController` 已落地（`lib/state/agent_run_controller.dart`），
+`AgentPage` 通过 `agentRunControllerProvider` 订阅 snapshot；`dispose()` 只释放
+输入/焦点/滚动控制器，不再取消 run。因此“离开页面继续生成、返回恢复最新进展”的
 主体结构已经具备，**不要再按旧版页面 State 实现回退**。
+
+档案确认（F2，Wave 2 已实现）：
+
+- `DictionaryFamiliarizationService.generateMany()` 只生成 proposal，不写档案、
+  不调用 UI；`AgentProfileInboxController` 持有应用级 pending 队列。
+- run 通过 `AgentRunStatus.awaitingProfile` / `AgentStage.awaitingProfile` 等待
+  所有 proposal 的显式决定；页面不在前台时不会自动 `skipOnce`。
+- 返回页面后按队列顺序显示熟悉期 sheet；关闭 sheet 保持 pending；取消 run 时
+  队列以 skip 释放，不写档案。
+- 决策由 inbox 统一持久化（`persistAgentProfileDecision`），因此 Agent run 与
+  档案管理页的重新生成共用同一路径。
+- 队列只在应用内存中；进程死亡后的恢复仍属 P6.7。
 
 仍需补齐：
 
-- **档案确认队列（F2，高优先级）**：当前 `AgentPage.dispose()` 会 detach
-  profile handler，controller 在 handler 为空时返回 `skipOnce`
-  （`agent_run_controller.dart:205-220`），导致离开页面后生成的档案不保存、
-  查词提前开始。必须按本文改为应用级队列 + `awaitingProfile` gate；F2 完成前
-  不得实现 F7/F13/F14 的档案相关部分。
 - **进程死亡/重启持久化**：`AgentRunSnapshot` 是应用内存态；`AgentStore` 的
   sessions/runs/messages/citations 表仍未写入（H8），进程被杀后无法恢复。
 - **provider 取消链**：OpenAI/Anthropic 已接 `LlmCancelToken` → Dio
@@ -277,9 +282,9 @@ run（`agent_page.dart:63-68`）。因此“离开页面继续生成、返回恢
 - [x] 校验完成的合法条目逐条淡入；不做流式 JSON 解析，不展示未校验尾部。
 - [ ] 生成摘要（P3）暂不做；未来只允许独立 `summary` 字段，禁止截取 reasoning。
 - [x] 重复发送/新会话/重试有幂等保护；同一 session 最多一个 active run。
-- [ ] 熟悉期生成与确认解耦：应用级 `AgentProfileInboxController` 保存待确认
+- [x] 熟悉期生成与确认解耦：应用级 `AgentProfileInboxController` 保存待确认
       档案；页面离开不自动 skip；全部处理完才进入 tokenizing；返回时逐个重开
-      sheet（当前实现仍是页面回调 + skip-once，F2 待改）。
+      sheet（Wave 2 已实现；设备验收待 Wave 4）。
 - [x] 发送成功后同时清空输入栏文本和图片附件；重试从发送快照重放，不清空新草稿。
 - [x] run 开始时快照词典/模式/模型/语言；run 中设置变更不影响当前 run。
 - [ ] 失败/取消/中断保留 partial；错误卡可重试；不弹阻塞全局对话框。
@@ -307,11 +312,13 @@ run（`agent_page.dart:63-68`）。因此“离开页面继续生成、返回恢
       发送图片路径的清空与重试复用仍需补设备测试。
 - [ ] 旧 run 未结束时新 run：旧结果不覆盖新结果；旧 stage 不覆盖新 stage。
 - [ ] 旋转/重建页面：snapshot 保留，不重复请求。
-- [ ] 熟悉期 sheet 打开时离开/返回：档案进入应用级队列；返回逐个展示；全部
-      处理完才进入查词；不自动 skip-once、不丢失档案。
-- [ ] 离页 10 秒再返回：思考时间包含离页区间；无第二次 provider 请求。
-- [ ] 任务所选语言为中文、输入为日文时：Agent 本地 UI 与结果人类可读字段为
-      中文；输入启发式已删除（F1/F17）。
+- [x] 熟悉期 sheet 打开时离开/返回：档案进入应用级队列；返回逐个展示；全部
+      处理完才进入查词；不自动 skip-once、不丢失档案（unit/widget；设备验收
+      待 Wave 4）。
+- [x] 离页 10 秒再返回：思考时间包含离页区间；无第二次 provider 请求（elapsed/
+      gate 测试；设备计时待验）。
+- [x] 任务所选语言为中文、输入为日文时：Agent 本地 UI 与 prompt 语言契约为
+      中文；输入启发式已删除（F1a/F17；结果字段后校验 F1b 待 Wave 3）。
 - [ ] 进程死亡模拟（重建 provider/store）：显示 interrupted + 重试，不自动续跑。
 - [ ] 应用切后台/回前台：回前台显示最新 snapshot；不自动重跑。
 - [ ] 网络断开/provider 429/超时：错误卡 + partial + 重试；不整屏清空。

@@ -23,7 +23,7 @@ class AgentStore
     final support = await getApplicationSupportDirectory();
     final database = await openDatabase(
       p.join(support.path, 'rikai_agent.db'),
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE agent_providers (
@@ -124,6 +124,7 @@ class AgentStore
         await db.execute('''
           CREATE TABLE dictionary_profiles (
             dictionary_id TEXT PRIMARY KEY,
+            title TEXT NOT NULL DEFAULT '',
             fingerprint TEXT NOT NULL,
             profile_json TEXT NOT NULL,
             markdown TEXT NOT NULL,
@@ -164,6 +165,14 @@ class AgentStore
           'CREATE INDEX idx_agent_citations_run ON agent_citations(run_id)',
         );
       },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute(
+            "ALTER TABLE dictionary_profiles "
+            "ADD COLUMN title TEXT NOT NULL DEFAULT ''",
+          );
+        }
+      },
     );
     _database = database;
     return database;
@@ -186,6 +195,7 @@ class AgentStore
     final rawConfirmed = row['confirmed_at'] as int?;
     return StoredDictionaryProfile(
       dictionaryId: dictionaryId,
+      title: row['title'] as String? ?? '',
       fingerprint: row['fingerprint'] as String? ?? '',
       markdown: row['markdown'] as String? ?? '',
       status: DictionaryProfileStatus.fromWire(row['status']),
@@ -206,6 +216,7 @@ class AgentStore
     final db = await _db();
     await db.insert('dictionary_profiles', <String, Object?>{
       'dictionary_id': profile.dictionaryId,
+      'title': profile.title,
       'fingerprint': profile.fingerprint,
       'profile_json': jsonEncode(profile.profile?.toJson() ?? const {}),
       'markdown': profile.markdown,
@@ -224,6 +235,73 @@ class AgentStore
       'dictionary_profiles',
       where: 'dictionary_id = ?',
       whereArgs: <Object?>[dictionaryId],
+    );
+  }
+
+  /// Lists stored profiles for the Agent profile manager, newest first.
+  Future<List<StoredDictionaryProfile>> listDictionaryProfiles() async {
+    final db = await _db();
+    final rows = await db.query(
+      'dictionary_profiles',
+      orderBy: 'confirmed_at DESC, dictionary_id ASC',
+    );
+    return <StoredDictionaryProfile>[
+      for (final row in rows) _profileFromRow(row),
+    ];
+  }
+
+  /// Replaces the editable Markdown while keeping the fingerprint/status so
+  /// the profile remains valid for the same dictionary version.
+  Future<void> updateProfileMarkdown(
+    String dictionaryId,
+    String markdown,
+  ) async {
+    final db = await _db();
+    await db.update(
+      'dictionary_profiles',
+      <String, Object?>{
+        'markdown': markdown,
+        'confirmed_at': DateTime.now().millisecondsSinceEpoch,
+      },
+      where: 'dictionary_id = ?',
+      whereArgs: <Object?>[dictionaryId],
+    );
+  }
+
+  Future<void> deleteDictionaryProfiles(List<String> dictionaryIds) async {
+    if (dictionaryIds.isEmpty) return;
+    final db = await _db();
+    final placeholders = List<String>.filled(
+      dictionaryIds.length,
+      '?',
+    ).join(',');
+    await db.delete(
+      'dictionary_profiles',
+      where: 'dictionary_id IN ($placeholders)',
+      whereArgs: dictionaryIds,
+    );
+  }
+
+  StoredDictionaryProfile _profileFromRow(Map<String, Object?> row) {
+    final profileJson = agentMap(
+      _tryDecode(row['profile_json'] as String? ?? ''),
+    );
+    final rawConfirmed = row['confirmed_at'] as int?;
+    return StoredDictionaryProfile(
+      dictionaryId: row['dictionary_id'] as String? ?? '',
+      title: row['title'] as String? ?? '',
+      fingerprint: row['fingerprint'] as String? ?? '',
+      markdown: row['markdown'] as String? ?? '',
+      status: DictionaryProfileStatus.fromWire(row['status']),
+      profile: profileJson.isEmpty
+          ? null
+          : DictionaryProfile.fromJson(profileJson),
+      confirmedAt: rawConfirmed == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(rawConfirmed),
+      modelId: row['model_id'] as String? ?? '',
+      promptVersion: (row['prompt_version'] as int?) ?? 1,
+      schemaVersion: (row['schema_version'] as int?) ?? 1,
     );
   }
 

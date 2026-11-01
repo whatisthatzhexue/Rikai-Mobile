@@ -2,7 +2,7 @@
 
 Date: 2026-10-29
 Base: Phase 3 (`docs/phase3-status.md`)
-Scope: `docs/phase3-review.md`, `docs/capture-redesign-requirements.md`
+Scope: `docs/phase3-review.md`, `docs/archive/capture-redesign-requirements.md`
 
 > Historical Phase 3.5 record. Vertical MangaOCR, automatic orientation and the
 > enabled 竖向 mode are implemented in Phase 4; see `docs/phase4-status.md`.

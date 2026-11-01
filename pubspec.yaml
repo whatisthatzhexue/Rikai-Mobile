@@ -86,9 +86,12 @@ flutter:
 
   assets:
     - assets/models/
-    - assets/licenses/
     - assets/Rikai_Icon.jpg
     - assets/agent/
+
+  # assets/licenses/ is intentionally not bundled: the in-app license page shows
+  # a summary, and the authoritative texts stay in the repository for
+  # attribution/distribution (see THIRD_PARTY_NOTICES.md).
 
   # HarmonyOS Sans SC is NOT distributed with this repository. Download it and
   # place it at assets/fonts/HarmonyOS_Sans_SC_Regular.ttf before building.

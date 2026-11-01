@@ -9,35 +9,14 @@ import '../../core/models/lookup_models.dart';
 import '../../core/theme/page_route.dart';
 import '../../core/ui/rikai_toast.dart';
 import '../../services/agent/adapters/dictionary_sample_port_adapter.dart';
+import '../../services/agent/agent_ui_strings.dart';
 import '../../services/agent/familiarization/dictionary_familiarization_service.dart';
 import '../../services/agent/providers/provider_factory.dart';
 import '../../state/agent_providers.dart';
+import '../../state/agent_run_controller.dart';
 import '../../state/providers.dart';
 import '../lookup/entry_page.dart';
 import 'familiarization_sheet.dart';
-
-Future<ProfileConfirmation> confirmAgentProfile(
-  BuildContext context,
-  DictionaryProfile profile,
-  String markdown,
-) async {
-  if (!context.mounted) {
-    return ProfileConfirmation(
-      action: ProfileConfirmationAction.skipOnce,
-      markdown: markdown,
-    );
-  }
-  final decision = await showFamiliarizationSheet(
-    context,
-    profile: profile,
-    markdown: markdown,
-  );
-  return decision ??
-      ProfileConfirmation(
-        action: ProfileConfirmationAction.skipOnce,
-        markdown: markdown,
-      );
-}
 
 Future<void> openAgentCitation(
   BuildContext context,
@@ -45,6 +24,15 @@ Future<void> openAgentCitation(
   AgentCitation citation,
 ) async {
   final enabled = ref.read(enabledDictionariesProvider);
+  final settings = ref.read(appSettingsProvider);
+  final run = ref.read(agentRunControllerProvider);
+  final strings = AgentUiStrings.of(
+    resolveAgentUiLanguage(
+      run.hasConversation
+          ? run.responseLanguage
+          : AgentResponseLanguage.fromWire(settings.agentResponseLanguage),
+    ),
+  );
   DictionaryInfo? dictionary;
   for (final item in enabled) {
     if (item.id == citation.dictionaryId) {
@@ -53,7 +41,7 @@ Future<void> openAgentCitation(
     }
   }
   if (dictionary == null) {
-    RikaiToast.show(context, '该词典当前不可用');
+    RikaiToast.show(context, strings.dictionaryUnavailable);
     return;
   }
   final selectedDictionary = dictionary;
@@ -71,7 +59,7 @@ Future<void> openAgentCitation(
     final group = result.hitGroups.isEmpty ? null : result.hitGroups.first;
     if (!context.mounted) return;
     if (group == null || group.entries.isEmpty) {
-      RikaiToast.show(context, '未找到该词条');
+      RikaiToast.show(context, strings.entryNotFound);
       return;
     }
     Navigator.of(context).push(
@@ -89,7 +77,7 @@ Future<void> openAgentCitation(
       ),
     );
   } catch (_) {
-    if (context.mounted) RikaiToast.show(context, '打开词条失败');
+    if (context.mounted) RikaiToast.show(context, strings.openEntryFailed);
   }
 }
 
@@ -102,6 +90,15 @@ Future<void> retryAgentDictionaryProfile(
   AgentProviderConfig provider,
 ) async {
   final enabled = ref.read(enabledDictionariesProvider);
+  final settings = ref.read(appSettingsProvider);
+  final run = ref.read(agentRunControllerProvider);
+  final strings = AgentUiStrings.of(
+    resolveAgentUiLanguage(
+      run.hasConversation
+          ? run.responseLanguage
+          : AgentResponseLanguage.fromWire(settings.agentResponseLanguage),
+    ),
+  );
   DictionaryInfo? dictionary;
   for (final item in enabled) {
     if (item.id == issue.dictionaryId) {
@@ -110,11 +107,10 @@ Future<void> retryAgentDictionaryProfile(
     }
   }
   if (dictionary == null) {
-    RikaiToast.show(context, '该词典当前不可用');
+    RikaiToast.show(context, strings.dictionaryUnavailable);
     return;
   }
   final selectedDictionary = dictionary;
-  final settings = ref.read(appSettingsProvider);
   try {
     final mdict = await ref.read(mdictServiceProvider.future);
     final secretStore = ref.read(secretStoreProvider);
@@ -144,6 +140,7 @@ Future<void> retryAgentDictionaryProfile(
           context,
           profile: profile,
           markdown: markdown,
+          strings: strings,
         );
         return decision ??
             ProfileConfirmation(
@@ -156,9 +153,11 @@ Future<void> retryAgentDictionaryProfile(
     if (batch.issues.isNotEmpty) {
       RikaiToast.show(context, batch.issues.first.reason);
     } else {
-      RikaiToast.show(context, '档案已更新，请重新开始分析');
+      RikaiToast.show(context, strings.profileUpdatedRestart);
     }
   } catch (_) {
-    if (context.mounted) RikaiToast.show(context, '档案重试失败');
+    if (context.mounted) {
+      RikaiToast.show(context, strings.profileRegenerateFailed);
+    }
   }
 }

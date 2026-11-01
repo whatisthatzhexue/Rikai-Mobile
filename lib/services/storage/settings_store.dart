@@ -18,7 +18,7 @@ class AppSettings {
     this.onboardingCompleted = false,
     this.autoSaveOcr = false,
     this.agentProfileLanguage = 'zh',
-    this.agentResponseLanguage = 'follow',
+    this.agentResponseLanguage = 'zh',
   });
 
   final String unidicPath;
@@ -52,7 +52,7 @@ class AppSettings {
   /// Human-readable language for the dictionary profile body: zh/en/ja.
   final String agentProfileLanguage;
 
-  /// Agent answer language: follow/zh/en/ja.
+  /// Agent answer language: zh/en/ja. Legacy `follow` is migrated to `zh`.
   final String agentResponseLanguage;
 
   AppSettings copyWith({

@@ -39,14 +39,15 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **213** |
-| 当前测试文件数 | **60** |
+| 当前 test/testWidgets 声明数 | **231** |
+| 当前测试文件数 | **65** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | 213 passed |
+| 最近 `flutter test` | 231 passed |
 | 最近 `flutter build apk --debug` | success |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
-> 该数字对应 `last_verified_code_commit: c6094b5`。新增/删除测试后只更新本节。
+> 该数字对应 Wave 2 工作区（在 `c6094b5` 之上、尚未提交）。新增/删除测试后只更新
+> 本节。
 
 ### 2.2 历史测试基线（不要当作当前值）
 
@@ -57,7 +58,8 @@
 | Phase 6 设计快照 | 199 | `docs/phase6-agent-design.md` 旧记录 |
 | Wave 1 前 | 206 | Agent Wave 1 新增测试前 |
 | Wave 1 后 | 212 | Agent Wave 1 完成时 |
-| 当前 | **213** | 见 §2.1 |
+| Wave 2 后 | 231 | Agent 语言/档案队列/多图/结果操作行 |
+| 当前 | **231** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
@@ -207,8 +209,9 @@ arm64 真机性能另需复测。
 | 默认输出/UI 语言 | 中文（zh） | **2026-11-01 决策**：旧 `follow` 一律映射为 `zh`；禁止按输入假名/拉丁字符推断 |
 | 可选语言 | zh / en / ja | 用户显式设置；`follow` 仅兼容旧配置，解析为 `zh` |
 
-> 当前代码仍默认 `follow`，`resolveAgentUiLanguage` 仍有输入启发式；F1/F17
-> 的实现待 Wave 2。
+> Wave 2 已实现：默认 `zh`，旧 `follow` 解析为 `zh`，`resolveAgentUiLanguage`
+> 只接收显式设置，输入假名/拉丁字符不再影响 UI 语言；F1b（结果字段语言后校验）
+> 仍属 Wave 3。
 
 > 契约中的默认值若与本表冲突：以本表作为当前实现值，并修
 > `docs/phase6-agent-contracts.md`；未来 tool loop/coverage 值必须标明 future。
@@ -217,12 +220,12 @@ arm64 真机性能另需复测。
 
 | 项 | 值 |
 |---|---|
-| 最近验证代码提交 | `c6094b5`（OCR 模型页操作逻辑修正） |
+| 最近验证代码提交 | `c6094b5` + Wave 2 未提交工作区 |
 | Phase 5 基线 | `2534c3a` |
 | Phase 6 P6.1–P6.5 提交起点 | `7be4b81` |
 | Phase 6 文档提交 | `b208456` |
 | 历史快照 banner | `3709d3d` |
-| 当前工作队列 | `docs/agent_docs/device-feedback-2026-10-31.md`（F1–F17，Wave 2–4 待做） |
+| 当前工作队列 | `docs/agent_docs/device-feedback-2026-10-31.md`（Wave 2 已完成；Wave 3–4 待做） |
 
 > 历史提交的完整列表在 `git log` 与各 phase status 中；本表只保留当前锚点，
 > 避免每次提交都改多份文档。

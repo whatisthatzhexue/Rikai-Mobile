@@ -7,8 +7,8 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 
 > **Status: P6.1–P6.5 core implemented; P6.6 (multi-OCR variants/repair) and
 > P6.7 (annotation DSL/Markdown/ruby/pitch/release) are not implemented.**
-> 2026-10-31 real-device feedback F1–F17: **Wave 1 (F4/F5/F9/F10/F15/F16) is
-> implemented; Waves 2–4 are pending**; follow
+> 2026-10-31 real-device feedback F1–F17: **Waves 1–2 are implemented
+> (Wave 2: F8/F1a/F17/F2/F3/F11/F12/F13/F14); Waves 3–4 are pending**; follow
 > `docs/agent_docs/device-feedback-2026-10-31.md` before extending the Agent.
 > **Current test/device/build/environment numbers are centralized in
 > `docs/project-data.md`; do not copy them here.** Normative MUST/MUST NOT rules
@@ -19,11 +19,12 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > `sample`/`suggest` acceptance still remain. The review backlog in
 > `docs/agent_docs/phase6-pipeline-review.md` is authoritative for open gaps.
 >
-> **2026-11-01 language decision**: the default output/UI language is Chinese
-> (`zh`); legacy `follow` maps to `zh`; input-script language inference is
-> forbidden. The current code still defaults to `follow` and infers in
-> `resolveAgentUiLanguage`; F1/F17 implementation remains open for Wave 2. Do
-> not describe the decision as implemented.
+> **2026-11-01 language decision (implemented in Wave 2)**: the default
+> output/UI language is Chinese (`zh`); legacy `follow` maps to `zh`;
+> `resolveAgentUiLanguage` takes only the explicit setting and never inspects
+> source text. `AgentUiStrings` supplies Chinese/English/Japanese Agent-area
+> copy. F1b (post-validation of human-readable fields plus one language repair)
+> remains Wave 3 and must not be described as implemented.
 
 ## Implemented
 
@@ -164,7 +165,7 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 - **Strict mode**: word notes always require citations in strict mode; unknown
   source/citation and empty results are rejected; debug-only raw-output logs.
 
-### 2026-10-31 real-device feedback backlog (Wave 1 implemented)
+### 2026-10-31 real-device feedback backlog (Waves 1–2 implemented)
 
 The user reported 17 additional issues after a real-device P6.5 trial. The
 authoritative plan, current-code evidence, wave ordering and acceptance
@@ -176,12 +177,12 @@ Summary:
   (F5), 3.5-row dictionary filters (F9), Chinese provider labels/presets (F10),
   current-dictionary-only entry links (F15), app-scoped OCR download progress
   (F16).
-- **Wave 2 (Agent lifecycle/UI)**: Chinese-first default and no input-language
-  heuristic (F1/F17), independent Agent dictionary preferences (F8), app-level
-  dictionary-profile inbox that gates tokenizing (F2), elapsed time across page
-  leave (F3), camera/gallery multi-image input (F11), full-screen sent-image
-  viewer (F12), profile manager (F13), result action row/copy/edit/regenerate
-  (F14).
+- **Wave 2 (implemented, Agent lifecycle/UI)**: Chinese-first default and no
+  input-language heuristic (F1a/F17), independent Agent dictionary preferences
+  (F8), app-level dictionary-profile inbox that gates tokenizing (F2), elapsed
+  time across page leave (F3), camera/gallery multi-image input (F11),
+  full-screen sent-image viewer (F12), profile manager (F13), result action
+  row/copy/edit/regenerate (F14). F1b remains Wave 3.
 - **Wave 3 (evidence)**: global `AgentLimits` and exact → prefix → suffix →
   incremental lookup (F6); one schema-constrained coverage review with at most
   one supplementary lookup pass (F7); output-language field validation and one
@@ -206,23 +207,55 @@ Wave 1 implementation (2026-10-31):
   `docs/project-data.md` §2/§5. Device visual/navigation/download acceptance
   remains for Wave 4.
 
-Current behavior that differs from the target:
+Wave 2 implementation (2026-11-01):
 
-- `AgentPage.dispose()` detaches the profile handler and
-  `AgentRunController` returns `skipOnce` when no handler is attached
-  (`lib/state/agent_run_controller.dart:205-220`), so a profile generated while
-  the user is away is not saved and tokenizing can start. This is F2.
-- **Implementation gap (decision already fixed)**: the default answer language
-  is still `follow`, and `resolveAgentUiLanguage` still infers Japanese/English
-  from the input (`lib/services/agent/agent_messages.dart:7-29`). The
-  2026-11-01 decision requires default `zh` and no input heuristic; this is
-  F1/F17 for Wave 2.
-- Agent dictionary selection is still seeded from the lookup preference and is
-  not independently persisted (`lib/features/agent/agent_page.dart:52-58`).
-  This is F8.
-- Evidence lookup is exact→prefix only and the `60` limit is hard-coded in
-  several places (`lib/services/agent/evidence_builder.dart:23-25`,
+- **F1a/F17 language**: `AgentResponseLanguage` no longer has `follow`; stored
+  `follow` maps to `zh`. `resolveAgentUiLanguage(setting)` takes no source
+  text. New `AgentUiStrings` (zh/en/ja) supplies Agent page, session panel,
+  composer, message/result copy, profile sheet/manager, and Agent settings
+  labels. The analysis prompt contract now states that all human-readable
+  fields use the configured language and Japanese appears only in quotes,
+  word forms, readings and dictionary examples.
+- **F8 selection**: `AgentDictionaryPreferences` uses separate
+  `agent_dictionary_selected_ids` / `agent_dictionary_mode` keys. The Agent
+  page never reads or writes `lookupPreferencesProvider`.
+- **F2 profile inbox**: `DictionaryFamiliarizationService.generateMany()`
+  returns all proposals without asking consent; `persistDecision()` writes only
+  after an explicit decision. `AgentProfileInboxController` is app-scoped and
+  `AgentRunController` waits in `AgentRunStatus.awaitingProfile`. Page detach
+  cannot call `skipOnce`; closing the sheet keeps the item pending. Decisions
+  are persisted by the inbox so run-generated and manager-generated proposals
+  share one path.
+- **F3 elapsed time**: `startedAt` remains in the app-scoped snapshot;
+  `awaitingProfile` counts as running. A wall-clock elapsed test covers a
+  10-second absence; run/profile tests assert no extra provider request before
+  the user decides.
+- **F11/F12 images**: composer supports a camera/gallery bottom sheet,
+  multi-select, append, per-image removal and `AgentLimits.maxImagesPerRun`
+  (6). Sent thumbnails open the existing `PhotoViewerPage`.
+- **F13 profile manager**: `/agent-profiles` lists stored profiles with
+  trusted/declined/pending/stale/ unavailable states, Markdown edit, single and
+  batch regenerate, and multi-select delete. Regeneration uses the shared
+  inbox, not a page-local familiarizer.
+- **F14 result actions**: result bubble has regenerate then copy (Markdown via
+  `buildAgentResultMarkdown`, no raw JSON/reasoning/paths). Long-press on a
+  user message offers copy/edit. `regenerate()` replays the request from the
+  familiarization stage, keeps the previous result visible until success, and
+  restores it with a notice on failure.
+- Wave 2 verification: `flutter analyze` clean; `flutter test` 231 passed;
+  `flutter build apk --debug` succeeded. Device visual/provider/arm64
+  acceptance remains for Wave 4.
+
+Current known gaps:
+
+- F1b (post-validation of human-readable fields + one language repair) is
+  Wave 3.
+- Evidence lookup is still exact→prefix only and the `60` limit is hard-coded
+  in several places (`lib/services/agent/evidence_builder.dart:23-25`,
   `lib/services/agent/agent_orchestrator.dart:45-47`). This is F6.
+- F7 coverage review remains Wave 3.
+- Process-death recovery of the in-memory profile inbox remains P6.7; the queue
+  survives page navigation but not process death.
 
 ## Tests and build
 
@@ -258,14 +291,18 @@ New test files include: `agent_models_test.dart`, `lookup_gateway_test.dart`,
 `analysis_normalizer_test.dart`, `analysis_schema_contract_test.dart`,
 `agent_settings_page_test.dart`, `lookup_actions_test.dart`,
 `ocr_model_download_controller_test.dart`.
+Wave 2 adds `agent_language_test.dart`, `agent_dictionary_preferences_test.dart`,
+`agent_profile_inbox_test.dart` and `agent_wave2_ui_test.dart`, plus new queue/
+gate/regenerate/multi-image cases in `agent_lifecycle_test.dart` and
+`agent_page_test.dart`.
 
 ## Not implemented / next
 
-1. **2026-10-31 device feedback (F1–F17)**: Wave 1 quick UI/non-Agent fixes
-   are implemented and verified by unit/widget tests; continue with Wave 2
-   language/profile queue/multi-image/action row, then Wave 3 lookup
-   completeness + coverage review. **Do not start P6.6/P6.7 until these
-   feedback items are closed or explicitly deferred.**
+1. **2026-10-31 device feedback (F1–F17)**: Waves 1–2 are implemented and
+   verified by unit/widget tests; continue with Wave 3 (F1b result-language
+   validation, F6 lookup completeness, F7 coverage review), then Wave 4 device
+   acceptance. **Do not start P6.6/P6.7 until these feedback items are closed
+   or explicitly deferred.**
 2. **P6.6 multi-OCR**: `ocr.consensus` variants, diff/hit-rate scoring,
    dictionary-assisted repair suggestions and the Agent OCR-version UI. The
    current Agent uses one OCR mode per image.
