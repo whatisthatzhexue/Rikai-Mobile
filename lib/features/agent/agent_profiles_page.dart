@@ -20,6 +20,21 @@ import '../../state/providers.dart';
 import 'agent_profile_inbox_host.dart';
 import 'familiarization_sheet.dart';
 
+// Stable keys keep each AppBar action's element (and its ink/focus state) tied
+// to the action itself. Without them, inserting the selection actions at the
+// front makes Flutter reuse the tapped selection-mode button's element for the
+// new "select all" button, which then shows a lingering highlight.
+const _selectAllActionKey = ValueKey<String>('agent-profile-action-select-all');
+const _regenerateSelectedActionKey = ValueKey<String>(
+  'agent-profile-action-regenerate-selected',
+);
+const _deleteSelectedActionKey = ValueKey<String>(
+  'agent-profile-action-delete-selected',
+);
+const _selectionModeActionKey = ValueKey<String>(
+  'agent-profile-action-selection-mode',
+);
+
 class AgentProfilesPage extends ConsumerStatefulWidget {
   const AgentProfilesPage({super.key});
 
@@ -73,6 +88,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
         actions: [
           if (_selecting) ...[
             IconButton(
+              key: _selectAllActionKey,
               tooltip: strings.profileSelectAll,
               onPressed: () {
                 final profiles = profilesAsync.asData?.value ?? const [];
@@ -85,6 +101,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
               icon: const Icon(Icons.select_all),
             ),
             IconButton(
+              key: _regenerateSelectedActionKey,
               tooltip: strings.profileRegenerateSelected,
               onPressed: actionsBusy || _selected.isEmpty
                   ? null
@@ -92,6 +109,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
               icon: const Icon(Icons.refresh),
             ),
             IconButton(
+              key: _deleteSelectedActionKey,
               tooltip: strings.profileDeleteSelected,
               onPressed: actionsBusy || _selected.isEmpty
                   ? null
@@ -103,6 +121,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
           // must not be replaced by "select all" in place, which caused a
           // lingering highlight and a visual jump.
           IconButton(
+            key: _selectionModeActionKey,
             tooltip: _selecting
                 ? strings.profileExitSelection
                 : strings.profileSelectMode,

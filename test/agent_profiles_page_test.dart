@@ -63,10 +63,29 @@ void main() {
     expect(find.text('测试词典'), findsOneWidget);
     expect(find.text('已信任'), findsOneWidget);
 
+    final modeTooltip = tester.element(find.byTooltip('多选'));
+
     await tester.tap(find.byTooltip('多选'));
     await tester.pumpAndSettle();
     expect(find.byType(Checkbox), findsOneWidget);
     expect(find.byTooltip('删除选中'), findsOneWidget);
     expect(find.byTooltip('重新生成选中'), findsOneWidget);
+
+    // The selection action must not reuse the tapped mode toggle's element,
+    // otherwise its ink/focus highlight is carried over to "select all".
+    expect(tester.element(find.byTooltip('全选')), isNot(same(modeTooltip)));
+    expect(
+      find.byKey(const ValueKey('agent-profile-action-select-all')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('agent-profile-action-selection-mode')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('退出多选'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('全选'), findsNothing);
+    expect(find.byTooltip('多选'), findsOneWidget);
   });
 }
