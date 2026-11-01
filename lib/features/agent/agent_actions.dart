@@ -142,11 +142,18 @@ Future<void> retryAgentDictionaryProfile(
           markdown: markdown,
           strings: strings,
         );
-        return decision ??
+        final resolved =
+            decision ??
             ProfileConfirmation(
               action: ProfileConfirmationAction.skipOnce,
               markdown: markdown,
             );
+        if (resolved.action == ProfileConfirmationAction.saveAndNeverAsk) {
+          ref
+              .read(appSettingsProvider.notifier)
+              .setAgentProfilesAutoAccept(true);
+        }
+        return resolved;
       },
     );
     if (!context.mounted) return;

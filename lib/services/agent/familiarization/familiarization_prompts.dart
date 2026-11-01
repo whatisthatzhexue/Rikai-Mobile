@@ -9,12 +9,11 @@ String dictionaryProfileSystemPrompt(AgentProfileLanguage language) =>
 You write a compact reference profile for a Japanese MDict dictionary.
 You receive bounded sample entries (plain text) and metadata only. Never ask for
 or invent file paths, images, audio, or content outside the samples.
-Return one JSON object with the requested schema. The profile helps a later
-model decide how to query this dictionary; it is not a translation.
+The profile helps a later model decide how to query this dictionary; it is not
+a translation.
 ${language.instruction}
 Keep Japanese headwords, readings and sample entry text unchanged.
-Required JSON schema:
-${jsonEncode(dictionaryProfileResponseSchema())}
+${_profileFormatInstructions()}
 ''';
 
 String buildDictionaryProfileUserPrompt(
@@ -33,13 +32,81 @@ String dictionaryProfileBatchSystemPrompt(AgentProfileLanguage language) =>
 You write compact reference profiles for several Japanese MDict dictionaries.
 You receive bounded samples grouped by dictionary_id (plain text) and metadata
 only. Never ask for or invent file paths, images, audio, or content outside the
-samples. Return one JSON object with a "profiles" array containing exactly one
-profile per input dictionary. Each dictionary_id must match its input.
+samples. Write exactly one PROFILE block per input dictionary. Each ID must
+match its input dictionary_id.
 ${language.instruction}
 Keep Japanese headwords, readings and sample entry text unchanged.
-Required JSON schema:
-${jsonEncode(dictionaryProfileBatchResponseSchema())}
+${_profileFormatInstructions()}
 ''';
+
+String _profileFormatInstructions() => '''
+OUTPUT FORMAT
+Do not return JSON. Do not use Markdown fences. Use this flat tag format:
+[PROFILE]
+[ID]dictionary_id[/ID]
+[TITLE]display title[/TITLE]
+[KIND]dictionary type[/KIND]
+[LANGUAGES]ja|zh[/LANGUAGES]
+[HEADWORD_FIELDS]field1|field2[/HEADWORD_FIELDS]
+[DEFINITION_FIELDS]field1|field2[/DEFINITION_FIELDS]
+[FLAGS]ruby|kanji|examples|audio|images[/FLAGS]
+[EXACT_FORMS]form1|form2[/EXACT_FORMS]
+[PREFIX]yes or no[/PREFIX]
+[SEARCH_NOTES]short note[/SEARCH_NOTES]
+[STRENGTHS]short item|short item[/STRENGTHS]
+[CAVEATS]short item|short item[/CAVEATS]
+[RECOMMENDED]query form|query form[/RECOMMENDED]
+[ENTRY_NOTES]short note[/ENTRY_NOTES]
+[/PROFILE]
+Use "|" between list items. Omit a tag or leave it empty when unknown. Do not
+write confidence values, percentages, citations or internal field names in the
+text. Keep every description concise.
+''';
+
+LlmRequest buildDictionaryProfileBatchRepairRequest({
+  required String model,
+  required List<DictionarySample> samples,
+  required AgentProfileLanguage language,
+  required String rawOutput,
+  required List<String> errors,
+  int maxTokens = 6000,
+}) {
+  return LlmRequest(
+    model: model,
+    messages: <LlmMessage>[
+      LlmMessage(
+        role: LlmRole.system,
+        parts: <LlmTextPart>[
+          LlmTextPart('''
+${dictionaryProfileBatchSystemPrompt(language)}
+FORMAT CORRECTION TASK:
+The previous response failed to parse. Keep every word of descriptive text
+unchanged. Do not rewrite, summarize, translate, add or delete content. Only
+add or fix the missing plain-text tags. If an ID is missing, reuse the exact
+dictionary_id from the input samples. Return only the corrected tag blocks.
+'''),
+        ],
+      ),
+      LlmMessage(
+        role: LlmRole.user,
+        parts: <LlmTextPart>[
+          LlmTextPart('''
+${buildDictionaryProfileBatchUserPrompt(samples, language)}
+Previous output (untrusted):
+$rawOutput
+
+Parse errors:
+${errors.isEmpty ? 'missing PROFILE tags or required ID' : errors.join('\n')}
+
+Return only the corrected tag blocks.
+'''),
+        ],
+      ),
+    ],
+    maxTokens: maxTokens,
+    stream: false,
+  );
+}
 
 String buildDictionaryProfileBatchUserPrompt(
   List<DictionarySample> samples,

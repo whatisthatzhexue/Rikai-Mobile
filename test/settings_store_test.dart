@@ -20,6 +20,7 @@ void main() {
     expect(settings.ocrModelsDirectory, '');
     expect(settings.onboardingCompleted, isFalse);
     expect(settings.autoSaveOcr, isFalse);
+    expect(settings.agentProfilesAutoAccept, isFalse);
   });
 
   test('persists font family and entry limit', () async {
@@ -36,6 +37,7 @@ void main() {
         ocrModelsDirectory: '/storage/emulated/0/rikai-models',
         onboardingCompleted: true,
         autoSaveOcr: true,
+        agentProfilesAutoAccept: true,
       ),
     );
     final restored = SettingsStore(preferences).load();
@@ -47,6 +49,7 @@ void main() {
     expect(restored.ocrModelsDirectory, '/storage/emulated/0/rikai-models');
     expect(restored.onboardingCompleted, isTrue);
     expect(restored.autoSaveOcr, isTrue);
+    expect(restored.agentProfilesAutoAccept, isTrue);
   });
 
   test('an existing UniDic path counts as completed onboarding', () async {

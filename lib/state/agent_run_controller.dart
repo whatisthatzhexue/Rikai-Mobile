@@ -16,6 +16,7 @@ import '../services/agent/familiarization/unidic_familiarization_service.dart';
 import '../services/mdict/mdict_worker.dart';
 import 'agent_profile_inbox.dart';
 import 'agent_run_services.dart';
+import 'providers.dart';
 
 /// Owns the current Agent run at application scope. `AgentPage` is only a
 /// subscriber: navigating away, rotating, or reopening the page never cancels
@@ -210,8 +211,11 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         },
         // The app-level inbox owns the decision futures. If the page is not
         // mounted, the run stays in `awaitingProfile`; it never auto-skips.
-        onProfilesGenerated: (runId, proposals) {
+        onProfilesGenerated: (runId, proposals) async {
           final inbox = ref.read(agentProfileInboxProvider.notifier);
+          if (ref.read(appSettingsProvider).agentProfilesAutoAccept) {
+            return inbox.autoAcceptAll(proposals);
+          }
           return inbox.waitForAll(runId, proposals);
         },
       );

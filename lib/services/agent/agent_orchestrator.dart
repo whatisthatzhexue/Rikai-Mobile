@@ -13,6 +13,7 @@ import 'analysis_normalizer.dart';
 import 'analysis_parser.dart';
 import 'analysis_prompts.dart';
 import 'analysis_salvager.dart';
+import 'analysis_tag_parser.dart';
 import 'citation_registry.dart';
 import 'evidence_builder.dart';
 import 'familiarization/dictionary_familiarization_service.dart';
@@ -328,7 +329,12 @@ class AgentOrchestrator {
         AgentStage.validating,
         agentStageMessage(AgentStage.validating, uiLanguage),
       );
-      var analysis = _parseAndNormalize(raw, quotes, evidence);
+      var analysis = _parseAndNormalize(
+        raw,
+        quotes,
+        evidence,
+        expectedSourceId: primary?.id,
+      );
       var validation = analysis == null
           ? null
           : validator.validate(
@@ -366,7 +372,12 @@ class AgentOrchestrator {
             ),
             cancellation,
           );
-          final repaired = _parseAndNormalize(repairRaw, quotes, evidence);
+          final repaired = _parseAndNormalize(
+            repairRaw,
+            quotes,
+            evidence,
+            expectedSourceId: primary?.id,
+          );
           if (repaired != null) {
             raw = repairRaw;
             analysis = repaired;
@@ -584,32 +595,40 @@ class AgentOrchestrator {
   AgentAnalysis? _parseAndNormalize(
     String raw,
     List<AgentQuoteRef> quotes,
-    AgentEvidenceBundle evidence,
-  ) {
-    try {
-      final parsed = AgentAnalysis.fromJson(
-        normalizeAnalysisJson(extractJsonObject(raw)),
-      );
-      if (parsed.translation.isEmpty || parsed.segments.isEmpty) {
-        if (kDebugMode) {
-          debugPrint('[AgentAnalysis] empty translation/segments');
-        }
-        return null;
+    AgentEvidenceBundle evidence, {
+    String? expectedSourceId,
+  }) {
+    AgentAnalysis? parsed = parseTaggedAnalysis(
+      raw,
+      sourceId: expectedSourceId ?? '',
+    );
+    if (parsed == null) {
+      // Transitional compatibility: a model may still return the old JSON
+      // shape. The tagged format is authoritative whenever it parses.
+      try {
+        parsed = AgentAnalysis.fromJson(
+          normalizeAnalysisJson(extractJsonObject(raw)),
+        );
+      } catch (_) {
+        parsed = null;
       }
-      return normalizeAnalysis(
-        analysis: parsed,
-        quotes: quotes,
-        evidence: evidence,
-      );
-    } catch (error) {
+    }
+    if (parsed == null ||
+        parsed.translation.isEmpty ||
+        parsed.segments.isEmpty) {
       if (kDebugMode) {
         debugPrint(
           '[AgentAnalysis] parse failed chars=${raw.length} '
-          'head=${_debugHead(raw)} type=${error.runtimeType}',
+          'head=${_debugHead(raw)}',
         );
       }
       return null;
     }
+    return normalizeAnalysis(
+      analysis: parsed,
+      quotes: quotes,
+      evidence: evidence,
+    );
   }
 
   Future<String> _collect(

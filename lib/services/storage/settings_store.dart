@@ -19,6 +19,7 @@ class AppSettings {
     this.autoSaveOcr = false,
     this.agentProfileLanguage = 'zh',
     this.agentResponseLanguage = 'zh',
+    this.agentProfilesAutoAccept = false,
   });
 
   final String unidicPath;
@@ -55,6 +56,10 @@ class AppSettings {
   /// Agent answer language: zh/en/ja. Legacy `follow` is migrated to `zh`.
   final String agentResponseLanguage;
 
+  /// When true, newly generated dictionary profiles are saved without a
+  /// confirmation sheet. Defaults to false ("ask every time").
+  final bool agentProfilesAutoAccept;
+
   AppSettings copyWith({
     String? unidicPath,
     bool? showFurigana,
@@ -68,6 +73,7 @@ class AppSettings {
     bool? autoSaveOcr,
     String? agentProfileLanguage,
     String? agentResponseLanguage,
+    bool? agentProfilesAutoAccept,
   }) {
     return AppSettings(
       unidicPath: unidicPath ?? this.unidicPath,
@@ -87,6 +93,8 @@ class AppSettings {
       agentResponseLanguage: AgentResponseLanguage.fromWire(
         agentResponseLanguage ?? this.agentResponseLanguage,
       ).wireName,
+      agentProfilesAutoAccept:
+          agentProfilesAutoAccept ?? this.agentProfilesAutoAccept,
     );
   }
 }
@@ -107,6 +115,7 @@ class SettingsStore {
   static const _autoSaveOcrKey = 'corpus_auto_save_ocr';
   static const _agentProfileLanguageKey = 'agent_profile_language';
   static const _agentResponseLanguageKey = 'agent_response_language';
+  static const _agentProfilesAutoAcceptKey = 'agent_profiles_auto_accept';
 
   final SharedPreferences _preferences;
 
@@ -141,6 +150,8 @@ class SettingsStore {
       agentResponseLanguage: AgentResponseLanguage.fromWire(
         _preferences.getString(_agentResponseLanguageKey),
       ).wireName,
+      agentProfilesAutoAccept:
+          _preferences.getBool(_agentProfilesAutoAcceptKey) ?? false,
     );
   }
 
@@ -171,6 +182,10 @@ class SettingsStore {
     await _preferences.setString(
       _agentResponseLanguageKey,
       settings.agentResponseLanguage,
+    );
+    await _preferences.setBool(
+      _agentProfilesAutoAcceptKey,
+      settings.agentProfilesAutoAccept,
     );
   }
 

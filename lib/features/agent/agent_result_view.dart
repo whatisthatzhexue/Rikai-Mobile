@@ -22,7 +22,7 @@ class AgentResultView extends StatelessWidget {
   final AgentRunResult result;
   final ValueChanged<AgentCitation> onCitationTap;
   final AgentUiStrings strings;
-  final ValueChanged<DictionaryProfileIssue>? onRetryProfile;
+  final Future<void> Function(DictionaryProfileIssue)? onRetryProfile;
 
   @override
   Widget build(BuildContext context) {
@@ -117,9 +117,10 @@ class AgentResultView extends StatelessWidget {
                   ),
                 ),
                 if (onRetryProfile != null)
-                  TextButton(
-                    onPressed: () => onRetryProfile!(issue),
-                    child: Text(strings.retryThisDictionary),
+                  _RetryProfileAction(
+                    issue: issue,
+                    strings: strings,
+                    onRetry: onRetryProfile!,
                   ),
               ],
             ),
@@ -222,6 +223,56 @@ class AgentResultView extends StatelessWidget {
             ),
         ],
       ],
+    );
+  }
+}
+
+class _RetryProfileAction extends StatefulWidget {
+  const _RetryProfileAction({
+    required this.issue,
+    required this.strings,
+    required this.onRetry,
+  });
+
+  final DictionaryProfileIssue issue;
+  final AgentUiStrings strings;
+  final Future<void> Function(DictionaryProfileIssue) onRetry;
+
+  @override
+  State<_RetryProfileAction> createState() => _RetryProfileActionState();
+}
+
+class _RetryProfileActionState extends State<_RetryProfileAction> {
+  bool _loading = false;
+
+  Future<void> _retry() async {
+    if (_loading) return;
+    setState(() => _loading = true);
+    try {
+      await widget.onRetry(widget.issue);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return Semantics(
+        label: widget.strings.retryingProfile,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          child: SizedBox(
+            width: AppSizes.iconSmall,
+            height: AppSizes.iconSmall,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+    return TextButton(
+      onPressed: _retry,
+      child: Text(widget.strings.retryThisDictionary),
     );
   }
 }

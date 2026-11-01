@@ -17,6 +17,7 @@ import '../../state/agent_profile_manager.dart';
 import '../../state/agent_providers.dart';
 import '../../state/agent_run_controller.dart';
 import '../../state/providers.dart';
+import 'agent_profile_inbox_host.dart';
 import 'familiarization_sheet.dart';
 
 class AgentProfilesPage extends ConsumerStatefulWidget {
@@ -28,7 +29,6 @@ class AgentProfilesPage extends ConsumerStatefulWidget {
 
 class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
   bool _selecting = false;
-  bool _busy = false;
   final Set<String> _selected = <String>{};
   final Map<String, Future<bool>> _staleFutures = <String, Future<bool>>{};
 
@@ -49,11 +49,22 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     final enabled = ref.watch(enabledDictionariesProvider);
     final pending = ref.watch(agentProfileInboxProvider).pending;
     final running = ref.watch(agentRunControllerProvider).isRunning;
+    final regeneration = ref.watch(agentProfileRegenerationProvider);
     final settings = ref.watch(appSettingsProvider);
+    final actionsBusy = running || regeneration.active;
     ref.listen(appSettingsProvider, (previous, next) {
       if (previous?.agentProfileLanguage != next.agentProfileLanguage) {
         _staleFutures.clear();
       }
+    });
+    ref.listen(agentProfileRegenerationProvider, (previous, next) {
+      final error = next.error;
+      if (error == null || error == previous?.error) return;
+      final message = error == 'profile_regenerate_failed'
+          ? strings.profileRegenerateFailed
+          : error;
+      RikaiToast.show(context, message);
+      ref.read(agentProfileRegenerationProvider.notifier).clearError();
     });
 
     return Scaffold(
@@ -75,116 +86,146 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
             ),
             IconButton(
               tooltip: strings.profileRegenerateSelected,
-              onPressed: _busy || _selected.isEmpty || running
+              onPressed: actionsBusy || _selected.isEmpty
                   ? null
                   : () => _regenerateSelected(enabled, running),
               icon: const Icon(Icons.refresh),
             ),
             IconButton(
               tooltip: strings.profileDeleteSelected,
-              onPressed: _busy || _selected.isEmpty || running
+              onPressed: actionsBusy || _selected.isEmpty
                   ? null
                   : () => _deleteSelected(strings),
               icon: const Icon(Icons.delete_outline),
             ),
-            IconButton(
-              tooltip: strings.profileExitSelection,
-              onPressed: () => setState(() {
-                _selecting = false;
-                _selected.clear();
-              }),
-              icon: const Icon(Icons.close),
-            ),
-          ] else
-            IconButton(
-              tooltip: strings.profileSelectMode,
-              onPressed: () => setState(() => _selecting = true),
-              icon: const Icon(Icons.checklist),
-            ),
+          ],
+          // Keep the mode toggle as the rightmost action in both states. It
+          // must not be replaced by "select all" in place, which caused a
+          // lingering highlight and a visual jump.
+          IconButton(
+            tooltip: _selecting
+                ? strings.profileExitSelection
+                : strings.profileSelectMode,
+            onPressed: () => setState(() {
+              _selecting = !_selecting;
+              if (!_selecting) _selected.clear();
+            }),
+            icon: Icon(_selecting ? Icons.close : Icons.checklist),
+          ),
         ],
       ),
-      body: SafeArea(
-        top: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.md,
-            AppSpacing.lg,
-            AppSpacing.xl,
-          ),
-          children: [
-            if (_busy)
-              const Padding(
-                padding: EdgeInsets.only(bottom: AppSpacing.sm),
-                child: LinearProgressIndicator(minHeight: 2),
-              ),
-            if (pending.isNotEmpty) ...[
-              Text(
-                strings.pendingProfiles(pending.length),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontSize: AgentTokens.helper,
-                  color: AppColors.warning,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              for (final proposal in pending)
-                _ProfileCard(
-                  title: proposal.title,
-                  statusLabel: strings.profileStatusPending,
-                  statusColor: AppColors.warning,
-                  subtitle: '',
-                  trailing: TextButton(
-                    onPressed: () => _resolveProposal(proposal, strings),
-                    child: Text(strings.profileOpen),
+      body: AgentProfileInboxHost(
+        strings: strings,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              if (regeneration.active)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                    AppSpacing.lg,
+                    AppSpacing.sm,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        strings.regeneratingProfile(
+                          regeneration.titles.join('、'),
+                        ),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: AgentTokens.helper,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      const LinearProgressIndicator(),
+                    ],
                   ),
                 ),
-              const Divider(height: AppSpacing.xl),
-            ],
-            profilesAsync.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.all(AppSpacing.md),
-                child: LinearProgressIndicator(minHeight: 2),
-              ),
-              error: (error, stack) => Text(
-                strings.providerLoadFailed,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontSize: AgentTokens.helper,
-                  color: AppColors.error,
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    AppSpacing.md,
+                    AppSpacing.lg,
+                    AppSpacing.xl,
+                  ),
+                  children: [
+                    if (pending.isNotEmpty) ...[
+                      Text(
+                        strings.pendingProfiles(pending.length),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: AgentTokens.helper,
+                          color: AppColors.warning,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      for (final proposal in pending)
+                        _ProfileCard(
+                          title: proposal.title,
+                          statusLabel: strings.profileStatusPending,
+                          statusColor: AppColors.warning,
+                          subtitle: '',
+                          trailing: TextButton(
+                            onPressed: () =>
+                                _resolveProposal(proposal, strings),
+                            child: Text(strings.profileOpen),
+                          ),
+                        ),
+                      const Divider(height: AppSpacing.xl),
+                    ],
+                    profilesAsync.when(
+                      loading: () => const Padding(
+                        padding: EdgeInsets.all(AppSpacing.md),
+                        child: LinearProgressIndicator(minHeight: 2),
+                      ),
+                      error: (error, stack) => Text(
+                        strings.providerLoadFailed,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: AgentTokens.helper,
+                          color: AppColors.error,
+                        ),
+                      ),
+                      data: (profiles) {
+                        if (profiles.isEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: AppSpacing.xl,
+                            ),
+                            child: Text(
+                              strings.profileManagerEmpty,
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                fontSize: AgentTokens.helper,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          );
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (final profile in profiles)
+                              _buildProfileCard(
+                                context,
+                                profile,
+                                enabled,
+                                settings.agentProfileLanguage,
+                                actionsBusy,
+                                strings,
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
-              data: (profiles) {
-                if (profiles.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppSpacing.xl,
-                    ),
-                    child: Text(
-                      strings.profileManagerEmpty,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontSize: AgentTokens.helper,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  );
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final profile in profiles)
-                      _buildProfileCard(
-                        context,
-                        profile,
-                        enabled,
-                        settings.agentProfileLanguage,
-                        running,
-                        strings,
-                      ),
-                  ],
-                );
-              },
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -195,7 +236,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     StoredDictionaryProfile profile,
     List<DictionaryInfo> enabled,
     String profileLanguage,
-    bool running,
+    bool busy,
     AgentUiStrings strings,
   ) {
     DictionaryInfo? dictionary;
@@ -231,21 +272,19 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
               children: [
                 IconButton(
                   tooltip: strings.profileEdit,
-                  onPressed: running
-                      ? null
-                      : () => _editProfile(profile, strings),
+                  onPressed: busy ? null : () => _editProfile(profile, strings),
                   icon: const Icon(Icons.edit_outlined, size: AppSizes.icon),
                 ),
                 IconButton(
                   tooltip: strings.profileRegenerate,
-                  onPressed: running || dictionary == null
+                  onPressed: busy || dictionary == null
                       ? null
                       : () => _regenerate(dictionary!, strings),
                   icon: const Icon(Icons.refresh, size: AppSizes.icon),
                 ),
                 IconButton(
                   tooltip: strings.profileDelete,
-                  onPressed: running
+                  onPressed: busy
                       ? null
                       : () => _deleteProfiles(<StoredDictionaryProfile>[
                           profile,
@@ -335,7 +374,8 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     StoredDictionaryProfile profile,
     AgentUiStrings strings,
   ) async {
-    if (ref.read(agentRunControllerProvider).isRunning) {
+    if (ref.read(agentRunControllerProvider).isRunning ||
+        ref.read(agentProfileRegenerationProvider).active) {
       RikaiToast.show(context, strings.profileActionsDisabledWhileRunning);
       return;
     }
@@ -364,16 +404,12 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     AgentProfileProposal proposal,
     AgentUiStrings strings,
   ) async {
-    final decision = await showFamiliarizationSheet(
+    await presentAgentProfileConfirmation(
       context,
-      profile: proposal.profile,
-      markdown: proposal.markdown,
-      strings: strings,
+      ref,
+      strings,
+      proposal: proposal,
     );
-    if (!mounted || decision == null) return;
-    await ref
-        .read(agentProfileInboxProvider.notifier)
-        .resolve(proposal.id, decision);
     _staleFutures.clear();
     ref.invalidate(agentProfilesProvider);
   }
@@ -390,7 +426,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     bool running,
   ) async {
     final strings = _strings();
-    if (running) {
+    if (running || ref.read(agentProfileRegenerationProvider).active) {
       RikaiToast.show(context, strings.profileActionsDisabledWhileRunning);
       return;
     }
@@ -411,6 +447,19 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
       RikaiToast.show(context, strings.profileActionsDisabledWhileRunning);
       return;
     }
+    if (ref.read(agentProfileRegenerationProvider).active) return;
+    final pendingIds = ref
+        .read(agentProfileInboxProvider)
+        .pending
+        .map((proposal) => proposal.dictionaryId)
+        .toSet();
+    final targets = dictionaries
+        .where((dictionary) => !pendingIds.contains(dictionary.id))
+        .toList(growable: false);
+    if (targets.isEmpty) {
+      RikaiToast.show(context, strings.profilesAwaitingConfirmation);
+      return;
+    }
     final providers =
         ref.read(agentProvidersProvider).asData?.value ??
         const <AgentProviderConfig>[];
@@ -418,28 +467,10 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
       RikaiToast.show(context, strings.profileRegenerateNeedsProvider);
       return;
     }
-    final provider = providers.first;
-    setState(() => _busy = true);
-    try {
-      final generation = await ref
-          .read(agentProfileManagerProvider)
-          .generate(dictionaries: dictionaries, provider: provider);
-      ref
-          .read(agentProfileInboxProvider.notifier)
-          .enqueue(generation.proposals);
-      if (generation.issues.isNotEmpty && mounted) {
-        RikaiToast.show(context, generation.issues.first.reason);
-      }
-      if (generation.proposals.isNotEmpty && mounted) {
-        _staleFutures.clear();
-        ref.invalidate(agentProfilesProvider);
-        await _resolveProposal(generation.proposals.first, strings);
-      }
-    } catch (_) {
-      if (mounted) RikaiToast.show(context, strings.profileRegenerateFailed);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    _staleFutures.clear();
+    await ref
+        .read(agentProfileRegenerationProvider.notifier)
+        .start(dictionaries: targets, provider: providers.first);
   }
 
   Future<void> _deleteSelected(AgentUiStrings strings) async {
@@ -456,7 +487,8 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     AgentUiStrings strings,
   ) async {
     if (profiles.isEmpty) return;
-    if (ref.read(agentRunControllerProvider).isRunning) {
+    if (ref.read(agentRunControllerProvider).isRunning ||
+        ref.read(agentProfileRegenerationProvider).active) {
       RikaiToast.show(context, strings.profileActionsDisabledWhileRunning);
       return;
     }

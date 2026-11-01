@@ -170,6 +170,10 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
     _update(state.copyWith(agentResponseLanguage: value));
   }
 
+  void setAgentProfilesAutoAccept(bool value) {
+    _update(state.copyWith(agentProfilesAutoAccept: value));
+  }
+
   void setOnboardingCompleted(bool value) {
     _update(state.copyWith(onboardingCompleted: value));
   }

@@ -235,6 +235,67 @@ void main() {
     expect(await repository.load('dict_b'), isNotNull);
   });
 
+  test('tagged profile output is parsed into a pending proposal', () async {
+    final repository = InMemoryDictionaryProfileRepository();
+    final samples = _FakeSamplePort();
+    final llm = FakeProvider(
+      responseText: '''
+[PROFILE]
+[ID]dict_a[/ID]
+[TITLE]A[/TITLE]
+[KIND]国語辞典[/KIND]
+[HEADWORD_FIELDS]見出し[/HEADWORD_FIELDS]
+[DEFINITION_FIELDS]語義[/DEFINITION_FIELDS]
+[FLAGS]ruby|examples[/FLAGS]
+[PREFIX]yes[/PREFIX]
+[STRENGTHS]多义项[/STRENGTHS]
+[/PROFILE]
+''',
+    );
+    final service = _service(
+      samples: samples,
+      repository: repository,
+      llm: llm,
+    );
+
+    final result = await service.ensure(_dictionary);
+    expect(result.action, FamiliarizationAction.pending);
+    expect(result.draft!.kind, '国語辞典');
+    expect(result.draft!.entryStructure.hasRuby, isTrue);
+    expect(llm.requests, hasLength(1));
+  });
+
+  test('broken profile tags get one format-correction call', () async {
+    final repository = InMemoryDictionaryProfileRepository();
+    final samples = _FakeSamplePort();
+    final llm = FakeProvider(
+      responseSequence: <String>[
+        'Here is the profile without any tags.',
+        '''
+[PROFILE]
+[ID]dict_a[/ID]
+[TITLE]A[/TITLE]
+[KIND]国語辞典[/KIND]
+[/PROFILE]
+''',
+      ],
+    );
+    final service = _service(
+      samples: samples,
+      repository: repository,
+      llm: llm,
+    );
+
+    final result = await service.ensure(_dictionary);
+    expect(result.action, FamiliarizationAction.pending);
+    expect(llm.requests, hasLength(2));
+    final repairText = llm.requests.last.messages
+        .map((message) => message.text)
+        .join('\n');
+    expect(repairText, contains('FORMAT CORRECTION TASK'));
+    expect(repairText, contains('Previous output'));
+  });
+
   test('profile markdown follows the selected language', () {
     final profile = DictionaryProfile.fromJson(_profileJson);
     expect(

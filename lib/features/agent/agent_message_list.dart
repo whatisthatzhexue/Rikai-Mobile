@@ -18,17 +18,6 @@ import 'agent_actions.dart';
 import 'agent_evidence_panel.dart';
 import 'agent_message_widgets.dart';
 
-void scrollAgentToBottom(ScrollController controller, bool mounted) {
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (!mounted || !controller.hasClients) return;
-    controller.animateTo(
-      controller.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOut,
-    );
-  });
-}
-
 class AgentMessageList extends ConsumerWidget {
   const AgentMessageList({
     super.key,
@@ -145,19 +134,17 @@ class AgentMessageList extends ConsumerWidget {
               strings: strings,
               onCitationTap: (citation) =>
                   unawaited(openAgentCitation(context, ref, citation)),
-              onRetryProfile: (issue) {
+              onRetryProfile: (issue) async {
                 final selectedProvider = provider;
                 if (selectedProvider == null) {
                   RikaiToast.show(context, strings.modelRequired);
                   return;
                 }
-                unawaited(
-                  retryAgentDictionaryProfile(
-                    context,
-                    ref,
-                    issue,
-                    selectedProvider,
-                  ),
+                await retryAgentDictionaryProfile(
+                  context,
+                  ref,
+                  issue,
+                  selectedProvider,
                 );
               },
             ),

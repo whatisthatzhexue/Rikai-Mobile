@@ -229,6 +229,23 @@ class AgentUiStrings {
   String get decline => _pick('不再询问', 'Do not ask again', '今後確認しない');
   String get profileUnavailable =>
       _pick('档案不可用', 'Profile unavailable', 'プロファイル利用不可');
+  String profileGenerated(String title) => _pick(
+    '「$title」词典档案已生成',
+    'Dictionary profile generated: $title',
+    '辞書プロファイルを生成しました：$title',
+  );
+  String regeneratingProfile(String titles) => _pick(
+    '正在重新生成档案：$titles',
+    'Regenerating profile: $titles',
+    'プロファイルを再生成中：$titles',
+  );
+  String get profilesAwaitingConfirmation => _pick(
+    '该词典档案正在等待确认',
+    'This dictionary profile is waiting for confirmation',
+    'この辞書プロファイルは確認待ちです',
+  );
+  String get retryingProfile =>
+      _pick('正在重试词典档案', 'Retrying dictionary profile', '辞書プロファイルを再試行中');
 
   // Result view.
   String get resultTruncated => _pick(
@@ -378,6 +395,16 @@ class AgentUiStrings {
   String get profileLanguageLabel =>
       _pick('档案主体语言', 'Profile language', 'プロファイル言語');
   String get answerLanguageLabel => _pick('回答语言', 'Answer language', '回答言語');
+  String get autoAcceptProfiles => _pick(
+    '生成词典档案时不再询问',
+    'Do not ask when generating dictionary profiles',
+    '辞書プロファイル生成時に確認しない',
+  );
+  String get autoAcceptProfilesBody => _pick(
+    '开启后，新生成的词典档案会自动保存并信任；仍可在“词典档案”中修改或重新生成。',
+    'When enabled, newly generated dictionary profiles are saved and trusted automatically. You can still edit or regenerate them under “Dictionary profiles”.',
+    '有効にすると、生成された辞書プロファイルは自動的に保存・信頼されます。「辞書プロファイル」から編集・再生成できます。',
+  );
   String get modelServicesTitle => _pick('模型服务', 'Model services', 'モデルサービス');
   String get secretBody => _pick(
     'API Key 只保存在 Android 安全存储中，不会写入 SharedPreferences、日志或导出文件。图片仍只在本机 OCR，不会上传。',

@@ -10,11 +10,12 @@ import '../ports/agent_capability_exception.dart';
 import '../ports/dictionary_sample_port.dart';
 import '../ports/llm_port.dart';
 import 'dictionary_profile_markdown.dart';
+import 'dictionary_profile_tag_parser.dart';
 import 'familiarization_prompts.dart';
 import 'profile_fingerprint.dart';
 import 'profile_repository.dart';
 
-enum ProfileConfirmationAction { save, skipOnce, decline }
+enum ProfileConfirmationAction { save, skipOnce, saveAndNeverAsk, decline }
 
 class ProfileConfirmation {
   const ProfileConfirmation({required this.action, required this.markdown});
@@ -345,10 +346,6 @@ class DictionaryFamiliarizationService {
             ],
           ),
         ],
-        responseFormat: LlmResponseFormat(
-          name: 'dictionary_profiles',
-          schema: dictionaryProfileBatchResponseSchema(),
-        ),
         maxTokens: maxTokens,
         stream: false,
       );
@@ -381,38 +378,36 @@ class DictionaryFamiliarizationService {
         continue;
       }
 
-      final profiles = <String, DictionaryProfile>{};
-      try {
-        final json = extractJsonObject(raw);
-        final rawProfiles = json['profiles'];
-        if (rawProfiles is List) {
-          for (final item in rawProfiles.whereType<Map>()) {
-            final profile = DictionaryProfile.fromJson(
-              item.map((key, value) => MapEntry(key.toString(), value)),
-            );
-            if (profile.dictionaryId.isNotEmpty) {
-              profiles[profile.dictionaryId] = profile.copyWith(
-                language: profileLanguage.wireName,
-              );
-            }
-          }
-        } else if (batch.length == 1) {
-          // Older prompts/one-dictionary calls may return the profile directly
-          // instead of wrapping it in {"profiles": [...]}. Keep that response
-          // usable without spending a repair request.
-          final profile = DictionaryProfile.fromJson(json);
-          if (profile.dictionaryId.isNotEmpty) {
-            profiles[profile.dictionaryId] = profile.copyWith(
-              language: profileLanguage.wireName,
-            );
-          }
+      var profiles = _parseProfiles(raw, batch);
+      final missing = batch
+          .where((dictionary) => !profiles.containsKey(dictionary.id))
+          .toList(growable: false);
+      if (missing.isNotEmpty) {
+        // One bounded format-correction call per batch. It may only add tags;
+        // readable text must stay unchanged.
+        try {
+          final repairedRaw = await collectLlmText(
+            _llm,
+            buildDictionaryProfileBatchRepairRequest(
+              model: _smallModel,
+              samples: batchSamples,
+              language: profileLanguage,
+              rawOutput: raw,
+              errors: <String>[
+                'missing profiles for: '
+                    '${missing.map((dictionary) => dictionary.id).join(', ')}',
+              ],
+              maxTokens: maxTokens,
+            ),
+          );
+          final repaired = _parseProfiles(repairedRaw, batch);
+          profiles = <String, DictionaryProfile>{...repaired, ...profiles};
+        } catch (error) {
+          _agentDebug(
+            '[AgentFamiliarization] format repair failed '
+            '(dictionaries=${batch.length}): ${error.runtimeType}',
+          );
         }
-      } catch (error) {
-        _agentDebug(
-          '[AgentFamiliarization] batch JSON parse failed '
-          '(dictionaries=${batch.length}, chars=${raw.length}): '
-          '${error.runtimeType}',
-        );
       }
 
       for (final dictionary in batch) {
@@ -477,6 +472,50 @@ class DictionaryFamiliarizationService {
     );
   }
 
+  Map<String, DictionaryProfile> _parseProfiles(
+    String raw,
+    List<DictionaryInfo> batch,
+  ) {
+    final tagged = parseTaggedProfiles(raw, language: profileLanguage);
+    final profiles = <String, DictionaryProfile>{
+      for (final profile in tagged)
+        if (profile.dictionaryId.isNotEmpty) profile.dictionaryId: profile,
+    };
+    if (profiles.isNotEmpty) return profiles;
+
+    // Transitional compatibility with the old JSON output.
+    try {
+      final json = extractJsonObject(raw);
+      final rawProfiles = json['profiles'];
+      if (rawProfiles is List) {
+        for (final item in rawProfiles.whereType<Map>()) {
+          final profile = DictionaryProfile.fromJson(
+            item.map((key, value) => MapEntry(key.toString(), value)),
+          );
+          if (profile.dictionaryId.isNotEmpty) {
+            profiles[profile.dictionaryId] = profile.copyWith(
+              language: profileLanguage.wireName,
+            );
+          }
+        }
+      } else if (batch.length == 1) {
+        final profile = DictionaryProfile.fromJson(json);
+        if (profile.dictionaryId.isNotEmpty) {
+          profiles[profile.dictionaryId] = profile.copyWith(
+            language: profileLanguage.wireName,
+          );
+        }
+      }
+    } catch (error) {
+      _agentDebug(
+        '[AgentFamiliarization] batch parse failed '
+        '(dictionaries=${batch.length}, chars=${raw.length}): '
+        '${error.runtimeType}',
+      );
+    }
+    return profiles;
+  }
+
   List<List<DictionaryInfo>> _splitBatches(
     List<DictionaryInfo> dictionaries,
     Map<String, DictionarySample> samples,
@@ -512,7 +551,8 @@ Future<FamiliarizationResult> persistAgentProfileDecision({
 }) async {
   final dictionary = proposal.dictionary;
   switch (action) {
-    case ProfileConfirmationAction.save:
+    case ProfileConfirmationAction.save ||
+        ProfileConfirmationAction.saveAndNeverAsk:
       final stored = StoredDictionaryProfile(
         dictionaryId: dictionary.id,
         title: dictionary.title,

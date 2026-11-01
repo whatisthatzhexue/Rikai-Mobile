@@ -39,15 +39,15 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **231** |
-| 当前测试文件数 | **65** |
+| 当前 test/testWidgets 声明数 | **246** |
+| 当前测试文件数 | **68** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | 231 passed |
+| 最近 `flutter test` | 246 passed |
 | 最近 `flutter build apk --debug` | success |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
-> 该数字对应 Wave 2 工作区（在 `c6094b5` 之上、尚未提交）。新增/删除测试后只更新
-> 本节。
+> 该数字对应 `40a480d` 之后的 Wave 2 follow-up 工作区（尚未提交）。
+> 新增/删除测试后只更新本节。
 
 ### 2.2 历史测试基线（不要当作当前值）
 
@@ -59,7 +59,8 @@
 | Wave 1 前 | 206 | Agent Wave 1 新增测试前 |
 | Wave 1 后 | 212 | Agent Wave 1 完成时 |
 | Wave 2 后 | 231 | Agent 语言/档案队列/多图/结果操作行 |
-| 当前 | **231** | 见 §2.1 |
+| Wave 2 follow-up | 246 | 档案队列复用、自动保存、标签输出、交互修正 |
+| 当前 | **246** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
@@ -220,7 +221,7 @@ arm64 真机性能另需复测。
 
 | 项 | 值 |
 |---|---|
-| 最近验证代码提交 | `c6094b5` + Wave 2 未提交工作区 |
+| 最近验证代码提交 | `40a480d` + Wave 2 follow-up 未提交工作区 |
 | Phase 5 基线 | `2534c3a` |
 | Phase 6 P6.1–P6.5 提交起点 | `7be4b81` |
 | Phase 6 文档提交 | `b208456` |

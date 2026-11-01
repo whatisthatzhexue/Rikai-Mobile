@@ -170,9 +170,13 @@ class _FamiliarizationSheetState extends State<_FamiliarizationSheet> {
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: TextButton(
-                            onPressed: () =>
-                                _finish(ProfileConfirmationAction.decline),
-                            child: Text(widget.strings.decline),
+                            onPressed: () => _finish(
+                              ProfileConfirmationAction.saveAndNeverAsk,
+                            ),
+                            child: Text(
+                              widget.strings.decline,
+                              textAlign: TextAlign.center,
+                            ),
                           ),
                         ),
                       ],

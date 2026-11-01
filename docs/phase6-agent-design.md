@@ -304,10 +304,17 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   - 前缀探针：`あ/か/さ/漢/日本` 等少量前缀，每前缀最多 2 条；
   - 每条只取 `matchedKey/headword/纯文本摘要/tag 特征/ruby/image/audio/table/
     example` 标记，摘要 ≤400 字符。
-- LLM 每本词典单独一次调用（小模型），输入只含采样 JSON，不含路径；输出
-  `DictionaryProfile`（词典类型、条目结构、字段、查询行为、强项、注意事项、推荐
-  查询形式、置信度）+ 给用户看的 Markdown 摘要。
+- LLM 每本词典单独一次调用（小模型），输入只含采样 JSON，不含路径；模型输出
+  `[PROFILE]...[/PROFILE]` 扁平标签文本，由
+  `dictionary_profile_tag_parser.dart` 解析为 `DictionaryProfile`（词典类型、
+  条目结构、字段、查询行为、强项、注意事项、推荐查询形式）；解析失败或缺少某本
+  词典时发送一次“正文不变、仅补标签”的格式纠错。置信度由代码设默认值，模型不
+  输出数值；Markdown 摘要由本地生成。
 - 用户确认：sheet 预览，可编辑 Markdown；按钮“保存并信任 / 本次跳过 / 不再询问”。
+  “不再询问”= 保存当前档案并开启 `agent_profiles_auto_accept`；用户也可在 Agent
+  设置中随时关闭/开启该选项（默认关闭）。档案确认由共享
+  `AgentProfileInboxHost` 在 Agent 页、档案管理页和 Agent 设置页统一呈现；同一
+  proposal 只弹一次。
   生成与确认分离：每个已生成档案先进入**应用级待确认队列**；用户离开 Agent 页
   时队列保留、生成继续，返回后逐个处理。**所有已生成档案都得到显式处理
   （信任 / 本次跳过 / 不再询问）后，才进入 tokenizing/查词阶段**；页面离开、
@@ -430,7 +437,13 @@ Stage 0 envelope + Stage 1 evidence + 已确认的 dictionary profiles。输出�
 偏离目标语言时允许一次语言修复；仍偏离则保留结果并显示警告，不得丢弃已生成内容
 （F1b，Wave 3 待实现）。
 
-输出 `rikai.agent.analysis.v1` 结构化 JSON（完整 schema 见契约文档）：
+**2026-11-01 运行时格式**：模型不再输出 JSON，而是输出方括号标签的纯文本块
+（`[TRANSLATION]`、`[SEGMENT]`、`[MEANING]`、`[WORD]`、`[GRAMMAR]`、
+`[OPTION]`、`[UNRESOLVED]`、`[SUPPLEMENT]`），由
+`lib/services/agent/analysis_tag_parser.dart` 用正则解析为 `AgentAnalysis`。
+模型只写正文，`type` 在标签属性中；置信度和内部标记由代码生成/剥离。正则解析
+失败时只发送一次格式纠错请求，要求正文不变、仅补齐标签。下面的 JSON 结构保留为
+内部 DTO/旧输出兼容，不再是模型响应格式：
 
 ```json
 {
@@ -478,7 +491,8 @@ Stage 0 envelope + Stage 1 evidence + 已确认的 dictionary profiles。输出�
 
 `AgentValidator` 必须做：
 
-1. JSON Schema 校验；未知字段/越界 ID 拒绝。
+1. 标签解析结果/DTO 校验；未知字段/越界 ID 拒绝；标签缺失时先做一次格式纠错，
+   仍失败再进入校验/salvage。
 2. citation 存在、属于本次 run、`dictionaryId` 在会话选择内；伪造/越界只按普通
    文本显示，不导航。`citations_used` 只作模型提示，最终由编排器从各 claim 的
    `citation_ids` 重新汇总，不信任模型自报的来源列表。

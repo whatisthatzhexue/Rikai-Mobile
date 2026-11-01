@@ -28,7 +28,9 @@ import 'package:rikai_mobile/state/agent_profile_inbox.dart';
 import 'package:rikai_mobile/state/agent_providers.dart';
 import 'package:rikai_mobile/state/agent_run_controller.dart';
 import 'package:rikai_mobile/state/agent_run_services.dart';
+import 'package:rikai_mobile/state/providers.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _dictionary = DictionaryInfo(
   id: 'dict_a',
@@ -303,7 +305,14 @@ Future<AgentRunSnapshot> _runToCompletion(
   return container.read(agentRunControllerProvider);
 }
 
+late SharedPreferences _preferences;
+
 void main() {
+  setUp(() async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    _preferences = await SharedPreferences.getInstance();
+  });
+
   test('start reaches done with evidence and progress counts', () async {
     final provider = FakeProvider(
       responseSequence: <String>[
@@ -313,6 +322,7 @@ void main() {
     );
     final container = ProviderContainer(
       overrides: [
+        sharedPreferencesProvider.overrideWithValue(_preferences),
         agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
           ({required bool needsOcr, bool Function()? isCancelled}) async =>
@@ -337,6 +347,7 @@ void main() {
     final provider = _CancelAwareProvider();
     final container = ProviderContainer(
       overrides: [
+        sharedPreferencesProvider.overrideWithValue(_preferences),
         agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
           ({required bool needsOcr, bool Function()? isCancelled}) async =>
@@ -366,6 +377,38 @@ void main() {
     expect(snapshot.sentText, '何卒');
   });
 
+  test('auto-accept saves profiles and continues without a sheet', () async {
+    await _preferences.setBool('agent_profiles_auto_accept', true);
+    final provider = FakeProvider(
+      responseSequence: <String>[
+        jsonEncode(_profileJson),
+        jsonEncode(_analysisJson),
+      ],
+    );
+    final repository = InMemoryDictionaryProfileRepository();
+    final container = ProviderContainer(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(_preferences),
+        agentProfileRepositoryProvider.overrideWithValue(repository),
+        agentRunServicesProvider.overrideWithValue(
+          ({required bool needsOcr, bool Function()? isCancelled}) async =>
+              _services(provider, profileRepository: repository),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(agentRunControllerProvider.notifier);
+
+    final snapshot = await _runToCompletion(container, controller);
+    expect(snapshot.status, AgentRunStatus.done);
+    expect(provider.requests, hasLength(2));
+    expect(container.read(agentProfileInboxProvider).pending, isEmpty);
+    expect(
+      (await repository.load('dict_a'))?.status,
+      DictionaryProfileStatus.confirmed,
+    );
+  });
+
   test(
     'a generated profile gates tokenizing until the app inbox resolves it',
     () async {
@@ -378,6 +421,7 @@ void main() {
       final repository = InMemoryDictionaryProfileRepository();
       final container = ProviderContainer(
         overrides: [
+          sharedPreferencesProvider.overrideWithValue(_preferences),
           agentProfileRepositoryProvider.overrideWithValue(repository),
           agentRunServicesProvider.overrideWithValue(
             ({required bool needsOcr, bool Function()? isCancelled}) async =>
@@ -460,6 +504,7 @@ void main() {
       );
       final container = ProviderContainer(
         overrides: [
+          sharedPreferencesProvider.overrideWithValue(_preferences),
           agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
           agentProfileRepositoryProvider.overrideWithValue(repository),
           agentRunServicesProvider.overrideWithValue(
@@ -513,6 +558,7 @@ void main() {
       );
       final container = ProviderContainer(
         overrides: [
+          sharedPreferencesProvider.overrideWithValue(_preferences),
           agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
           agentProfileRepositoryProvider.overrideWithValue(repository),
           agentRunServicesProvider.overrideWithValue(
@@ -540,6 +586,7 @@ void main() {
   test('immediate validation error keeps the sent text', () async {
     final container = ProviderContainer(
       overrides: [
+        sharedPreferencesProvider.overrideWithValue(_preferences),
         agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
           ({required bool needsOcr, bool Function()? isCancelled}) async =>

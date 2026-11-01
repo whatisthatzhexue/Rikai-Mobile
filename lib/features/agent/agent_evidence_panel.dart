@@ -19,7 +19,7 @@ class AgentEvidencePanel extends StatelessWidget {
 
   final AgentRunResult result;
   final ValueChanged<AgentCitation> onCitationTap;
-  final ValueChanged<DictionaryProfileIssue> onRetryProfile;
+  final Future<void> Function(DictionaryProfileIssue) onRetryProfile;
   final AgentUiStrings strings;
 
   @override

@@ -231,45 +231,86 @@ void main() {
     },
   );
 
-  test('strict validation failure is repaired without redoing OCR/lookup', () async {
-    final bad = Map<String, Object?>.from(_analysisJson)
-      ..['segments'] = <Object?>[
-        <String, Object?>{
-          'id': 'seg-1',
-          'quote_id': 'q1',
-          'interpretation': '无依据',
-          'epistemic': 'dictionary_fact',
-          'word_notes': <Object?>[
-            <String, Object?>{'token_id': 't1', 'surface': '何卒', 'sense': '随便'},
-          ],
-        },
-      ];
-    final provider = FakeProvider(
-      responseSequence: <String>[
-        jsonEncode(bad),
-        jsonEncode(_analysisJson),
-      ],
-    );
+  test(
+    'strict validation failure is repaired without redoing OCR/lookup',
+    () async {
+      final bad = Map<String, Object?>.from(_analysisJson)
+        ..['segments'] = <Object?>[
+          <String, Object?>{
+            'id': 'seg-1',
+            'quote_id': 'q1',
+            'interpretation': '无依据',
+            'epistemic': 'dictionary_fact',
+            'word_notes': <Object?>[
+              <String, Object?>{
+                'token_id': 't1',
+                'surface': '何卒',
+                'sense': '随便',
+              },
+            ],
+          },
+        ];
+      final provider = FakeProvider(
+        responseSequence: <String>[jsonEncode(bad), jsonEncode(_analysisJson)],
+      );
 
-    final result = await _orchestrator(provider: provider).run(
-      const AgentRunRequest(
-        sessionId: 's1',
-        mode: AgentMode.strict,
-        dictionaries: <DictionaryInfo>[_dictionary],
-        provider: _provider,
-        userText: '何卒',
-      ),
-    );
+      final result = await _orchestrator(provider: provider).run(
+        const AgentRunRequest(
+          sessionId: 's1',
+          mode: AgentMode.strict,
+          dictionaries: <DictionaryInfo>[_dictionary],
+          provider: _provider,
+          userText: '何卒',
+        ),
+      );
 
-    expect(result.validation.valid, isTrue);
-    expect(result.analysis.segments, isNotEmpty);
-    expect(provider.requests, hasLength(2));
-    final repairPrompt = provider.requests.last.messages
-        .map((message) => message.text)
-        .join('\n');
-    expect(repairPrompt.contains('Validation errors'), isTrue);
-    expect(repairPrompt.contains('Previous output'), isTrue);
-  });
+      expect(result.validation.valid, isTrue);
+      expect(result.analysis.segments, isNotEmpty);
+      expect(provider.requests, hasLength(2));
+      final repairPrompt = provider.requests.last.messages
+          .map((message) => message.text)
+          .join('\n');
+      expect(repairPrompt.contains('Validation errors'), isTrue);
+      expect(repairPrompt.contains('Previous output'), isTrue);
+    },
+  );
+
+  test(
+    'tagged output repairs a broken format without redoing evidence',
+    () async {
+      final provider = FakeProvider(
+        responseSequence: <String>[
+          'This is not a tagged response.',
+          '''
+[TRANSLATION quote="q1"]请多关照。[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]正式请求
+[WORD id="t1"]何卒||请务必|source-1[/WORD]
+[/SEGMENT]
+''',
+        ],
+      );
+
+      final result = await _orchestrator(provider: provider).run(
+        const AgentRunRequest(
+          sessionId: 's1',
+          mode: AgentMode.strict,
+          dictionaries: <DictionaryInfo>[_dictionary],
+          provider: _provider,
+          userText: '何卒',
+        ),
+      );
+
+      expect(result.validation.valid, isTrue);
+      expect(result.analysis.translation.single.text, '请多关照。');
+      expect(provider.requests, hasLength(2));
+      final repairPrompt = provider.requests.last.messages
+          .map((message) => message.text)
+          .join('\n');
+      expect(repairPrompt, contains('FORMAT CORRECTION TASK'));
+      expect(repairPrompt, contains('Previous output'));
+    },
+  );
 
   test('unrepaired output is salvaged instead of being thrown away', () async {
     final bad = Map<String, Object?>.from(_analysisJson)

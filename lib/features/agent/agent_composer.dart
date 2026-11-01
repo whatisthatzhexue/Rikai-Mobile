@@ -99,11 +99,15 @@ Widget buildAgentComposer(
                   ],
                 ),
                 const SizedBox(height: AppSpacing.xxs),
-                Text(
-                  strings.imageLocalOnly,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontSize: AgentTokens.helper,
-                    color: AppColors.textSecondary,
+                Align(
+                  alignment: Alignment.center,
+                  child: Text(
+                    strings.imageLocalOnly,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: AgentTokens.helper,
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
               ],

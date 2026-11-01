@@ -9,6 +9,7 @@ import '../../services/agent/agent_ui_strings.dart';
 import '../../services/security/secret_store.dart';
 import '../../state/agent_providers.dart';
 import '../../state/providers.dart';
+import '../agent/agent_profile_inbox_host.dart';
 
 class AgentSettingsPage extends ConsumerWidget {
   const AgentSettingsPage({super.key});
@@ -25,157 +26,167 @@ class AgentSettingsPage extends ConsumerWidget {
     );
     return Scaffold(
       appBar: AppBar(title: Text(strings.settingsTitle)),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.lg,
-          AppSpacing.lg,
-          AppSpacing.xl,
-        ),
-        children: [
-          Text(
-            strings.profileLanguageTitle,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontSize: AppTypography.sectionHeading,
-            ),
+      body: AgentProfileInboxHost(
+        strings: strings,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.xl,
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            strings.profileLanguageBody,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontSize: AppTypography.helper,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          DropdownButtonFormField<String>(
-            initialValue: settings.agentProfileLanguage,
-            decoration: InputDecoration(
-              labelText: strings.profileLanguageLabel,
-              isDense: true,
-            ),
-            items: <DropdownMenuItem<String>>[
-              for (final language in AgentProfileLanguage.values)
-                DropdownMenuItem(
-                  value: language.wireName,
-                  child: Text(language.label),
-                ),
-            ],
-            onChanged: (value) async {
-              if (value == null || value == settings.agentProfileLanguage) {
-                return;
-              }
-              final confirmed = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: Text(strings.profileLanguageTitle),
-                  content: Text(strings.profileLanguageBody),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      child: Text(strings.cancel),
-                    ),
-                    FilledButton(
-                      onPressed: () => Navigator.of(context).pop(true),
-                      child: Text(strings.save),
-                    ),
-                  ],
-                ),
-              );
-              if (confirmed != true) return;
-              ref
-                  .read(appSettingsProvider.notifier)
-                  .setAgentProfileLanguage(value);
-            },
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          DropdownButtonFormField<String>(
-            initialValue: settings.agentResponseLanguage,
-            decoration: InputDecoration(
-              labelText: strings.answerLanguageLabel,
-              isDense: true,
-            ),
-            items: <DropdownMenuItem<String>>[
-              for (final language in AgentResponseLanguage.values)
-                DropdownMenuItem(
-                  value: language.wireName,
-                  child: Text(language.label),
-                ),
-            ],
-            onChanged: (value) {
-              if (value == null) return;
-              ref
-                  .read(appSettingsProvider.notifier)
-                  .setAgentResponseLanguage(value);
-            },
-          ),
-          const Divider(height: AppSpacing.xxl),
-          Text(
-            strings.modelServicesTitle,
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontSize: AppTypography.sectionHeading,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            strings.secretBody,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontSize: AppTypography.helper,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          providersAsync.when(
-            loading: () => const Padding(
-              padding: EdgeInsets.all(AppSpacing.md),
-              child: LinearProgressIndicator(minHeight: 2),
-            ),
-            error: (error, stack) => Text(
-              strings.providerLoadFailed,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontSize: AppTypography.helper,
-                color: AppColors.error,
+          children: [
+            Text(
+              strings.profileLanguageTitle,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontSize: AppTypography.sectionHeading,
               ),
             ),
-            data: (providers) => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (providers.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppSpacing.md,
-                    ),
-                    child: Text(
-                      strings.noProviders,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontSize: AppTypography.helper,
-                        color: AppColors.textSecondary,
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              strings.profileLanguageBody,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontSize: AppTypography.helper,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            DropdownButtonFormField<String>(
+              initialValue: settings.agentProfileLanguage,
+              decoration: InputDecoration(
+                labelText: strings.profileLanguageLabel,
+                isDense: true,
+              ),
+              items: <DropdownMenuItem<String>>[
+                for (final language in AgentProfileLanguage.values)
+                  DropdownMenuItem(
+                    value: language.wireName,
+                    child: Text(language.label),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value == null || value == settings.agentProfileLanguage) {
+                  return;
+                }
+                ref
+                    .read(appSettingsProvider.notifier)
+                    .setAgentProfileLanguage(value);
+              },
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            DropdownButtonFormField<String>(
+              initialValue: settings.agentResponseLanguage,
+              decoration: InputDecoration(
+                labelText: strings.answerLanguageLabel,
+                isDense: true,
+              ),
+              items: <DropdownMenuItem<String>>[
+                for (final language in AgentResponseLanguage.values)
+                  DropdownMenuItem(
+                    value: language.wireName,
+                    child: Text(language.label),
+                  ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                ref
+                    .read(appSettingsProvider.notifier)
+                    .setAgentResponseLanguage(value);
+              },
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            CheckboxListTile(
+              value: settings.agentProfilesAutoAccept,
+              onChanged: (value) => ref
+                  .read(appSettingsProvider.notifier)
+                  .setAgentProfilesAutoAccept(value ?? false),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              dense: true,
+              title: Text(
+                strings.autoAcceptProfiles,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: AppTypography.helper,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              subtitle: Text(
+                strings.autoAcceptProfilesBody,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: AppTypography.helper,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            const Divider(height: AppSpacing.xxl),
+            Text(
+              strings.modelServicesTitle,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontSize: AppTypography.sectionHeading,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              strings.secretBody,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontSize: AppTypography.helper,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            providersAsync.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.all(AppSpacing.md),
+                child: LinearProgressIndicator(minHeight: 2),
+              ),
+              error: (error, stack) => Text(
+                strings.providerLoadFailed,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: AppTypography.helper,
+                  color: AppColors.error,
+                ),
+              ),
+              data: (providers) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (providers.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.md,
+                      ),
+                      child: Text(
+                        strings.noProviders,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontSize: AppTypography.helper,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ),
+                  for (final provider in providers) ...[
+                    _ProviderRow(
+                      provider: provider,
+                      strings: strings,
+                      onEdit: () =>
+                          _editProvider(context, ref, provider, strings),
+                      onDelete: () =>
+                          _deleteProvider(context, ref, provider, strings),
+                    ),
+                    const Divider(height: 1, color: AppColors.divider),
+                  ],
+                  const SizedBox(height: AppSpacing.md),
+                  SizedBox(
+                    height: AppSizes.control,
+                    child: FilledButton(
+                      onPressed: () =>
+                          _editProvider(context, ref, null, strings),
+                      child: Text(strings.addProvider),
+                    ),
                   ),
-                for (final provider in providers) ...[
-                  _ProviderRow(
-                    provider: provider,
-                    strings: strings,
-                    onEdit: () =>
-                        _editProvider(context, ref, provider, strings),
-                    onDelete: () =>
-                        _deleteProvider(context, ref, provider, strings),
-                  ),
-                  const Divider(height: 1, color: AppColors.divider),
                 ],
-                const SizedBox(height: AppSpacing.md),
-                SizedBox(
-                  height: AppSizes.control,
-                  child: FilledButton(
-                    onPressed: () => _editProvider(context, ref, null, strings),
-                    child: Text(strings.addProvider),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

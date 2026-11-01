@@ -4,6 +4,12 @@
 > `ToolResult`、`unidic.tokenize`、`mdict.lookup`、`mdict.suggest`、预算/可见性）
 > 仅作为未来契约保留；`lib/services/agent/tools/` 已删除，模型请求不携带 tools。
 >
+> **2026-11-01 输出格式变更（已实现）**：分析和词典档案生成不再要求模型输出
+> JSON。运行时使用方括号标签的纯文本块，代码用正则解析；模型不输出 confidence、
+> 概率或 `context_inference`/`dictionary_fact` 等内部标记。JSON schema 保留为
+> 内部 DTO、旧输出兼容和测试夹具，不再是模型响应格式。解析失败时只有一次
+> “保持正文不变、仅补标签”的格式纠错调用。
+>
 > **2026-11-01 语言决策（Wave 2 已实现）**：默认输出/UI 语言为中文（`zh`）；
 > 旧 `follow` 映射为 `zh`；禁止按输入假名/拉丁字符推断。§5.2 的默认/文案契约
 > 已落地；F1b 结果字段后校验仍待 Wave 3。
@@ -348,6 +354,33 @@ class ToolResult {
 
 ## 5. 分析输出 `rikai.agent.analysis.v1`
 
+> **2026-11-01 运行时格式**：模型输出下面的标签文本，不再输出 JSON。
+> 解析器：`lib/services/agent/analysis_tag_parser.dart`。标签内的正文按目标语言
+> 纯文本输出；`type` 只出现在标签属性中，前端根据 type 渲染推断类别和固定置信度。
+
+```text
+[TRANSLATION quote="q1"]translated text[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]interpretation[/MEANING]
+[WORD id="t1"]surface|reading|sense|source-1,source-2[/WORD]
+[GRAMMAR id="p1"]grammar explanation|source-1[/GRAMMAR]
+[/SEGMENT]
+[OPTION id="i1" label="A" citations="source-1"]alternative meaning[/OPTION]
+[UNRESOLVED quote="q1"]reason[/UNRESOLVED]
+[SUPPLEMENT]loose-mode commentary[/SUPPLEMENT]
+```
+
+- `type`：`fact` / `structure` / `inference` / `translation`。解析器也容忍旧内部名
+  `dictionary_fact` / `structural_analysis` / `context_inference`。
+- 置信度由解析器分配（fact 0.95、structure 0.9、inference 0.6、translation
+  0.95；OPTION 0.5/0.7），模型不输出数值。
+- 解析器会剥离正文中泄漏的 `context_inference`/`dictionary_fact`/
+  `structural_analysis`、`(90%)`、`置信度: …` 和 `[source-N]` 标记。
+- 至少需要一条 TRANSLATION 和一条 SEGMENT；正则解析失败时发送一次格式纠错请求，
+  要求保持所有正文文字不变、只补齐标签；仍失败则进入既有 salvage/校验路径。
+
+以下 JSON 结构保留为内部 DTO 与旧输出兼容格式（不再作为模型响应格式）：
+
 完整 schema：`docs/schemas/agent/analysis.v1.schema.json`。
 
 ```json
@@ -458,6 +491,14 @@ class ToolResult {
 
 ## 6. 词典档案 `rikai.dictionary.profile.v1`
 
+> **2026-11-01 运行时格式**：模型输出 `[PROFILE]...[/PROFILE]` 扁平标签块
+> （`lib/services/agent/familiarization/dictionary_profile_tag_parser.dart`）：
+> `[ID]`/`[TITLE]`/`[KIND]`/`[LANGUAGES]`/`[HEADWORD_FIELDS]`/
+> `[DEFINITION_FIELDS]`/`[FLAGS]`/`[EXACT_FORMS]`/`[PREFIX]`/`[SEARCH_NOTES]`/
+> `[STRENGTHS]`/`[CAVEATS]`/`[RECOMMENDED]`/`[ENTRY_NOTES]`。列表使用 `|`。
+> 解析失败或缺少某本词典时，发送一次保持正文不变、仅补标签的格式纠错请求。
+> 以下 JSON schema 保留为内部存储/旧输出兼容，不再是模型响应格式。
+
 完整 schema：`docs/schemas/agent/dictionary-profile.v1.schema.json`。
 
 ```json
@@ -555,6 +596,11 @@ idle
   重建或 dismiss sheet 不得自动 skip；`unavailable` 档案无确认内容，记录 issue
   后不阻塞。队列属于应用级 controller，不属于 `AgentPage`。**Wave 2 已实现**
   （`AgentProfileInboxController` + `DictionaryFamiliarizationService.generateMany`）。
+- 确认窗口的“不再询问”= 保存当前档案并开启 `agent_profiles_auto_accept`；
+  默认关闭。开启后新生成的档案直接保存并信任，Agent 设置可再次关闭。确认窗口
+  由 `AgentProfileInboxHost` 统一呈现：Agent 页、档案管理页和 Agent 设置页共用，
+  同一 proposal 不会重复弹出；档案重新生成由应用级
+  `AgentProfileRegenerationController` 持有，离开页面不会丢失或重复调用模型。
 - `coverage` 是 2026-10-31 F7 的一次性覆盖审查；每个请求最多触发一次补充检索，
   `coverageFallbackUsed=true` 后不得再次回退。**待 Wave 3。**
 - 任何阶段可取消；取消后状态为 `cancelled`，保留已完成的本地结果。

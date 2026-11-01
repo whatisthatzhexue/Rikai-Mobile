@@ -242,9 +242,25 @@ Wave 2 implementation (2026-11-01):
   user message offers copy/edit. `regenerate()` replays the request from the
   familiarization stage, keeps the previous result visible until success, and
   restores it with a notice on failure.
-- Wave 2 verification: `flutter analyze` clean; `flutter test` 231 passed;
-  `flutter build apk --debug` succeeded. Device visual/provider/arm64
-  acceptance remains for Wave 4.
+- Wave 2 review follow-up (2026-11-01): profile-language changes apply without a
+  dialog; `AgentProfileInboxHost` is shared by the Agent page, profile manager
+  and Agent settings and uses a claim guard so a proposal never opens twice.
+  Regeneration moved to app-scoped `AgentProfileRegenerationController` (no
+  duplicate token spend after leaving/re-entering; title-bar text and
+  indeterminate progress). “不再询问” now saves and enables
+  `agent_profiles_auto_accept` (default off; new checkbox in Agent settings;
+  toast on save). Retry-dictionary shows a spinner; Agent no longer auto-scrolls;
+  the profile-manager mode toggle stays in place and the composer image notice is
+  centered.
+- Model output format: analysis and dictionary profiles now use bracket-tag
+  plain text (`analysis_tag_parser.dart`, `dictionary_profile_tag_parser.dart`)
+  with no JSON response format. Leaked type/probability markers are stripped;
+  types/confidence are derived locally; one “text unchanged, tags only” format
+  repair is attempted before salvage. JSON schema/DTOs remain for internal
+  storage and legacy-output compatibility.
+- Wave 2 verification: `flutter analyze` clean; current test/build results in
+  `docs/project-data.md` §2/§5. Device visual/provider/arm64 acceptance remains
+  for Wave 4.
 
 Current known gaps:
 

@@ -30,6 +30,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('模型服务'), findsOneWidget);
+    final autoAccept = tester.widget<CheckboxListTile>(
+      find.byType(CheckboxListTile),
+    );
+    expect(autoAccept.value, isFalse);
+    expect(find.text('生成词典档案时不再询问'), findsOneWidget);
     await tester.tap(find.text('添加模型服务'));
     await tester.pumpAndSettle();
 
@@ -59,6 +64,38 @@ void main() {
     await tester.tap(find.text('Claude（Anthropic）').last);
     await tester.pumpAndSettle();
     expect(baseUrl.controller?.text, 'https://example.com/v1');
+  });
+
+  testWidgets('profile language changes immediately without a dialog', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final preferences = await SharedPreferences.getInstance();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          agentProvidersProvider.overrideWith((ref) async => const []),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const AgentSettingsPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(DropdownButtonFormField<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsNothing);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AgentSettingsPage)),
+    );
+    expect(container.read(appSettingsProvider).agentProfileLanguage, 'en');
   });
 
   testWidgets(

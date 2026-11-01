@@ -40,6 +40,20 @@ final agentProfileInboxProvider =
 class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
   final Map<String, Completer<ProfileConfirmation>> _decisions =
       <String, Completer<ProfileConfirmation>>{};
+  bool _presenting = false;
+
+  /// Only one page/subpage host may show a confirmation sheet at a time. This
+  /// prevents the Agent page behind the profile manager from presenting the
+  /// same proposal twice.
+  bool tryClaimPresentation() {
+    if (_presenting) return false;
+    _presenting = true;
+    return true;
+  }
+
+  void releasePresentation() {
+    _presenting = false;
+  }
 
   @override
   AgentProfileInboxState build() {
@@ -86,6 +100,39 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
       futures.add(completer.future);
     }
     return Future.wait(futures);
+  }
+
+  /// Saves every generated proposal without a sheet when the user enabled
+  /// "不再询问". Runs still receive the decisions so their prompt can use the
+  /// new Markdown immediately.
+  Future<List<ProfileConfirmation>> autoAcceptAll(
+    List<AgentProfileProposal> proposals,
+  ) async {
+    final decisions = <ProfileConfirmation>[];
+    for (final proposal in proposals) {
+      final decision = ProfileConfirmation(
+        action: ProfileConfirmationAction.save,
+        markdown: proposal.markdown,
+      );
+      try {
+        await persistAgentProfileDecision(
+          repository: ref.read(agentProfileRepositoryProvider),
+          proposal: proposal,
+          action: decision.action,
+          markdown: decision.markdown,
+        );
+      } catch (error, stack) {
+        developer.log(
+          'Failed to auto-save dictionary profile',
+          name: 'AgentProfileInbox',
+          error: error,
+          stackTrace: stack,
+        );
+      }
+      decisions.add(decision);
+    }
+    ref.invalidate(agentProfilesProvider);
+    return decisions;
   }
 
   /// Persists the explicit decision and releases the waiting run. The profile

@@ -14,14 +14,13 @@ import '../../core/ui/rikai_toast.dart';
 import '../../services/agent/agent_run.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../state/agent_dictionary_preferences.dart';
-import '../../state/agent_profile_inbox.dart';
 import '../../state/agent_providers.dart';
 import '../../state/agent_run_controller.dart';
 import '../../state/providers.dart';
 import 'agent_composer.dart';
 import 'agent_message_list.dart';
+import 'agent_profile_inbox_host.dart';
 import 'agent_session_panel.dart';
-import 'familiarization_sheet.dart';
 
 class AgentPage extends ConsumerStatefulWidget {
   const AgentPage({super.key});
@@ -46,16 +45,12 @@ class _AgentPageState extends ConsumerState<AgentPage> {
   String? _selectedProviderId;
   List<_PickedImage> _images = <_PickedImage>[];
   bool _settingsExpanded = false;
-  bool _profileSheetOpen = false;
   int _imageSerial = 0;
 
   @override
   void initState() {
     super.initState();
     _runController = ref.read(agentRunControllerProvider.notifier);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _processProfileInbox();
-    });
   }
 
   @override
@@ -87,44 +82,6 @@ class _AgentPageState extends ConsumerState<AgentPage> {
       if (provider.id == _selectedProviderId) return provider;
     }
     return providers.first;
-  }
-
-  void _scheduleProfileInbox() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) unawaited(_processProfileInbox());
-    });
-  }
-
-  Future<void> _processProfileInbox() async {
-    if (!mounted || _profileSheetOpen) return;
-    final proposal = ref.read(agentProfileInboxProvider).first;
-    if (proposal == null) return;
-    _profileSheetOpen = true;
-    try {
-      final run = ref.read(agentRunControllerProvider);
-      final settings = ref.read(appSettingsProvider);
-      final strings = _stringsFor(
-        run,
-        AgentResponseLanguage.fromWire(settings.agentResponseLanguage),
-      );
-      final decision = await showFamiliarizationSheet(
-        context,
-        profile: proposal.profile,
-        markdown: proposal.markdown,
-        strings: strings,
-      );
-      if (!mounted || decision == null) {
-        // Closing the sheet keeps the proposal pending; it must never imply a
-        // skip. It is shown again on the next page entry or queue change.
-        return;
-      }
-      await ref
-          .read(agentProfileInboxProvider.notifier)
-          .resolve(proposal.id, decision);
-      _scheduleProfileInbox();
-    } finally {
-      _profileSheetOpen = false;
-    }
   }
 
   Future<void> _showImageSourceMenu(AgentUiStrings strings) async {
@@ -322,18 +279,6 @@ class _AgentPageState extends ConsumerState<AgentPage> {
       run,
       AgentResponseLanguage.fromWire(settings.agentResponseLanguage),
     );
-    ref.listen(agentProfileInboxProvider, (previous, next) {
-      if (next.pending.isNotEmpty) _scheduleProfileInbox();
-    });
-    ref.listen(agentRunControllerProvider, (previous, next) {
-      if (previous?.status != next.status ||
-          previous?.stageMessage != next.stageMessage ||
-          previous?.receivedChars != next.receivedChars ||
-          previous?.result != next.result ||
-          previous?.errorMessage != next.errorMessage) {
-        scrollAgentToBottom(_messagesScroll, mounted);
-      }
-    });
     final running = run.isRunning;
 
     return Scaffold(
@@ -362,70 +307,74 @@ class _AgentPageState extends ConsumerState<AgentPage> {
           ),
         ],
       ),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            buildAgentSessionBar(
-              context,
-              mode: _mode,
-              providerName: provider?.displayName ?? strings.unconfiguredModel,
-              expanded: _settingsExpanded,
-              strings: strings,
-              onToggle: () =>
-                  setState(() => _settingsExpanded = !_settingsExpanded),
-            ),
-            if (_settingsExpanded)
-              buildAgentSessionPanel(
+      body: AgentProfileInboxHost(
+        strings: strings,
+        child: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              buildAgentSessionBar(
                 context,
-                providers: providers,
-                provider: provider,
                 mode: _mode,
-                enabled: enabled,
-                selectedIds: selectedIds,
-                selectionMode: preferences.mode,
-                running: running,
+                providerName:
+                    provider?.displayName ?? strings.unconfiguredModel,
+                expanded: _settingsExpanded,
                 strings: strings,
-                onProviderChanged: (value) =>
-                    setState(() => _selectedProviderId = value),
-                onModeChanged: (value) => setState(() => _mode = value),
-                onSelectionModeChanged: (value) => ref
-                    .read(agentDictionaryPreferencesProvider.notifier)
-                    .setMode(value),
-                onToggleDictionary: (id) => ref
-                    .read(agentDictionaryPreferencesProvider.notifier)
-                    .toggle(id, enabled),
-                onSelectAll: () => ref
-                    .read(agentDictionaryPreferencesProvider.notifier)
-                    .selectAll(),
-                onOpenSettings: () => context.push('/agent-settings'),
+                onToggle: () =>
+                    setState(() => _settingsExpanded = !_settingsExpanded),
               ),
-            Expanded(
-              child: AgentMessageList(
-                scrollController: _messagesScroll,
-                providers: providers,
-                provider: provider,
-                run: run,
-                onRetry: _retry,
-                onLooseRetry: _retryLoose,
-                onRegenerate: _regenerate,
-                onEditMessage: _editCurrentMessage,
+              if (_settingsExpanded)
+                buildAgentSessionPanel(
+                  context,
+                  providers: providers,
+                  provider: provider,
+                  mode: _mode,
+                  enabled: enabled,
+                  selectedIds: selectedIds,
+                  selectionMode: preferences.mode,
+                  running: running,
+                  strings: strings,
+                  onProviderChanged: (value) =>
+                      setState(() => _selectedProviderId = value),
+                  onModeChanged: (value) => setState(() => _mode = value),
+                  onSelectionModeChanged: (value) => ref
+                      .read(agentDictionaryPreferencesProvider.notifier)
+                      .setMode(value),
+                  onToggleDictionary: (id) => ref
+                      .read(agentDictionaryPreferencesProvider.notifier)
+                      .toggle(id, enabled),
+                  onSelectAll: () => ref
+                      .read(agentDictionaryPreferencesProvider.notifier)
+                      .selectAll(),
+                  onOpenSettings: () => context.push('/agent-settings'),
+                ),
+              Expanded(
+                child: AgentMessageList(
+                  scrollController: _messagesScroll,
+                  providers: providers,
+                  provider: provider,
+                  run: run,
+                  onRetry: _retry,
+                  onLooseRetry: _retryLoose,
+                  onRegenerate: _regenerate,
+                  onEditMessage: _editCurrentMessage,
+                ),
               ),
-            ),
-            buildAgentComposer(
-              context,
-              controller: _input,
-              focusNode: _inputFocus,
-              imagePaths: _images.map((image) => image.path).toList(),
-              running: running,
-              canSend: providers.isNotEmpty,
-              strings: strings,
-              onPickImage: () => _showImageSourceMenu(strings),
-              onRemoveImage: _removeImage,
-              onSend: _send,
-              onStop: _cancel,
-            ),
-          ],
+              buildAgentComposer(
+                context,
+                controller: _input,
+                focusNode: _inputFocus,
+                imagePaths: _images.map((image) => image.path).toList(),
+                running: running,
+                canSend: providers.isNotEmpty,
+                strings: strings,
+                onPickImage: () => _showImageSourceMenu(strings),
+                onRemoveImage: _removeImage,
+                onSend: _send,
+                onStop: _cancel,
+              ),
+            ],
+          ),
         ),
       ),
     );

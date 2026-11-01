@@ -11,7 +11,7 @@
   [`docs/project-data.md`](../project-data.md) §2/§5。
   F4/F5/F9/F10 有 widget/unit 覆盖；F15 有请求范围 unit 测试；F16 有
   controller 进度/取消测试。设备手工验收仍待 Wave 4。
-- Wave 2 验证：`flutter analyze` 无问题；`flutter test` 231 passed；
+- Wave 2 验证：`flutter analyze` 无问题；`flutter test` 246 passed；
   `flutter build apk --debug` 成功。新增 F8 隔离持久化、语言/旧 `follow`
   迁移、应用级档案队列 gate、跨页思考时间、多图/全屏查看、结果操作行/
   Markdown/重新生成等测试。设备视觉、真实 provider、arm64 与档案管理页
@@ -736,8 +736,32 @@ AgentCoverageReview          // F7 覆盖审查结果（Wave 3）
    `regenerate()` 从熟悉步骤重跑并保留旧结果直到新结果成功。
 
 说明：F2 完成前不得推进 F7/F13/F14 的档案相关部分；F13 先于 F14 的循环重生成。
-Wave 2 验证：`flutter analyze` 无问题、231 tests passed、debug APK 构建成功；
-设备视觉/真实 provider/arm64 验收留到 Wave 4。
+
+**2026-11-01 Wave 2 review follow-up（已实现）**：
+
+- 更改档案主体语言立即生效，不再弹确认窗口。
+- 档案确认统一由 `AgentProfileInboxHost` 呈现；Agent 页、档案管理页、Agent
+  设置页共用，`tryClaimPresentation` 保证同一 proposal 只弹一次；关闭 sheet
+  仍保持 pending，不自动 skip。
+- 档案重新生成迁移到应用级 `AgentProfileRegenerationController`；离开页面不会
+  丢失或重复调用模型；已有 pending 档案时不再发起生成。进度位于标题栏下方：
+  “正在重新生成档案：[词典名]”+ 不确定进度条。
+- 档案确认窗口“不再询问”改为**保存并信任**，同时开启
+  `agent_profiles_auto_accept`；Agent 设置新增同名勾选框，默认关闭；保存成功
+  且宿主页仍在前台时用底部 toast 提示“「词典名」词典档案已生成”。
+- 生成结果中“重试词典”在请求期间显示转圈进度。
+- Agent 运行期间不再自动滚动消息列表，滚动位置由用户控制。
+- 档案管理页右上角模式切换保持固定位置，不再让“全选”瞬移到该位置；composer
+  的“图片仅在本机 OCR”文案居中。
+- 模型回复全面改为方括号标签纯文本，不再要求 JSON：分析使用
+  `[TRANSLATION]/[SEGMENT]/[MEANING]/[WORD]/[GRAMMAR]/[OPTION]/[UNRESOLVED]/[SUPPLEMENT]`，
+  档案使用 `[PROFILE]...[/PROFILE]` 扁平标签；解析器剥离泄漏的
+  `context_inference`/`dictionary_fact`/`(90%)` 等标记，并按 type 渲染类别和
+  固定置信度。正则解析失败时只发送一次“正文不变、仅补标签”的格式纠错。
+
+Wave 2 验证：`flutter analyze` 无问题；当前测试/构建结果见
+[`docs/project-data.md`](../project-data.md) §2/§5。设备视觉/真实 provider/
+arm64 验收留到 Wave 4。
 
 ### Wave 3：检索完整度与结果语言
 

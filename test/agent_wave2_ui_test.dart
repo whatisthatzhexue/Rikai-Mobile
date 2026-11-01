@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/agent_analysis.dart';
@@ -9,8 +11,10 @@ import 'package:rikai_mobile/services/agent/agent_result_markdown.dart';
 import 'package:rikai_mobile/services/agent/agent_run.dart';
 import 'package:rikai_mobile/services/agent/agent_ui_strings.dart';
 import 'package:rikai_mobile/services/agent/agent_validator.dart';
+import 'package:rikai_mobile/services/agent/familiarization/dictionary_familiarization_service.dart';
 import 'package:rikai_mobile/features/agent/agent_composer.dart';
 import 'package:rikai_mobile/features/agent/agent_message_widgets.dart';
+import 'package:rikai_mobile/features/agent/agent_result_view.dart';
 import 'package:rikai_mobile/features/capture/photo_viewer_page.dart';
 
 const _citation = AgentCitation(
@@ -90,6 +94,13 @@ const _result = AgentRunResult(
   ),
   sources: <AgentSourceVersion>[],
   dictionaryProfiles: <String>[],
+  unavailableProfiles: <DictionaryProfileIssue>[
+    DictionaryProfileIssue(
+      dictionaryId: 'dict-b',
+      title: 'B',
+      reason: '档案请求失败',
+    ),
+  ],
 );
 
 final _strings = AgentUiStrings.of(AgentUiLanguage.chinese);
@@ -219,6 +230,35 @@ void main() {
     expect(markdown, isNot(contains('（q1）')));
     expect(markdown, isNot(contains('reasoning')));
     expect(markdown, isNot(contains('/tmp/')));
+  });
+
+  testWidgets('retry dictionary shows a spinner while the request is running', (
+    tester,
+  ) async {
+    final pending = Completer<void>();
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentResultView(
+              result: _result,
+              strings: _strings,
+              onCitationTap: (_) {},
+              onRetryProfile: (_) => pending.future,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('重试此词典'));
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    pending.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('重试此词典'), findsOneWidget);
   });
 
   test('awaiting profile still counts as an active run for elapsed time', () {

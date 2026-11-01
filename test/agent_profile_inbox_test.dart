@@ -83,6 +83,62 @@ void main() {
     },
   );
 
+  test('save-and-never-ask persists the profile as confirmed', () async {
+    final repository = InMemoryDictionaryProfileRepository();
+    final container = ProviderContainer(
+      overrides: [agentProfileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final inbox = container.read(agentProfileInboxProvider.notifier);
+    final proposal = _proposal('p1');
+    final decisions = inbox.waitForAll('run-1', <AgentProfileProposal>[
+      proposal,
+    ]);
+
+    await inbox.resolve(
+      proposal.id,
+      const ProfileConfirmation(
+        action: ProfileConfirmationAction.saveAndNeverAsk,
+        markdown: 'accepted',
+      ),
+    );
+    await decisions;
+
+    final saved = await repository.load('dict-a');
+    expect(saved?.status, DictionaryProfileStatus.confirmed);
+    expect(saved?.markdown, 'accepted');
+  });
+
+  test('auto-accept saves every proposal without enqueuing it', () async {
+    final repository = InMemoryDictionaryProfileRepository();
+    final container = ProviderContainer(
+      overrides: [agentProfileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final inbox = container.read(agentProfileInboxProvider.notifier);
+    final proposal = _proposal('p1');
+
+    final decisions = await inbox.autoAcceptAll(<AgentProfileProposal>[
+      proposal,
+    ]);
+    expect(decisions.single.action, ProfileConfirmationAction.save);
+    expect(container.read(agentProfileInboxProvider).pending, isEmpty);
+    expect(
+      (await repository.load('dict-a'))?.status,
+      DictionaryProfileStatus.confirmed,
+    );
+  });
+
+  test('only one host can present a confirmation at a time', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final inbox = container.read(agentProfileInboxProvider.notifier);
+    expect(inbox.tryClaimPresentation(), isTrue);
+    expect(inbox.tryClaimPresentation(), isFalse);
+    inbox.releasePresentation();
+    expect(inbox.tryClaimPresentation(), isTrue);
+  });
+
   test(
     'cancelling a run releases the queue without writing profiles',
     () async {
