@@ -66,7 +66,14 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     final running = ref.watch(agentRunControllerProvider).isRunning;
     final regeneration = ref.watch(agentProfileRegenerationProvider);
     final settings = ref.watch(appSettingsProvider);
-    final actionsBusy = running || regeneration.active;
+    final canRegenerateSelection =
+        !running &&
+        _selected.isNotEmpty &&
+        enabled.any(
+          (dictionary) =>
+              _selected.contains(dictionary.id) &&
+              !regeneration.isGenerating(dictionary.id),
+        );
     ref.listen(appSettingsProvider, (previous, next) {
       if (previous?.agentProfileLanguage != next.agentProfileLanguage) {
         _staleFutures.clear();
@@ -103,15 +110,15 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
             IconButton(
               key: _regenerateSelectedActionKey,
               tooltip: strings.profileRegenerateSelected,
-              onPressed: actionsBusy || _selected.isEmpty
-                  ? null
-                  : () => _regenerateSelected(enabled, running),
+              onPressed: canRegenerateSelection
+                  ? () => _regenerateSelected(enabled, running)
+                  : null,
               icon: const Icon(Icons.refresh),
             ),
             IconButton(
               key: _deleteSelectedActionKey,
               tooltip: strings.profileDeleteSelected,
-              onPressed: actionsBusy || _selected.isEmpty
+              onPressed: running || _selected.isEmpty
                   ? null
                   : () => _deleteSelected(strings),
               icon: const Icon(Icons.delete_outline),
@@ -233,7 +240,8 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
                                 profile,
                                 enabled,
                                 settings.agentProfileLanguage,
-                                actionsBusy,
+                                running,
+                                regeneration,
                                 strings,
                               ),
                           ],
@@ -255,7 +263,8 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     StoredDictionaryProfile profile,
     List<DictionaryInfo> enabled,
     String profileLanguage,
-    bool busy,
+    bool running,
+    AgentProfileRegenerationState regeneration,
     AgentUiStrings strings,
   ) {
     DictionaryInfo? dictionary;
@@ -291,19 +300,24 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
               children: [
                 IconButton(
                   tooltip: strings.profileEdit,
-                  onPressed: busy ? null : () => _editProfile(profile, strings),
+                  onPressed: running
+                      ? null
+                      : () => _editProfile(profile, strings),
                   icon: const Icon(Icons.edit_outlined, size: AppSizes.icon),
                 ),
                 IconButton(
                   tooltip: strings.profileRegenerate,
-                  onPressed: busy || dictionary == null
+                  onPressed:
+                      running ||
+                          dictionary == null ||
+                          regeneration.isGenerating(profile.dictionaryId)
                       ? null
                       : () => _regenerate(dictionary!, strings),
                   icon: const Icon(Icons.refresh, size: AppSizes.icon),
                 ),
                 IconButton(
                   tooltip: strings.profileDelete,
-                  onPressed: busy
+                  onPressed: running
                       ? null
                       : () => _deleteProfiles(<StoredDictionaryProfile>[
                           profile,
@@ -393,8 +407,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     StoredDictionaryProfile profile,
     AgentUiStrings strings,
   ) async {
-    if (ref.read(agentRunControllerProvider).isRunning ||
-        ref.read(agentProfileRegenerationProvider).active) {
+    if (ref.read(agentRunControllerProvider).isRunning) {
       RikaiToast.show(context, strings.profileActionsDisabledWhileRunning);
       return;
     }
@@ -445,7 +458,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     bool running,
   ) async {
     final strings = _strings();
-    if (running || ref.read(agentProfileRegenerationProvider).active) {
+    if (running) {
       RikaiToast.show(context, strings.profileActionsDisabledWhileRunning);
       return;
     }
@@ -466,17 +479,26 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
       RikaiToast.show(context, strings.profileActionsDisabledWhileRunning);
       return;
     }
-    if (ref.read(agentProfileRegenerationProvider).active) return;
     final pendingIds = ref
         .read(agentProfileInboxProvider)
         .pending
         .map((proposal) => proposal.dictionaryId)
         .toSet();
-    final targets = dictionaries
-        .where((dictionary) => !pendingIds.contains(dictionary.id))
-        .toList(growable: false);
+    final regeneration = ref.read(agentProfileRegenerationProvider);
+    final seen = <String>{};
+    final targets = <DictionaryInfo>[
+      for (final dictionary in dictionaries)
+        if (!pendingIds.contains(dictionary.id) &&
+            !regeneration.isGenerating(dictionary.id) &&
+            seen.add(dictionary.id))
+          dictionary,
+    ];
     if (targets.isEmpty) {
-      RikaiToast.show(context, strings.profilesAwaitingConfirmation);
+      if (dictionaries.any(
+        (dictionary) => pendingIds.contains(dictionary.id),
+      )) {
+        RikaiToast.show(context, strings.profilesAwaitingConfirmation);
+      }
       return;
     }
     final providers =
@@ -506,8 +528,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     AgentUiStrings strings,
   ) async {
     if (profiles.isEmpty) return;
-    if (ref.read(agentRunControllerProvider).isRunning ||
-        ref.read(agentProfileRegenerationProvider).active) {
+    if (ref.read(agentRunControllerProvider).isRunning) {
       RikaiToast.show(context, strings.profileActionsDisabledWhileRunning);
       return;
     }

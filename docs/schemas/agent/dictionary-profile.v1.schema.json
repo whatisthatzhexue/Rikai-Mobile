@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rikai.mobile/schemas/agent/dictionary-profile.v1.schema.json",
   "title": "Rikai Dictionary Profile v1",
+  "description": "Internal storage/DTO shape only. The model response format is the bracket-tag PROFILE block parsed by dictionary_profile_tag_parser.dart.",
   "type": "object",
   "required": [
     "schema",

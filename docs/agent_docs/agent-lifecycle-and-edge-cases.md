@@ -240,6 +240,10 @@ AgentRunSnapshot {
   队列以 skip 释放，不写档案。
 - 决策由 inbox 统一持久化（`persistAgentProfileDecision`），因此 Agent run 与
   档案管理页的重新生成共用同一路径。
+- 档案管理页的重新生成由应用级 `AgentProfileRegenerationController` 持有：不同
+  词典可并行，同一词典在请求完成前不会重复发起；离开页面不取消生成，进度提示
+  列出当前全部活动词典并在新增/完成后更新。生成期间其他档案的编辑/删除/生成
+  仍可用。
 - 队列只在应用内存中；进程死亡后的恢复仍属 P6.7。
 
 仍需补齐：

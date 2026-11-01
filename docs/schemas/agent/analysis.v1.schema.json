@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://rikai.mobile/schemas/agent/analysis.v1.schema.json",
   "title": "Rikai Agent Analysis v1",
+  "description": "Internal DTO/storage shape only. The model response format is the bracket-tag plain text parsed by analysis_tag_parser.dart.",
   "type": "object",
   "required": ["schema", "source_id", "translation", "segments"],
   "additionalProperties": false,

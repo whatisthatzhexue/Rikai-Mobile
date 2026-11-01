@@ -5,25 +5,32 @@ import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
 import 'package:rikai_mobile/core/models/dict_info.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
 import 'package:rikai_mobile/features/agent/agent_profiles_page.dart';
+import 'package:rikai_mobile/state/agent_profile_manager.dart';
 import 'package:rikai_mobile/state/agent_providers.dart';
 import 'package:rikai_mobile/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _dictionary = DictionaryInfo(
   id: 'dict-a',
-  title: '测试词典',
-  mdxPath: '/tmp/missing-dictionary.mdx',
+  title: '测试词典A',
+  mdxPath: '/tmp/missing-dictionary-a.mdx',
+);
+
+const _dictionaryB = DictionaryInfo(
+  id: 'dict-b',
+  title: '测试词典B',
+  mdxPath: '/tmp/missing-dictionary-b.mdx',
 );
 
 const _stored = StoredDictionaryProfile(
   dictionaryId: 'dict-a',
-  title: '测试词典',
+  title: '测试词典A',
   fingerprint: 'outdated',
   markdown: '这是一份词典档案。',
   status: DictionaryProfileStatus.confirmed,
   profile: DictionaryProfile(
     dictionaryId: 'dict-a',
-    title: '测试词典',
+    title: '测试词典A',
     kind: '国語辞典',
     entryStructure: DictionaryEntryStructure(),
     searchBehavior: DictionarySearchBehavior(),
@@ -32,6 +39,68 @@ const _stored = StoredDictionaryProfile(
   promptVersion: 1,
   schemaVersion: 1,
 );
+
+const _storedB = StoredDictionaryProfile(
+  dictionaryId: 'dict-b',
+  title: '测试词典B',
+  fingerprint: 'outdated',
+  markdown: '这是第二份词典档案。',
+  status: DictionaryProfileStatus.confirmed,
+  profile: DictionaryProfile(
+    dictionaryId: 'dict-b',
+    title: '测试词典B',
+    kind: '国語辞典',
+    entryStructure: DictionaryEntryStructure(),
+    searchBehavior: DictionarySearchBehavior(),
+  ),
+  modelId: 'small',
+  promptVersion: 1,
+  schemaVersion: 1,
+);
+
+class _FixedRegenerationController extends AgentProfileRegenerationController {
+  _FixedRegenerationController(this._initial);
+
+  final AgentProfileRegenerationState _initial;
+
+  @override
+  AgentProfileRegenerationState build() => _initial;
+}
+
+Future<void> _pumpProfilesPage(
+  WidgetTester tester, {
+  required List<DictionaryInfo> active,
+}) async {
+  SharedPreferences.setMockInitialValues(<String, Object>{});
+  final preferences = await SharedPreferences.getInstance();
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(preferences),
+        agentProfilesProvider.overrideWith(
+          (ref) async => <StoredDictionaryProfile>[_stored, _storedB],
+        ),
+        enabledDictionariesProvider.overrideWithValue(<DictionaryInfo>[
+          _dictionary,
+          _dictionaryB,
+        ]),
+        agentProfileRegenerationProvider.overrideWith(
+          () => _FixedRegenerationController(
+            AgentProfileRegenerationState(activeDictionaries: active),
+          ),
+        ),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.light(),
+        home: const AgentProfilesPage(),
+      ),
+    ),
+  );
+  // The active-regeneration progress bar animates forever, so settling is not
+  // possible. Pump enough frames for the async profile list to arrive.
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 200));
+}
 
 void main() {
   testWidgets('profile manager lists stored profiles and enters multi-select', (
@@ -60,7 +129,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('词典档案'), findsOneWidget);
-    expect(find.text('测试词典'), findsOneWidget);
+    expect(find.text('测试词典A'), findsOneWidget);
     expect(find.text('已信任'), findsOneWidget);
 
     final modeTooltip = tester.element(find.byTooltip('多选'));
@@ -88,4 +157,84 @@ void main() {
     expect(find.byTooltip('全选'), findsNothing);
     expect(find.byTooltip('多选'), findsOneWidget);
   });
+
+  testWidgets(
+    'editing and deleting stay available during another regeneration',
+    (tester) async {
+      await _pumpProfilesPage(tester, active: <DictionaryInfo>[_dictionary]);
+
+      expect(find.text('正在重新生成档案：测试词典A'), findsOneWidget);
+
+      final refreshButtons = tester
+          .widgetList<IconButton>(
+            find.widgetWithIcon(IconButton, Icons.refresh),
+          )
+          .toList();
+      expect(refreshButtons, hasLength(2));
+      expect(refreshButtons[0].onPressed, isNull);
+      expect(refreshButtons[1].onPressed, isNotNull);
+
+      expect(
+        tester
+            .widgetList<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.edit_outlined),
+            )
+            .every((button) => button.onPressed != null),
+        isTrue,
+      );
+      expect(
+        tester
+            .widgetList<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.delete_outline),
+            )
+            .every((button) => button.onPressed != null),
+        isTrue,
+      );
+    },
+  );
+
+  testWidgets(
+    'multi-select regeneration skips only dictionaries already generating',
+    (tester) async {
+      await _pumpProfilesPage(tester, active: <DictionaryInfo>[_dictionary]);
+
+      await tester.tap(find.byTooltip('多选'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('全选'));
+      await tester.pump();
+
+      final regenerateSelected = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.refresh),
+      );
+      expect(regenerateSelected.onPressed, isNotNull);
+      final deleteSelected = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.delete_outline),
+      );
+      expect(deleteSelected.onPressed, isNotNull);
+    },
+  );
+
+  testWidgets(
+    'multi-select regeneration is disabled when every selection is generating',
+    (tester) async {
+      await _pumpProfilesPage(
+        tester,
+        active: <DictionaryInfo>[_dictionary, _dictionaryB],
+      );
+
+      await tester.tap(find.byTooltip('多选'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('全选'));
+      await tester.pump();
+
+      final regenerateSelected = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.refresh),
+      );
+      expect(regenerateSelected.onPressed, isNull);
+      final deleteSelected = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.delete_outline),
+      );
+      expect(deleteSelected.onPressed, isNotNull);
+    },
+  );
 }

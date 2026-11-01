@@ -47,11 +47,9 @@ Future<AgentProfilePresentationResult> presentAgentProfileConfirmation(
     if (decision.action == ProfileConfirmationAction.saveAndNeverAsk) {
       settings.setAgentProfilesAutoAccept(true);
     }
+    // Saved-profile toasts are emitted by the inbox so manual saves and
+    // auto-accept saves share one path; the mounted host listens for them.
     await inbox.resolve(target.id, decision);
-    if (decision.action == ProfileConfirmationAction.saveAndNeverAsk &&
-        context.mounted) {
-      RikaiToast.show(context, strings.profileGenerated(target.title));
-    }
     return AgentProfilePresentationResult.resolved;
   } finally {
     inbox.releasePresentation();
@@ -79,11 +77,29 @@ class AgentProfileInboxHost extends ConsumerStatefulWidget {
 class _AgentProfileInboxHostState extends ConsumerState<AgentProfileInboxHost> {
   String? _dismissedId;
   bool _scheduled = false;
+  int _lastSavedNoticeId = 0;
 
   @override
   void initState() {
     super.initState();
+    // Do not replay a save that happened before this surface was mounted.
+    _lastSavedNoticeId =
+        ref.read(agentProfileInboxProvider).savedNotice?.id ?? 0;
     _schedule();
+  }
+
+  void _maybeShowSavedNotice(AgentProfileSavedNotice? notice) {
+    if (notice == null || notice.id <= _lastSavedNoticeId) return;
+    _lastSavedNoticeId = notice.id;
+    if (!mounted) return;
+    // Several Agent surfaces can be mounted at once; only the first host
+    // handles this notice so the user sees a single toast.
+    if (!ref
+        .read(agentProfileInboxProvider.notifier)
+        .claimSavedNotice(notice.id)) {
+      return;
+    }
+    RikaiToast.show(context, widget.strings.profilesGenerated(notice.titles));
   }
 
   void _schedule() {
@@ -121,6 +137,7 @@ class _AgentProfileInboxHostState extends ConsumerState<AgentProfileInboxHost> {
   @override
   Widget build(BuildContext context) {
     ref.listen(agentProfileInboxProvider, (previous, next) {
+      _maybeShowSavedNotice(next.savedNotice);
       if (next.pending.isEmpty) {
         _dismissedId = null;
         return;

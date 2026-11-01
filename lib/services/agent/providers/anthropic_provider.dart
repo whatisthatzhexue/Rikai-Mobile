@@ -165,15 +165,6 @@ class AnthropicProvider implements LlmPort {
       'stream': stream,
     };
     if (system.isNotEmpty) payload['system'] = system.join('\n\n');
-    final format = request.responseFormat;
-    if (format != null && config.supportsJsonSchema) {
-      payload['output_config'] = <String, Object?>{
-        'format': <String, Object?>{
-          'type': 'json_schema',
-          'schema': format.schema,
-        },
-      };
-    }
     return payload;
   }
 }

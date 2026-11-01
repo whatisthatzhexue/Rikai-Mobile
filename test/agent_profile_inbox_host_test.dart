@@ -27,6 +27,15 @@ const _profile = DictionaryProfile(
   searchBehavior: DictionarySearchBehavior(),
 );
 
+AgentProfileProposal _proposal() => AgentProfileProposal(
+  id: 'p1',
+  dictionary: _dictionary,
+  fingerprint: 'fp',
+  profile: _profile,
+  markdown: 'draft profile',
+  runId: 'run-1',
+);
+
 void main() {
   testWidgets(
     'never-ask saves the profile, enables auto-accept and shows a toast',
@@ -86,4 +95,87 @@ void main() {
       await tester.pump(const Duration(seconds: 3));
     },
   );
+
+  testWidgets('manual save shows the generated-profile toast', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final preferences = await SharedPreferences.getInstance();
+    final repository = InMemoryDictionaryProfileRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          agentProfileRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: AgentProfileInboxHost(
+            strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            child: const Scaffold(body: SizedBox.shrink()),
+          ),
+        ),
+      ),
+    );
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AgentProfileInboxHost)),
+    );
+    container.read(agentProfileInboxProvider.notifier).enqueue(
+      <AgentProfileProposal>[_proposal()],
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('保存并信任'));
+    await tester.pumpAndSettle();
+
+    expect(
+      (await repository.load('dict-a'))?.status,
+      DictionaryProfileStatus.confirmed,
+    );
+    expect(
+      container.read(appSettingsProvider).agentProfilesAutoAccept,
+      isFalse,
+    );
+    expect(find.textContaining('词典档案已生成'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('auto-save shows the toast while an Agent surface is mounted', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final preferences = await SharedPreferences.getInstance();
+    final repository = InMemoryDictionaryProfileRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          agentProfileRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: AgentProfileInboxHost(
+            strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            child: const Scaffold(body: SizedBox.shrink()),
+          ),
+        ),
+      ),
+    );
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AgentProfileInboxHost)),
+    );
+    await container.read(agentProfileInboxProvider.notifier).autoAcceptAll(
+      <AgentProfileProposal>[_proposal()],
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      (await repository.load('dict-a'))?.status,
+      DictionaryProfileStatus.confirmed,
+    );
+    expect(find.textContaining('词典档案已生成'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+  });
 }

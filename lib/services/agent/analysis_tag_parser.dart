@@ -1,4 +1,38 @@
 import '../../core/models/agent/agent_analysis.dart';
+import 'tag_block_integrity.dart';
+
+const _analysisBlockTags = <String>{
+  'TRANSLATION',
+  'SEGMENT',
+  'MEANING',
+  'WORD',
+  'GRAMMAR',
+  'OPTION',
+  'UNRESOLVED',
+  'SUPPLEMENT',
+};
+
+/// Reports unbalanced or mis-nested analysis blocks. Parsing may still succeed
+/// on a truncated response; callers use these errors to request repair.
+List<String> analysisTagIntegrityErrors(String raw) {
+  return tagBlockIntegrityErrors(
+    raw,
+    blockTags: _analysisBlockTags,
+    rootOnlyTags: const <String>{
+      'TRANSLATION',
+      'SEGMENT',
+      'OPTION',
+      'UNRESOLVED',
+      'SUPPLEMENT',
+    },
+    requiredParent: const <String, String>{
+      'MEANING': 'SEGMENT',
+      'WORD': 'SEGMENT',
+      'GRAMMAR': 'SEGMENT',
+    },
+    singleInParent: const <String>{'MEANING'},
+  );
+}
 
 /// Parses the flat, tag-delimited analysis format used by the new prompts.
 ///

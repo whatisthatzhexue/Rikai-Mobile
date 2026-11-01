@@ -56,25 +56,16 @@ class LlmMessage {
   };
 }
 
-class LlmResponseFormat {
-  const LlmResponseFormat({required this.name, required this.schema});
-
-  final String name;
-  final Map<String, Object?> schema;
-}
-
 class LlmRequest {
   const LlmRequest({
     required this.model,
     required this.messages,
-    this.responseFormat,
     this.maxTokens = 16000,
     this.stream = true,
   });
 
   final String model;
   final List<LlmMessage> messages;
-  final LlmResponseFormat? responseFormat;
   final int maxTokens;
   final bool stream;
 }
@@ -91,8 +82,5 @@ class LlmEvent {
 }
 
 abstract interface class LlmPort {
-  Stream<LlmEvent> stream(
-    LlmRequest request, {
-    LlmCancelToken? cancellation,
-  });
+  Stream<LlmEvent> stream(LlmRequest request, {LlmCancelToken? cancellation});
 }

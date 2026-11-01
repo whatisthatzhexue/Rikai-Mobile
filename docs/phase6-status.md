@@ -124,14 +124,15 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
   the response-language setting. Legacy behavior (`follow` inferred Japanese
   from kana, English from Latin-only input, otherwise Chinese) is superseded by
   the 2026-11-01 decision: default `zh`, no input heuristic; implementation is
-  pending. Raw streamed JSON, reasoning text
+  pending. Raw streamed output, reasoning text
   and character counts are never rendered. Validated result items fade in one by
   one after validation; there is no streaming JSON partial display. Citations
   are numbered “依据1/依据2…” and consolidated once per segment instead of after
   every word note. The safe model-generated “summary” field is deferred (P3).
-- **Schema success**: analysis/familiarization JSON Schema is included in the
-  prompt for `json_object` providers; analysis requires non-empty
-  `translation`/`segments` and a matching `source_id`.
+- **Tag format success**: analysis/familiarization use bracket-tag plain text,
+  not JSON. Analysis requires non-empty `translation`/`segments`; tag-block
+  integrity (balance/nesting/single-instance fields) is checked before repair.
+  No `response_format`/`json_schema`/`output_config` is sent.
 - **Normalization**: `literal` is filled from the selected quote; grammar notes
   with unknown `pattern_id` are dropped; result view shows epistemic/confidence
   badges.
@@ -247,17 +248,23 @@ Wave 2 implementation (2026-11-01):
   and Agent settings and uses a claim guard so a proposal never opens twice.
   Regeneration moved to app-scoped `AgentProfileRegenerationController` (no
   duplicate token spend after leaving/re-entering; title-bar text and
-  indeterminate progress). “不再询问” now saves and enables
-  `agent_profiles_auto_accept` (default off; new checkbox in Agent settings;
-  toast on save). Retry-dictionary shows a spinner; Agent no longer auto-scrolls;
-  the profile-manager mode toggle stays in place and the composer image notice is
-  centered.
-- Model output format: analysis and dictionary profiles now use bracket-tag
-  plain text (`analysis_tag_parser.dart`, `dictionary_profile_tag_parser.dart`)
-  with no JSON response format. Leaked type/probability markers are stripped;
-  types/confidence are derived locally; one “text unchanged, tags only” format
-  repair is attempted before salvage. JSON schema/DTOs remain for internal
-  storage and legacy-output compatibility.
+  indeterminate progress). Independent dictionaries may regenerate in parallel;
+  only the same dictionary is refused while its request is active, and its
+  edit/delete actions stay available. The title lists every active dictionary
+  and updates as new requests are added or finish. “不再询问” now saves and
+  enables `agent_profiles_auto_accept` (default off; new checkbox in Agent
+  settings). Any save made while an Agent page or subpage is mounted (manual or
+  auto-accept) shows the shared host toast once per batch. Retry-dictionary
+  shows a spinner; Agent no longer auto-scrolls; the profile-manager mode toggle
+  stays in place and the composer image notice is centered.
+- Model output format: analysis and dictionary profiles use bracket-tag plain
+  text (`analysis_tag_parser.dart`, `dictionary_profile_tag_parser.dart`).
+  Leaked type/probability markers are stripped; types/confidence are derived
+  locally. `tag_block_integrity.dart` checks unclosed/misordered/mis-nested
+  blocks and duplicate single-instance tags before one “text unchanged, tags
+  only” repair. Legacy JSON output fallback, runtime response schemas and the
+  `response_format`/`json_schema` capability flag were removed; DTO JSON remains
+  only for local storage.
 - Wave 2 verification: `flutter analyze` clean; current test/build results in
   `docs/project-data.md` §2/§5. Device visual/provider/arm64 acceptance remains
   for Wave 4.
@@ -304,13 +311,13 @@ New test files include: `agent_models_test.dart`, `lookup_gateway_test.dart`,
 `agent_page_test.dart`, `agent_run_controller_test.dart`,
 `agent_lifecycle_test.dart`, `agent_result_view_test.dart`,
 `provider_http_test.dart`, `provider_retry_test.dart`,
-`analysis_normalizer_test.dart`, `analysis_schema_contract_test.dart`,
+`analysis_normalizer_test.dart`, `tag_block_integrity_test.dart`,
 `agent_settings_page_test.dart`, `lookup_actions_test.dart`,
 `ocr_model_download_controller_test.dart`.
 Wave 2 adds `agent_language_test.dart`, `agent_dictionary_preferences_test.dart`,
-`agent_profile_inbox_test.dart` and `agent_wave2_ui_test.dart`, plus new queue/
-gate/regenerate/multi-image cases in `agent_lifecycle_test.dart` and
-`agent_page_test.dart`.
+`agent_profile_inbox_test.dart`, `agent_profile_regeneration_test.dart` and
+`agent_wave2_ui_test.dart`, plus new queue/gate/regenerate/multi-image cases in
+`agent_lifecycle_test.dart` and `agent_page_test.dart`.
 
 ## Not implemented / next
 

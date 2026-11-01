@@ -6,9 +6,11 @@
 >
 > **2026-11-01 输出格式变更（已实现）**：分析和词典档案生成不再要求模型输出
 > JSON。运行时使用方括号标签的纯文本块，代码用正则解析；模型不输出 confidence、
-> 概率或 `context_inference`/`dictionary_fact` 等内部标记。JSON schema 保留为
-> 内部 DTO、旧输出兼容和测试夹具，不再是模型响应格式。解析失败时只有一次
-> “保持正文不变、仅补标签”的格式纠错调用。
+> 概率或 `context_inference`/`dictionary_fact` 等内部标记。旧 JSON 响应格式、
+> 运行时 JSON schema、`response_format`/`json_schema` 能力标志和旧 JSON 输出
+> 回退均已移除；分析/档案 DTO 仍可序列化为本地 JSON 供存储使用。解析器额外校验
+> 标签块完整性（未闭合、错序、越界嵌套、重复单例标签）；格式或完整性失败时只有
+> 一次“保持正文不变、仅补标签”的格式纠错调用。
 >
 > **2026-11-01 语言决策（Wave 2 已实现）**：默认输出/UI 语言为中文（`zh`）；
 > 旧 `follow` 映射为 `zh`；禁止按输入假名/拉丁字符推断。§5.2 的默认/文案契约
@@ -102,7 +104,7 @@ class ToolResult {
 | `PROVIDER_RATE_LIMITED` | 429 | 是（退避） |
 | `PROVIDER_UNAVAILABLE` | 5xx/网络失败 | 是（最多 2 次） |
 | `PROVIDER_REFUSED` | 模型拒绝 | 否 |
-| `VALIDATION_FAILED` | 模型输出未通过 schema/引用/原文校验 | 视情况修复一次 |
+| `VALIDATION_FAILED` | 模型输出未通过标签/引用/原文校验 | 视情况修复一次 |
 | `INTERNAL_ERROR` | 未分类内部错误 | 否 |
 
 原生异常、路径、堆栈、API Key 不得进入 `message`；`message` 使用中文用户可读文案。
@@ -376,10 +378,14 @@ class ToolResult {
   0.95；OPTION 0.5/0.7），模型不输出数值。
 - 解析器会剥离正文中泄漏的 `context_inference`/`dictionary_fact`/
   `structural_analysis`、`(90%)`、`置信度: …` 和 `[source-N]` 标记。
-- 至少需要一条 TRANSLATION 和一条 SEGMENT；正则解析失败时发送一次格式纠错请求，
-  要求保持所有正文文字不变、只补齐标签；仍失败则进入既有 salvage/校验路径。
+- 至少需要一条 TRANSLATION 和一条 SEGMENT。解析后还检查标签块完整性：未闭合、
+  结束标签错序/多余、根级标签被嵌套、`MEANING`/`WORD`/`GRAMMAR` 不在 `SEGMENT`
+  内、同一 `SEGMENT` 重复 `MEANING`。解析失败或完整性失败时发送一次格式纠错请求，
+  要求保持所有正文文字不变、只补齐标签；修复后仍不完整则 validation 不通过并进入
+  既有 salvage 路径。
+- 旧的 JSON 输出回退已移除；模型必须返回标签文本。
 
-以下 JSON 结构保留为内部 DTO 与旧输出兼容格式（不再作为模型响应格式）：
+以下 JSON 结构仅作为内部 DTO/存储结构，不是模型响应格式：
 
 完整 schema：`docs/schemas/agent/analysis.v1.schema.json`。
 
@@ -496,8 +502,9 @@ class ToolResult {
 > `[ID]`/`[TITLE]`/`[KIND]`/`[LANGUAGES]`/`[HEADWORD_FIELDS]`/
 > `[DEFINITION_FIELDS]`/`[FLAGS]`/`[EXACT_FORMS]`/`[PREFIX]`/`[SEARCH_NOTES]`/
 > `[STRENGTHS]`/`[CAVEATS]`/`[RECOMMENDED]`/`[ENTRY_NOTES]`。列表使用 `|`。
-> 解析失败或缺少某本词典时，发送一次保持正文不变、仅补标签的格式纠错请求。
-> 以下 JSON schema 保留为内部存储/旧输出兼容，不再是模型响应格式。
+> 解析失败、缺少某本词典或标签块完整性校验失败时，发送一次保持正文不变、仅补
+> 标签的格式纠错请求；修复后仍不完整时保留可解析档案并记录 warning。以下 JSON
+> 结构仅作为内部存储/DTO，不是模型响应格式；旧 JSON 输出回退已移除。
 
 完整 schema：`docs/schemas/agent/dictionary-profile.v1.schema.json`。
 
@@ -599,8 +606,11 @@ idle
 - 确认窗口的“不再询问”= 保存当前档案并开启 `agent_profiles_auto_accept`；
   默认关闭。开启后新生成的档案直接保存并信任，Agent 设置可再次关闭。确认窗口
   由 `AgentProfileInboxHost` 统一呈现：Agent 页、档案管理页和 Agent 设置页共用，
-  同一 proposal 不会重复弹出；档案重新生成由应用级
-  `AgentProfileRegenerationController` 持有，离开页面不会丢失或重复调用模型。
+  同一 proposal 不会重复弹出。手动或自动保存成功时，只要上述任一宿主仍在，
+  由宿主用底部 toast 提示一次（同一批只提示一次）。档案重新生成由应用级
+  `AgentProfileRegenerationController` 持有：离开页面不会丢失；不同词典可并行，
+  同一词典在请求完成前不会重复发起；进度文本列出当前全部活动词典并随新增/
+  完成实时更新。生成期间编辑/删除仍可用，仅目标词典的“重新生成”禁用。
 - `coverage` 是 2026-10-31 F7 的一次性覆盖审查；每个请求最多触发一次补充检索，
   `coverageFallbackUsed=true` 后不得再次回退。**待 Wave 3。**
 - 任何阶段可取消；取消后状态为 `cancelled`，保留已完成的本地结果。
@@ -621,7 +631,8 @@ idle
 
 ```text
 validate(analysis, evidence, quotes, mode):
-  assert schema(analysis)
+  assert parse_tagged_analysis(raw) != null
+  assert tag_blocks_complete(raw)
   known = {c.id for c in evidence.citations}
   used = {}
   for claim in all_claims(analysis):
@@ -650,16 +661,18 @@ validate(analysis, evidence, quotes, mode):
 
 ## 11. Provider 请求契约
 
-- 当前 `LlmRequest` 含 `model`、`messages`、`responseFormat`、`maxTokens`、`stream`；
-  **不含 `tools`**。若未来恢复 tool loop，才增加 tools/tool_result 契约。
+- 当前 `LlmRequest` 含 `model`、`messages`、`maxTokens`、`stream`；**不含
+  `responseFormat`、`tools`**。输出格式由 system prompt 的标签协议约束。若未来
+  恢复 tool loop，才增加 tools/tool_result 契约。
 - `LlmMessage.content` 只有 `LlmTextPart`；**没有 image/file 类型**。
 - 发送前 `assertNoImagePayload`：递归检查 JSON 键/值，禁止
   `image`、`image_url`、`input_image`、`base64`、`data:image`、`file://`、
   `content://`、`.jpg/.png/.webp/.heic` 路径。
 - Anthropic：`x-api-key` + `anthropic-version: 2026-10-21`；
   `POST /v1/messages`；不发送 `temperature/top_p/top_k`。
-- OpenAI-compatible：`Authorization: Bearer`；`POST /chat/completions`；
-  JSON schema 支持因 provider 而异，用 capability flag + JSON object 回退。
+- OpenAI-compatible：`Authorization: Bearer`；`POST /chat/completions`。
+- 两种 provider 都不发送 `response_format`、`json_schema` 或 `output_config`；
+  模型输出由标签协议和解析器校验。
 - 测试捕获实际 HTTP body，断言不含图片/路径/Key；请求日志只记录
   `tool`、`model`、`elapsed_ms`、token 数，不记录 body/Key。
 

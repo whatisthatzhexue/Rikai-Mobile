@@ -385,7 +385,6 @@ class AgentStore
       'complex_model': provider.complexModel,
       'timeout_seconds': provider.timeoutSeconds,
       'capabilities_json': jsonEncode(<String, bool>{
-        'json_schema': provider.supportsJsonSchema,
         'streaming': provider.supportsStreaming,
       }),
       'created_at': now,

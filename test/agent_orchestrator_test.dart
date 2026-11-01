@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/agent_input.dart';
 import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
@@ -34,34 +32,20 @@ const _provider = AgentProviderConfig(
   supportsStreaming: false,
 );
 
-const _analysisJson = <String, Object?>{
-  'schema': 'rikai.agent.analysis.v1',
-  'source_id': 'src-1',
-  'translation': <Object?>[
-    <String, Object?>{'quote_id': 'q1', 'text': '请多关照。', 'label': '模型译文'},
-  ],
-  'segments': <Object?>[
-    <String, Object?>{
-      'id': 'seg-1',
-      'quote_id': 'q1',
-      'literal': '何卒',
-      'interpretation': '正式请求',
-      'epistemic': 'dictionary_fact',
-      'word_notes': <Object?>[
-        <String, Object?>{
-          'token_id': 't1',
-          'surface': '何卒',
-          'sense': '请务必',
-          'citation_ids': <String>['source-1'],
-        },
-      ],
-    },
-  ],
-  'interpretations': <Object?>[],
-  'unresolved': <Object?>[],
-  'citations_used': <String>['source-1'],
-  'model_supplements': <Object?>[],
-};
+const _analysisTagged = '''
+[TRANSLATION quote="q1"]请多关照。[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]正式请求[/MEANING]
+[WORD id="t1"]何卒||请务必|source-1[/WORD]
+[/SEGMENT]
+''';
+
+const _analysisWithoutCitation = '''
+[TRANSLATION quote="q1"]请多关照。[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]无依据[/MEANING]
+[/SEGMENT]
+''';
 
 class _FakeOcr implements OcrPort {
   int calls = 0;
@@ -151,7 +135,7 @@ AgentOrchestrator _orchestrator({
 
 void main() {
   test('runs the fixed pipeline and returns cited evidence', () async {
-    final provider = FakeProvider(responseText: jsonEncode(_analysisJson));
+    final provider = FakeProvider(responseText: _analysisTagged);
     final stages = <AgentStage>[];
     final result = await _orchestrator(provider: provider).run(
       const AgentRunRequest(
@@ -178,7 +162,7 @@ void main() {
   });
 
   test('OCR image paths are never placed in the provider request', () async {
-    final provider = FakeProvider(responseText: jsonEncode(_analysisJson));
+    final provider = FakeProvider(responseText: _analysisTagged);
     final ocr = _FakeOcr();
     await _orchestrator(provider: provider, ocr: ocr).run(
       const AgentRunRequest(
@@ -207,7 +191,7 @@ void main() {
   test(
     'image plus instruction keeps the instruction out of evidence sources',
     () async {
-      final provider = FakeProvider(responseText: jsonEncode(_analysisJson));
+      final provider = FakeProvider(responseText: _analysisTagged);
       final result = await _orchestrator(provider: provider).run(
         const AgentRunRequest(
           sessionId: 's1',
@@ -234,24 +218,8 @@ void main() {
   test(
     'strict validation failure is repaired without redoing OCR/lookup',
     () async {
-      final bad = Map<String, Object?>.from(_analysisJson)
-        ..['segments'] = <Object?>[
-          <String, Object?>{
-            'id': 'seg-1',
-            'quote_id': 'q1',
-            'interpretation': '无依据',
-            'epistemic': 'dictionary_fact',
-            'word_notes': <Object?>[
-              <String, Object?>{
-                'token_id': 't1',
-                'surface': '何卒',
-                'sense': '随便',
-              },
-            ],
-          },
-        ];
       final provider = FakeProvider(
-        responseSequence: <String>[jsonEncode(bad), jsonEncode(_analysisJson)],
+        responseSequence: <String>[_analysisWithoutCitation, _analysisTagged],
       );
 
       final result = await _orchestrator(provider: provider).run(
@@ -284,7 +252,7 @@ void main() {
           '''
 [TRANSLATION quote="q1"]请多关照。[/TRANSLATION]
 [SEGMENT type="fact" quote="q1"]
-[MEANING]正式请求
+[MEANING]正式请求[/MEANING]
 [WORD id="t1"]何卒||请务必|source-1[/WORD]
 [/SEGMENT]
 ''',
@@ -312,20 +280,61 @@ void main() {
     },
   );
 
+  test(
+    'orphan tag triggers one format repair even when content parses',
+    () async {
+      final provider = FakeProvider(
+        responseSequence: <String>[
+          '$_analysisTagged[/SEGMENT]',
+          _analysisTagged,
+        ],
+      );
+
+      final result = await _orchestrator(provider: provider).run(
+        const AgentRunRequest(
+          sessionId: 's1',
+          mode: AgentMode.strict,
+          dictionaries: <DictionaryInfo>[_dictionary],
+          provider: _provider,
+          userText: '何卒',
+        ),
+      );
+
+      expect(result.validation.valid, isTrue);
+      expect(provider.requests, hasLength(2));
+      final repairPrompt = provider.requests.last.messages
+          .map((message) => message.text)
+          .join('\n');
+      expect(repairPrompt, contains('多余的结束标签 [/SEGMENT]'));
+    },
+  );
+
+  test('unrepaired tag integrity failure is reported, not accepted', () async {
+    final provider = FakeProvider(responseText: '$_analysisTagged[/SEGMENT]');
+
+    final result = await _orchestrator(provider: provider).run(
+      const AgentRunRequest(
+        sessionId: 's1',
+        mode: AgentMode.strict,
+        dictionaries: <DictionaryInfo>[_dictionary],
+        provider: _provider,
+        userText: '何卒',
+      ),
+    );
+
+    expect(result.validation.valid, isFalse);
+    expect(
+      result.validation.errors.any(
+        (error) => error.contains('多余的结束标签 [/SEGMENT]'),
+      ),
+      isTrue,
+    );
+    expect(result.analysis.translation, isNotEmpty);
+    expect(provider.requests, hasLength(2));
+  });
+
   test('unrepaired output is salvaged instead of being thrown away', () async {
-    final bad = Map<String, Object?>.from(_analysisJson)
-      ..['segments'] = <Object?>[
-        <String, Object?>{
-          'id': 'seg-1',
-          'quote_id': 'q1',
-          'interpretation': '无依据',
-          'epistemic': 'dictionary_fact',
-          'word_notes': <Object?>[
-            <String, Object?>{'token_id': 't1', 'surface': '何卒', 'sense': '随便'},
-          ],
-        },
-      ];
-    final provider = FakeProvider(responseText: jsonEncode(bad));
+    final provider = FakeProvider(responseText: _analysisWithoutCitation);
 
     final result = await _orchestrator(provider: provider).run(
       const AgentRunRequest(

@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
 import 'package:rikai_mobile/core/models/dict_info.dart';
@@ -46,6 +44,38 @@ const _profileJson = <String, Object?>{
   'schema_version': 1,
 };
 
+const _profileTagged = '''
+[PROFILE]
+[ID]dict_a[/ID]
+[TITLE]A[/TITLE]
+[KIND]国語辞典[/KIND]
+[HEADWORD_FIELDS]見出し[/HEADWORD_FIELDS]
+[DEFINITION_FIELDS]語義[/DEFINITION_FIELDS]
+[FLAGS]examples[/FLAGS]
+[EXACT_FORMS]漢字|かな[/EXACT_FORMS]
+[PREFIX]yes[/PREFIX]
+[STRENGTHS]多义项[/STRENGTHS]
+[CAVEATS]含图片[/CAVEATS]
+[RECOMMENDED]lemma[/RECOMMENDED]
+[/PROFILE]
+''';
+
+const _profileTaggedB = '''
+[PROFILE]
+[ID]dict_b[/ID]
+[TITLE]B[/TITLE]
+[KIND]類語辞典[/KIND]
+[/PROFILE]
+''';
+
+const _profileTaggedOther = '''
+[PROFILE]
+[ID]other[/ID]
+[TITLE]A[/TITLE]
+[KIND]国語辞典[/KIND]
+[/PROFILE]
+''';
+
 class _FakeSamplePort implements DictionarySamplePort {
   int calls = 0;
 
@@ -81,7 +111,7 @@ DictionaryFamiliarizationService _service({
   return DictionaryFamiliarizationService(
     samplePort: samples,
     repository: repository,
-    llm: llm ?? FakeProvider(responseText: jsonEncode(_profileJson)),
+    llm: llm ?? FakeProvider(responseText: _profileTagged),
     smallModel: 'small',
   );
 }
@@ -102,7 +132,7 @@ void main() {
   test('confirmed profile is reused without another LLM call', () async {
     final repository = InMemoryDictionaryProfileRepository();
     final samples = _FakeSamplePort();
-    final llm = FakeProvider(responseText: jsonEncode(_profileJson));
+    final llm = FakeProvider(responseText: _profileTagged);
     final service = _service(
       samples: samples,
       repository: repository,
@@ -159,7 +189,7 @@ void main() {
   test('decline is remembered for the same fingerprint', () async {
     final repository = InMemoryDictionaryProfileRepository();
     final samples = _FakeSamplePort();
-    final llm = FakeProvider(responseText: jsonEncode(_profileJson));
+    final llm = FakeProvider(responseText: _profileTagged);
     final service = _service(
       samples: samples,
       repository: repository,
@@ -188,12 +218,10 @@ void main() {
   test('a mismatched dictionary id is rejected', () async {
     final repository = InMemoryDictionaryProfileRepository();
     final samples = _FakeSamplePort();
-    final bad = Map<String, Object?>.from(_profileJson)
-      ..['dictionary_id'] = 'other';
     final service = _service(
       samples: samples,
       repository: repository,
-      llm: FakeProvider(responseText: jsonEncode(bad)),
+      llm: FakeProvider(responseText: _profileTaggedOther),
     );
 
     await expectLater(
@@ -206,14 +234,7 @@ void main() {
   test('generates multiple missing profiles in one provider request', () async {
     final repository = InMemoryDictionaryProfileRepository();
     final samples = _FakeSamplePort();
-    final profileB = Map<String, Object?>.from(_profileJson)
-      ..['dictionary_id'] = 'dict_b'
-      ..['title'] = 'B';
-    final llm = FakeProvider(
-      responseText: jsonEncode(<String, Object?>{
-        'profiles': <Object?>[_profileJson, profileB],
-      }),
-    );
+    final llm = FakeProvider(responseText: '$_profileTagged\n$_profileTaggedB');
     final service = _service(
       samples: samples,
       repository: repository,
@@ -295,6 +316,30 @@ void main() {
     expect(repairText, contains('FORMAT CORRECTION TASK'));
     expect(repairText, contains('Previous output'));
   });
+
+  test(
+    'orphan profile tag gets one format correction even when it parses',
+    () async {
+      final repository = InMemoryDictionaryProfileRepository();
+      final samples = _FakeSamplePort();
+      final llm = FakeProvider(
+        responseSequence: <String>['$_profileTagged[/PROFILE]', _profileTagged],
+      );
+      final service = _service(
+        samples: samples,
+        repository: repository,
+        llm: llm,
+      );
+
+      final result = await service.ensure(_dictionary);
+      expect(result.action, FamiliarizationAction.pending);
+      expect(llm.requests, hasLength(2));
+      final repairText = llm.requests.last.messages
+          .map((message) => message.text)
+          .join('\n');
+      expect(repairText, contains('多余的结束标签 [/PROFILE]'));
+    },
+  );
 
   test('profile markdown follows the selected language', () {
     final profile = DictionaryProfile.fromJson(_profileJson);

@@ -216,7 +216,6 @@ class AgentSettingsPage extends ConsumerWidget {
       smallModel: result.smallModel.trim(),
       complexModel: result.complexModel.trim(),
       supportsStreaming: true,
-      supportsJsonSchema: result.kind == AgentProviderKind.anthropic,
     );
     final store = ref.read(agentStoreProvider);
     await store.saveProvider(config);

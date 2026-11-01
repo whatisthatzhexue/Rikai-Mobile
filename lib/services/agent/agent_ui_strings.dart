@@ -234,6 +234,19 @@ class AgentUiStrings {
     'Dictionary profile generated: $title',
     '辞書プロファイルを生成しました：$title',
   );
+  String profilesGenerated(List<String> titles) {
+    final names = titles
+        .where((title) => title.trim().isNotEmpty)
+        .toList(growable: false);
+    if (names.isEmpty) return '';
+    if (names.length == 1) return profileGenerated(names.single);
+    return _pick(
+      '已生成词典档案：${names.join('、')}',
+      'Dictionary profiles generated: ${names.join(', ')}',
+      '辞書プロファイルを生成しました：${names.join('、')}',
+    );
+  }
+
   String regeneratingProfile(String titles) => _pick(
     '正在重新生成档案：$titles',
     'Regenerating profile: $titles',

@@ -79,7 +79,6 @@ class AgentProviderConfig {
     required this.smallModel,
     required this.complexModel,
     this.timeoutSeconds = 180,
-    this.supportsJsonSchema = false,
     this.supportsStreaming = true,
   });
 
@@ -90,7 +89,6 @@ class AgentProviderConfig {
   final String smallModel;
   final String complexModel;
   final int timeoutSeconds;
-  final bool supportsJsonSchema;
   final bool supportsStreaming;
 
   String get normalizedBaseUrl {
@@ -109,7 +107,6 @@ class AgentProviderConfig {
     String? smallModel,
     String? complexModel,
     int? timeoutSeconds,
-    bool? supportsJsonSchema,
     bool? supportsStreaming,
   }) {
     return AgentProviderConfig(
@@ -120,7 +117,6 @@ class AgentProviderConfig {
       smallModel: smallModel ?? this.smallModel,
       complexModel: complexModel ?? this.complexModel,
       timeoutSeconds: timeoutSeconds ?? this.timeoutSeconds,
-      supportsJsonSchema: supportsJsonSchema ?? this.supportsJsonSchema,
       supportsStreaming: supportsStreaming ?? this.supportsStreaming,
     );
   }
@@ -133,10 +129,7 @@ class AgentProviderConfig {
     'small_model': smallModel,
     'complex_model': complexModel,
     'timeout_seconds': timeoutSeconds,
-    'capabilities': {
-      'json_schema': supportsJsonSchema,
-      'streaming': supportsStreaming,
-    },
+    'capabilities': {'streaming': supportsStreaming},
   };
 
   factory AgentProviderConfig.fromJson(Map<String, Object?> json) {
@@ -149,7 +142,6 @@ class AgentProviderConfig {
       smallModel: agentString(json['small_model']),
       complexModel: agentString(json['complex_model']),
       timeoutSeconds: agentInt(json['timeout_seconds'], 180),
-      supportsJsonSchema: agentBool(capabilities['json_schema']),
       supportsStreaming: agentBool(capabilities['streaming'], true),
     );
   }

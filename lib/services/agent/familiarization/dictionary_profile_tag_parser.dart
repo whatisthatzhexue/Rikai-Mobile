@@ -1,4 +1,36 @@
 import '../../../core/models/agent/agent_profile.dart';
+import '../tag_block_integrity.dart';
+
+const _profileFieldTags = <String>{
+  'ID',
+  'TITLE',
+  'KIND',
+  'LANGUAGES',
+  'HEADWORD_FIELDS',
+  'DEFINITION_FIELDS',
+  'FLAGS',
+  'EXACT_FORMS',
+  'PREFIX',
+  'SEARCH_NOTES',
+  'STRENGTHS',
+  'CAVEATS',
+  'RECOMMENDED',
+  'ENTRY_NOTES',
+};
+
+/// Reports unbalanced or mis-nested profile blocks. Parsing may still succeed
+/// on a truncated batch; callers use these errors to request repair.
+List<String> dictionaryProfileTagIntegrityErrors(String raw) {
+  return tagBlockIntegrityErrors(
+    raw,
+    blockTags: <String>{'PROFILE', ..._profileFieldTags},
+    rootOnlyTags: const <String>{'PROFILE'},
+    requiredParent: <String, String>{
+      for (final tag in _profileFieldTags) tag: 'PROFILE',
+    },
+    singleInParent: _profileFieldTags,
+  );
+}
 
 /// Parses the flat tag format used for dictionary profiles.
 ///

@@ -378,11 +378,12 @@ class DictionaryFamiliarizationService {
         continue;
       }
 
-      var profiles = _parseProfiles(raw, batch);
+      final parsed = _parseProfiles(raw);
+      var profiles = parsed.profiles;
       final missing = batch
           .where((dictionary) => !profiles.containsKey(dictionary.id))
           .toList(growable: false);
-      if (missing.isNotEmpty) {
+      if (missing.isNotEmpty || parsed.integrityErrors.isNotEmpty) {
         // One bounded format-correction call per batch. It may only add tags;
         // readable text must stay unchanged.
         try {
@@ -394,14 +395,22 @@ class DictionaryFamiliarizationService {
               language: profileLanguage,
               rawOutput: raw,
               errors: <String>[
-                'missing profiles for: '
-                    '${missing.map((dictionary) => dictionary.id).join(', ')}',
+                ...parsed.integrityErrors,
+                if (missing.isNotEmpty)
+                  'missing profiles for: '
+                      '${missing.map((dictionary) => dictionary.id).join(', ')}',
               ],
               maxTokens: maxTokens,
             ),
           );
-          final repaired = _parseProfiles(repairedRaw, batch);
-          profiles = <String, DictionaryProfile>{...repaired, ...profiles};
+          final repaired = _parseProfiles(repairedRaw);
+          profiles = <String, DictionaryProfile>{
+            ...repaired.profiles,
+            ...profiles,
+          };
+          if (repaired.integrityErrors.isNotEmpty) {
+            warnings.add('词典档案标签不完整，已使用可解析内容');
+          }
         } catch (error) {
           _agentDebug(
             '[AgentFamiliarization] format repair failed '
@@ -472,48 +481,16 @@ class DictionaryFamiliarizationService {
     );
   }
 
-  Map<String, DictionaryProfile> _parseProfiles(
-    String raw,
-    List<DictionaryInfo> batch,
-  ) {
+  ({Map<String, DictionaryProfile> profiles, List<String> integrityErrors})
+  _parseProfiles(String raw) {
     final tagged = parseTaggedProfiles(raw, language: profileLanguage);
-    final profiles = <String, DictionaryProfile>{
-      for (final profile in tagged)
-        if (profile.dictionaryId.isNotEmpty) profile.dictionaryId: profile,
-    };
-    if (profiles.isNotEmpty) return profiles;
-
-    // Transitional compatibility with the old JSON output.
-    try {
-      final json = extractJsonObject(raw);
-      final rawProfiles = json['profiles'];
-      if (rawProfiles is List) {
-        for (final item in rawProfiles.whereType<Map>()) {
-          final profile = DictionaryProfile.fromJson(
-            item.map((key, value) => MapEntry(key.toString(), value)),
-          );
-          if (profile.dictionaryId.isNotEmpty) {
-            profiles[profile.dictionaryId] = profile.copyWith(
-              language: profileLanguage.wireName,
-            );
-          }
-        }
-      } else if (batch.length == 1) {
-        final profile = DictionaryProfile.fromJson(json);
-        if (profile.dictionaryId.isNotEmpty) {
-          profiles[profile.dictionaryId] = profile.copyWith(
-            language: profileLanguage.wireName,
-          );
-        }
-      }
-    } catch (error) {
-      _agentDebug(
-        '[AgentFamiliarization] batch parse failed '
-        '(dictionaries=${batch.length}, chars=${raw.length}): '
-        '${error.runtimeType}',
-      );
-    }
-    return profiles;
+    return (
+      profiles: <String, DictionaryProfile>{
+        for (final profile in tagged)
+          if (profile.dictionaryId.isNotEmpty) profile.dictionaryId: profile,
+      },
+      integrityErrors: dictionaryProfileTagIntegrityErrors(raw),
+    );
   }
 
   List<List<DictionaryInfo>> _splitBatches(

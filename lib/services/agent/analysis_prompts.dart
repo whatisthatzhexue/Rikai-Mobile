@@ -73,137 +73,6 @@ LOOSE MODE:
 ''';
 }
 
-Map<String, Object?> analysisResponseSchema() => <String, Object?>{
-  'type': 'object',
-  'additionalProperties': false,
-  'required': <String>['schema', 'source_id', 'translation', 'segments'],
-  'properties': <String, Object?>{
-    'schema': <String, Object?>{'const': 'rikai.agent.analysis.v1'},
-    'source_id': <String, Object?>{'type': 'string'},
-    'translation': <String, Object?>{
-      'type': 'array',
-      'items': <String, Object?>{
-        'type': 'object',
-        'required': <String>['quote_id', 'text', 'label'],
-        'additionalProperties': false,
-        'properties': <String, Object?>{
-          'quote_id': <String, Object?>{'type': 'string'},
-          'text': <String, Object?>{'type': 'string'},
-          'label': <String, Object?>{'type': 'string'},
-          'citation_ids': <String, Object?>{
-            'type': 'array',
-            'items': <String, Object?>{'type': 'string'},
-          },
-        },
-      },
-    },
-    'segments': <String, Object?>{
-      'type': 'array',
-      'items': <String, Object?>{
-        'type': 'object',
-        'required': <String>['id', 'quote_id', 'interpretation', 'epistemic'],
-        'additionalProperties': false,
-        'properties': <String, Object?>{
-          'id': <String, Object?>{'type': 'string'},
-          'quote_id': <String, Object?>{'type': 'string'},
-          'literal': <String, Object?>{'type': 'string'},
-          'interpretation': <String, Object?>{'type': 'string'},
-          'epistemic': <String, Object?>{
-            'type': 'string',
-            'enum': <String>[
-              'dictionary_fact',
-              'structural_analysis',
-              'context_inference',
-              'translation',
-            ],
-          },
-          'confidence': <String, Object?>{'type': 'number'},
-          'word_notes': <String, Object?>{
-            'type': 'array',
-            'items': <String, Object?>{
-              'type': 'object',
-              'required': <String>['token_id', 'surface', 'sense'],
-              'additionalProperties': false,
-              'properties': <String, Object?>{
-                'token_id': <String, Object?>{'type': 'string'},
-                'surface': <String, Object?>{'type': 'string'},
-                'reading': <String, Object?>{'type': 'string'},
-                'sense': <String, Object?>{'type': 'string'},
-                'citation_ids': <String, Object?>{
-                  'type': 'array',
-                  'items': <String, Object?>{'type': 'string'},
-                },
-              },
-            },
-          },
-          'grammar_notes': <String, Object?>{
-            'type': 'array',
-            'items': <String, Object?>{
-              'type': 'object',
-              'required': <String>['pattern_id', 'explanation'],
-              'additionalProperties': false,
-              'properties': <String, Object?>{
-                'pattern_id': <String, Object?>{'type': 'string'},
-                'explanation': <String, Object?>{'type': 'string'},
-                'citation_ids': <String, Object?>{
-                  'type': 'array',
-                  'items': <String, Object?>{'type': 'string'},
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-    'interpretations': <String, Object?>{
-      'type': 'array',
-      'items': <String, Object?>{
-        'type': 'object',
-        'required': <String>['id', 'label', 'meaning', 'confidence'],
-        'additionalProperties': false,
-        'properties': <String, Object?>{
-          'id': <String, Object?>{'type': 'string'},
-          'label': <String, Object?>{'type': 'string'},
-          'meaning': <String, Object?>{'type': 'string'},
-          'confidence': <String, Object?>{'type': 'number'},
-          'citation_ids': <String, Object?>{
-            'type': 'array',
-            'items': <String, Object?>{'type': 'string'},
-          },
-        },
-      },
-    },
-    'unresolved': <String, Object?>{
-      'type': 'array',
-      'items': <String, Object?>{
-        'type': 'object',
-        'required': <String>['quote_id', 'reason'],
-        'additionalProperties': false,
-        'properties': <String, Object?>{
-          'quote_id': <String, Object?>{'type': 'string'},
-          'reason': <String, Object?>{'type': 'string'},
-        },
-      },
-    },
-    'citations_used': <String, Object?>{
-      'type': 'array',
-      'items': <String, Object?>{'type': 'string'},
-    },
-    'model_supplements': <String, Object?>{
-      'type': 'array',
-      'items': <String, Object?>{
-        'type': 'object',
-        'required': <String>['text', 'label'],
-        'additionalProperties': false,
-        'properties': <String, Object?>{
-          'text': <String, Object?>{'type': 'string'},
-          'label': <String, Object?>{'type': 'string'},
-        },
-      },
-    },
-  },
-};
-
 String buildAnalysisUserPrompt({
   required AgentInputEnvelope input,
   required AgentEvidenceBundle evidence,
@@ -235,7 +104,7 @@ String buildAnalysisUserPrompt({
   return buffer.toString();
 }
 
-/// One bounded repair call after the first analysis JSON/validation failed.
+/// One bounded repair call after the first analysis format/validation failed.
 /// The same evidence and quotes are sent back; the model may only fix the
 /// format/citations/quotes, never add new facts.
 LlmRequest buildAnalysisRepairRequest({
@@ -260,8 +129,9 @@ LlmRequest buildAnalysisRepairRequest({
           LlmTextPart('''
 ${analysisSystemPrompt(mode, responseLanguage)}
 FORMAT CORRECTION TASK:
-Your previous response failed to parse. Keep every word of readable text
-unchanged. Do not translate, rewrite, summarize, delete or add any content.
+Your previous response failed validation or tag-integrity checks. Keep every
+word of readable text unchanged. Do not translate, rewrite, summarize, delete or
+add any content.
 Only add or fix the missing plain-text tags so the response matches the tag
 format above. If a required quote/id/citation is missing, reuse the exact ids
 from the provided evidence; never invent new ones. Return only the corrected
@@ -280,7 +150,7 @@ $rawOutput
 Validation errors:
 $errorText
 
-Return only the corrected JSON object.
+Return only the corrected tagged text.
 '''),
         ],
       ),

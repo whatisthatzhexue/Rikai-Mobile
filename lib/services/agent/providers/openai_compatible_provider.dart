@@ -244,21 +244,6 @@ class OpenAiCompatibleProvider implements LlmPort {
       'max_tokens': request.maxTokens,
       'stream': stream,
     };
-    final format = request.responseFormat;
-    if (format != null) {
-      if (config.supportsJsonSchema) {
-        payload['response_format'] = <String, Object?>{
-          'type': 'json_schema',
-          'json_schema': <String, Object?>{
-            'name': format.name,
-            'schema': format.schema,
-            'strict': true,
-          },
-        };
-      } else {
-        payload['response_format'] = <String, Object?>{'type': 'json_object'};
-      }
-    }
     return payload;
   }
 }

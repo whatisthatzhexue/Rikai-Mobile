@@ -58,7 +58,6 @@ void main() {
         smallModel: 'small',
         complexModel: 'large',
         supportsStreaming: false,
-        supportsJsonSchema: true,
       ),
       secrets: secrets,
     );

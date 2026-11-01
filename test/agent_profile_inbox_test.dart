@@ -127,6 +127,77 @@ void main() {
       (await repository.load('dict-a'))?.status,
       DictionaryProfileStatus.confirmed,
     );
+    final notice = container.read(agentProfileInboxProvider).savedNotice;
+    expect(notice?.titles, <String>['dict-a']);
+  });
+
+  test('auto-accept notice lists every saved dictionary once', () async {
+    final repository = InMemoryDictionaryProfileRepository();
+    final container = ProviderContainer(
+      overrides: [agentProfileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final inbox = container.read(agentProfileInboxProvider.notifier);
+
+    await inbox.autoAcceptAll(<AgentProfileProposal>[
+      _proposal('p1', dictionaryId: 'dict-a'),
+      _proposal('p2', dictionaryId: 'dict-b'),
+    ]);
+
+    final notice = container.read(agentProfileInboxProvider).savedNotice;
+    expect(notice?.titles, <String>['dict-a', 'dict-b']);
+  });
+
+  test('an explicit save publishes one claimable notice', () async {
+    final repository = InMemoryDictionaryProfileRepository();
+    final container = ProviderContainer(
+      overrides: [agentProfileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final inbox = container.read(agentProfileInboxProvider.notifier);
+    final proposal = _proposal('p1');
+    final decisions = inbox.waitForAll('run-1', <AgentProfileProposal>[
+      proposal,
+    ]);
+    expect(container.read(agentProfileInboxProvider).savedNotice, isNull);
+
+    await inbox.resolve(
+      proposal.id,
+      const ProfileConfirmation(
+        action: ProfileConfirmationAction.save,
+        markdown: 'saved',
+      ),
+    );
+    await decisions;
+
+    final notice = container.read(agentProfileInboxProvider).savedNotice;
+    expect(notice?.titles, <String>['dict-a']);
+    expect(inbox.claimSavedNotice(notice!.id), isTrue);
+    expect(inbox.claimSavedNotice(notice.id), isFalse);
+  });
+
+  test('skip does not publish a save notice', () async {
+    final repository = InMemoryDictionaryProfileRepository();
+    final container = ProviderContainer(
+      overrides: [agentProfileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final inbox = container.read(agentProfileInboxProvider.notifier);
+    final proposal = _proposal('p1');
+    final decisions = inbox.waitForAll('run-1', <AgentProfileProposal>[
+      proposal,
+    ]);
+
+    await inbox.resolve(
+      proposal.id,
+      const ProfileConfirmation(
+        action: ProfileConfirmationAction.skipOnce,
+        markdown: '',
+      ),
+    );
+    await decisions;
+
+    expect(container.read(agentProfileInboxProvider).savedNotice, isNull);
   });
 
   test('only one host can present a confirmation at a time', () {

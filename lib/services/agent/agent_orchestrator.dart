@@ -10,14 +10,12 @@ import 'agent_messages.dart';
 import 'agent_run.dart';
 import 'agent_validator.dart';
 import 'analysis_normalizer.dart';
-import 'analysis_parser.dart';
 import 'analysis_prompts.dart';
 import 'analysis_salvager.dart';
 import 'analysis_tag_parser.dart';
 import 'citation_registry.dart';
 import 'evidence_builder.dart';
 import 'familiarization/dictionary_familiarization_service.dart';
-import 'familiarization/familiarization_prompts.dart';
 import 'familiarization/unidic_familiarization_service.dart';
 import 'grammar_patterns.dart';
 import 'ports/agent_capability_exception.dart';
@@ -329,12 +327,14 @@ class AgentOrchestrator {
         AgentStage.validating,
         agentStageMessage(AgentStage.validating, uiLanguage),
       );
-      var analysis = _parseAndNormalize(
+      final parsed = _parseAndNormalize(
         raw,
         quotes,
         evidence,
         expectedSourceId: primary?.id,
       );
+      var analysis = parsed.analysis;
+      var formatErrors = parsed.integrityErrors;
       var validation = analysis == null
           ? null
           : validator.validate(
@@ -345,6 +345,7 @@ class AgentOrchestrator {
               expectedSourceId: primary?.id,
             );
       final repairErrors = <String>[
+        if (formatErrors.isNotEmpty) ...formatErrors,
         if (analysis == null) '模型返回格式无效',
         if (validation != null && !validation.valid) ...validation.errors,
       ];
@@ -352,7 +353,10 @@ class AgentOrchestrator {
       // One bounded repair call. It reuses the same OCR/evidence/quotes; only
       // the model output is regenerated. A repair failure must not discard the
       // first analysis when it can still be salvaged.
-      if (analysis == null || validation == null || !validation.valid) {
+      if (analysis == null ||
+          formatErrors.isNotEmpty ||
+          validation == null ||
+          !validation.valid) {
         checkCancelled();
         notify(AgentStage.reasoning, agentRepairingMessage(uiLanguage));
         try {
@@ -378,11 +382,12 @@ class AgentOrchestrator {
             evidence,
             expectedSourceId: primary?.id,
           );
-          if (repaired != null) {
+          if (repaired.analysis != null) {
             raw = repairRaw;
-            analysis = repaired;
+            analysis = repaired.analysis;
+            formatErrors = repaired.integrityErrors;
             validation = validator.validate(
-              analysis: repaired,
+              analysis: analysis!,
               evidence: evidence,
               quotes: quotes,
               mode: request.mode,
@@ -400,6 +405,15 @@ class AgentOrchestrator {
       }
 
       checkCancelled();
+      if (validation != null && formatErrors.isNotEmpty) {
+        // Repairs may leave malformed blocks behind. Keep the parsable content
+        // for salvage, but never report the tagged contract as fully satisfied.
+        validation = AgentValidationResult(
+          valid: false,
+          errors: <String>[...formatErrors, ...validation.errors],
+          citationsUsed: validation.citationsUsed,
+        );
+      }
       if (analysis == null || validation == null || !validation.valid) {
         final salvaged = analysis == null
             ? null
@@ -592,27 +606,14 @@ class AgentOrchestrator {
     return versions;
   }
 
-  AgentAnalysis? _parseAndNormalize(
+  ({AgentAnalysis? analysis, List<String> integrityErrors}) _parseAndNormalize(
     String raw,
     List<AgentQuoteRef> quotes,
     AgentEvidenceBundle evidence, {
     String? expectedSourceId,
   }) {
-    AgentAnalysis? parsed = parseTaggedAnalysis(
-      raw,
-      sourceId: expectedSourceId ?? '',
-    );
-    if (parsed == null) {
-      // Transitional compatibility: a model may still return the old JSON
-      // shape. The tagged format is authoritative whenever it parses.
-      try {
-        parsed = AgentAnalysis.fromJson(
-          normalizeAnalysisJson(extractJsonObject(raw)),
-        );
-      } catch (_) {
-        parsed = null;
-      }
-    }
+    final integrityErrors = analysisTagIntegrityErrors(raw);
+    final parsed = parseTaggedAnalysis(raw, sourceId: expectedSourceId ?? '');
     if (parsed == null ||
         parsed.translation.isEmpty ||
         parsed.segments.isEmpty) {
@@ -622,12 +623,15 @@ class AgentOrchestrator {
           'head=${_debugHead(raw)}',
         );
       }
-      return null;
+      return (analysis: null, integrityErrors: integrityErrors);
     }
-    return normalizeAnalysis(
-      analysis: parsed,
-      quotes: quotes,
-      evidence: evidence,
+    return (
+      analysis: normalizeAnalysis(
+        analysis: parsed,
+        quotes: quotes,
+        evidence: evidence,
+      ),
+      integrityErrors: integrityErrors,
     );
   }
 

@@ -307,19 +307,21 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
 - LLM 每本词典单独一次调用（小模型），输入只含采样 JSON，不含路径；模型输出
   `[PROFILE]...[/PROFILE]` 扁平标签文本，由
   `dictionary_profile_tag_parser.dart` 解析为 `DictionaryProfile`（词典类型、
-  条目结构、字段、查询行为、强项、注意事项、推荐查询形式）；解析失败或缺少某本
-  词典时发送一次“正文不变、仅补标签”的格式纠错。置信度由代码设默认值，模型不
-  输出数值；Markdown 摘要由本地生成。
+  条目结构、字段、查询行为、强项、注意事项、推荐查询形式）；解析失败、缺少某本
+  词典或标签块完整性校验失败时发送一次“正文不变、仅补标签”的格式纠错，修复后
+  仍不完整则保留可解析档案并记录 warning。置信度由代码设默认值，模型不输出数值；
+  Markdown 摘要由本地生成。
 - 用户确认：sheet 预览，可编辑 Markdown；按钮“保存并信任 / 本次跳过 / 不再询问”。
   “不再询问”= 保存当前档案并开启 `agent_profiles_auto_accept`；用户也可在 Agent
   设置中随时关闭/开启该选项（默认关闭）。档案确认由共享
   `AgentProfileInboxHost` 在 Agent 页、档案管理页和 Agent 设置页统一呈现；同一
-  proposal 只弹一次。
+  proposal 只弹一次。手动或自动保存成功且用户仍停留在任一 Agent 界面时，由宿主
+  统一提示一次底部 toast（同一批只提示一次）。
   生成与确认分离：每个已生成档案先进入**应用级待确认队列**；用户离开 Agent 页
   时队列保留、生成继续，返回后逐个处理。**所有已生成档案都得到显式处理
   （信任 / 本次跳过 / 不再询问）后，才进入 tokenizing/查词阶段**；页面离开、
-  重建或 dismiss sheet 不得自动 skip。只有“保存并信任”才写
-  `dictionary_profiles`；“不再询问”写 declined；“本次跳过”不写。采样/模型失败
+  重建或 dismiss sheet 不得自动 skip。“保存并信任”和“不再询问”都写
+  `dictionary_profiles`（后者同时开启自动保存）；“本次跳过”不写。采样/模型失败
   产生的 `unavailable` 没有可确认内容，记录 warning 后不阻塞。用户编辑后的
   Markdown 是 prompt 中的权威摘要；`profile_json` 保留生成结构供 UI/校验，
   冲突时以用户编辑的 Markdown 为准。
@@ -441,9 +443,11 @@ Stage 0 envelope + Stage 1 evidence + 已确认的 dictionary profiles。输出�
 （`[TRANSLATION]`、`[SEGMENT]`、`[MEANING]`、`[WORD]`、`[GRAMMAR]`、
 `[OPTION]`、`[UNRESOLVED]`、`[SUPPLEMENT]`），由
 `lib/services/agent/analysis_tag_parser.dart` 用正则解析为 `AgentAnalysis`。
-模型只写正文，`type` 在标签属性中；置信度和内部标记由代码生成/剥离。正则解析
-失败时只发送一次格式纠错请求，要求正文不变、仅补齐标签。下面的 JSON 结构保留为
-内部 DTO/旧输出兼容，不再是模型响应格式：
+模型只写正文，`type` 在标签属性中；置信度和内部标记由代码生成/剥离。解析器还
+校验标签块完整性（未闭合、错序、越界嵌套、重复单例标签）；解析或完整性失败时
+只发送一次格式纠错请求，要求正文不变、仅补齐标签。旧 JSON 输出回退和
+`response_format`/`json_schema` 请求均已移除；下面的 JSON 结构仅作为内部
+DTO/存储结构，不是模型响应格式：
 
 ```json
 {
@@ -491,8 +495,8 @@ Stage 0 envelope + Stage 1 evidence + 已确认的 dictionary profiles。输出�
 
 `AgentValidator` 必须做：
 
-1. 标签解析结果/DTO 校验；未知字段/越界 ID 拒绝；标签缺失时先做一次格式纠错，
-   仍失败再进入校验/salvage。
+1. 标签解析结果/DTO 校验；未知字段/越界 ID 拒绝；标签缺失或标签块完整性失败时
+   先做一次格式纠错，仍失败再进入校验/salvage。
 2. citation 存在、属于本次 run、`dictionaryId` 在会话选择内；伪造/越界只按普通
    文本显示，不导航。`citations_used` 只作模型提示，最终由编排器从各 claim 的
    `citation_ids` 重新汇总，不信任模型自报的来源列表。
@@ -635,8 +639,8 @@ recommended_query_forms, confidence, schema_version`。UI 展示的 Markdown 由
 
 ### 9.3 用户同意与存储
 
-- 只有用户点“保存并信任”才写 `dictionary_profiles`；可选“本次跳过”“不再询问”
-  （记录 declined 状态，避免每次自动弹窗）。
+- “保存并信任”和“不再询问”都会写 `dictionary_profiles`；“本次跳过”不写。
+  “不再询问”同时开启 `agent_profiles_auto_accept`，之后新生成的档案自动保存。
 - 生成后的档案先进入应用级待确认队列；离开页面不自动 skip，全部处理完才进入
   查词（见 §6.1）。队列/确认状态属于应用生命周期，不依赖 `AgentPage`。
 - 档案只存应用私有 SQLite；不写用户 UniDic/MDict 目录；不导出；不包含大段原文。
@@ -679,19 +683,20 @@ LlmProvider
   - id / displayName
   - baseUrl / protocol
   - smallModel / complexModel
-  - capabilities {jsonSchema, tools, streaming}
+  - capabilities {streaming}
   - streamChat(LlmRequest) -> Stream<LlmEvent>
 ```
 
 - 首版适配：
   - OpenAI-compatible（DeepSeek/自定义 endpoint）：`POST {baseUrl}/chat/completions`，
-    `Authorization: Bearer`，文本 messages；JSON schema 支持因 provider 而异。
+    `Authorization: Bearer`，文本 messages；不发送 `response_format`/`json_schema`。
   - Anthropic Claude：`POST https://api.anthropic.com/v1/messages`，
     `x-api-key` + `anthropic-version: 2026-10-21`；内容块只有 `text`。
 - Dart 没有官方 Anthropic SDK，首版用 `dio` 直连；不引入通用 LLM SDK。
 - Claude 适配器不发送 `temperature/top_p/top_k`（当前模型会 400）；用
-  `max_tokens` + 结构化输出/effort 控制。复杂分析可用 adaptive thinking；
-  thinking 内容不展示、不作为 citation，最终以 JSON/schema 校验为准。
+  `max_tokens` + effort 控制；不发送 JSON schema。复杂分析可用 adaptive
+  thinking；thinking 内容不展示、不作为 citation，最终以标签解析和 validator
+  校验为准。
 - 请求构造器只有 `LlmTextPart`，没有 image 类型；运行时 `assertNoImagePayload`，
   测试捕获原始请求体断言无 `image`/`image_url`/`input_image`/`base64`/`data:image`/
   本地路径。

@@ -70,7 +70,6 @@ void main() {
         smallModel: 'small',
         complexModel: 'large',
         supportsStreaming: false,
-        supportsJsonSchema: true,
       ),
       secrets: secrets,
     );
@@ -85,10 +84,6 @@ void main() {
                 parts: <LlmTextPart>[LlmTextPart('请翻译')],
               ),
             ],
-            responseFormat: LlmResponseFormat(
-              name: 'analysis',
-              schema: <String, Object?>{'type': 'object'},
-            ),
           ),
         )
         .toList();
@@ -98,8 +93,7 @@ void main() {
     expect(capturedBody!.containsKey('image'), isFalse);
     expect(capturedBody!.containsKey('image_url'), isFalse);
     expect(capturedBody!['stream'], isFalse);
-    final format = capturedBody!['response_format'] as Map;
-    expect(format['type'], 'json_schema');
+    expect(capturedBody!.containsKey('response_format'), isFalse);
     expect(
       events.whereType<LlmEvent>().any(
         (event) => event.type == LlmEventType.done,

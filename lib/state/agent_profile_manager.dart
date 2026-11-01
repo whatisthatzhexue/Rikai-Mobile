@@ -57,25 +57,33 @@ final agentProfileManagerProvider = Provider<AgentProfileManager>(
 
 class AgentProfileRegenerationState {
   const AgentProfileRegenerationState({
-    this.active = false,
-    this.titles = const <String>[],
+    this.activeDictionaries = const <DictionaryInfo>[],
     this.error,
   });
 
-  final bool active;
-  final List<String> titles;
+  /// Every dictionary whose profile is currently being generated. Several
+  /// independent generations may run at the same time.
+  final List<DictionaryInfo> activeDictionaries;
   final String? error;
 
   static const idle = AgentProfileRegenerationState();
+
+  bool get active => activeDictionaries.isNotEmpty;
+
+  List<String> get titles => <String>[
+    for (final dictionary in activeDictionaries) dictionary.title,
+  ];
+
+  bool isGenerating(String dictionaryId) =>
+      activeDictionaries.any((dictionary) => dictionary.id == dictionaryId);
 }
 
-/// App-scoped profile regeneration. Keeping the request here (instead of page
-/// State) means leaving the manager never loses an in-flight generation or
-/// causes the same dictionary to be generated twice on re-entry.
+/// App-scoped profile regeneration. Keeping the requests here (instead of page
+/// State) means leaving the manager never loses an in-flight generation.
+/// Independent requests may overlap; the same dictionary can never be sent
+/// twice until its earlier request finishes.
 class AgentProfileRegenerationController
     extends Notifier<AgentProfileRegenerationState> {
-  int _serial = 0;
-
   @override
   AgentProfileRegenerationState build() => AgentProfileRegenerationState.idle;
 
@@ -83,27 +91,33 @@ class AgentProfileRegenerationController
     required List<DictionaryInfo> dictionaries,
     required AgentProviderConfig provider,
   }) async {
-    if (state.active || dictionaries.isEmpty) return;
+    if (dictionaries.isEmpty) return;
     final pendingIds = ref
         .read(agentProfileInboxProvider)
         .pending
         .map((proposal) => proposal.dictionaryId)
         .toSet();
-    final targets = dictionaries
-        .where((dictionary) => !pendingIds.contains(dictionary.id))
-        .toList(growable: false);
+    final seen = <String>{};
+    final targets = <DictionaryInfo>[
+      for (final dictionary in dictionaries)
+        if (!pendingIds.contains(dictionary.id) &&
+            !state.isGenerating(dictionary.id) &&
+            seen.add(dictionary.id))
+          dictionary,
+    ];
     if (targets.isEmpty) return;
 
-    final serial = ++_serial;
     state = AgentProfileRegenerationState(
-      active: true,
-      titles: <String>[for (final dictionary in targets) dictionary.title],
+      activeDictionaries: <DictionaryInfo>[
+        ...state.activeDictionaries,
+        ...targets,
+      ],
     );
+
     try {
       final generation = await ref
           .read(agentProfileManagerProvider)
           .generate(dictionaries: targets, provider: provider);
-      if (serial != _serial) return;
       final inbox = ref.read(agentProfileInboxProvider.notifier);
       if (ref.read(appSettingsProvider).agentProfilesAutoAccept) {
         await inbox.autoAcceptAll(generation.proposals);
@@ -111,24 +125,34 @@ class AgentProfileRegenerationController
         inbox.enqueue(generation.proposals);
       }
       ref.invalidate(agentProfilesProvider);
-      state = AgentProfileRegenerationState(
+      _finish(
+        targets,
         error: generation.issues.isEmpty
             ? null
             : generation.issues.first.reason,
       );
     } catch (_) {
-      if (serial != _serial) return;
-      state = const AgentProfileRegenerationState(
-        error: 'profile_regenerate_failed',
-      );
+      _finish(targets, error: 'profile_regenerate_failed');
     }
+  }
+
+  /// Removes only the finished batch from the progress list. Other generations
+  /// keep running and stay visible in the notice above the list.
+  void _finish(List<DictionaryInfo> targets, {String? error}) {
+    final finished = <String>{for (final dictionary in targets) dictionary.id};
+    state = AgentProfileRegenerationState(
+      activeDictionaries: <DictionaryInfo>[
+        for (final dictionary in state.activeDictionaries)
+          if (!finished.contains(dictionary.id)) dictionary,
+      ],
+      error: error ?? state.error,
+    );
   }
 
   void clearError() {
     if (state.error == null) return;
     state = AgentProfileRegenerationState(
-      active: state.active,
-      titles: state.titles,
+      activeDictionaries: state.activeDictionaries,
     );
   }
 }

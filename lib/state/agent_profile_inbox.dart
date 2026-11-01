@@ -6,15 +6,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/agent/familiarization/dictionary_familiarization_service.dart';
 import 'agent_providers.dart';
 
+/// One profile-save event. Hosts show a single toast per [id], so a save
+/// produced while several Agent surfaces are mounted is never announced twice.
+class AgentProfileSavedNotice {
+  const AgentProfileSavedNotice({required this.id, required this.titles});
+
+  final int id;
+  final List<String> titles;
+}
+
 /// App-scoped queue of generated profiles awaiting an explicit user decision.
 ///
 /// The queue survives Agent page disposal. A pending item is never auto-skipped
 /// merely because the page is not mounted; only [resolve] or [cancelRun] may
 /// complete its decision future.
 class AgentProfileInboxState {
-  const AgentProfileInboxState({this.pending = const <AgentProfileProposal>[]});
+  const AgentProfileInboxState({
+    this.pending = const <AgentProfileProposal>[],
+    this.savedNotice,
+  });
 
   final List<AgentProfileProposal> pending;
+
+  /// The most recent save. A host that mounts later starts from the current
+  /// id and therefore never replays an old toast.
+  final AgentProfileSavedNotice? savedNotice;
 
   int get pendingCount => pending.length;
 
@@ -24,12 +40,13 @@ class AgentProfileInboxState {
 
   AgentProfileProposal? get first => pending.isEmpty ? null : pending.first;
 
-  AgentProfileInboxState copyWith({List<AgentProfileProposal>? pending}) =>
-      AgentProfileInboxState(
-        pending: List<AgentProfileProposal>.unmodifiable(
-          pending ?? this.pending,
-        ),
-      );
+  AgentProfileInboxState copyWith({
+    List<AgentProfileProposal>? pending,
+    AgentProfileSavedNotice? savedNotice,
+  }) => AgentProfileInboxState(
+    pending: List<AgentProfileProposal>.unmodifiable(pending ?? this.pending),
+    savedNotice: savedNotice ?? this.savedNotice,
+  );
 }
 
 final agentProfileInboxProvider =
@@ -41,6 +58,8 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
   final Map<String, Completer<ProfileConfirmation>> _decisions =
       <String, Completer<ProfileConfirmation>>{};
   bool _presenting = false;
+  int _savedNoticeSerial = 0;
+  int _claimedSavedNoticeId = 0;
 
   /// Only one page/subpage host may show a confirmation sheet at a time. This
   /// prevents the Agent page behind the profile manager from presenting the
@@ -53,6 +72,22 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
 
   void releasePresentation() {
     _presenting = false;
+  }
+
+  /// Returns true for the first host that handles [id]. Several Agent surfaces
+  /// can be mounted at once (Agent page + profile manager/settings), but a
+  /// saved profile must produce only one toast.
+  bool claimSavedNotice(int id) {
+    if (id <= _claimedSavedNoticeId) return false;
+    _claimedSavedNoticeId = id;
+    return true;
+  }
+
+  AgentProfileSavedNotice _nextSavedNotice(List<String> titles) {
+    return AgentProfileSavedNotice(
+      id: ++_savedNoticeSerial,
+      titles: List<String>.unmodifiable(titles),
+    );
   }
 
   @override
@@ -109,6 +144,7 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
     List<AgentProfileProposal> proposals,
   ) async {
     final decisions = <ProfileConfirmation>[];
+    final savedTitles = <String>[];
     for (final proposal in proposals) {
       final decision = ProfileConfirmation(
         action: ProfileConfirmationAction.save,
@@ -121,6 +157,7 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
           action: decision.action,
           markdown: decision.markdown,
         );
+        savedTitles.add(proposal.title);
       } catch (error, stack) {
         developer.log(
           'Failed to auto-save dictionary profile',
@@ -132,6 +169,9 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
       decisions.add(decision);
     }
     ref.invalidate(agentProfilesProvider);
+    if (savedTitles.isNotEmpty) {
+      state = state.copyWith(savedNotice: _nextSavedNotice(savedTitles));
+    }
     return decisions;
   }
 
@@ -147,6 +187,7 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
       }
     }
     if (proposal == null) return;
+    AgentProfileSavedNotice? savedNotice;
     try {
       await persistAgentProfileDecision(
         repository: ref.read(agentProfileRepositoryProvider),
@@ -155,6 +196,10 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
         markdown: decision.markdown,
       );
       ref.invalidate(agentProfilesProvider);
+      if (decision.action == ProfileConfirmationAction.save ||
+          decision.action == ProfileConfirmationAction.saveAndNeverAsk) {
+        savedNotice = _nextSavedNotice(<String>[proposal.title]);
+      }
     } catch (error, stack) {
       developer.log(
         'Failed to persist dictionary profile decision',
@@ -168,6 +213,7 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
       pending: state.pending
           .where((item) => item.id != proposalId)
           .toList(growable: false),
+      savedNotice: savedNotice,
     );
     if (completer != null && !completer.isCompleted) {
       completer.complete(decision);

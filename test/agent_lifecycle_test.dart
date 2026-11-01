@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -49,44 +48,21 @@ const _provider = AgentProviderConfig(
   supportsStreaming: false,
 );
 
-const _analysisJson = <String, Object?>{
-  'source_id': 'src-1',
-  'translation': <Object?>[
-    <String, Object?>{'quote_id': 'q1', 'text': '请多关照。', 'label': '模型译文'},
-  ],
-  'segments': <Object?>[
-    <String, Object?>{
-      'id': 'seg-1',
-      'quote_id': 'q1',
-      'literal': '何卒',
-      'interpretation': '正式请求',
-      'epistemic': 'dictionary_fact',
-      'word_notes': <Object?>[
-        <String, Object?>{
-          'token_id': 't1',
-          'surface': '何卒',
-          'sense': '请务必',
-          'citation_ids': <String>['source-1'],
-        },
-      ],
-    },
-  ],
-};
+const _analysisTagged = '''
+[TRANSLATION quote="q1"]请多关照。[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]正式请求[/MEANING]
+[WORD id="t1"]何卒||请务必|source-1[/WORD]
+[/SEGMENT]
+''';
 
-const _profileJson = <String, Object?>{
-  'profiles': <Object?>[
-    <String, Object?>{
-      'dictionary_id': 'dict_a',
-      'title': 'A',
-      'kind': '国語辞典',
-      'entry_structure': <String, Object?>{},
-      'search_behavior': <String, Object?>{},
-      'confidence': 0.8,
-      'schema_version': 1,
-      'language': 'zh',
-    },
-  ],
-};
+const _profileTagged = '''
+[PROFILE]
+[ID]dict_a[/ID]
+[TITLE]A[/TITLE]
+[KIND]国語辞典[/KIND]
+[/PROFILE]
+''';
 
 class _FakeOcr implements OcrPort {
   @override
@@ -182,10 +158,7 @@ class _BlockingSecondAnalysisProvider implements LlmPort {
   }) async* {
     calls++;
     if (calls == 2) await secondCall.future;
-    yield LlmEvent(
-      type: LlmEventType.textDelta,
-      text: jsonEncode(_analysisJson),
-    );
+    yield LlmEvent(type: LlmEventType.textDelta, text: _analysisTagged);
     yield LlmEvent.done();
   }
 }
@@ -205,10 +178,7 @@ class _FailingSecondAnalysisProvider implements LlmPort {
         '模型服务暂时不可用',
       );
     }
-    yield LlmEvent(
-      type: LlmEventType.textDelta,
-      text: jsonEncode(_analysisJson),
-    );
+    yield LlmEvent(type: LlmEventType.textDelta, text: _analysisTagged);
     yield LlmEvent.done();
   }
 }
@@ -224,10 +194,7 @@ class _CancelAwareProvider implements LlmPort {
   }) async* {
     calls++;
     if (calls == 1) {
-      yield LlmEvent(
-        type: LlmEventType.textDelta,
-        text: jsonEncode(_profileJson),
-      );
+      yield LlmEvent(type: LlmEventType.textDelta, text: _profileTagged);
       yield LlmEvent.done();
       return;
     }
@@ -244,10 +211,7 @@ class _CancelAwareProvider implements LlmPort {
         '已取消',
       );
     }
-    yield LlmEvent(
-      type: LlmEventType.textDelta,
-      text: jsonEncode(_analysisJson),
-    );
+    yield LlmEvent(type: LlmEventType.textDelta, text: _analysisTagged);
     yield LlmEvent.done();
   }
 }
@@ -315,10 +279,7 @@ void main() {
 
   test('start reaches done with evidence and progress counts', () async {
     final provider = FakeProvider(
-      responseSequence: <String>[
-        jsonEncode(_profileJson),
-        jsonEncode(_analysisJson),
-      ],
+      responseSequence: <String>[_profileTagged, _analysisTagged],
     );
     final container = ProviderContainer(
       overrides: [
@@ -380,10 +341,7 @@ void main() {
   test('auto-accept saves profiles and continues without a sheet', () async {
     await _preferences.setBool('agent_profiles_auto_accept', true);
     final provider = FakeProvider(
-      responseSequence: <String>[
-        jsonEncode(_profileJson),
-        jsonEncode(_analysisJson),
-      ],
+      responseSequence: <String>[_profileTagged, _analysisTagged],
     );
     final repository = InMemoryDictionaryProfileRepository();
     final container = ProviderContainer(
@@ -413,10 +371,7 @@ void main() {
     'a generated profile gates tokenizing until the app inbox resolves it',
     () async {
       final provider = FakeProvider(
-        responseSequence: <String>[
-          jsonEncode(_profileJson),
-          jsonEncode(_analysisJson),
-        ],
+        responseSequence: <String>[_profileTagged, _analysisTagged],
       );
       final repository = InMemoryDictionaryProfileRepository();
       final container = ProviderContainer(
