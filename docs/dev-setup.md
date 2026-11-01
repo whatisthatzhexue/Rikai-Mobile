@@ -230,6 +230,38 @@ prefix suggestions, MDD image bytes, HTML sanitization/CSS injection, the
 dictionary registry, and the full search → entry WebView flow. Results are
 recorded in `docs/phase2-status.md`.
 
+## MDD audio integration test
+
+Push the audio dictionary as ASCII `dict.mdx`/`dict.mdd` under
+`/sdcard/Download/rikai-mdict-audio/`:
+
+```bash
+export MSYS_NO_PATHCONV=1
+adb shell mkdir -p /sdcard/Download/rikai-mdict-audio
+adb push "mdicts/日本語文型辞典 三语音频版"/*.mdx /sdcard/Download/rikai-mdict-audio/dict.mdx
+adb push "mdicts/日本語文型辞典 三语音频版"/*.mdd /sdcard/Download/rikai-mdict-audio/dict.mdd
+flutter test integration_test/mdict_audio_android_test.dart -d emulator-5554
+```
+
+The test looks up `あくまで`, reads its `sound://xxxx.aac` resource from the MDD,
+and asserts that the rendered entry contains a local `<audio>` element. Actual
+speaker output still needs manual confirmation.
+
+## Host MDict spike
+
+Running `dart run tool/spike_mdict.dart` in the root package triggers the MeCab
+native-assets hook failure on Windows. Copy the script into an isolated Dart
+package that depends only on `dict_reader`, then run it there. Do not add
+root-package dependencies just to run the spike.
+
+## Phase 6 test policy
+
+Automated Agent tests use fake providers and must never contain a real API key.
+Request-body tests assert that images, base64, file paths, and file names are
+absent. Real provider calls, secure-storage device I/O, and real-dictionary
+`sample`/`suggest` still require device acceptance; see
+[project-data.md](project-data.md) §8 and `docs/project-rules.md` R-SEC/R-AGENT.
+
 ## Camera and capture session
 
 The capture page uses the `camera` plugin (CameraX) and the app declares

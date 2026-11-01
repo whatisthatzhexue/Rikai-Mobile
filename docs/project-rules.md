@@ -5,22 +5,26 @@
 >
 > - 数据/数字/固定文案：`docs/project-data.md`
 > - 误区/踩坑与解决方案：`docs/project_tips.md`
-> - UI 视觉数值：`docs/design-tokens.md`
+> - UI 视觉数值/布局/交互：`docs/design-tokens.md`
 > - Agent 字段/错误码/Schema：`docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > - 架构决策：`docs/adr/`
-> - 历史阶段记录：`docs/phase*-status.md`（只代表当时状态）
+> - 历史阶段记录：`docs/project-history.md`（阶段流水汇总）/
+>   `docs/phase*-status.md`（详细快照，只代表当时状态）
 >
 > 最后同步：2026-11-01。规则变更只改本文件；数据变更只改 `project-data.md`；
-> 视觉数值变更只改 `design-tokens.md`；误区变更只改 `project_tips.md`。
+> 视觉/UI 布局变更只改 `design-tokens.md`；误区变更只改 `project_tips.md`；
+> 阶段流水变更只改 `project-history.md`。
 
 ## 0. 权威层级与写法
 
 1. **规则**：本文件；使用 `R-<域>-<序号>` 稳定 ID。
 2. **当前数据/文案**：`docs/project-data.md`。
-3. **视觉数值**：`docs/design-tokens.md` + `lib/core/theme/app_tokens.dart`。
+3. **视觉数值与 UI 行为细节**：`docs/design-tokens.md` +
+   `lib/core/theme/app_tokens.dart`。
 4. **Agent 字段/错误码/状态机**：`docs/phase6-agent-contracts.md` + `docs/schemas/agent/`。
 5. **架构决策**：`docs/adr/`。
-6. **历史阶段**：`docs/phase*-status.md`；允许保留“当时值”，不得当作当前规则/数据。
+6. **历史阶段**：`docs/project-history.md` 汇总阶段流水；`docs/phase*-status.md`
+   保留详细快照。允许保留“当时值”，不得当作当前规则/数据。
 7. **误区/踩坑**：`docs/project_tips.md`；只记录历史经验与解决方式，不复制
    MUST/MUST NOT 规则或当前数值。
 8. `README.md`、`CLAUDE.md` 及其他文档只做摘要和引用；与上面冲突时以上面为准并修正
@@ -138,13 +142,14 @@
 |---|---|---|---|---|
 | R-DOC-01 | MUST | 当前测试/设备/性能/构建/环境/预算/固定文案只在 `project-data.md` 维护 | 其他文档复制当前数字/文案 | `project-data` §10 |
 | R-DOC-02 | MUST | 规范性 MUST/MUST NOT 规则只在本文件维护；其他文档只引用规则 ID/链接 | 在 CLAUDE/README/design 复制规则正文 | 本文件 §0 |
-| R-DOC-03 | MUST | 视觉数值只在 `design-tokens.md` 维护；UI 实现用 `app_tokens.dart` | 在其它文档复制 token 数值 | `design-tokens` |
+| R-DOC-03 | MUST | 视觉数值与 UI 布局/交互细节只在 `design-tokens.md` 维护；UI 实现用 `app_tokens.dart` | 在其它文档复制 token 数值或页面布局规则 | `design-tokens` |
 | R-DOC-04 | MUST | Agent 字段/错误码/状态机只在 contracts/schemas 维护 | 在 design/README 另立字段表 | `phase6-agent-contracts`、`docs/schemas/agent` |
-| R-DOC-05 | MUST | ADR 只记录决策；phase status 只记录当时快照，不得写当前规则/数据 | 在 phase 文档更新当前值 | `docs/adr/`、`docs/phase*-status.md` |
+| R-DOC-05 | MUST | ADR 只记录决策；project-history 只记录阶段流水；phase status 只记录当时快照，均不得写当前规则/数据 | 在历史文档更新当前值 | `docs/adr/`、`docs/project-history.md`、`docs/phase*-status.md` |
 | R-DOC-06 | MUST | `README.md`/`CLAUDE.md` 只做摘要和引用；发现与权威文档冲突时修正摘要 | 摘要复制冲突数值/规则 | `README`、`CLAUDE.md` |
-| R-DOC-07 | MUST | 冲突处理：规则→本文件；数据→project-data；视觉→design-tokens；字段→contracts；误区→project-tips；历史→phase；修复低权威文档 | 任意文档冲突 | 本文件 §0 |
+| R-DOC-07 | MUST | 冲突处理：规则→本文件；数据→project-data；视觉→design-tokens；字段→contracts；误区→project-tips；历史→project-history/phase status；修复低权威文档 | 任意文档冲突 | 本文件 §0 |
 | R-DOC-08 | MUST | 数据变更更新 `last_verified`/`last_verified_code_commit`；规则变更更新本文件版本/日期；历史值标注“历史值” | 文档审查 | `project-data` 头部 |
 | R-DOC-09 | MUST | 误区/踩坑与解决方案只在 `project_tips.md` 维护（`T-###`）；其他文档只引用 T-ID/链接 | 在 CLAUDE/README/status 新增误区正文 | `project_tips.md` |
+| R-DOC-10 | MUST | 阶段开发历史只在 `project-history.md` 汇总；`CLAUDE.md` 只保留当前状态/下一步；详细 phase 快照留在 `phase*-status.md` | 在 CLAUDE.md 复制 Phase 0–5 流水账 | `project-history.md` |
 
 ## 8. 当前未来/部分规则
 
@@ -170,4 +175,6 @@
    `project-rules.md` / 数据见 `project-data.md`”。
 6. 误区/经验变化：只改 `project_tips.md`，追加 `T-###` 并同步附录 A；不要复制到
    `CLAUDE.md`/README/phase status。
-7. 历史 phase 文档：保留当时值，标注“历史值/历史快照”，不要用当前值回填。
+7. 阶段开发历史：只在 `project-history.md` 追加/更新；`CLAUDE.md` 只保留当前
+   状态与下一步，不复制详细流水账。
+8. 历史 phase 文档：保留当时值，标注“历史值/历史快照”，不要用当前值回填。

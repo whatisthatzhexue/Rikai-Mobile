@@ -212,4 +212,5 @@ See `docs/dev-setup.md` for the All Files Access grant loop.
 
 Phase 3: extract the PaddleOCR ONNX detection/recognition pipeline, add
 `ModelManager`, camera/gallery input, and connect horizontal OCR to the reader
-and lookup flow. Complete the ORT model smoke test first (see `CLAUDE.md` §4).
+and lookup flow. Complete the ORT model smoke test first (see
+`docs/project-history.md` 的“ORT 模型冒烟（PaddleOCR）”).

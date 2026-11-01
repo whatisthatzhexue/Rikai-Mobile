@@ -12,8 +12,11 @@ hardening are pending.
 > Current test/device/performance/build/environment data lives in
 > [docs/project-data.md](docs/project-data.md). Normative MUST/MUST NOT rules
 > live in [docs/project-rules.md](docs/project-rules.md). Pitfalls and proven
-> fixes live in [docs/project_tips.md](docs/project_tips.md). Other documents
-> link to them instead of copying current values, rule text or pitfall text.
+> fixes live in [docs/project_tips.md](docs/project_tips.md). Phase 0–5
+> implementation history lives in
+> [docs/project-history.md](docs/project-history.md). Other documents link to
+> them instead of copying current values, rule text, pitfall text or historical
+> detail.
 
 ## Status
 
@@ -197,6 +200,7 @@ build contains the P6.1–P6.5 Agent/provider implementation; P6.6/P6.7 and the
 - [Project data (single source)](docs/project-data.md)
 - [Design tokens](docs/design-tokens.md)
 - [Project tips (pitfalls)](docs/project_tips.md)
+- [Project history (Phase 0–5)](docs/project-history.md)
 - [Phase 0 status](docs/phase0-status.md)
 - [Phase 1 status](docs/phase1-status.md)
 - [Phase 2 status](docs/phase2-status.md)

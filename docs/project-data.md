@@ -2,13 +2,16 @@
 
 > **单一事实源**：所有跨文档复用的测试数量、设备结果、性能、构建产物、环境版本、
 > 开发数据统计和固定 UI 文案以本文件为准。其他文档只引用本文件对应小节，不再
-> 复制具体数值；历史 phase 文档可以保留“当时值”，但必须标注为历史快照。
+> 复制具体数值；历史阶段记录（`docs/project-history.md` / `docs/phase*-status.md`）
+> 可以保留“当时值”，但必须标注为历史快照。
 > 规范性 MUST/MUST NOT 规则见 `docs/project-rules.md`；视觉数值见
-> `docs/design-tokens.md`；误区/踩坑见 `docs/project_tips.md`。
+> `docs/design-tokens.md`；误区/踩坑见 `docs/project_tips.md`；阶段流水见
+> `docs/project-history.md`。
 >
 > - last_verified: 2026-11-01
 > - last_verified_code_commit: `c6094b5`（`fix: OCR模型页面操作逻辑修正`）
-> - last_doc_sync: 2026-11-01（引用结构整理；补记 Agent 语言默认值决策，不改变代码验证结果）
+> - last_doc_sync: 2026-11-01（引用结构整理；新增 `project-history` 指针；补记
+>   Agent 语言默认值决策，不改变代码验证结果）
 > - 设备基线: `Medium_Phone_API_36.1`（x86_64 模拟器，API 36）；无 arm64 真机
 > - 维护规则：数据变化时只改本文件，并同步更新 `last_verified`/
 >   `last_verified_code_commit`；其他文档的引用链接不需要改。不要把本文件自身的
@@ -33,7 +36,7 @@
 | `flutter_secure_storage` | 11.2.0 |
 
 > 构建命令、权限和集成测试步骤不在这份数据文档中重复，见
-> `docs/dev-setup.md` 与 `CLAUDE.md` §7。
+> `docs/dev-setup.md`。
 
 ## 2. 自动化测试
 
@@ -233,8 +236,8 @@ arm64 真机性能另需复测。
 | 历史快照 banner | `3709d3d` |
 | 当前工作队列 | `docs/agent_docs/device-feedback-2026-10-31.md`（F1–F17，Wave 2–4 待做） |
 
-> 历史提交的完整列表在 `git log` 与各 phase status 中；本表只保留当前锚点，避免
-> 每次提交都改多份文档。
+> 历史提交的完整列表在 `git log`、`docs/project-history.md` 与各 phase status 中；
+> 本表只保留当前锚点，避免每次提交都改多份文档。
 
 ## 10. 引用规则
 
@@ -247,6 +250,8 @@ arm64 真机性能另需复测。
 - **Agent 字段/错误码/Schema**：以 `phase6-agent-contracts.md` /
   `docs/schemas/agent/` 为准；未来 tool loop/coverage 必须标 future。
 - **模型 URL/SHA**：以 `assets/models/manifest.json` 为准；本文件只记录统计值。
-- **历史 phase 文档**：保留“当时值”，并加 `历史值` 标注；需要当前值则链接本文件。
+- **历史阶段**：阶段流水引用 `docs/project-history.md`；详细快照引用
+  `docs/phase*-status.md`。它们保留“当时值”，并加 `历史值` 标注；需要当前值则
+  链接本文件。
 - 修改本文件后，仅需更新 `last_verified`/`last_verified_code_commit`；其他文档的
   链接保持有效。
