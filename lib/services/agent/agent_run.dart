@@ -93,6 +93,16 @@ class AgentRunResult {
   final List<DictionaryProfileIssue> unavailableProfiles;
 
   List<AgentCitation> get citations => evidence.citations;
+
+  /// Citations referenced by validated claims. When validation reports no used
+  /// ids, all retrieved citations remain visible (the loose-mode fallback).
+  List<AgentCitation> get adoptedCitations {
+    final usedIds = validation.citationsUsed.toSet();
+    if (usedIds.isEmpty) return citations;
+    return citations
+        .where((citation) => usedIds.contains(citation.id))
+        .toList(growable: false);
+  }
 }
 
 class AgentRunFailure implements Exception {

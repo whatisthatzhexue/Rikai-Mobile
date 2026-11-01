@@ -43,7 +43,7 @@ class AgentEvidencePanel extends StatelessWidget {
             AppSpacing.md,
           ),
           title: Text(
-            strings.detailedAnalysis(result.citations.length),
+            strings.detailedAnalysis(result.adoptedCitations.length),
             style: theme.textTheme.bodyMedium?.copyWith(
               fontSize: AgentTokens.helper,
               color: AppColors.primary,

@@ -11,9 +11,8 @@
   [`docs/project-data.md`](../project-data.md) §2/§5。
   F4/F5/F9/F10 有 widget/unit 覆盖；F15 有请求范围 unit 测试；F16 有
   controller 进度/取消测试。设备手工验收仍待 Wave 4。
-- Wave 2 验证：本次改动 `flutter analyze` 无新增问题（工作区另有未跟踪 regeneration
-  测试的 2 个 warning）；`flutter test` 267 passed（含后续标签完整性/旧 schema
-  清理）；
+- Wave 2 验证：`flutter analyze` 无问题；`flutter test` 268 passed（含后续标签
+  完整性/旧 schema 清理与依据计数修正）；
   `flutter build apk --debug` 成功。新增 F8 隔离持久化、语言/旧 `follow`
   迁移、应用级档案队列 gate、跨页思考时间、多图/全屏查看、结果操作行/
   Markdown/重新生成等测试。设备视觉、真实 provider、arm64 与档案管理页

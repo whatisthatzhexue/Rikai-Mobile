@@ -254,9 +254,11 @@ Wave 2 implementation (2026-11-01):
   and updates as new requests are added or finish. “不再询问” now saves and
   enables `agent_profiles_auto_accept` (default off; new checkbox in Agent
   settings). Any save made while an Agent page or subpage is mounted (manual or
-  auto-accept) shows the shared host toast once per batch. Retry-dictionary
-  shows a spinner; Agent no longer auto-scrolls; the profile-manager mode toggle
-  stays in place and the composer image notice is centered.
+  auto-accept) shows the shared host toast once per batch. The “详细解析 ·
+  依据 N 条” header now counts only adopted citations, matching the filtered
+  evidence section and Markdown export. Retry-dictionary shows a spinner; Agent
+  no longer auto-scrolls; the profile-manager mode toggle stays in place and the
+  composer image notice is centered.
 - Model output format: analysis and dictionary profiles use bracket-tag plain
   text (`analysis_tag_parser.dart`, `dictionary_profile_tag_parser.dart`).
   Leaked type/probability markers are stripped; types/confidence are derived

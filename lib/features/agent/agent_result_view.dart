@@ -27,12 +27,7 @@ class AgentResultView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final usedIds = result.validation.citationsUsed.toSet();
-    final visibleCitations = usedIds.isEmpty
-        ? result.citations
-        : result.citations
-              .where((citation) => usedIds.contains(citation.id))
-              .toList(growable: false);
+    final visibleCitations = result.adoptedCitations;
     final citations = <String, AgentCitation>{
       for (final citation in visibleCitations) citation.id: citation,
     };

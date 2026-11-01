@@ -5,6 +5,7 @@ import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
 import 'package:rikai_mobile/core/models/agent/agent_input.dart';
 import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
+import 'package:rikai_mobile/features/agent/agent_evidence_panel.dart';
 import 'package:rikai_mobile/features/agent/agent_result_view.dart';
 import 'package:rikai_mobile/services/agent/agent_run.dart';
 import 'package:rikai_mobile/services/agent/agent_ui_strings.dart';
@@ -96,6 +97,35 @@ const _result = AgentRunResult(
   dictionaryProfiles: <String>[],
 );
 
+const _unusedCitation = AgentCitation(
+  id: 'source-2',
+  kind: 'mdict',
+  dictionaryId: 'dict_a',
+  dictionaryTitle: 'A',
+  dictionaryOrder: 0,
+  entryKey: '未採用語',
+  headword: '未採用語',
+  snippet: 'retrieved but not adopted',
+  toolCallId: 'call-2',
+);
+
+AgentRunResult _resultWithUnusedCitation() => AgentRunResult(
+  input: _result.input,
+  evidence: AgentEvidenceBundle(
+    sources: _result.evidence.sources,
+    citations: const <AgentCitation>[_citation, _unusedCitation],
+  ),
+  quotes: _result.quotes,
+  analysis: _result.analysis,
+  validation: const AgentValidationResult(
+    valid: true,
+    errors: <String>[],
+    citationsUsed: <String>['source-1'],
+  ),
+  sources: _result.sources,
+  dictionaryProfiles: _result.dictionaryProfiles,
+);
+
 void main() {
   testWidgets('renders quotes, evidence and clickable citations', (
     tester,
@@ -135,5 +165,33 @@ void main() {
 
     await tester.tap(find.text('依据1').first);
     expect(tapped?.id, 'source-1');
+  });
+
+  testWidgets('evidence header counts only adopted citations', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentEvidencePanel(
+              result: _resultWithUnusedCitation(),
+              onCitationTap: (_) {},
+              onRetryProfile: (_) async {},
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('详细解析 · 依据 1 条'), findsOneWidget);
+    expect(find.text('未採用語'), findsNothing);
+
+    await tester.tap(find.text('详细解析 · 依据 1 条'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('A · 1 条'), findsOneWidget);
+    expect(find.text('未採用語'), findsNothing);
+    expect(find.text('依据1'), findsWidgets);
   });
 }

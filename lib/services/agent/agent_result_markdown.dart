@@ -8,12 +8,7 @@ import 'agent_ui_strings.dart';
 /// It contains only user-visible structured content: no raw provider output,
 /// hidden reasoning, local image paths, HTML or API details.
 String buildAgentResultMarkdown(AgentRunResult result, AgentUiStrings strings) {
-  final usedIds = result.validation.citationsUsed.toSet();
-  final citations = usedIds.isEmpty
-      ? result.citations
-      : result.citations
-            .where((citation) => usedIds.contains(citation.id))
-            .toList(growable: false);
+  final citations = result.adoptedCitations;
   final citationNumbers = <String, int>{
     for (var index = 0; index < citations.length; index++)
       citations[index].id: index + 1,

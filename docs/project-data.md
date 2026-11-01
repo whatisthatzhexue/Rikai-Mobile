@@ -39,10 +39,10 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **267** |
+| 当前 test/testWidgets 声明数 | **268** |
 | 当前测试文件数 | **69** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | 267 passed |
+| 最近 `flutter test` | 268 passed |
 | 最近 `flutter build apk --debug` | success（输出格式清理前） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
@@ -61,7 +61,8 @@
 | Wave 2 后 | 231 | Agent 语言/档案队列/多图/结果操作行 |
 | Wave 2 follow-up | 246 | 档案队列复用、自动保存、标签输出、交互修正 |
 | 标签完整性/旧 schema 清理 | 267 | 标签块校验、移除 JSON 响应 schema/回退；含并行新增 regeneration 测试 |
-| 当前 | **267** | 见 §2.1 |
+| 依据计数修正 | 268 | 展开栏“详细解析”依据数改为最终采用数 |
+| 当前 | **268** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
