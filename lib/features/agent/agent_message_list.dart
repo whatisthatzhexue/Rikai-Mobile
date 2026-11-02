@@ -14,9 +14,11 @@ import '../../core/ui/rikai_toast.dart';
 import '../../services/agent/agent_result_markdown.dart';
 import '../../services/agent/agent_run.dart';
 import '../../services/agent/agent_ui_strings.dart';
+import '../../state/agent_ocr_variants.dart';
 import 'agent_actions.dart';
 import 'agent_evidence_panel.dart';
 import 'agent_message_widgets.dart';
+import 'agent_ocr_variants_panel.dart';
 
 class AgentMessageList extends ConsumerWidget {
   const AgentMessageList({
@@ -29,6 +31,8 @@ class AgentMessageList extends ConsumerWidget {
     required this.onLooseRetry,
     required this.onRegenerate,
     required this.onEditMessage,
+    this.onGenerateOcrVariants,
+    this.onReanalyzeOcrVariant,
   });
 
   final ScrollController scrollController;
@@ -39,6 +43,14 @@ class AgentMessageList extends ConsumerWidget {
   final VoidCallback onLooseRetry;
   final VoidCallback onRegenerate;
   final VoidCallback onEditMessage;
+  final Future<void> Function(AgentRunResult result, String imageId)?
+  onGenerateOcrVariants;
+  final void Function(
+    AgentRunResult result,
+    String imageId,
+    AgentOcrVariant variant,
+  )?
+  onReanalyzeOcrVariant;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -148,6 +160,23 @@ class AgentMessageList extends ConsumerWidget {
                   selectedProvider,
                 );
               },
+            ),
+          if (result != null &&
+              result.input.sources.any((source) => source.isImage))
+            AgentOcrVariantsPanel(
+              result: result,
+              variantsState: ref.watch(agentOcrVariantsProvider),
+              strings: strings,
+              onGenerate: run.isRunning || onGenerateOcrVariants == null
+                  ? null
+                  : (imageId) =>
+                        unawaited(onGenerateOcrVariants!(result, imageId)),
+              onCancelGenerate: () =>
+                  ref.read(agentOcrVariantsProvider.notifier).cancel(),
+              onReanalyze: run.isRunning || onReanalyzeOcrVariant == null
+                  ? null
+                  : (imageId, variant) =>
+                        onReanalyzeOcrVariant!(result, imageId, variant),
             ),
         ],
       ),

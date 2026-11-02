@@ -76,11 +76,13 @@
 | R-AGENT-11 | MUST NOT | 模型不能改变模式/词典/provider/model，也不能执行代码 | 只用 UI 修改这些设置 | `phase6-agent-design` §8.4/§14 |
 | R-AGENT-12 | MUST | Provider 请求文本-only；不发送 tools/capabilities/视觉字段 | `LlmRequest` 无 tools | `llm_port.dart`、`provider_payload.dart` |
 | R-AGENT-13 | MUST | Agent 预算/上限只引用统一预算常量，不在业务代码散落魔法数 | 代码审查/测试 | 统一预算常量 |
-| R-AGENT-14 | MUST | 当前工作优先级：先完成 2026-10-31 F1–F17；F2 未完成前不做 F7/F13/F14 档案部分；F6 未完成前不做 F7 | `device-feedback` Wave 顺序 | `device-feedback-2026-10-31` |
+| R-AGENT-14 | MUST | 当前工作优先级：先完成 2026-10-31 F1–F17；F2 未完成前不做 F7/F13/F14 档案部分；F6 未完成前不做 F7；P6.6/P6.7 只能由用户明确指示启动（P6.6 核心已于 2026-11-02 启动，Wave 4 待验收） | `device-feedback` Wave 顺序 | `device-feedback-2026-10-31` |
 | R-AGENT-15 | MUST | F1–F17/P6.6/P6.7 未完成前，不把这些能力写成已支持 | 文档/UI 审查 | `device-feedback`、`phase6-status` |
 | R-AGENT-16 | MUST | 运行状态归应用级 `AgentRunController`；离开页面不取消；返回恢复最新进度；只有显式“停止”才取消 | 生命周期测试 | `agent-lifecycle-and-edge-cases` |
 | R-AGENT-17 | MUST | 真实 provider/API Key、secure storage、真实词典 sample/suggest、arm64 Agent 未验收前不得声称已验证 | 状态文档 | `phase6-status` |
 | R-AGENT-18 | MUST | 默认输出/UI 语言为中文（zh）；旧 `follow` 必须映射为 `zh`；禁止按输入文本的假名/拉丁字符推断语言（F1/F17） | 日语输入 + 默认设置 → 中文 UI/结果；旧 `follow` → 中文；不得读取 `sourceText` 推断 | `device-feedback` F1/F17 |
+| R-AGENT-19 | MUST | 所有 Agent prompt 文本与请求构造集中在 `lib/services/agent/agent_prompts.dart`；其他文件不得硬编码 prompt | 代码审查：orchestrator/parser/controller/UI 无 prompt 字符串 | `agent_prompts.dart` |
+| R-AGENT-20 | MUST | 多 OCR 版本只由用户显式触发；不得自动合并版本或静默替换原文；采用变体/词典候选后必须重新分词、查词和分析；图片/路径/base64/Key 不得进入该流程或 provider 请求 | 变体/修复测试；请求体断言无图片/路径/Key | `phase6-agent-contracts` §3.1 |
 
 ## 5. UI / UX（R-UI）
 
@@ -138,13 +140,15 @@
 | ID/来源 | 状态 | 说明 |
 |---|---|---|
 | R-AGENT-02 tool loop | future | 只有新 ADR/批准后才可恢复；当前无模型工具 |
-| R-AGENT-14 F7 coverage | implemented | Wave 3：一次 `coverage.v1` 审查 + 最多一次可追溯补充检索；预算来自 `AgentLimits` |
-| F6 lookup completeness | implemented | Wave 3：`AgentLimits` 单一来源；exact→prefix→suffix→incremental；达上限/无新增即停 |
+| R-AGENT-14 F7 coverage | implemented | Wave 3：一次 `[COVERAGE]` 标签审查 + 最多一次可追溯补充检索；预算来自 `AgentLimits` |
+| F6 lookup completeness | implemented | Wave 3：`AgentLimits` 单一来源；exact→prefix→suffix→incremental；某模式无新增仍继续；UniDic 失败 raw surface 兜底 |
 | R-AGENT-18 F1/F17 language | implemented | Wave 2 默认 zh/文案；Wave 3（F1b）结果字段语言后校验 + 一次修复 + warning |
 | R-AGENT-09 F8 session dictionary | implemented | Wave 2：独立 key/模式持久化，不读写查词偏好 |
+| R-AGENT-19 prompt centralization | implemented | 所有 Agent prompt 文本/请求构造集中在 `agent_prompts.dart`；旧 prompt 文件为兼容 re-export |
 | R-UI-09 F4/F9 | partial | 短胶囊/3.5 行规范已定，设备/窄屏验收待 Wave 4 |
 | F11 多图 | implemented | Wave 2：相机/相册多选、追加、移除；上限 6 见统一预算常量 |
-| P6.6/P6.7 | future | 在 F1–F17 关闭前不开始 |
+| P6.6 multi-OCR | implemented (automation) | 2026-11-02 用户指示后实现：显式多版本、质量/diff、词典候选、用户确认后重新分析；真机视觉/OCR/词典质量验收待 Wave 4 |
+| P6.7 | future | annotation DSL/Markdown/ruby/pitch/历史/发布尚未开始 |
 
 ## 9. 变更流程
 

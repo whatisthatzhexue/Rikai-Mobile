@@ -5,25 +5,26 @@ import '../../core/models/agent/agent_coverage.dart';
 import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
 import '../../core/models/agent/agent_limits.dart';
+import '../../core/models/agent/agent_ocr.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/agent/agent_quote.dart';
 import '../../core/models/agent/agent_tool.dart';
-import 'agent_language_validator.dart';
 import 'agent_coverage_parser.dart';
+import 'agent_language_validator.dart';
 import 'agent_messages.dart';
+import 'agent_prompts.dart';
 import 'agent_run.dart';
 import 'agent_validator.dart';
-import 'coverage_prompts.dart';
-import 'coverage_support.dart';
 import 'analysis_normalizer.dart';
-import 'analysis_prompts.dart';
 import 'analysis_salvager.dart';
+import 'coverage_support.dart';
 import 'analysis_tag_parser.dart';
 import 'citation_registry.dart';
 import 'evidence_builder.dart';
 import 'familiarization/dictionary_familiarization_service.dart';
 import 'familiarization/unidic_familiarization_service.dart';
 import 'grammar_patterns.dart';
+import 'ocr_consensus.dart';
 import 'ports/agent_capability_exception.dart';
 import 'ports/llm_port.dart';
 import 'ports/lookup_port.dart';
@@ -66,6 +67,8 @@ class AgentOrchestrator {
   final AgentValidator validator;
   final AgentLanguageValidator languageValidator;
   final AgentLimits limits;
+
+  static const int _maxOcrVariants = 4;
 
   int get maxTargets => limits.maxTargets;
   int get maxCitations => limits.maxEvidenceEntries;
@@ -232,11 +235,7 @@ class AgentOrchestrator {
         }
       }
       for (final issue in unavailableProfiles) {
-        profiles.add(
-          'NO PROFILE for ${issue.title} (${issue.reason}). '
-          'Use generic lookup rules; do not assume this dictionary covers '
-          'the requested word or grammar.',
-        );
+        profiles.add(noProfileInstruction(issue.title, issue.reason));
       }
       final unidicService = unidicFamiliarizer;
       if (unidicService != null && request.unidicPath.trim().isNotEmpty) {
@@ -245,8 +244,10 @@ class AgentOrchestrator {
           final unidic = await unidicService.ensure(request.unidicPath);
           if (unidic != null) {
             profiles.add(
-              'UniDic profile: ${unidic.featureLayout} fields\n'
-              '${unidic.observations.join('\n')}',
+              unidicProfileInstruction(
+                unidic.featureLayout,
+                unidic.observations,
+              ),
             );
           }
         } on AgentCapabilityException catch (error) {
@@ -265,14 +266,14 @@ class AgentOrchestrator {
                   ? primary.selectedVariant?.text ?? ''
                   : primary.text,
               origin: primary.isImage
-                  ? AgentQuoteOrigin.ocr
+                  ? primary.selectedVariant?.origin ?? AgentQuoteOrigin.ocr
                   : AgentQuoteOrigin.userText,
             );
 
       final llm = _llmFactory(request.provider);
       final requestedUser = request.images.isNotEmpty && userText.isNotEmpty
           ? userText
-          : '解释这段日文并给出词典依据';
+          : defaultImageUserRequest();
       final smallModel = request.provider.smallModel.trim().isEmpty
           ? analysisModel
           : request.provider.smallModel.trim();
@@ -299,18 +300,14 @@ class AgentOrchestrator {
       checkCancelled();
       for (final issue in evidence.dictionaryIssues) {
         profiles.add(
-          'DICTIONARY UNAVAILABLE: ${issue.dictionaryTitle} '
-          '(${issue.message}). Do not claim coverage from this dictionary; '
-          'use the remaining evidence or mark the claim unresolved.',
+          dictionaryUnavailableInstruction(
+            issue.dictionaryTitle,
+            issue.message,
+          ),
         );
       }
       if (evidence.structureUnavailable) {
-        profiles.add(
-          'STRUCTURE UNAVAILABLE: UniDic is not configured or failed. Do not '
-          'return structural_analysis segments, grammar_notes, word_notes or '
-          'token ids. Translate the text and use dictionary citations or '
-          'unresolved; never claim token/grammar analysis in this run.',
-        );
+        profiles.add(structureUnavailableInstruction());
       }
 
       final warnings = <String>[];
@@ -583,6 +580,7 @@ class AgentOrchestrator {
             unavailableProfiles: unavailableProfiles,
             warnings: warnings,
             coverageFallbackUsed: coverageFallbackUsed,
+            ocrQuality: _ocrQuality(envelope, evidence),
           );
         }
         throw AgentRunFailure(
@@ -608,6 +606,7 @@ class AgentOrchestrator {
         unavailableProfiles: unavailableProfiles,
         warnings: warnings,
         coverageFallbackUsed: coverageFallbackUsed,
+        ocrQuality: _ocrQuality(envelope, evidence),
       );
     } on AgentRunFailure {
       rethrow;
@@ -673,7 +672,7 @@ class AgentOrchestrator {
     );
     review = parsed.review;
     if (review == null) {
-      // One bounded JSON-format repair; never loop.
+      // One bounded format/tag-integrity repair; never loop.
       try {
         final repaired = await _collect(
           llm,
@@ -809,25 +808,38 @@ class AgentOrchestrator {
         );
       }
       index++;
-      final run = await _ocrPort.recognize(
-        image: LocalOcrHandle(id: image.id, localPath: image.localPath),
-        mode: image.mode,
-      );
-      final variant = AgentOcrVariant(
-        id: 'var-$index',
-        engine: run.engine,
-        mode: run.mode,
-        text: run.text,
-        confidence: run.confidence,
-        elapsedMs: run.elapsedMs,
-      );
+      final prepared = image.variants;
+      final AgentOcrVariant variant;
+      final List<AgentOcrVariant> variants;
+      if (prepared.isNotEmpty) {
+        // P6.6: a selected variant is re-analyzed without repeating OCR.
+        variants = _boundedVariants(prepared, image.selectedVariantId);
+        variant = variants.firstWhere(
+          (item) => item.id == image.selectedVariantId,
+          orElse: () => variants.first,
+        );
+      } else {
+        final run = await _ocrPort.recognize(
+          image: LocalOcrHandle(id: image.id, localPath: image.localPath),
+          mode: image.mode,
+        );
+        variant = AgentOcrVariant(
+          id: 'var-$index',
+          engine: run.engine,
+          mode: run.mode,
+          text: run.text,
+          confidence: run.confidence,
+          elapsedMs: run.elapsedMs,
+        );
+        variants = <AgentOcrVariant>[variant];
+      }
       sources.add(
         AgentSourceInput(
           id: 'src-$index',
           kind: AgentSourceKind.imageOcr,
           imageId: image.id,
           selectedVariantId: variant.id,
-          variants: <AgentOcrVariant>[variant],
+          variants: variants,
         ),
       );
     }
@@ -861,6 +873,31 @@ class AgentOrchestrator {
     );
   }
 
+  /// The input contract allows at most four variants per image. Keep the
+  /// selected variant first so it cannot be dropped when a user has tried
+  /// several repairs; dedupe by id without reordering the rest.
+  List<AgentOcrVariant> _boundedVariants(
+    List<AgentOcrVariant> prepared,
+    String? selectedVariantId,
+  ) {
+    final seen = <String>{};
+    final unique = <AgentOcrVariant>[];
+    for (final variant in prepared) {
+      if (seen.add(variant.id)) unique.add(variant);
+    }
+    if (unique.length <= _maxOcrVariants) return unique;
+    final bounded = <AgentOcrVariant>[];
+    for (final variant in unique) {
+      if (variant.id == selectedVariantId) bounded.add(variant);
+    }
+    for (final variant in unique) {
+      if (variant.id == selectedVariantId) continue;
+      if (bounded.length >= _maxOcrVariants) break;
+      bounded.add(variant);
+    }
+    return bounded;
+  }
+
   AgentSourceInput? _primarySource(AgentInputEnvelope envelope) {
     for (final source in envelope.sources) {
       if (source.isImage) return source;
@@ -869,6 +906,33 @@ class AgentOrchestrator {
       if (!source.isImage && source.text.trim().isNotEmpty) return source;
     }
     return envelope.sources.isEmpty ? null : envelope.sources.first;
+  }
+
+  /// Local OCR quality for the selected image variants. It uses the final
+  /// (possibly coverage-supplemented) evidence so the dictionary hit rate is
+  /// the same one the answer used.
+  Map<String, OcrQuality> _ocrQuality(
+    AgentInputEnvelope envelope,
+    AgentEvidenceBundle evidence,
+  ) {
+    final evidenceBySource = <String, AgentSourceEvidence>{
+      for (final source in evidence.sources) source.id: source,
+    };
+    final quality = <String, OcrQuality>{};
+    for (final source in envelope.sources) {
+      if (!source.isImage) continue;
+      final imageId = source.imageId;
+      final variant = source.selectedVariant;
+      if (imageId == null || variant == null) continue;
+      final sourceEvidence = evidenceBySource[source.id];
+      quality[imageId] = sourceEvidence == null
+          ? OcrConsensus.assess(variant: variant)
+          : OcrConsensus.assessWithEvidence(
+              variant: variant,
+              evidence: sourceEvidence,
+            );
+    }
+    return quality;
   }
 
   List<AgentSourceVersion> _sourceVersions(AgentInputEnvelope envelope) {
@@ -884,7 +948,7 @@ class AgentOrchestrator {
             sourceId: source.id,
             imageId: source.imageId,
             variantId: variant?.id,
-            origin: AgentQuoteOrigin.ocr,
+            origin: variant?.origin ?? AgentQuoteOrigin.ocr,
             text: variant?.text ?? '',
             engine: variant?.engine ?? '',
             mode: variant?.mode.name ?? '',

@@ -357,6 +357,61 @@ class AgentUiStrings {
     '根拠$number $headword を表示',
   );
 
+  // P6.6 multi-OCR comparison / dictionary-assisted repair.
+  String get ocrVersionsTitle => _pick('OCR 版本', 'OCR variants', 'OCR バージョン');
+  String ocrImageLabel(int index) =>
+      _pick('图片 $index', 'Image $index', '画像 $index');
+  String get ocrModeAuto => _pick('自动', 'Auto', '自動');
+  String get ocrModeHorizontal => _pick('横向', 'Horizontal', '横書き');
+  String get ocrModeVertical => _pick('纵向', 'Vertical', '縦書き');
+  String get ocrRecommended => _pick('推荐', 'Recommended', '推奨');
+  String ocrConfidence(int percent) =>
+      _pick('置信度 $percent%', 'Confidence $percent%', '信頼度 $percent%');
+  String ocrKanaRatio(int percent) =>
+      _pick('假名 $percent%', 'Kana $percent%', 'かな $percent%');
+  String ocrDictionaryHit(int percent) =>
+      _pick('词典命中 $percent%', 'Dictionary hit $percent%', '辞書ヒット $percent%');
+  String get ocrQualityLow => _pick(
+    '识别质量偏低，建议对比其他 OCR 版本',
+    'OCR quality looks low; compare other variants',
+    'OCR 品質が低い可能性があります。他のバージョンと比較してください',
+  );
+  String get ocrVariantsGenerate =>
+      _pick('多版本识别', 'Compare OCR variants', 'OCR バージョンを比較');
+  String get ocrVariantsRegenerate => _pick('重新对比', 'Compare again', 'もう一度比較');
+  String get ocrVariantsLoading => _pick(
+    '正在对比横向/纵向识别…',
+    'Comparing horizontal/vertical OCR…',
+    '横書き/縦書き OCR を比較中…',
+  );
+  String get ocrVariantsUnavailable => _pick(
+    '没有可用的其他 OCR 版本',
+    'No other OCR variant is available',
+    '利用できる他の OCR バージョンはありません',
+  );
+  String get ocrVariantsFailed =>
+      _pick('多版本识别失败', 'OCR comparison failed', 'OCR 比較に失敗しました');
+  String get ocrCancelComparison => _pick('停止对比', 'Stop comparison', '比較を停止');
+  String get ocrDiffTitle => _pick('差异预览', 'Difference preview', '差分プレビュー');
+  String get ocrDiffHint => _pick(
+    '高亮文字与其他版本不一致',
+    'Highlighted text differs from other variants',
+    'ハイライトされた文字は他のバージョンと異なります',
+  );
+  String get ocrRepairsTitle => _pick('词典候选', 'Dictionary candidates', '辞書候補');
+  String get ocrRepairSearch =>
+      _pick('查找词典候选', 'Find dictionary candidates', '辞書候補を探す');
+  String get ocrRepairHint => _pick(
+    '采用候选后会重新分析；不会自动修改原文',
+    'Applying a candidate re-analyzes the text; the source is never changed automatically',
+    '候補を採用すると再解析します。原文は自動で変更されません',
+  );
+  String get ocrUseVariant =>
+      _pick('使用此版本重新分析', 'Re-analyze with this variant', 'このバージョンで再解析');
+  String ocrEngineLabel(String engine) => engine == 'dictionary_repair'
+      ? _pick('词典修复', 'Dictionary repair', '辞書修正')
+      : engine;
+
   // Profile manager.
   String get profileManagerTitle =>
       _pick('词典档案', 'Dictionary profiles', '辞書プロファイル');

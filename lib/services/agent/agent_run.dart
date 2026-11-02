@@ -4,6 +4,7 @@ import '../../core/models/agent/agent_analysis.dart';
 import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
 import '../../core/models/agent/agent_limits.dart';
+import '../../core/models/agent/agent_ocr.dart';
 import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/agent/agent_quote.dart';
@@ -34,11 +35,19 @@ class AgentImageInput {
     required this.id,
     required this.localPath,
     this.mode = OcrMode.auto,
+    this.variants = const <AgentOcrVariant>[],
+    this.selectedVariantId,
   });
 
   final String id;
   final String localPath;
   final OcrMode mode;
+
+  /// OCR variants already produced locally. When non-empty, the orchestrator
+  /// reuses them instead of running OCR again; this is how P6.6 variant
+  /// selection re-analyzes without repeating recognition.
+  final List<AgentOcrVariant> variants;
+  final String? selectedVariantId;
 }
 
 class AgentRunRequest {
@@ -84,6 +93,7 @@ class AgentRunResult {
     this.unavailableProfiles = const <DictionaryProfileIssue>[],
     this.warnings = const <String>[],
     this.coverageFallbackUsed = false,
+    this.ocrQuality = const <String, OcrQuality>{},
   });
 
   final AgentInputEnvelope input;
@@ -101,6 +111,10 @@ class AgentRunResult {
 
   /// True when the one allowed coverage-review supplementary lookup ran.
   final bool coverageFallbackUsed;
+
+  /// Local OCR quality for the selected variant of each image source, keyed by
+  /// the opaque image id. Never serialized or sent to the provider.
+  final Map<String, OcrQuality> ocrQuality;
 
   List<AgentCitation> get citations => evidence.citations;
 

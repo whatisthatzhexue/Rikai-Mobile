@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:rikai_ocr/rikai_ocr.dart' show OcrMode;
 
 import '../../core/models/agent/agent_input.dart';
 import '../../core/models/agent/agent_limits.dart';
@@ -14,6 +15,7 @@ import '../../core/ui/rikai_toast.dart';
 import '../../services/agent/agent_run.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../state/agent_dictionary_preferences.dart';
+import '../../state/agent_ocr_variants.dart';
 import '../../state/agent_providers.dart';
 import '../../state/agent_run_controller.dart';
 import '../../state/providers.dart';
@@ -165,6 +167,10 @@ class _AgentPageState extends ConsumerState<AgentPage> {
       run,
       AgentResponseLanguage.fromWire(settings.agentResponseLanguage),
     );
+    if (ref.read(agentOcrVariantsProvider).loading) {
+      RikaiToast.show(context, strings.ocrVariantsLoading);
+      return;
+    }
     FocusScope.of(context).unfocus();
     final text = _input.text.trim();
     final imagePaths = _images.map((image) => image.path).toList();
@@ -209,6 +215,7 @@ class _AgentPageState extends ConsumerState<AgentPage> {
     );
     // A request only leaves the composer after the controller accepted it.
     if (ref.read(agentRunControllerProvider).isRunning) {
+      ref.read(agentOcrVariantsProvider.notifier).clear();
       setState(() {
         _input.clear();
         _images = <_PickedImage>[];
@@ -230,6 +237,94 @@ class _AgentPageState extends ConsumerState<AgentPage> {
     unawaited(_runController.regenerate());
   }
 
+  Future<void> _generateOcrVariants(
+    AgentRunResult result,
+    String imageId,
+  ) async {
+    final run = ref.read(agentRunControllerProvider);
+    if (run.isRunning || run.sentImagePaths.isEmpty) return;
+    AgentSourceInput? target;
+    var imageIndex = -1;
+    var imageCount = 0;
+    for (final source in result.input.sources) {
+      if (!source.isImage) continue;
+      imageCount++;
+      final id = source.imageId ?? source.id;
+      if (id == imageId) {
+        target = source;
+        imageIndex = imageCount - 1;
+        break;
+      }
+    }
+    if (target == null) return;
+    final localPath = imageIndex < run.sentImagePaths.length
+        ? run.sentImagePaths[imageIndex]
+        : '';
+    final images = <AgentImageInput>[
+      AgentImageInput(
+        id: imageId,
+        localPath: localPath,
+        mode: target.selectedVariant?.mode ?? OcrMode.auto,
+        selectedVariantId: target.selectedVariantId,
+      ),
+    ];
+    final baselineVariants = <String, List<AgentOcrVariant>>{
+      imageId: target.variants,
+    };
+    final enabled = ref.read(enabledDictionariesProvider);
+    final preferences = ref.read(agentDictionaryPreferencesProvider);
+    final runDictionaryIds = result.input.dictionaries
+        .map((dictionary) => dictionary.id)
+        .toSet();
+    final dictionaries = _selectedDictionaries(enabled, preferences)
+        .where((dictionary) => runDictionaryIds.contains(dictionary.id))
+        .toList(growable: false);
+    await ref
+        .read(agentOcrVariantsProvider.notifier)
+        .generate(
+          images: images,
+          baselineVariants: baselineVariants,
+          dictionaries: dictionaries,
+        );
+  }
+
+  void _reanalyzeOcrVariant(
+    AgentRunResult result,
+    String imageId,
+    AgentOcrVariant selected,
+  ) {
+    final run = ref.read(agentRunControllerProvider);
+    if (run.isRunning) return;
+    final extras = ref.read(agentOcrVariantsProvider).extraVariants;
+    final images = <AgentImageInput>[];
+    var imageIndex = 0;
+    for (final source in result.input.sources) {
+      if (!source.isImage) continue;
+      final id = source.imageId ?? 'img-${imageIndex + 1}';
+      final all = <String, AgentOcrVariant>{
+        for (final variant in source.variants) variant.id: variant,
+        for (final variant in extras[id] ?? const <AgentOcrVariant>[])
+          variant.id: variant,
+      };
+      if (id == imageId) all[selected.id] = selected;
+      final localPath = imageIndex < run.sentImagePaths.length
+          ? run.sentImagePaths[imageIndex]
+          : '';
+      images.add(
+        AgentImageInput(
+          id: id,
+          localPath: localPath,
+          variants: all.values.toList(growable: false),
+          selectedVariantId: id == imageId
+              ? selected.id
+              : source.selectedVariantId,
+        ),
+      );
+      imageIndex++;
+    }
+    unawaited(_runController.reanalyzeWithImages(images));
+  }
+
   void _cancel() {
     _runController.cancel();
   }
@@ -237,6 +332,7 @@ class _AgentPageState extends ConsumerState<AgentPage> {
   void _newSession() {
     if (ref.read(agentRunControllerProvider).isRunning) return;
     _runController.newSession();
+    ref.read(agentOcrVariantsProvider.notifier).clear();
     setState(() {
       _input.clear();
       _images = <_PickedImage>[];
@@ -358,6 +454,8 @@ class _AgentPageState extends ConsumerState<AgentPage> {
                   onLooseRetry: _retryLoose,
                   onRegenerate: _regenerate,
                   onEditMessage: _editCurrentMessage,
+                  onGenerateOcrVariants: _generateOcrVariants,
+                  onReanalyzeOcrVariant: _reanalyzeOcrVariant,
                 ),
               ),
               buildAgentComposer(

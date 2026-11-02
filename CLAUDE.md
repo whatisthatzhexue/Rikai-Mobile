@@ -18,8 +18,9 @@
 > 误区、历史、开发环境六份文档之间不写相互引用。
 >
 > **Agent 开发门禁**：开发/修改 Phase 6 词典助手前，按
-> `docs/agent_docs/README.md` 的必读顺序阅读；2026-10-31 的 F1–F17 未关闭前，
-> 不在 P6.6/P6.7 上继续叠加新功能，也不把未实现能力写成已支持。
+> `docs/agent_docs/README.md` 的必读顺序阅读；2026-10-31 的 F1–F17/Wave 4 未关闭
+> 前，不在 P6.7 上继续叠加新功能，也不把未实现能力写成已支持。P6.6 多 OCR 核心
+> 已于 2026-11-02 按用户明确指示单独实现，但真机验收仍待 Wave 4。
 
 `docs/project-rules.md`：
 内容：正面/反面 MUST/MUST NOT 规则的单一权威源，按 `R-<域>-<序号>` 编号；
@@ -106,6 +107,11 @@ Agent 改动前。**今后的误区只在该文件新增。**
 队列。
 何时查看：开发 Agent 或安排下一步前；决定 Wave 顺序时。
 
+`docs/agent_docs/task-level-streaming-plan.md`：
+内容：P6.7 之后的任务级流式（Task-level Streaming）独立规划：标签块增量渲染、
+局部校验、证据缓存重试、进度增强；明确不做断点续生成。
+何时查看：规划 P6.7 后续工作、实现流式渲染/重试缓存前。
+
 `docs/agent_docs/phase6-pipeline-review.md`：
 内容：Agent 管线评审与已知问题（含 file:line 证据）。
 何时查看：排查 Agent 管线问题；作为历史 gap 证据，不作当前任务清单。
@@ -123,9 +129,9 @@ Agent 改动前。**今后的误区只在该文件新增。**
 何时查看：Agent 改动后做非 Agent 回归前。
 
 `docs/schemas/agent/`：
-内容：Agent JSON Schema（input/evidence/analysis/quote/profile/coverage/
-tool-result）。
-何时查看：改请求/响应结构或校验器前。
+内容：Agent 内部 DTO/输入/证据 schema（input/evidence/analysis/quote/profile/
+coverage/tool-result）；模型响应用方括号标签协议，不是 JSON 响应 schema。
+何时查看：改 DTO/请求/证据结构或校验器前。
 
 `docs/adr/`：
 内容：四个架构决策（ONNX OCR、UniDic 原地读取、MDict `dict_reader`、Agent
@@ -182,15 +188,16 @@ Phase 5（语料/历史、首次引导与发布打磨）也已于 2026-10-30 完
 语料清空/删除、图片压缩、设置页存储/许可入口和 arm64 release APK。Phase 5 已由
 用户发布为 1.0 release。
 
-Phase 6（`docs/phase6-agent-design.md`，**设计 v2；P6.1–P6.5 已实现，P6.6/P6.7
-未实现**；契约见 `docs/phase6-agent-contracts.md`）增加「词典助手」：可选地调用
+Phase 6（`docs/phase6-agent-design.md`，**设计 v2；P6.1–P6.5 与 P6.6 多 OCR
+核心已实现，P6.6 真机验收与 P6.7 未完成**；契约见
+`docs/phase6-agent-contracts.md`）增加「词典助手」：可选地调用
 用户配置的远程文本 LLM（DeepSeek/Claude 等），把本地 OCR、UniDic、MDict 作为
 schema 化证据；采用固定流水线，模型无工具调用（2026-10-31 决策）。图片仅在本机
 OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）；
 核心离线功能不得依赖该 Agent。实现进度见 `docs/phase6-status.md`。
 **2026-10-31 实机反馈 F1–F17 的修正计划见
-`docs/agent_docs/device-feedback-2026-10-31.md`；未完成前优先按该文档执行，不要
-开始 P6.6/P6.7。**
+`docs/agent_docs/device-feedback-2026-10-31.md`；Wave 4 设备验收未完成前优先按
+该文档执行，不要在 P6.7 上叠加功能。**
 
 - 项目根目录：`C:\Projects\Rikai-Mobile`（ASCII 路径，旧的 `E:\MyData\大工\...` 已不存在）
 - 包名/applicationId/namespace：`com.rikai.mobile`
@@ -285,8 +292,9 @@ OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）�
 
 Phase 0–5 已全部完成并发布 1.0（验收记录见 `docs/project-history.md` 与各
 `phase*-status.md`）。Phase 6 P6.1–P6.5 已实现；2026-10-31 实机反馈 Wave 1–3
-（F1b/F6/F7）已实现，Wave 4 设备回归验收待做；P6.6/P6.7 未实现。当前进度、
-验证记录与工作队列只维护在以下文档，本文件不再复述：
+（F1b/F6/F7）已实现，Wave 4 设备回归验收待做；P6.6 多 OCR 核心已于 2026-11-02
+实现（自动化测试），P6.6 真机验收与 P6.7 未完成。当前进度、验证记录与工作队列
+只维护在以下文档，本文件不再复述：
 
 - 实现进度与验证记录：`docs/phase6-status.md`
 - F1–F17 状态、Wave 计划与验收：`docs/agent_docs/device-feedback-2026-10-31.md`
@@ -302,8 +310,8 @@ Phase 0–5 已全部完成并发布 1.0（验收记录见 `docs/project-history
 - 按 `docs/agent_docs/device-feedback-2026-10-31.md` 完成 Wave 4 设备回归验收
   （真实 provider/API Key、arm64 Agent 端到端、大词典 suffix/incremental 冒烟、
   secure storage 设备 I/O）；Wave 1–3 的自动化测试不能替代设备验收。
-- P6.6 多 OCR 版本/词典辅助修复：多版本冲突必须让用户选择，不能静默覆盖，
-  也不能把图片发给模型。
+- P6.6 多 OCR 版本/词典辅助修复：核心已实现（显式多版本、质量/diff、词典候选、
+  用户确认后重新分析）；剩余真机视觉/OCR/词典质量验收，不能把图片发给模型。
 - P6.7 annotation DSL/Markdown/ruby/pitch、Agent 会话历史 UI、发布打磨。
 
 设备验收项见下文「真机/网络验收」；禁止事项（图片/密钥/未实现能力）见
@@ -441,8 +449,8 @@ third_party/overlay-translator/                               # Apache 许可/�
 third_party/paddleocr4android/                                # MIT 许可/可选后端说明
 ```
 
-Phase 6 新增（P6.1–P6.5 与 Wave 3 已创建；`ocr_consensus.dart`、annotation、
-markdown_renderer 等 P6.6/P6.7 文件待建）：
+Phase 6 新增（P6.1–P6.5、Wave 3 与 P6.6 多 OCR 核心已创建；annotation、
+markdown_renderer 等 P6.7 文件待建）：
 
 ```text
 lib/features/agent/                                           # Agent 页/输入/模式/证据卡/OCR 版本/档案 sheet
@@ -454,11 +462,14 @@ lib/services/agent/evidence_builder.dart                      # token/语法/ ci
 lib/services/agent/citation_registry.dart                     # orchestrator 发放 source-N（可删除覆盖重复）
 lib/services/agent/agent_validator.dart                       # schema/quote/order/strict 校验
 lib/services/agent/agent_language_validator.dart              # F1b 结果人类字段语言后校验
-lib/services/agent/coverage_prompts.dart                      # F7 coverage JSON 请求/一次修复
-lib/services/agent/agent_coverage_parser.dart                 # F7 coverage JSON 解析/字段校验
+lib/services/agent/agent_prompts.dart                         # 所有 Agent prompt 文本/请求构造（禁止散落硬编码）
+lib/services/agent/agent_coverage_parser.dart                 # F7 [COVERAGE] 标签解析/完整性
 lib/services/agent/coverage_support.dart                      # F7 可追溯性/重复验证/证据合并
 lib/core/models/agent/agent_limits.dart                       # F6/F7 预算单一来源
-lib/services/agent/ocr_consensus.dart                         # 按需多 OCR/词典辅助修复
+lib/core/models/agent/agent_ocr.dart                          # P6.6 质量/diff/修复候选 DTO
+lib/services/agent/ocr_consensus.dart                         # P6.6 质量评分/diff/排序/词典候选
+lib/state/agent_ocr_variants.dart                             # P6.6 应用级多版本识别控制器
+lib/features/agent/agent_ocr_variants_panel.dart              # P6.6 版本 chip/差异/修复 UI
 lib/services/agent/annotation/                                # 注音/标注安全 DSL 与统一渲染（P6.7）
 lib/services/agent/markdown_renderer.dart                     # Markdown/ruby/声调安全渲染（P6.7）
 lib/core/models/agent/                                        # input/evidence/analysis/profile/quote/tool DTO
@@ -498,8 +509,9 @@ flutter build apk --debug
   文件不入库。修改 `assets/Rikai_Icon.jpg` 后运行
   `dart run flutter_launcher_icons`。
 - Phase 6 自动化测试只用 fake provider；不得用真实 API Key 跑测试。P6.6 多 OCR
-  和 P6.7 annotation DSL 的测试尚未编写；真实 provider/secure storage/真实词典
-  sample/suggest 仍需设备验收。
+  已有 quality/diff/ranking/repair、controller、prepared-variant orchestrator 与
+  widget 测试（全部 fake OCR/lookup）；P6.7 annotation DSL 测试尚未编写；真实
+  OCR 质量、真实词典候选、provider/secure storage/arm64 仍需设备验收。
 - 每个阶段结束运行 analyze/test/debug build；当前测试数量、设备套件结果与构建
   产物见 `docs/project-data.md` §2/§3/§5。
 

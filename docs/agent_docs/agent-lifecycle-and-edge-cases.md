@@ -6,8 +6,9 @@
 - 状态：**开发规范（要求）**。应用级 `AgentRunController`、provider CancelToken、
   OCR/Evidence 取消、四步进度和编号依据已落地；**应用级档案队列（F2）与
   `awaitingProfile` gate 已于 Wave 2 实现；F1b 语言后校验、F6 检索递进和 F7
-  coverage 阶段已于 Wave 3 实现**。进程死亡持久化、familiarization 取消和真实
-  设备“离开页面→返回”验收仍待补；未完成前不要把剩余能力写成已实现。
+  coverage 阶段已于 Wave 3 实现；P6.6 多 OCR 对比已实现应用级 controller**。
+  进程死亡持久化、familiarization 取消和真实设备“离开页面→返回”验收仍待补；
+  未完成前不要把剩余能力写成已实现。
 - 适用范围：`lib/features/agent/`、`lib/state/`、`lib/services/agent/` 及后续
   P6.6/P6.7 的 Agent UI。
 - 关联：[管线评审](phase6-pipeline-review.md) 的 H4（取消/并发）与 H8（持久化）、
@@ -208,6 +209,10 @@ AgentRunSnapshot {
   - 旧 run 的 runId 与新 run 不同，所有旧回调被丢弃；
   - 不允许多个 controller 同时写同一 session 的 snapshot。
 - 快速双击发送、快速切换页面、快速点停止/开始，都必须幂等。
+- **P6.6 多 OCR 对比与 run 互斥**：`AgentOcrVariantsController` 也使用本机 OCR
+  服务，对比进行中不得同时开始 Agent run；页面拒绝发送并提示先停止对比。对比
+  本身是应用级任务，离开页面不取消，只有用户“停止对比”、新会话或新的发送意图
+  才会取消/清理。
 
 ## 7. 持久化、进程死亡与后台限制
 
@@ -246,6 +251,15 @@ AgentRunSnapshot {
   列出当前全部活动词典并在新增/完成后更新。生成期间其他档案的编辑/删除/生成
   仍可用。
 - 队列只在应用内存中；进程死亡后的恢复仍属 P6.7。
+
+多 OCR 对比（P6.6 核心，2026-11-02）：
+
+- `AgentOcrVariantsController` 是应用级 provider；离开 Agent 页面不取消对比。
+- 对比结果（附加变体、质量、diff、词典候选）保存在应用内存；新会话/新发送/
+  显式停止会清理。它不保存图片路径，也不调用 provider。
+- 切换变体或采用候选后，通过 `AgentRunController.reanalyzeWithImages()` 重新
+  分词/查词/分析；旧结果在新结果成功前保持可见。
+- 真机视觉/OCR/词典质量验收仍待 Wave 4。
 
 仍需补齐：
 

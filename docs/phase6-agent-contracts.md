@@ -8,9 +8,13 @@
 > JSON。运行时使用方括号标签的纯文本块，代码用正则解析；模型不输出 confidence、
 > 概率或 `context_inference`/`dictionary_fact` 等内部标记。旧 JSON 响应格式、
 > 运行时 JSON schema、`response_format`/`json_schema` 能力标志和旧 JSON 输出
-> 回退均已移除；分析/档案 DTO 仍可序列化为本地 JSON 供存储使用。解析器额外校验
-> 标签块完整性（未闭合、错序、越界嵌套、重复单例标签）；格式或完整性失败时只有
-> 一次“保持正文不变、仅补标签”的格式纠错调用。
+> 回退均已移除；分析/档案 DTO 仍可序列化为本地 JSON 供存储使用。覆盖审查也已
+> 迁移到 `[COVERAGE]` 标签协议。所有 Agent prompt 统一维护在
+> `lib/services/agent/agent_prompts.dart`，其他文件不得硬编码 prompt；旧的
+> `analysis_prompts.dart`/`coverage_prompts.dart`/`familiarization_prompts.dart`
+> 仅保留兼容 re-export，不是独立 prompt 源。解析器额外
+> 校验标签块完整性（未闭合、错序、越界嵌套、重复单例标签）；格式或完整性失败时
+> 只有一次“保持正文不变、仅补标签”的格式纠错调用。
 >
 > **2026-11-01 语言决策（Wave 2–3 已实现）**：默认输出/UI 语言为中文（`zh`）；
 > 旧 `follow` 映射为 `zh`；禁止按输入假名/拉丁字符推断。§5.2 的默认/文案契约
@@ -20,8 +24,9 @@
 > 见 `docs/project-data.md`。本文件只保留 Agent 字段、错误码、状态机和未来
 > tool 契约，不重复规则正文或当前实现数值。
 
-- 状态：**设计契约；P6.1–P6.5 核心已实现，P6.6/P6.7 未实现**；与
-  `docs/phase6-agent-design.md` v2 配套。实现状态见 `docs/phase6-status.md`。
+- 状态：**P6.1–P6.5 核心、Wave 1–3 与 P6.6 多 OCR 核心已实现；P6.6 真机验收与
+  P6.7 未完成**；与 `docs/phase6-agent-design.md` v2 配套。实现状态见
+  `docs/phase6-status.md`。
   **2026-10-31 实机反馈的 F1–F17 修正计划见
   `docs/agent_docs/device-feedback-2026-10-31.md`；Wave 1–3 已实现（应用级档案
   队列/语言默认与文案、F1b 语言后校验、F6 检索递进、F7 覆盖审查）；Wave 4
@@ -288,6 +293,46 @@ class ToolResult {
 - `variants` 最多 4 个；`selected_variant_id` 必须指向其中一个。
 - `dictionaries` 按 `order` 升序；只包含本会话选中的词典。
 
+### 3.1 P6.6 本地 OCR 变体与修复契约（2026-11-02）
+
+以下字段/对象只在本地内存和 UI 中使用，不改变 provider 输入信封：
+
+```text
+AgentImageInput (local)
+  id, localPath, mode,
+  variants: [AgentOcrVariant], selectedVariantId
+
+AgentOcrVariant (serialized subset)
+  id, engine, mode, text, confidence, elapsedMs
+  origin: ocr | dictionary_repair   // local only, not serialized
+
+OcrQuality (local)
+  charCount, meaningfulChars, kanaRatio, kanjiRatio, latinRatio,
+  duplicateNoiseRatio, meanConfidence, dictionaryHitRate?, contentWords
+
+OcrTextDiff (local)
+  baseSpans[], candidateSpans[]  // {text, start, end, changed}, UTF-16
+  baseChangedChars, candidateChangedChars
+
+OcrRepairSuggestion (local)
+  original, start, end, candidates[
+    {text, dictionaryIds, score}
+  ]
+```
+
+硬规则：
+
+- 多版本识别只能由用户显式触发；默认 run 仍只用一个 `auto` 变体。
+- 用户选择变体或采用词典候选后，必须重新执行分词/查词/分析；不能把旧结果的
+  citation 直接套到新文本。
+- 不自动合并版本、不静默替换原文；`dictionary_repair` 只在用户采用候选后生成
+  新的本地变体。
+- 质量评分、diff 和候选只在本机计算；不得把图片、路径、base64、完整 HTML 或
+  API Key 放入这些对象或 provider 请求。
+- `AgentRunResult.ocrQuality` 以 `image_id` 为键，仅用于本地 UI。
+- 变体文本会进入 provider 的 `variants[]`；`origin` 不序列化。当前只把选中变体
+  写入 `AgentSourceVersion`，所有变体的持久化留给 P6.7 历史工作。
+
 ## 4. 证据包 `rikai.agent.evidence.v1`
 
 完整 schema：`docs/schemas/agent/evidence.v1.schema.json`。
@@ -439,53 +484,51 @@ class ToolResult {
 - `model_supplements` 严格模式必须为空/隐藏；宽松模式必须带“模型补充”标签。
 - `reading` 必须匹配 token 读音或 citation 摘要；否则标 `未验证` 或移除。
 
-### 5.1 覆盖审查 `rikai.agent.coverage.v1`（2026-10-31 F7，Wave 3 已实现）
+### 5.1 覆盖审查 `[COVERAGE]` 标签（DTO `rikai.agent.coverage.v1`；F7，Wave 3 已实现）
 
-初始证据后调用一次，判断是否缺少词典资料。这是独立的轻量 schema，不直接复用
-较重的 `analysis.v1`。机器可读草案：
-`docs/schemas/agent/coverage.v1.schema.json`（尚未接入运行时，字段变更需升
-版本）。
+初始证据后调用一次，判断是否缺少词典资料。这是独立的轻量审查，不直接复用
+较重的 `analysis.v1`；模型输出标签文本，不再输出 JSON。`source_id` 由解析器
+使用本次主源 ID 填充，模型不写。解析器先执行 `coverageTagIntegrityErrors`：
+COVERAGE 根块唯一、MISSING/DUPLICATE/NOTES 必须位于 COVERAGE 内、同一 COVERAGE
+下 NOTES 唯一、标签必须闭合；解析或完整性失败只做一次格式修复。机器可读 DTO
+结构见 `docs/schemas/agent/coverage.v1.schema.json`，仅作内部 DTO/序列化结构，
+不是模型响应格式；当前代码没有 coverage JSON 的持久化调用，“存储结构”不能写成
+已使用。
 
-```json
-{
-  "schema": "rikai.agent.coverage.v1",
-  "source_id": "src-1",
-  "verdict": "missing",
-  "missing": [
-    {
-      "kind": "word",
-      "query": "何卒",
-      "source_refs": ["t12", "p3"],
-      "reason": "缺少正式请求语境下的释义",
-      "priority": 1
-    }
-  ],
-  "duplicate_groups": [
-    {
-      "dictionary_id": "dict_a",
-      "keep_entry_key": "何卒",
-      "remove_entry_keys": ["何卒（副）"],
-      "reason": "词条相同且释义大部分重合"
-    }
-  ],
-  "notes": ""
-}
+```text
+[COVERAGE verdict="missing"]
+[MISSING kind="usage" query="何卒" refs="t12,p3" priority="1"]缺少正式请求语境下的释义[/MISSING]
+[DUPLICATE dictionary="dict_a" keep="何卒" remove="何卒（副）|何卒（別）"]词条相同且释义大部分重合[/DUPLICATE]
+[NOTES]可选说明[/NOTES]
+[/COVERAGE]
+```
+
+`verdict="sufficient"` 时返回：
+
+```text
+[COVERAGE verdict="sufficient"][/COVERAGE]
 ```
 
 - `verdict`: `sufficient | missing`；`missing` 最多 20 项，`duplicate_groups`
   最多 10 组（来自 `AgentLimits`）。
-- `query` 必须可追溯到源文本/token lemma/lookupCandidates/语法模式/suggest；
-  不可追溯项由 orchestrator 丢弃，不能让模型任意浏览词典。
-- `duplicate_groups` 仅是建议；orchestrator 必须本地验证同词典、同 headword/
-  entryKey、摘要大部分重合后才可删除，且优先删除信息密度较低者。
+- `MISSING` 的 `kind` 为 word/grammar/sense/usage/reading/example/context；
+  `refs` 用逗号或 `|` 分隔，只能引用 source/tN/pN；`priority` 可选 1–5。
+- `query` 必须可追溯到源文本/token surface/lemma/reading/lookupCandidates/
+  语法模式/已有 citation key；不可追溯项由 orchestrator 丢弃，不能让模型任意
+  浏览词典。当前 Agent 管线不使用 `suggest` 作为补查来源。
+- `DUPLICATE` 仅是建议；orchestrator 必须本地验证同词典、摘要大部分重合后才可
+  删除，且保留信息密度较高（摘要更长）的条目。`keep`/`remove` entry key 只用于
+  定位候选，不要求彼此完全相同（例如 `何卒` 与 `何卒（副）` 可因摘要高度重合成组）。
 - 未达 citation 上限走流程 A（按 missing 补充检索，模式 exact→prefix→suffix→
-  incremental）；已达上限走流程 B（先删可验证重复腾槽位，再走流程 A）。
+  incremental，某模式无新增也继续下一个模式）；已达上限走流程 B（先删可验证
+  重复腾槽位，再走流程 A）。
 - 每个用户请求最多一次覆盖审查 + 一次回退；失败/无重复/无可追溯 query 时保留
   原证据并显示 warning，不让整次 run 失败。`AgentRunResult.warnings` 承载
   本地化 warning，`coverageFallbackUsed` 标记是否执行过补充检索。
-- 运行时输出为 JSON 文本（`stream:false`，不发 `response_format`/
-  `json_schema`）；解析失败只做一次 JSON 格式修复。模型返回的 coverage
-  建议必须经过本地可追溯性/重复校验，不能直接删除或查询任意词条。
+- 运行时输出为标签文本（`stream:false`，不发 `response_format`/
+  `json_schema`）；解析或标签块完整性失败只做一次“正文不变、只补标签”的格式
+  修复。模型返回的 coverage 建议必须经过本地可追溯性/重复校验，不能直接删除或
+  查询任意词条。
 
 ### 5.2 输出语言（2026-10-31 F1；默认/文案 Wave 2、F1b Wave 3 已实现）
 

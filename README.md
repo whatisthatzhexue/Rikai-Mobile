@@ -6,8 +6,9 @@ tokenize with the user's UniDic, show furigana, and look up any word in the
 user's MDict dictionaries. OCR models may be downloaded during setup; after
 that, OCR, tokenization, and dictionary lookup are offline. Phase 6 adds an
 optional dictionary assistant that can call a user-configured LLM provider;
-P6.1–P6.5 are implemented, while P6.6/P6.7 and the 2026-10-31 device-feedback
-hardening are pending.
+P6.1–P6.5, the 2026-10-31 feedback Waves 1–3 and the P6.6 multi-OCR core are
+implemented. Wave 4 device acceptance, P6.6 device-quality checks and P6.7 are
+pending.
 
 > Current test/device/performance/build/environment data lives in
 > [docs/project-data.md](docs/project-data.md). Normative MUST/MUST NOT rules
@@ -28,8 +29,10 @@ user-confirmed on a cold-booted emulator on 2026-10-30.** Phase 6 (dictionary
 assistant) is in progress: P6.1–P6.5 core is implemented (capability ports,
 provider adapters, secure key storage, dictionary familiarization, fixed
 orchestrator/evidence/citation pipeline, Agent page and provider settings).
-P6.6 (multi-OCR variants/repair) and P6.7 (annotation DSL, Markdown/ruby/pitch,
-history/release polish) are not implemented.
+The 2026-10-31 feedback Waves 1–3 are implemented. P6.6 multi-OCR comparison and
+dictionary-assisted repair core is implemented (2026-11-02, automated tests);
+its real-device quality acceptance and P6.7 (annotation DSL, Markdown/ruby/
+pitch, history/release polish) remain.
 
 - In-place MeCab/UniDic tokenization in a long-lived worker isolate, private
   `mecabrc`, CSV-aware parsing of quoted UniDic fields
@@ -131,13 +134,13 @@ Phase 6 P6.1–P6.5 core is implemented; 主页功能按钮的数量、顺序和
   that open the existing entry page. Provider settings are available under
   Settings → 词典助手.
 
-Still pending: the 2026-10-31 real-device feedback backlog (implement the
-confirmed Chinese-first default and remove input-script inference, app-level
-dictionary-profile confirmation queue, multi-image input,
-lookup completeness/coverage review and related UI), then P6.6 multi-OCR
-variants/dictionary-assisted repair and P6.7 annotation DSL/Markdown/ruby/pitch/
-history/release polish. Real-network provider calls, secure-storage device I/O,
-real-dictionary `sample`/`suggest` and arm64 Agent acceptance still need device
+Still pending: Wave 4 device acceptance for the 2026-10-31 feedback backlog
+(real provider/API key, arm64 Agent end-to-end, large-dictionary
+suffix/incremental smoke, secure-storage device I/O), P6.6 real-device visual/
+OCR/dictionary-candidate acceptance, and P6.7 annotation DSL/Markdown/ruby/
+pitch/history/release polish. P6.6's explicit multi-OCR comparison, diff,
+quality ranking and user-confirmed dictionary repair are implemented and
+covered by fake-OCR/fake-lookup tests; this does not replace device
 verification. The feedback plan and wave order are in
 [docs/agent_docs/device-feedback-2026-10-31.md](docs/agent_docs/device-feedback-2026-10-31.md).
 See [docs/phase6-status.md](docs/phase6-status.md) for the current implementation
@@ -145,7 +148,8 @@ record, [docs/phase6-agent-design.md](docs/phase6-agent-design.md) for the desig
 and [docs/phase6-agent-contracts.md](docs/phase6-agent-contracts.md) for the
 tool/JSON-schema contracts.
 
-Next: finish the feedback backlog, then P6.6/P6.7 and arm64/device acceptance. See
+Next: finish Wave 4 device acceptance for the feedback backlog, P6.6 device
+quality checks and P6.7. See
 [docs/phase5-status.md](docs/phase5-status.md),
 [docs/phase4.5-status.md](docs/phase4.5-status.md),
 [docs/phase6-agent-design.md](docs/phase6-agent-design.md),
@@ -190,8 +194,8 @@ previous debug/integration-test run left `integration_test` in the generated
 plugin registrant, run the `--config-only` release command once before
 `flutter build apk --release --target-platform android-arm64 --split-per-abi`.
 UI work must follow [docs/design-tokens.md](docs/design-tokens.md). The current
-build contains the P6.1–P6.5 Agent/provider implementation; P6.6/P6.7 and the
-2026-10-31 feedback hardening are not yet implemented.
+build contains P6.1–P6.5, the 2026-10-31 feedback Waves 1–3 and the P6.6
+multi-OCR core; Wave 4 device acceptance and P6.7 are not yet implemented.
 
 ## Documents
 

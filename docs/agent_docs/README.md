@@ -38,7 +38,13 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
   Agent 专项评审、生命周期和历史 gap 证据，不复制规则正文/当前数值。
 - 开发或修改 Agent 前，先读 `device-feedback-2026-10-31.md`（当前队列）；
   `phase6-pipeline-review.md` 是历史 gap 证据，不是当前任务清单。优先级/门禁见
-  [`../project-rules.md`](../project-rules.md) R-AGENT-14/15。
+  [`../project-rules.md`](../project-rules.md) R-AGENT-14/15。P6.6 多 OCR 核心
+  已于 2026-11-02 按用户明确指示实现，但 Wave 4 真机/真实词典验收仍未完成；
+  不要把它写成设备已验证。
+- **Agent prompt 文本与请求构造统一维护在
+  `lib/services/agent/agent_prompts.dart`**；不要在 orchestrator、parser、controller
+  或 UI 中硬编码 prompt 字符串。`analysis_prompts.dart`、`coverage_prompts.dart`、
+  `familiarization_prompts.dart` 仅为兼容 re-export，不是独立 prompt 源。
 - 图片/密钥/运行状态/未实现能力等具体规则见
   [`../project-rules.md`](../project-rules.md) R-SEC/R-AGENT；
   生命周期细节见 [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md)。
@@ -58,6 +64,9 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
   [non-agent-regression-review.md](non-agent-regression-review.md)。
 - 当前实现进度与测试/构建记录：[../phase6-status.md](../phase6-status.md)。
 - 当前测试/设备/性能数字：[../project-data.md](../project-data.md)。
+- P6.7 之后的任务级流式规划：
+  [task-level-streaming-plan.md](task-level-streaming-plan.md)（规划中，未实现；
+  不要当作当前任务）。
 
 ## 回归与维护性评审
 

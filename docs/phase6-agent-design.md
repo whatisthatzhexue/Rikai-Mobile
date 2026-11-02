@@ -15,8 +15,9 @@
 > 规范性 MUST/MUST NOT 规则见 `docs/project-rules.md`；当前预算/上限和固定文案
 > 见 `docs/project-data.md`。本文保留产品/流程设计细节，不重复规则正文或当前数值。
 
-- 状态：**设计 v2；P6.1–P6.5 核心已实现，P6.6（多 OCR）与 P6.7（DSL/发布）未实现**
-- 日期：2026-10-30
+- 状态：**设计 v2；P6.1–P6.5 核心、2026-10-31 反馈 Wave 1–3 与 P6.6 多 OCR
+  核心已实现；P6.6 真机验收、Wave 4 设备验收与 P6.7（DSL/发布）未完成**
+- 日期：2026-10-30（P6.6 核心实现更新：2026-11-02）
 - 前身：v1 只描述通用工具型 Agent；v2 加入用户确认的固定流水线、词典熟悉、
   OCR JSON 信封、逐词/语法证据、原文引用、会话级词典选择与按需多 OCR。
 - 依赖：Phase 4.5 的 arm64/真实页面验收、Phase 5 的完整历史/引导/发布打磨，以及
@@ -24,8 +25,8 @@
 - 契约：工具表、完整 JSON Schema、状态机和错误码见
   `docs/phase6-agent-contracts.md`；机器可读 schema 见 `docs/schemas/agent/`。
 - 实现状态：见 `docs/phase6-status.md`。当前已接入 Agent 页、Provider 设置、
-  熟悉期、证据/引用/校验和主页第五按钮；多 OCR 版本、历史 UI、annotation DSL 和
-  发布验收仍待完成。
+  熟悉期、证据/引用/校验、主页第五按钮和 P6.6 多 OCR 对比/词典候选修复；多 OCR
+  真机验收、历史 UI、annotation DSL 和发布验收仍待完成。
 
 ## 0. v2 变更摘要
 
@@ -384,7 +385,9 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   生成新的 `SourceVersion(origin: user_edit)`，不覆盖原 OCR。
 - 多 OCR 按需：默认 `auto`。若平均置信度低、或分词后内容词词典命中率低于阈值
   （初始 0.35），提示“再跑横向/竖向对比”；用户确认后顺序执行并生成 `variants[]`。
-  不改变现有 Phase 4.5 “auto 只返回一个引擎”的照片集行为。
+  不改变现有 Phase 4.5 “auto 只返回一个引擎”的照片集行为。P6.6 核心已于
+  2026-11-02 实现：显式“多版本识别”、横向/纵向补跑、质量评分、差异预览与用户
+  确认后的重新分析；真实漫画页/大词典质量验收仍待设备完成。
 
 ### 6.3 Stage 1：分词与证据（Step 1）
 
@@ -403,9 +406,11 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   ≤400 字符；去重 `(dictionaryId, entryKey)`；记录 `dictionaryOrder`。
   2026-10-31 反馈（F6，Wave 3 已实现）为全局递进：所有 target 先 exact；若唯一
   citation 数未达 `AgentLimits.maxEvidenceEntries`（默认 60，禁止散落硬编码），
-  依次跑 prefix → suffix → incremental；每个模式只处理尚未满额的 target，若某模式
-  新增为 0 或达到全局上限立即停止；达到上限时不再发起下一次模式。`AgentLimits`
-  同时控制 UI 的“已检索 N / 上限 M”。
+  依次跑 prefix → suffix → incremental；每个模式只处理尚未满额的 target；某模式
+  新增为 0 也继续下一个模式（避免 prefix 空结果跳过 suffix/incremental）。正常
+  模式递进以全局 `maxEvidenceEntries` 为终止条件；取消会中断运行，某个
+  target/词典达到每词每典上限时只是不再为该 target/词典发查询，不终止模式循环。
+  `AgentLimits` 同时控制 UI 的“已检索 N / 上限 M”。
 - `CitationRegistry.issue(toolCallId, dictionary, entryKey, headword, snippet,
   sourceSpan)` 发放 `source-N`；模型只看到 `source-N`，不能自造。
 - 证据包只含：token ID/文本/读音/词性/offset、语法模式、清洗后的 citation 摘要；
@@ -413,26 +418,32 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
 - 重复 token（如「は」出现 10 次）只查一次，但保留所有 span 映射；输出 token 级
   证据表供 UI 展开。
 - UniDic 未配置/分词失败：不伪造 token；严格模式提示“无法进行结构/语法校验”，
-  仍可用 MDict 做词级查询但结果标记为不完整；宽松模式可继续，但
-  `structural_analysis` 必须标为未验证。分词失败不阻断纯翻译，但不得声称有语法依据。
+  但使用**有界 raw surface targets**：按换行/空白/标点切块，加入长度 ≤12 的整块，
+  并生成 2–6 字符窗口（受 `maxTargets` 限制），继续 MDict 词级查询，结果标记为
+  不完整；宽松模式可继续，但 `structural_analysis` 必须标为未验证。raw fallback
+  是 best-effort，不得声称分词或结构分析；分词失败不阻断纯翻译，但不得声称有
+  语法依据。
 
 ### 6.3.1 覆盖审查（2026-10-31 反馈 F7，Wave 3 已实现）
 
-初始证据完成后、最终分析前，用一次轻量 schema LLM 调用判断“还缺哪些词典
-资料”。输出 `rikai.agent.coverage.v1`（见契约 §5.1）：`missing[]` 的 query
-必须可追溯到源文本/token/语法模式/suggest；`duplicate_groups[]` 只是建议。
-运行时以 JSON 文本请求（`stream:false`，不发 `response_format`/`json_schema`），
-解析失败只做一次 JSON 格式修复，仍失败则保留原证据并显示 warning。
+初始证据完成后、最终分析前，用一次轻量标签审查判断“还缺哪些词典资料”。
+输出 `[COVERAGE]` 标签块（见契约 §5.1）：`MISSING` 的 query 必须可追溯到源
+文本/token/语法模式/已有 citation key；`DUPLICATE` 只是建议。运行时以标签文本
+请求（`stream:false`，不发 `response_format`/`json_schema`）；`source_id` 由
+解析器本地填充，模型不输出。解析器校验 COVERAGE 根块唯一、MISSING/DUPLICATE/
+NOTES 的父子关系、同一 COVERAGE 下 NOTES 唯一和标签闭合；解析或完整性失败只做
+一次格式修复，仍失败则保留原证据并显示 warning。内部 `coverage.v1` JSON 仅作
+DTO/序列化结构，不参与模型响应，当前也没有持久化调用。
 
 - 未达上限（流程 A）：按缺失关键词补充检索，仍按 exact→prefix→suffix→
-  incremental，直到上限或无新增。
+  incremental；**某模式无新增也继续下一个模式**，直到上限或无 eligible target。
 - 已达上限（流程 B）：本地先验证同词典、摘要大部分重合（字符 bigram 重合或包含
   关系），保留信息密度较高（摘要更长）的条目并删除其余重复 citation 腾出槽位，
   再走流程 A；模型不能单独决定删除，跨词典或多个组共享的 keep 不会被删。
 - 每个用户请求最多一次覆盖审查 + 一次回退查词（`coverageFallbackUsed`）；没有
   可验证缺口/重复时直接进入 reasoning，不循环。
-- 覆盖审查失败、schema 无效或 query 不可追溯时只产生 warning，保留原证据继续；
-  不得让整次 run 失败。
+- 覆盖审查失败、标签无效/不完整或 query 不可追溯时只产生 warning，保留原证据
+  继续；不得让整次 run 失败。
 
 ### 6.4 Stage 2：语境推断（Step 2）
 
@@ -534,6 +545,12 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
 - 阶段进度通过事件/状态流推给 UI，不在页面 State 里私存。
 
 ## 7. 输入、OCR 版本与词典辅助修复
+
+> **2026-11-02 P6.6 核心实现**：`OcrConsensus` 负责本地质量评分、字符级 diff、
+> 版本排序和有界词典候选；`AgentOcrVariantsController` 在用户点击“多版本识别”
+> 后才补跑横向/纵向；`AgentOcrVariantsPanel` 展示 chip、质量、差异高亮和候选。
+> 采用候选或切换版本会创建新的本地 OCR 变体并重新分析，绝不静默改写上一次结果。
+> 图片、路径、base64 和 API Key 不进入该流程或 provider 请求。
 
 ### 7.1 OCR 版本模型
 
@@ -740,7 +757,7 @@ SharedPreferences，但不得混入 Key。
 
 - 主页五按钮：已按“拍照识别/查句子/查单词/历史记录/词典助手”顺序接入；
   `docs/design-tokens.md` 与 `AgentTokens` 已补充规范，小屏/横屏通过滚动保证
-  不溢出。后续 P6.6/P6.7 仍必须先改 token 再改页面。
+  不溢出。P6.6 已按既有 Agent token 实现；P6.7 仍必须先改 token 再改页面。
 - Agent 页：深蓝 AppBar「词典助手」；新会话/历史/设置；**对话式布局**（消息区
   约 80%，小屏 ≥70%；本会话设置默认收起、固定底部输入区）；严格/宽松与
   small/complex 模型提示；会话词典筛选；阶段进度；发送/停止。
@@ -753,8 +770,8 @@ SharedPreferences，但不得混入 Key。
   独立标签。
 - 状态/错误：空闲/提交中/流式/完成/中断/降级/离线/错误均有视觉标识；失败保留
   已生成内容，错误卡出现在消息下方，不弹全局对话框、不整屏 loading。
-- OCR 版本区（P6.6）：版本 chip、差异高亮、修复建议“采用/忽略”、切换版本重新
-  分析。
+- OCR 版本区（P6.6 核心已实现，2026-11-02）：版本 chip、质量指标、差异高亮、
+  词典候选“采用”（不采用即保持不变）、切换版本后重新分析；真机视觉验收待做。
 - 熟悉期 sheet：档案预览/编辑、保存/本次跳过/不再询问；确认前不写档案。
 - 设置：provider 列表/新增/编辑、Base URL、small/complex 模型、API Key 掩码输入
   与显示切换、测试连接（显式发送最小文本请求）、三态配置标签、隐私说明、清除
@@ -823,12 +840,14 @@ Phase 6 实施后至少覆盖：
 - 主页五按钮已接入，Agent 页/Provider 设置/熟悉期/证据/引用/校验可用。
 - **对话式 Agent UI v2 基础布局已实现（气泡/流式/折叠依据/固定输入区），但
   状态条、历史、无障碍 200% 等完整 v2 验收项仍待补。**
-- P6.6 多 OCR 与 P6.7 DSL/发布未完成；真实 provider/API Key 与真实词典
-  `sample` 设备验证仍待做。详见 `docs/phase6-status.md`。
+- P6.6 多 OCR 核心已实现（2026-11-02，自动化测试）；P6.6 真机视觉/OCR/词典
+  质量验收与 P6.7 DSL/发布未完成；真实 provider/API Key 与真实词典 `sample`
+  设备验证仍待做。详见 `docs/phase6-status.md`。
 
 ## 16. 实施顺序（Phase 6）
 
-Phase 6 已在 Phase 5 完成后开始；P6.1–P6.5 核心已完成，P6.6/P6.7 待做。
+Phase 6 已在 Phase 5 完成后开始；P6.1–P6.5 核心已完成，P6.6 多 OCR 核心已完成
+（2026-11-02），P6.6 真机验收与 P6.7 待做。
 以下不是时间估算：
 
 1. **6.1 能力 Ports**：`lib/services/agent/ports/`、DTO 序列化、`LookupGateway`、
@@ -845,14 +864,16 @@ Phase 6 已在 Phase 5 完成后开始；P6.1–P6.5 核心已完成，P6.6/P6.7
    `agent_validator.dart`。
 5. **6.5 Agent UI**：Agent 页、会话词典选择、citation 点击、历史/设置、主页第五
    按钮、设计 token；先结构化组件 + 安全纯文本，不引入完整 Markdown/ruby。
-6. **6.6 多 OCR**：`ocr_consensus.dart`、变体差异/修复建议 UI；默认单版本。
+6. **6.6 多 OCR（核心已实现，2026-11-02）**：`ocr_consensus.dart`、变体差异/
+   修复建议 UI；默认单版本；真机视觉/OCR/词典质量验收仍待完成。
 7. **6.7 DSL/发布**：annotation DSL、Markdown/ruby/pitch、许可证/性能/发布验收。
 
 ## 17. 已定事项、默认值与开放问题
 
 **已定：**
 
-- Phase 6 已在 Phase 5 后开始；P6.1–P6.5 核心已实现，P6.6/P6.7 待做。
+- Phase 6 已在 Phase 5 后开始；P6.1–P6.5 核心已实现，P6.6 多 OCR 核心已实现
+  （2026-11-02），P6.6 真机验收与 P6.7 待做。
 - 固定流水线；模型无工具（2026-10-31 决策；tool loop 为未来扩展）。
 - OpenAI-compatible + Anthropic 双适配；`flutter_secure_storage`。
 - 多 OCR 按需；默认单版本。

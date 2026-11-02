@@ -39,14 +39,14 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **291** |
-| 当前测试文件数 | **72** |
+| 当前 test/testWidgets 声明数 | **321** |
+| 当前测试文件数 | **75** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | 291 passed |
-| 最近 `flutter build apk --debug` | success（Wave 3） |
+| 最近 `flutter test` | 321 passed |
+| 最近 `flutter build apk --debug` | success（P6.6 多 OCR 核心实现后） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
-> 该数字对应 `389e86e` 之后的标签块完整性/旧 schema 清理工作区（尚未提交）。
+> 该数字对应当前未提交工作区（Wave 3 + prompt 集中/覆盖标签/raw surface + P6.6）。
 > 新增/删除测试后只更新本节。
 
 ### 2.2 历史测试基线（不要当作当前值）
@@ -63,7 +63,9 @@
 | 标签完整性/旧 schema 清理 | 267 | 标签块校验、移除 JSON 响应 schema/回退；含并行新增 regeneration 测试 |
 | 依据计数修正 | 268 | 展开栏“详细解析”依据数改为最终采用数 |
 | Wave 3 | 291 | F1b 语言后校验、F6 四种模式递进/AgentLimits、F7 覆盖审查与一次回退 |
-| 当前 | **291** | 见 §2.1 |
+| Prompt/覆盖标签/raw 兜底 | 295 | agent_prompts 集中、coverage 标签、模式无新增继续、UniDic raw surface |
+| P6.6 多 OCR 核心 | 321 | 质量/diff、版本比较、词典候选、用户确认后重新分析；设备验收待做 |
+| 当前 | **321** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 

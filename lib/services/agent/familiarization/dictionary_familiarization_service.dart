@@ -9,9 +9,9 @@ import '../../../core/models/dictionary_sample.dart';
 import '../ports/agent_capability_exception.dart';
 import '../ports/dictionary_sample_port.dart';
 import '../ports/llm_port.dart';
+import '../agent_prompts.dart';
 import 'dictionary_profile_markdown.dart';
 import 'dictionary_profile_tag_parser.dart';
-import 'familiarization_prompts.dart';
 import 'profile_fingerprint.dart';
 import 'profile_repository.dart';
 

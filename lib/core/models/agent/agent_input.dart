@@ -1,6 +1,7 @@
 import 'package:rikai_ocr/rikai_ocr.dart' show OcrMode;
 
 import 'agent_json.dart';
+import 'agent_quote.dart';
 
 /// Strict/loose answer policy for one Agent request.
 enum AgentMode {
@@ -62,6 +63,7 @@ class AgentOcrVariant {
     required this.text,
     this.confidence = 0,
     this.elapsedMs = 0,
+    this.origin = AgentQuoteOrigin.ocr,
   });
 
   final String id;
@@ -70,6 +72,30 @@ class AgentOcrVariant {
   final String text;
   final double confidence;
   final int elapsedMs;
+
+  /// Local provenance. It is deliberately not serialized into the provider
+  /// input envelope; only the local source-version record uses it.
+  final AgentQuoteOrigin origin;
+
+  AgentOcrVariant copyWith({
+    String? id,
+    String? engine,
+    OcrMode? mode,
+    String? text,
+    double? confidence,
+    int? elapsedMs,
+    AgentQuoteOrigin? origin,
+  }) {
+    return AgentOcrVariant(
+      id: id ?? this.id,
+      engine: engine ?? this.engine,
+      mode: mode ?? this.mode,
+      text: text ?? this.text,
+      confidence: confidence ?? this.confidence,
+      elapsedMs: elapsedMs ?? this.elapsedMs,
+      origin: origin ?? this.origin,
+    );
+  }
 
   Map<String, Object?> toJson() => {
     'id': id,

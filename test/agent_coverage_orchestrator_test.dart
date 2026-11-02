@@ -43,18 +43,16 @@ const _analysisTagged = '''
 ''';
 
 const _coverageMissing = '''
-{"schema":"rikai.agent.coverage.v1","source_id":"src-1","verdict":"missing",
- "missing":[{"kind":"usage","query":"何卒","source_refs":["t1"],
-             "reason":"缺少用法","priority":1}],
- "duplicate_groups":[]}
+[COVERAGE verdict="missing"]
+[MISSING kind="usage" query="何卒" refs="t1" priority="1"]缺少用法[/MISSING]
+[/COVERAGE]
 ''';
 
 const _coverageDuplicate = '''
-{"schema":"rikai.agent.coverage.v1","source_id":"src-1","verdict":"missing",
- "missing":[{"kind":"usage","query":"何卒","source_refs":["t1"],
-             "reason":"缺少用法","priority":1}],
- "duplicate_groups":[{"dictionary_id":"dict_a","keep_entry_key":"何卒",
-                      "remove_entry_keys":["何卒（副）"],"reason":"重复"}]}
+[COVERAGE verdict="missing"]
+[MISSING kind="usage" query="何卒" refs="t1" priority="1"]缺少用法[/MISSING]
+[DUPLICATE dictionary="dict_a" keep="何卒" remove="何卒（副）"]重复[/DUPLICATE]
+[/COVERAGE]
 ''';
 
 class _FakeOcr implements OcrPort {
@@ -190,6 +188,43 @@ void main() {
     expect(provider.requests, hasLength(2));
   });
 
+  test('coverage tag integrity failure gets one format repair', () async {
+    final lookup = _LookupScript(<List<LookupEntry>>[
+      <LookupEntry>[_entry('何卒', 'なにとぞ。どうか。')],
+      <LookupEntry>[_entry('何卒・用法', '正式な依頼に使う表現。')],
+    ]);
+    final provider = FakeProvider(
+      responseSequence: <String>[
+        '$_coverageMissing[/COVERAGE]',
+        _coverageMissing,
+        _analysisTagged,
+      ],
+    );
+
+    final result =
+        await _orchestrator(
+          provider: provider,
+          lookup: lookup,
+          limits: const AgentLimits(maxCoverageFallback: 1),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.strict,
+            dictionaries: <DictionaryInfo>[_dictionary],
+            provider: _provider,
+            userText: '何卒',
+          ),
+        );
+
+    expect(result.coverageFallbackUsed, isTrue);
+    expect(provider.requests, hasLength(3));
+    final repairPrompt = provider.requests[1].messages
+        .map((message) => message.text)
+        .join('\n');
+    expect(repairPrompt, contains('FORMAT CORRECTION TASK'));
+    expect(repairPrompt, contains('多余的结束标签 [/COVERAGE]'));
+  });
+
   test('flow B prunes a verified duplicate before supplementing', () async {
     final lookup = _LookupScript(<List<LookupEntry>>[
       <LookupEntry>[
@@ -238,8 +273,8 @@ void main() {
     ]);
     final provider = FakeProvider(
       responseSequence: <String>[
-        'not coverage json',
-        'still not coverage json',
+        'not coverage tags',
+        'still not coverage tags',
         _analysisTagged,
       ],
     );

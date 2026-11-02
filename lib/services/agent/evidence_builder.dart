@@ -8,6 +8,7 @@ import '../../core/models/lookup_models.dart';
 import '../../core/models/lookup_request.dart';
 import '../../core/models/token.dart';
 import '../../core/utils/html_text.dart';
+import '../../core/utils/text_normalizer.dart';
 import 'citation_registry.dart';
 import 'grammar_patterns.dart';
 import 'ports/agent_capability_exception.dart';
@@ -52,6 +53,8 @@ class EvidenceBuilder {
     final sourceEvidence = <AgentSourceEvidence>[];
     final patternEvidence = <AgentGrammarPatternEvidence>[];
     final tokenTargets = <String, _TokenTarget>{};
+    final rawTargets = <_TokenTarget>[];
+    final rawKeys = <String>{};
     final patternTargets = <_PatternTarget>[];
     var tokenCounter = 0;
     var patternCounter = 0;
@@ -116,6 +119,30 @@ class EvidenceBuilder {
         }
       }
 
+      // UniDic is optional. When it is unavailable or returns no tokens, keep
+      // word-level lookup alive with bounded raw-surface targets instead of
+      // silently producing an empty evidence bundle.
+      if (text.trim().isNotEmpty && tokens.isEmpty) {
+        structureUnavailable = true;
+        if (rawTargets.length < maxTargets) {
+          for (final candidates in _rawSurfaceCandidates(
+            text,
+            maxTargets - rawTargets.length,
+          )) {
+            final key = candidates.join('\u0000');
+            if (!rawKeys.add(key)) continue;
+            rawTargets.add(
+              _TokenTarget(
+                candidates: candidates,
+                tokenIds: const <String>[],
+                content: true,
+              ),
+            );
+            if (rawTargets.length >= maxTargets) break;
+          }
+        }
+      }
+
       final matches = grammar.match(tokens);
       for (final match in matches) {
         final ids = tokenIds
@@ -147,9 +174,14 @@ class EvidenceBuilder {
       );
     }
 
+    final rawOnlyTargets = <_TokenTarget>[
+      for (final target in rawTargets)
+        if (!tokenTargets.containsKey(_targetKey(target.candidates))) target,
+    ];
     final targets = <_LookupTarget>[
       ...patternTargets,
       ...tokenTargets.values.where((target) => target.content),
+      ...rawOnlyTargets,
       ...tokenTargets.values.where((target) => !target.content),
     ];
     final selectedTargets = targets.take(maxTargets).toList(growable: false);
@@ -172,11 +204,11 @@ class EvidenceBuilder {
     }
 
     // F6: run one mode across every target before moving to the next mode.
-    // Stop at the global cap, or when a mode adds no new unique citation.
+    // A mode that adds nothing does not stop later modes: a prefix miss can
+    // still have suffix/incremental hits. Stop only at the global cap.
     var capReached = false;
     for (final mode in _lookupModes) {
       if (capReached) break;
-      var modeNew = 0;
       for (final target in selectedTargets) {
         if (isCancelled?.call() == true) {
           throw const AgentCapabilityException(
@@ -240,7 +272,6 @@ class EvidenceBuilder {
             target.citationIds.add(citation.id);
             target.perDictionary[group.dictionary.id] =
                 (target.perDictionary[group.dictionary.id] ?? 0) + 1;
-            modeNew++;
             remaining--;
             onProgress?.call(citations.citations.length);
             if (citations.citations.length >= maxCitations) {
@@ -254,7 +285,6 @@ class EvidenceBuilder {
         if (capReached) break;
       }
       if (capReached) break;
-      if (modeNew == 0) break;
     }
 
     final tokensWithCitations = <String, List<String>>{};
@@ -361,7 +391,6 @@ class EvidenceBuilder {
 
     for (final mode in _lookupModes) {
       if (capReached) break;
-      var modeNew = 0;
       for (var queryIndex = 0; queryIndex < order.length; queryIndex++) {
         if (isCancelled?.call() == true) {
           throw const AgentCapabilityException(
@@ -433,7 +462,6 @@ class EvidenceBuilder {
                 (counts[group.dictionary.id] ?? 0) + 1;
             remaining--;
             newCount++;
-            modeNew++;
             onProgress?.call(citations.citations.length);
             if (newCount >= maxNewCitations) {
               capReached = true;
@@ -445,7 +473,6 @@ class EvidenceBuilder {
         if (capReached) break;
       }
       if (capReached) break;
-      if (modeNew == 0) break;
     }
     return result;
   }
@@ -514,3 +541,45 @@ class _PatternTarget extends _LookupTarget {
   @override
   final List<String> candidates;
 }
+
+String _targetKey(List<String> candidates) => candidates.join('\u0000');
+
+/// Bounded word-like candidates for the UniDic-unavailable fallback.
+///
+/// Japanese has no spaces, so this deliberately mixes whole punctuation/line
+/// chunks with short bounded windows. It is best-effort only: it never invents
+/// tokens, never claims structure, and is capped by [maxTargets].
+List<List<String>> _rawSurfaceCandidates(String text, int limit) {
+  if (limit <= 0) return const <List<String>>[];
+  final normalized = normalizeLookupText(text);
+  final results = <List<String>>[];
+  final seen = <String>{};
+
+  void add(String raw) {
+    if (results.length >= limit) return;
+    final surface = raw.trim();
+    if (surface.length < 2) return;
+    final candidates = lookupCandidatesFor(<String>[surface]);
+    if (candidates.isEmpty) return;
+    if (!seen.add(_targetKey(candidates))) return;
+    results.add(candidates);
+  }
+
+  for (final chunk in normalized.split(_rawSurfaceSplit)) {
+    final value = chunk.trim();
+    if (value.length < 2) continue;
+    if (value.length <= 12) add(value);
+    final maxWindow = value.length < 6 ? value.length : 6;
+    for (var length = maxWindow; length >= 2; length--) {
+      for (var start = 0; start + length <= value.length; start++) {
+        add(value.substring(start, start + length));
+        if (results.length >= limit) return results;
+      }
+    }
+  }
+  return results;
+}
+
+final _rawSurfaceSplit = RegExp(
+  r'[\s、。，．・：；！？「」『』（）［］｛｝【】〈〉《》〔〕…‥〜～,.;:!?/\\|]+',
+);

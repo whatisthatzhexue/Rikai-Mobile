@@ -94,24 +94,60 @@ AgentCoverageReview _review({
 void main() {
   test('parses a valid coverage review', () {
     final parsed = parseCoverageReview('''
-{"schema":"rikai.agent.coverage.v1","source_id":"src-1","verdict":"missing",
- "missing":[{"kind":"word","query":"何卒","source_refs":["t1"],
-             "reason":"缺少用法","priority":1}],
- "duplicate_groups":[]}
+[COVERAGE verdict="missing"]
+[MISSING kind="word" query="何卒" refs="t1" priority="1"]缺少用法[/MISSING]
+[DUPLICATE dictionary="dict-a" keep="何卒" remove="何卒（副）|何卒（別）"]重复[/DUPLICATE]
+[NOTES]short note[/NOTES]
+[/COVERAGE]
 ''', expectedSourceId: 'src-1');
     expect(parsed.errors, isEmpty);
     expect(parsed.review?.missing.single.query, '何卒');
     expect(parsed.review?.missing.single.kind, AgentCoverageKind.word);
+    expect(parsed.review?.missing.single.priority, 1);
+    expect(parsed.review?.duplicateGroups.single.keepEntryKey, '何卒');
+    expect(parsed.review?.duplicateGroups.single.removeEntryKeys, <String>[
+      '何卒（副）',
+      '何卒（別）',
+    ]);
+    expect(parsed.review?.notes, 'short note');
   });
 
-  test('rejects a coverage review with a wrong schema', () {
+  test('keeps spaces inside duplicate entry keys', () {
+    final parsed = parseCoverageReview('''
+[COVERAGE verdict="missing"]
+[DUPLICATE dictionary="dict-a" keep="take care" remove="take care of|look after"]重复[/DUPLICATE]
+[/COVERAGE]
+''', expectedSourceId: 'src-1');
+    expect(parsed.errors, isEmpty);
+    expect(parsed.review?.duplicateGroups.single.keepEntryKey, 'take care');
+    expect(parsed.review?.duplicateGroups.single.removeEntryKeys, <String>[
+      'take care of',
+      'look after',
+    ]);
+  });
+
+  test('parses a sufficient coverage review', () {
     final parsed = parseCoverageReview(
-      '{"schema":"wrong","source_id":"src-1","verdict":"sufficient",'
-      '"missing":[],"duplicate_groups":[]}',
+      '[COVERAGE verdict="sufficient"][/COVERAGE]',
       expectedSourceId: 'src-1',
     );
-    expect(parsed.review, isNull);
-    expect(parsed.errors, isNotEmpty);
+    expect(parsed.errors, isEmpty);
+    expect(parsed.review?.verdict, AgentCoverageVerdict.sufficient);
+    expect(parsed.review?.missing, isEmpty);
+  });
+
+  test('rejects malformed or unbalanced coverage tags', () {
+    for (final raw in <String>[
+      'not coverage tags',
+      '[COVERAGE verdict="missing"]\n[MISSING kind="word" query="何卒" refs="t1"]缺少用法[/MISSING]',
+      '[COVERAGE verdict="missing"]\n[MISSING kind="word" query="何卒" refs="t1"]缺少用法',
+      '[COVERAGE verdict="wrong"][/COVERAGE]',
+      '[COVERAGE verdict="sufficient"]\n[MISSING kind="word" query="何卒" refs="t1"]x[/MISSING]\n[/COVERAGE]',
+    ]) {
+      final parsed = parseCoverageReview(raw, expectedSourceId: 'src-1');
+      expect(parsed.review, isNull, reason: raw);
+      expect(parsed.errors, isNotEmpty, reason: raw);
+    }
   });
 
   test('drops untraceable queries and unknown source refs', () {

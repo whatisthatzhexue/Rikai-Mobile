@@ -5,14 +5,14 @@ Base: Phase 5 complete (`docs/phase5-status.md`)
 Design: `docs/phase6-agent-design.md` v2
 Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 
-> **Status: P6.1–P6.5 core implemented; P6.6 (multi-OCR variants/repair) and
-> P6.7 (annotation DSL/Markdown/ruby/pitch/release) are not implemented.**
-> 2026-10-31 real-device feedback F1–F17: **Waves 1–2 are implemented
-> (Wave 2: F8/F1a/F17/F2/F3/F11/F12/F13/F14); Waves 3–4 are pending**; follow
-> `docs/agent_docs/device-feedback-2026-10-31.md` before extending the Agent.
-> **Current test/device/build/environment numbers are centralized in
-> `docs/project-data.md`; do not copy them here.** Normative MUST/MUST NOT rules
-> live in `docs/project-rules.md`. Automated tests use fake
+> **Status: P6.1–P6.5 core and 2026-10-31 feedback Waves 1–3 are implemented;
+> Wave 4 device acceptance is still pending. P6.6 multi-OCR core is implemented
+> (2026-11-02, automated tests only); P6.7 (annotation DSL/Markdown/ruby/pitch/
+> release) is not implemented.**
+> Follow `docs/agent_docs/device-feedback-2026-10-31.md` for the remaining
+> Wave 4 device checks. **Current test/device/build/environment numbers are
+> centralized in `docs/project-data.md`; do not copy them here.** Normative
+> MUST/MUST NOT rules live in `docs/project-rules.md`. Automated tests use fake
 > providers and never a real API key. On
 > 2026-10-30 a user-configured DeepSeek provider was smoke-tested on the x86_64
 > emulator (key never logged); arm64/real manga-page and real-dictionary
@@ -183,14 +183,20 @@ Summary:
   (F8), app-level dictionary-profile inbox that gates tokenizing (F2), elapsed
   time across page leave (F3), camera/gallery multi-image input (F11),
   full-screen sent-image viewer (F12), profile manager (F13), result action
-  row/copy/edit/regenerate (F14). F1b remains Wave 3.
+  row/copy/edit/regenerate (F14). F1b is implemented in Wave 3.
 - **Wave 3 (implemented)**: `AgentLanguageValidator` + one language repair
-  (F1b); global `AgentLimits` and exact → prefix → suffix → incremental lookup
-  with immediate cap/no-new stop and N/M progress (F6); one
-  `rikai.agent.coverage.v1` review, traceability filtering, locally verified
-  duplicate pruning, flow A/B and at most one supplementary lookup (F7).
+  (F1b); global `AgentLimits` and exact → prefix → suffix → incremental lookup,
+  continuing past a zero-new mode, with normal progression ending at the global
+  cap (cancellation aborts; per-target/per-dictionary caps skip queries, not
+  modes) and N/M progress (F6); one `[COVERAGE]` tag review, source-id fill,
+  tag-integrity checks, traceability filtering, locally verified duplicate
+  pruning, flow A/B and at most one supplementary lookup (F7). All Agent prompt
+  text is centralized in `agent_prompts.dart`; old prompt files are compatibility
+  re-exports.
 - F2 must precede F7/F13/F14 profile work. F6 must precede F7. F17 must precede
-  all Agent UI localization work. Do not start P6.6/P6.7 from this backlog.
+  all Agent UI localization work. The backlog itself does not authorize P6.6/
+  P6.7; P6.6 was started separately on 2026-11-02 by explicit user instruction,
+  while Wave 4 device acceptance remains pending.
 
 Wave 1 implementation (2026-10-31):
 
@@ -286,34 +292,91 @@ Wave 3 implementation (2026-11-01, F1b/F6/F7):
 - **F6**: `AgentLimits` (`lib/core/models/agent/agent_limits.dart`) is the single
   budget source and is injectable through `agentLimitsProvider`. Evidence lookup
   runs mode-by-mode: all targets exact, then prefix, suffix, incremental. A mode
-  with zero new unique citations stops later modes; the global cap stops
-  immediately; per-target/per-dictionary caps are enforced across modes; duplicate
-  `(dictionaryId, entryKey)` entries are linked, not reissued. Progress uses
-  `已检索 N / M` from the run's limit snapshot.
-- **F7**: After initial evidence, one `rikai.agent.coverage.v1` JSON review (small
-  model, one JSON-format repair). Queries are kept only when traceable to source
-  text, token surface/lemma/reading/candidates, pattern surface or an existing
-  citation key; source refs must exist. Flow A supplements below the cap with
-  the same F6 mode order. Flow B verifies model-suggested same-dictionary
-  duplicate groups locally by snippet overlap, keeps the denser entry, prunes
-  the rest from the bundle/registry, then supplements. At most one review and one
-  fallback per run; failure, untraceable queries, no verified duplicates or no
-  new evidence produce localized warnings and keep the original evidence.
+  with zero new unique citations does **not** stop later modes; normal mode
+  progression ends at the global cap, while cancellation aborts and per-target/
+  per-dictionary caps skip a target/dictionary without stopping the mode loop;
+  duplicate `(dictionaryId, entryKey)` entries are linked, not reissued. When
+  UniDic fails/returns no tokens, bounded raw-surface targets keep MDict lookups
+  alive: chunks are split by newline/whitespace/punctuation, whole chunks ≤12 chars and
+  2–6 char windows are added, candidates go through `lookupCandidatesFor`, and
+  raw targets share the same modes and caps. Progress uses `已检索 N / M` from
+  the run's limit snapshot.
+- **F7**: After initial evidence, one `[COVERAGE]` tag review (small model, one
+  tag-format repair). The parser fills `source_id` locally and checks the single
+  COVERAGE root, MISSING/DUPLICATE/NOTES parentage, NOTES uniqueness and tag
+  closure before accepting a review. Queries are kept only when traceable to
+  source text, token surface/lemma/reading/candidates, pattern surface or an
+  existing citation key; source refs must exist. Flow A supplements below the cap
+  with the same F6 mode order. Flow B verifies model-suggested same-dictionary
+  duplicate groups locally by snippet overlap, keeps the denser entry, prunes the
+  rest from the bundle/registry, then supplements. At most one review and one
+  fallback per run; failure, untraceable queries, no verified duplicates or no new
+  evidence produce localized warnings and keep the original evidence.
   `AgentStage.coverage` maps to the lookup progress step; `coverageFallbackUsed`
-  is recorded in the result.
-- Wave 3 verification: `flutter analyze` clean; `flutter test` 291 passed;
-  `flutter build apk --debug` succeeded. Real provider/arm64/large-dictionary
+  is recorded in the result. The `coverage.v1` JSON DTO/serialization remains
+  internal; no persistence call is currently wired.
+- All Agent prompt text/request builders live in
+  `lib/services/agent/agent_prompts.dart`; other Agent files must not embed prompt
+  literals.
+- Wave 3 verification: `flutter analyze` clean; `flutter test` see
+  `docs/project-data.md` §2.1; `flutter build apk --debug` succeeded after the
+  prompt/coverage/raw-surface migration. Real provider/arm64/large-dictionary
   smoke remains Wave 4.
+
+P6.6 implementation (2026-11-02, multi-OCR core):
+
+- `AgentOcrVariant` now carries local `origin` (OCR or dictionary repair) and
+  prepared variants can be passed through `AgentImageInput`; re-analysis reuses
+  the selected OCR text and does not run recognition again. Source/quote
+  provenance records `dictionary_repair` locally without serializing paths or
+  origins to the provider.
+- `OcrConsensus` (`lib/services/agent/ocr_consensus.dart`) computes local
+  quality (confidence, kana/kanji/latin ratio, duplicate-noise ratio, bounded
+  dictionary hit rate), bounded character diff (prefix/suffix + LCS for small
+  middles), deterministic variant ranking, and bounded dictionary-backed repair
+  suggestions. No provider call, image upload or automatic text replacement is
+  involved.
+- `AgentOcrVariantsController` (`lib/state/agent_ocr_variants.dart`) is
+  app-scoped. It runs horizontal/vertical alternatives only after the user asks
+  for a comparison, dedupes identical text, reports a stable error code on
+  failure, and supports stop/clear.
+- `AgentOcrVariantsPanel` shows variant chips (engine/mode/confidence), quality
+  metrics, low-quality warning, difference preview with highlighted changed
+  spans, dictionary candidates, and an explicit “re-analyze with this variant”
+  action. Applying a candidate creates a `dictionary_repair` variant and starts
+  a new run; it never edits the previous result in place.
+- `AgentRunResult.ocrQuality` exposes the selected variant's local quality for
+  the UI; it is never sent to the provider.
+- Automated coverage: quality/diff/ranking/repair unit tests, controller
+  generation/dedupe/error/clear tests, prepared-variant orchestrator test, and
+  panel widget tests. Real-device visual/OCR quality and real dictionary
+  suggestion quality remain Wave 4/P6.6 device acceptance.
 
 Current known gaps:
 
 - Wave 4 device acceptance is not done: real provider/API key, arm64 Agent
   end-to-end, real large-dictionary suffix/incremental smoke, and secure-storage
   device I/O remain unverified. Automated Wave 3 tests do not prove those.
-- The coverage review uses the small model and JSON text parsed locally; real
-  provider JSON reliability and latency still need device measurement.
+- The coverage review uses the small model and tag text parsed locally; real
+  provider tag reliability and latency still need device measurement.
+- Test coverage gaps: there is no dedicated raw-surface-target cap test (current
+  cap tests use token targets), and no dedicated duplicate-`[NOTES]` integrity
+  test. The implementation has both paths but the tests do not yet pin them.
+- `coverage.v1` still has JSON serialization methods, but no persistence call is
+  wired; do not describe it as an active storage format.
+- P6.6 device acceptance is pending: horizontal/vertical variant quality on
+  real manga pages, dictionary candidate usefulness against the real 463k-entry
+  dictionary, contrast/overflow at 200% font, and re-analysis latency.
+- P6.6 does not yet show per-variant citations before the user commits to a
+  re-analysis; citations are rebuilt after the selected variant is analyzed.
+  All variants are in the input envelope, but only the selected variant is
+  recorded in `AgentSourceVersion` (the SQLite source-version store is not yet
+  wired to persist every variant).
 - Process-death recovery of the in-memory profile inbox remains P6.7; the queue
   survives page navigation but not process death.
+- P6.7 之后的任务级流式规划：
+  [`task-level-streaming-plan.md`](agent_docs/task-level-streaming-plan.md)
+  （规划中，未实现）。
 
 ## Tests and build
 
@@ -357,17 +420,22 @@ Wave 3 adds `agent_language_validator_test.dart`, `agent_coverage_test.dart`
 and `agent_coverage_orchestrator_test.dart`, plus lookup-mode/cap cases in
 `evidence_builder_test.dart` and language/coverage cases in
 `agent_orchestrator_test.dart`.
+P6.6 adds `ocr_consensus_test.dart`, `agent_ocr_variants_test.dart` and
+`agent_ocr_variants_ui_test.dart`, plus a prepared-variant case in
+`agent_orchestrator_test.dart`.
 
 ## Not implemented / next
 
 1. **2026-10-31 device feedback (F1–F17)**: Waves 1–3 are implemented and
-   verified by unit/widget tests; continue with Wave 4 device acceptance
-   (real provider, arm64, large-dictionary suffix/incremental smoke).
-   **Do not start P6.6/P6.7 until these feedback items are closed or explicitly
-   deferred.**
-2. **P6.6 multi-OCR**: `ocr.consensus` variants, diff/hit-rate scoring,
-   dictionary-assisted repair suggestions and the Agent OCR-version UI. The
-   current Agent uses one OCR mode per image.
+   verified by unit/widget tests; Wave 4 device acceptance remains
+   (real provider, arm64, large-dictionary suffix/incremental smoke). The
+   2026-11-02 user instruction to continue development was used to start P6.6;
+   this does not turn the pending Wave 4 device checks into verified results.
+2. **P6.6 multi-OCR**: core implemented 2026-11-02 (quality/diff/ranking,
+   dictionary-assisted candidates, user-confirmed variant re-analysis and UI).
+   Remaining: real-device visual/OCR/dictionary acceptance and per-variant
+   citation preview; persistence of every variant remains tied to P6.7 history
+   work.
 3. **P6.7**: annotation DSL, Markdown/ruby/pitch rendering, history/session UI
    (tables exist; no write/read UI yet), provider test-connection, release
    packaging/licence review.

@@ -1,7 +1,8 @@
 # ADR 0004: Agent capability ports and deterministic citation pipeline
 
-- Status: accepted; P6.1–P6.5 implemented (P6.6/P6.7 pending)
-- Date: 2026-10-30
+- Status: accepted; P6.1–P6.5 and P6.6 multi-OCR core implemented (P6.6 device
+  acceptance and P6.7 pending)
+- Date: 2026-10-30 (P6.6 core update: 2026-11-02)
 - Update 2026-10-31: the fixed pipeline is the shipped design; the model has no
   tools. `lib/services/agent/tools/` was deleted. The tool visibility list below
   is retained only as a rejected/future option; do not present tool calling as
@@ -71,5 +72,6 @@ which evidence to cite. That conflicts with the product requirements:
 - The model has less freedom but cannot reorder dictionaries or invent sources.
 - A new `MdictService.sample`/`suggest` surface and a pure `LookupGateway` are
   required before the Agent UI can be built; both are now implemented.
-- P6.1–P6.5 now follow this decision. P6.6 (multi-OCR) and P6.7 (annotation
-  DSL/Markdown/ruby/pitch/history/release) remain pending.
+- P6.1–P6.5 and the P6.6 multi-OCR core now follow this decision. P6.6
+  device-quality acceptance and P6.7 (annotation DSL/Markdown/ruby/pitch/
+  history/release) remain pending.

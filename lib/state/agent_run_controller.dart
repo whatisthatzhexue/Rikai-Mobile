@@ -61,6 +61,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
           id: 'img-${index + 1}',
           localPath: images[index].localPath,
           mode: images[index].mode,
+          variants: images[index].variants,
+          selectedVariantId: images[index].selectedVariantId,
         ),
     ];
     final inputs = _RunInputs(
@@ -258,6 +260,26 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       dictionaries: inputs.dictionaries,
       provider: inputs.provider,
       mode: mode ?? inputs.mode,
+      unidicPath: inputs.unidicPath,
+      responseLanguage: inputs.responseLanguage,
+      profileLanguage: inputs.profileLanguage,
+      retainResult: state.result ?? state.retainedResult,
+    );
+  }
+
+  /// Re-analyzes with prepared OCR variants (P6.6). The run keeps the same
+  /// text/dictionaries/provider/mode, reuses the supplied OCR text instead of
+  /// running recognition again, and keeps the previous result visible until
+  /// the new one succeeds.
+  Future<void> reanalyzeWithImages(List<AgentImageInput> images) async {
+    final inputs = _lastInputs;
+    if (inputs == null || state.isRunning) return;
+    await start(
+      userText: inputs.userText,
+      images: images,
+      dictionaries: inputs.dictionaries,
+      provider: inputs.provider,
+      mode: inputs.mode,
       unidicPath: inputs.unidicPath,
       responseLanguage: inputs.responseLanguage,
       profileLanguage: inputs.profileLanguage,

@@ -1,7 +1,9 @@
 # Agent 实机反馈修正计划（2026-10-31）
 
 - 状态：**Wave 1–3 已实现（Wave 2：F8/F1a/F17/F2/F3/F11/F12/F13/F14；
-  Wave 3：F1b/F6/F7）；Wave 4 设备回归未开始；未开始 P6.6/P6.7。**
+  Wave 3：F1b/F6/F7）；Wave 4 设备回归未开始。P6.6 多 OCR 核心已于
+  2026-11-02 按用户明确指示实现（自动化测试），真机/真实词典验收仍待
+  Wave 4；P6.7 未开始。**
 - 来源：用户实机使用 P6.5 后提出的 17 项反馈（本文件按原编号 F1–F17 记录）。
 - 基线：P6.5 固定流水线、应用级 `AgentRunController`；Wave 3 后
   `flutter analyze` 无问题；当前测试/构建基线见
@@ -17,15 +19,19 @@
   迁移、应用级档案队列 gate、跨页思考时间、多图/全屏查看、结果操作行/
   Markdown/重新生成等测试。设备视觉、真实 provider、arm64 与档案管理页
   手工验收仍待 Wave 4。
-- Wave 3 验证（2026-11-01）：`flutter analyze` 无问题；`flutter test` 291 passed；
-  `flutter build apk --debug` 成功。
+- Wave 3 验证（2026-11-01）：`flutter analyze` 无问题；`flutter test` 295 passed
+  （含后续 prompt 集中/coverage 标签/raw surface 迁移）；`flutter build apk
+  --debug` 成功。
   F1b 有中/英/日目标语言字段校验、忽略原文/读音/引用摘要、一次语言修复成功
   与仍偏离时保留结果+warning 的 unit/orchestrator 测试；F6 有
-  exact→prefix→suffix→incremental 顺序、全局上限立即停止、某模式无新增即停止、
-  每词每典上限和 `AgentLimits`/进度 N/M 的测试；F7 有 coverage JSON 解析、
-  可追溯性过滤、重复条目本地验证、流程 A/B、审查失败保留证据和只回退一次的
-  orchestrator 测试。真实大词典 suffix/incremental 设备冒烟、真实 provider
-  与 arm64 验收仍属 Wave 4。
+  exact→prefix→suffix→incremental 顺序、全局上限立即停止、某模式无新增仍继续
+  下一个模式、UniDic 失败 raw surface 兜底、每词每典上限和 `AgentLimits`/
+  进度 N/M 的测试；F7 有 `[COVERAGE]` 标签解析/完整性、可追溯性过滤、重复条目
+  本地验证、流程 A/B、审查失败保留证据和只回退一次的 orchestrator 测试。
+  所有 Agent prompt 已统一到 `agent_prompts.dart`；旧 prompt 文件仅为兼容
+  re-export。现有自动化未单独覆盖 raw-target 上限与重复 `[NOTES]` 规则；前者
+  只有共享 `_TokenTarget` 上限路径，后者只有完整性实现，没有专门用例。真实
+  大词典 suffix/incremental 设备冒烟、真实 provider 与 arm64 验收仍属 Wave 4。
 - 约束：规则见 `docs/project-rules.md`（R-SEC/R-AGENT/R-DEV），数据/文案见
   `docs/project-data.md`；F15/F16 是用户明确要求的非 Agent 修复，不能借机改动
   查词/OCR 的核心行为。
@@ -76,7 +82,8 @@ Wave 4  回归、设备验收、状态表更新
 6. **F13 先于 F14**：F14 的循环图标要“从熟悉词典步骤重跑”，复用 F13 的档案
    服务/管理接口，而不是再造一套页面内重试。
 7. **F6 先于 F7**：F7 的补充检索必须建立在“exact→prefix→suffix→incremental、
-   全局上限、遇到无新增即停止”的确定性检索器上；否则覆盖审查会放大无界查询。
+   全局上限、某模式无新增也继续下一个模式”的确定性检索器上；否则覆盖审查会
+   放大无界查询。
 8. **F1b 放在 Wave 3 开头**：语言后校验/一次修复与 F6/F7 都改 orchestrator，但
    它不依赖覆盖审查；先做可先降低“设置中文却输出日文”的体感问题。
 
@@ -89,8 +96,8 @@ Wave 4  回归、设备验收、状态表更新
 | F3 | 离开页面期间也要计算思考时间 | fixed（`startedAt` 保持应用级 wall-clock；`awaitingProfile` 仍计时；elapsed 回归测试） | 2 | F2 |
 | F4 | 依据气泡改为短胶囊并自动换行 | fixed（unit/widget；设备视觉待验） | 1 | — |
 | F5 | 结果中的 `（q1）` 等标记太抽象 | fixed（unit/widget） | 1 | — |
-| F6 | 查词不能只完全/前方匹配；达到全局上限或搜不到更多才停 | fixed：`AgentLimits` 单一来源；全局 exact→prefix→suffix→incremental；全局/每词每典上限、无新增即停、进度 N/M；unit 覆盖，设备大词典冒烟待 Wave 4 | 3 | `AgentLimits` |
-| F7 | 查词结束后补做覆盖审查，最多回退一次查词 | fixed：`coverage.v1` 解析/一次修复、可追溯性过滤、流程 A/B、重复本地验证、单次回退、失败 warning；orchestrator 测试覆盖，设备验收待 Wave 4 | 3 | F2、F6 |
+| F6 | 查词不能只完全/前方匹配；达到全局上限或搜不到更多才停 | fixed：`AgentLimits` 单一来源；全局 exact→prefix→suffix→incremental；全局/每词每典上限、某模式无新增仍继续、UniDic 失败 raw surface 兜底、进度 N/M；unit 覆盖，设备大词典冒烟待 Wave 4 | 3 | `AgentLimits` |
+| F7 | 查词结束后补做覆盖审查，最多回退一次查词 | fixed：`[COVERAGE]` 标签解析/完整性/一次修复、可追溯性过滤、流程 A/B、重复本地验证、单次回退、失败 warning；orchestrator 测试覆盖，设备验收待 Wave 4 | 3 | F2、F6 |
 | F8 | Agent 词典选择必须独立保存，不影响查词选择 | fixed（独立 key/模式持久化，不读不写查词偏好；unit 覆盖） | 2 | — |
 | F9 | 词典选择第 4 行露出半行（预留 3.5 行） | fixed（shared widget + widget test；设备视觉待验） | 1 | — |
 | F10 | Provider 表单中文化、DeepSeek/Claude 自动填 Base URL | fixed（widget/unit test；设备保存待验） | 1 | — |
@@ -308,16 +315,20 @@ maxCoverageFallback        1    // F7 每个用户请求最多回退一次
    - 先对所有 target 跑 exact；
    - 若未达上限，依次跑 prefix → suffix → incremental；
    - 每个模式只处理尚未达到每词每典上限的 target，按词典顺序查询；
-   - 每模式统计“新增的唯一 citation 数”；若某模式新增为 0，说明无法从该模式
-     获得更多内容，停止后续模式；
+   - 某模式新增为 0 时不停止，继续下一个模式；否则 prefix 空结果会错误跳过
+     suffix/incremental；
    - citation 数达到上限立即停止；重复 `(dictionaryId, entryKey)` 不计数、不发新
      citation。
+   - UniDic 失败/返回空 token 时，用有界 raw surface targets 继续词级查询：
+     按换行/空白/标点切块，加入长度 ≤12 的整块并生成 2–6 字符窗口，受 `maxTargets`
+     限制；候选经 `lookupCandidatesFor` 展开。
 3. 进度显示“已检索 N 条 / 上限 M 条”，N/M 来自 policy；UI 不写死 60。
 4. 性能保护：suffix/incremental 依赖 worker 的 key 扫描缓存；每目标/每模式有
    取消检查；大词典扫描期间仍可停止；不要把 120 个 target 的四轮查询做成无界
    并发。
 5. 测试：exact 达上限时不跑后续模式；prefix 有新增继续；suffix/incremental
-   顺序正确；某模式无新增即停止；全局上限变量被引用。
+   顺序正确；某模式无新增仍继续；UniDic 失败 raw surface 兜底；全局上限变量
+   被引用。
 
 ### F7｜查词后做一次覆盖审查，最多回退查词一次
 
@@ -328,42 +339,31 @@ maxCoverageFallback        1    // F7 每个用户请求最多回退一次
 
 方案：新增 **一次性覆盖审查**，放在初始证据之后、最终 analysis 之前。
 
-#### F7.1 轻量 schema（新建议，不直接复用较重的 analysis schema）
+#### F7.1 轻量标签协议（不直接复用较重的 analysis 协议）
 
-```json
-{
-  "schema": "rikai.agent.coverage.v1",
-  "source_id": "src-1",
-  "verdict": "missing",
-  "missing": [
-    {
-      "kind": "word|grammar|sense|usage|reading|example|context",
-      "query": "何卒",
-      "source_refs": ["t12", "p3"],
-      "reason": "缺少该词在正式请求语境下的释义",
-      "priority": 1
-    }
-  ],
-  "duplicate_groups": [
-    {
-      "dictionary_id": "dict_a",
-      "keep_entry_key": "何卒",
-      "remove_entry_keys": ["何卒（副）"],
-      "reason": "词条相同且释义大部分重合"
-    }
-  ],
-  "notes": ""
-}
+```text
+[COVERAGE verdict="missing"]
+[MISSING kind="usage" query="何卒" refs="t12,p3" priority="1"]缺少该词在正式请求语境下的释义[/MISSING]
+[DUPLICATE dictionary="dict_a" keep="何卒" remove="何卒（副）|何卒（別）"]词条相同且释义大部分重合[/DUPLICATE]
+[NOTES]可选说明[/NOTES]
+[/COVERAGE]
 ```
 
+- `verdict=sufficient` 时只返回
+  `[COVERAGE verdict="sufficient"][/COVERAGE]`。
+- `source_id` 由解析器使用本次主源 ID 填充，模型不输出。
 - `missing` 最多 `AgentLimits.maxCoverageMissing` 项；`duplicate_groups` 最多
   `maxCoverageDuplicateGroups` 组。
-- `query` 必须可追溯到源文本子串、token 的 lemma/lookupCandidates、已匹配语法
-  模式或已有 suggest 结果；否则 orchestrator 丢弃，不能把模型当任意词典浏览器。
+- `query` 必须可追溯到源文本子串、token 的 surface/lemma/reading/
+  lookupCandidates、已匹配语法模式或已有 citation key；否则 orchestrator 丢弃，
+  不能把模型当任意词典浏览器。当前 Agent 管线不使用 `suggest` 作为补查来源。
 - 输入只含文本源、token/语法摘要、去 HTML/去路径/截断的词典摘要，不含图片、路径、
   完整 HTML、MDD、base64。
-- 复用现有 JSON 解析/一次修复/校验管线；覆盖审查失败只产生 warning，不让整次
-  run 失败。
+- 解析器先检查 COVERAGE 根块唯一、MISSING/DUPLICATE/NOTES 的父子关系、同一
+  COVERAGE 下 NOTES 唯一和标签闭合；解析或完整性失败只做一次“正文不变、只补
+  标签”的修复；覆盖审查失败只产生 warning，不让整次 run 失败。
+- 内部 `coverage.v1` JSON 仅作 DTO/序列化结构与测试使用，不是模型响应格式；
+  当前代码没有持久化调用，不能写成已用于存储。
 
 #### F7.2 流程
 
@@ -380,7 +380,7 @@ initial evidence (F6 modes)
 ```
 
 - **流程 A（未达上限）**：按 `missing` 中可追溯的 query 直接补充检索；仍按 F6
-  的模式顺序，直到达到上限或某模式无新增；已有 citation 不重复。
+  的模式顺序，某模式无新增也继续下一个模式，直到达到上限；已有 citation 不重复。
 - **流程 B（已达上限）**：先由本地确定性校验确认“同一词典 + 同一词条/词条键 +
   摘要大部分重合”；删除信息密度较低的重复条目，空出的槽位再用流程 A 补充。
   不能仅凭模型说“重复”就删除，不能跨词典误删。
@@ -788,12 +788,13 @@ arm64 验收留到 Wave 4。
 ### Wave 3：检索完整度与结果语言（已实现）
 
 1. **F1b** 输出语言字段校验 + 一次语言修复（复用 repair；失败保留结果）。
-2. **F6** `AgentLimits` + exact→prefix→suffix→incremental 递进。
-3. **F7** `agent.coverage.v1` 覆盖审查 + 流程 A/B + 最多一次回退。
+2. **F6** `AgentLimits` + exact→prefix→suffix→incremental 递进；某模式无新增也
+   继续；UniDic 失败 raw surface 兜底。
+3. **F7** `[COVERAGE]` 标签覆盖审查 + 流程 A/B + 最多一次回退。
 4. 补性能/取消/词典顺序测试；大词典 suffix/incremental 设备冒烟。
 
 实现：`agent_language_validator.dart`、`agent_limits.dart`、
-`evidence_builder.dart`、`coverage_prompts.dart`、`agent_coverage_parser.dart`、
+`evidence_builder.dart`、`agent_prompts.dart`、`agent_coverage_parser.dart`、
 `coverage_support.dart`、`agent_coverage.dart`。真实大词典 suffix/incremental
 冒烟随 Wave 4 执行，不在自动化结果中冒充已验证。
 
@@ -816,10 +817,11 @@ arm64 验收留到 Wave 4。
       unit + 应用级 `startedAt`）。
 - [x] F4 依据为短胶囊、自动换行、颜色不变；触控目标仍需设备视觉/可点性验收。
 - [x] F5 结果中无 `（q1）` 等内部标记，原文 quote 仍显示。
-- [x] F6 四种模式按 exact/prefix/suffix/incremental 递进；达全局上限或无新增
-      即停止；上限来自 `AgentLimits`。
-- [x] F7 查词后有一次覆盖审查；未满/已满分别走流程 A/B；最多回退一次；重复条目
-      删除前有本地重合校验。
+- [x] F6 四种模式按 exact/prefix/suffix/incremental 递进；某模式无新增仍继续；
+      正常递进以全局上限为终止条件（取消会中断，每词每典上限只跳过对应
+      target/词典）；UniDic 失败走有界 raw surface 兜底；上限来自 `AgentLimits`。
+- [x] F7 查词后有一次 `[COVERAGE]` 覆盖审查；未满/已满分别走流程 A/B；最多回退
+      一次；重复条目删除前有本地重合校验。
 - [x] F8 Agent/查词词典选择双向隔离且各自持久化。
 - [x] F9 所有词典筛选条第 4 行露出半行（共享 widget 测试）。
 - [x] F10 表单无 Provider/Base URL/small/complex 英文；DeepSeek/Claude 自动填地址；
@@ -846,7 +848,8 @@ arm64 验收留到 Wave 4。
 4. **F2 等待可能很久**：用户不回来时 run 停在待确认是预期行为；取消/重试仍可用。
    进程死亡后的队列恢复归 P6.7，当前不能声称已支持。
 5. **F13 不是 P6.7 历史 UI**：只管理词典档案，不实现对话会话历史；不要顺手把
-   P6.6/P6.7 标成已完成。
+   P6.6 的真机验收或 P6.7 标成已完成（P6.6 核心已按 2026-11-02 用户指示单独实现，
+   但设备验收仍待 Wave 4）。
 6. **F15/F16 是非 Agent 范围**：按用户明确要求修改，但不得改变查词选择全局偏好、
    MDict 查词语义、模型下载校验与 `.part` 续传。
 7. **本次只改文档**：未运行完整测试/构建；实施时每个 Wave 必须重新跑 analyze/

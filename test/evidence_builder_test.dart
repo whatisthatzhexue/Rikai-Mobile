@@ -224,7 +224,7 @@ void main() {
     },
   );
 
-  test('a missing UniDic degrades instead of failing the run', () async {
+  test('a missing UniDic falls back to raw surface lookup', () async {
     final builder = EvidenceBuilder(
       tokenizePort: _ThrowingTokenize(),
       lookupPort: _FakeLookup(),
@@ -239,7 +239,7 @@ void main() {
 
     expect(bundle.structureUnavailable, isTrue);
     expect(bundle.sources.single.tokens, isEmpty);
-    expect(bundle.citations, isEmpty);
+    expect(bundle.citations, isNotEmpty);
   });
 
   test(
@@ -305,7 +305,7 @@ void main() {
     expect(bundle.truncated, isTrue);
   });
 
-  test('stops after a mode adds no new citation', () async {
+  test('continues to later modes when a mode adds no citation', () async {
     final lookup = _ModeLookup(<LookupMatchMode, List<String>>{
       LookupMatchMode.exact: <String>['何卒'],
       LookupMatchMode.prefix: <String>['何卒'],
@@ -327,8 +327,39 @@ void main() {
     expect(lookup.modes, <LookupMatchMode>[
       LookupMatchMode.exact,
       LookupMatchMode.prefix,
+      LookupMatchMode.suffix,
+      LookupMatchMode.incremental,
     ]);
-    expect(bundle.citations, hasLength(1));
+    expect(bundle.citations, hasLength(2));
+  });
+
+  test('coverage extra lookup also continues past an empty mode', () async {
+    final lookup = _ModeLookup(<LookupMatchMode, List<String>>{
+      LookupMatchMode.exact: <String>[],
+      LookupMatchMode.prefix: <String>[],
+      LookupMatchMode.suffix: <String>['extra'],
+    });
+    final builder = EvidenceBuilder(
+      tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
+      lookupPort: lookup,
+      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+      citations: CitationRegistry(),
+      limits: const AgentLimits(maxEntriesPerDictionary: 10),
+    );
+
+    final result = await builder.lookupExtraQueries(
+      queries: const <String>['何卒'],
+      dictionaries: const <DictionaryInfo>[_dictionaryA],
+      maxNewCitations: 5,
+    );
+
+    expect(lookup.modes, <LookupMatchMode>[
+      LookupMatchMode.exact,
+      LookupMatchMode.prefix,
+      LookupMatchMode.suffix,
+      LookupMatchMode.incremental,
+    ]);
+    expect(result['何卒'], hasLength(1));
   });
 
   test('honours the per-target per-dictionary cap across modes', () async {

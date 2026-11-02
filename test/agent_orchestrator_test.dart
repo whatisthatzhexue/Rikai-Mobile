@@ -3,6 +3,7 @@ import 'package:rikai_mobile/core/models/agent/agent_input.dart';
 import 'package:rikai_mobile/core/models/agent/agent_limits.dart';
 import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
 import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
+import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
 import 'package:rikai_mobile/core/models/dict_info.dart';
 import 'package:rikai_mobile/core/models/lookup_models.dart';
 import 'package:rikai_mobile/core/models/lookup_request.dart';
@@ -444,6 +445,97 @@ void main() {
       expect(result.analysis.translation.single.text, 'Please treat me well.');
       expect(result.warnings, isEmpty);
       expect(provider.requests, hasLength(1));
+    },
+  );
+
+  test('reuses prepared OCR variants without repeating recognition', () async {
+    final ocr = _FakeOcr();
+    final provider = FakeProvider(responseText: _analysisTagged);
+    const baseline = AgentOcrVariant(
+      id: 'var-1',
+      engine: 'paddle_v5',
+      mode: OcrMode.auto,
+      text: '何卒',
+      confidence: 0.9,
+    );
+    const repaired = AgentOcrVariant(
+      id: 'repair-1',
+      engine: 'dictionary_repair',
+      mode: OcrMode.auto,
+      text: '何卒',
+      confidence: 0.9,
+      origin: AgentQuoteOrigin.dictionaryRepair,
+    );
+
+    final result = await _orchestrator(provider: provider, ocr: ocr).run(
+      const AgentRunRequest(
+        sessionId: 's1',
+        mode: AgentMode.strict,
+        dictionaries: <DictionaryInfo>[_dictionary],
+        provider: _provider,
+        images: <AgentImageInput>[
+          AgentImageInput(
+            id: 'img-1',
+            localPath: '/never-used.png',
+            variants: <AgentOcrVariant>[baseline, repaired],
+            selectedVariantId: 'repair-1',
+          ),
+        ],
+      ),
+    );
+
+    expect(ocr.calls, 0);
+    expect(result.input.sources, hasLength(1));
+    expect(result.input.sources.single.selectedVariantId, 'repair-1');
+    expect(result.input.sources.single.variants, hasLength(2));
+    expect(result.sources.single.origin, AgentQuoteOrigin.dictionaryRepair);
+    expect(result.quotes.single.origin, AgentQuoteOrigin.dictionaryRepair);
+    expect(result.ocrQuality['img-1'], isNotNull);
+    final requestText = provider.requests.single.messages
+        .map((message) => message.text)
+        .join('\n');
+    expect(requestText.contains('/never-used.png'), isFalse);
+    expect(requestText.contains('file://'), isFalse);
+  });
+
+  test(
+    'prepared OCR variants are capped at four with the selected kept',
+    () async {
+      final variants = <AgentOcrVariant>[
+        for (var index = 0; index < 5; index++)
+          AgentOcrVariant(
+            id: 'v$index',
+            engine: 'paddle_v5',
+            mode: OcrMode.auto,
+            text: '何卒',
+            confidence: 0.9,
+          ),
+      ];
+      final result =
+          await _orchestrator(
+            provider: FakeProvider(responseText: _analysisTagged),
+          ).run(
+            AgentRunRequest(
+              sessionId: 's1',
+              mode: AgentMode.strict,
+              dictionaries: const <DictionaryInfo>[_dictionary],
+              provider: _provider,
+              images: <AgentImageInput>[
+                AgentImageInput(
+                  id: 'img-1',
+                  localPath: '/never-used.png',
+                  variants: variants,
+                  selectedVariantId: 'v4',
+                ),
+              ],
+            ),
+          );
+
+      expect(
+        result.input.sources.single.variants.map((variant) => variant.id),
+        <String>['v4', 'v0', 'v1', 'v2'],
+      );
+      expect(result.input.sources.single.selectedVariantId, 'v4');
     },
   );
 }
