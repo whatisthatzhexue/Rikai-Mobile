@@ -249,4 +249,38 @@ void main() {
     );
     expect(AgentProviderPreset.forConfig(custom), AgentProviderPreset.custom);
   });
+
+  test('provider config preserves the optional max output tokens', () {
+    const config = AgentProviderConfig(
+      id: 'p1',
+      kind: AgentProviderKind.openAiCompatible,
+      displayName: 'DeepSeek',
+      baseUrl: 'https://api.deepseek.com/',
+      smallModel: 'small',
+      complexModel: 'large',
+      maxOutputTokens: 4096,
+    );
+    final json = config.toJson();
+    expect(json['max_output_tokens'], 4096);
+    expect(
+      (json['capabilities'] as Map<String, Object?>)['max_output_tokens'],
+      4096,
+    );
+    expect(AgentProviderConfig.fromJson(json).maxOutputTokens, 4096);
+
+    final legacyCapabilities = Map<String, Object?>.of(
+      json['capabilities'] as Map<String, Object?>,
+    )..remove('max_output_tokens');
+    final legacy = Map<String, Object?>.of(json)
+      ..remove('max_output_tokens')
+      ..['capabilities'] = legacyCapabilities;
+    expect(AgentProviderConfig.fromJson(legacy).maxOutputTokens, 0);
+
+    final dbStyle = Map<String, Object?>.of(legacy)
+      ..['capabilities'] = <String, Object?>{
+        'streaming': true,
+        'max_output_tokens': 2048,
+      };
+    expect(AgentProviderConfig.fromJson(dbStyle).maxOutputTokens, 2048);
+  });
 }

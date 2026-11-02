@@ -90,4 +90,39 @@ void main() {
     expect(events.any((event) => event.type == LlmEventType.done), isTrue);
     expect(events.any((event) => event.text == '好的'), isTrue);
   });
+
+  test('provider max_tokens overrides the request budget', () async {
+    final secrets = InMemorySecretStore();
+    await secrets.write(agentProviderSecretKey('a2'), 'test-key');
+    final provider = AnthropicProvider(
+      config: AgentProviderConfig(
+        id: 'a2',
+        kind: AgentProviderKind.anthropic,
+        displayName: 'Claude',
+        baseUrl: baseUrl,
+        smallModel: 'small',
+        complexModel: 'large',
+        supportsStreaming: false,
+        maxOutputTokens: 4096,
+      ),
+      secrets: secrets,
+    );
+
+    await provider
+        .stream(
+          const LlmRequest(
+            model: 'large',
+            maxTokens: 12000,
+            messages: <LlmMessage>[
+              LlmMessage(
+                role: LlmRole.user,
+                parts: <LlmTextPart>[LlmTextPart('请翻译')],
+              ),
+            ],
+          ),
+        )
+        .toList();
+
+    expect(capturedBody!['max_tokens'], 4096);
+  });
 }

@@ -112,6 +112,41 @@ void main() {
     expect(events.any((event) => event.text == '好的'), isTrue);
   });
 
+  test('sends provider max_tokens only when configured', () async {
+    final secrets = InMemorySecretStore();
+    await secrets.write(agentProviderSecretKey('p5'), 'test-key');
+    final provider = OpenAiCompatibleProvider(
+      config: AgentProviderConfig(
+        id: 'p5',
+        kind: AgentProviderKind.openAiCompatible,
+        displayName: 'Test',
+        baseUrl: baseUrl,
+        smallModel: 'small',
+        complexModel: 'large',
+        supportsStreaming: false,
+        maxOutputTokens: 4096,
+      ),
+      secrets: secrets,
+    );
+
+    await provider
+        .stream(
+          const LlmRequest(
+            model: 'large',
+            maxTokens: 12000,
+            messages: <LlmMessage>[
+              LlmMessage(
+                role: LlmRole.user,
+                parts: <LlmTextPart>[LlmTextPart('请翻译')],
+              ),
+            ],
+          ),
+        )
+        .toList();
+
+    expect(capturedBody!['max_tokens'], 4096);
+  });
+
   test('streams SSE text deltas from a Uint8List response body', () async {
     streamResponse = true;
     final secrets = InMemorySecretStore();

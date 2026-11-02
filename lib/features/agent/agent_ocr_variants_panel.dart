@@ -47,11 +47,27 @@ class AgentOcrVariantsPanel extends StatefulWidget {
 class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
   final Map<String, String> _selectedByImage = <String, String>{};
 
+  /// Selected repair candidate per image and suggestion index. The index is
+  /// the word/span identity; at most one candidate is kept for each word.
+  final Map<String, Map<int, OcrRepairCandidate>> _repairSelections =
+      <String, Map<int, OcrRepairCandidate>>{};
+
   @override
   void didUpdateWidget(covariant AgentOcrVariantsPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.result, widget.result)) {
       _selectedByImage.clear();
+      _repairSelections.clear();
+    }
+    if (!identical(
+          oldWidget.variantsState.repairs,
+          widget.variantsState.repairs,
+        ) ||
+        !identical(
+          oldWidget.variantsState.repairBaselineIds,
+          widget.variantsState.repairBaselineIds,
+        )) {
+      _repairSelections.clear();
     }
   }
 
@@ -136,6 +152,8 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
         widget.variantsState.repairBaselineIds[imageId] == baseline.id
         ? widget.variantsState.repairs[imageId] ?? const <OcrRepairSuggestion>[]
         : const <OcrRepairSuggestion>[];
+    final repairSelections =
+        _repairSelections[imageId] ?? const <int, OcrRepairCandidate>{};
     final generated = widget.variantsState.generatedImages.contains(imageId);
     final loading = widget.variantsState.loadingImageIds.contains(imageId);
     final errorCode = widget.variantsState.errorFor(imageId);
@@ -288,7 +306,7 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
               color: AppColors.textSecondary,
             ),
           ),
-          for (final suggestion in repairs)
+          for (final (index, suggestion) in repairs.indexed)
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.xxs),
               child: Row(
@@ -312,16 +330,18 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
                   const SizedBox(width: AppSpacing.xxs),
                   Expanded(
                     child: Wrap(
+                      alignment: WrapAlignment.start,
                       spacing: AppSpacing.xs,
                       runSpacing: AppSpacing.xxs,
                       children: [
                         for (final candidate in suggestion.candidates)
                           _RepairCandidateButton(
                             label: candidate.text,
-                            onTap: () => _applyRepair(
+                            selected:
+                                repairSelections[index]?.text == candidate.text,
+                            onTap: () => _toggleRepairCandidate(
                               imageId: imageId,
-                              baseline: baseline,
-                              suggestion: suggestion,
+                              suggestionIndex: index,
                               candidate: candidate,
                             ),
                           ),
@@ -331,6 +351,24 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
                 ],
               ),
             ),
+          const SizedBox(height: AppSpacing.xs),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.tonal(
+              onPressed:
+                  widget.onReanalyze == null ||
+                      !repairs.indexed.any(
+                        (entry) => repairSelections.containsKey(entry.$1),
+                      )
+                  ? null
+                  : () => _applySelectedRepairs(
+                      imageId: imageId,
+                      baseline: baseline,
+                      repairs: repairs,
+                    ),
+              child: Text(widget.strings.ocrUseVariant),
+            ),
+          ),
         ],
       ],
     );
@@ -414,19 +452,52 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
     );
   }
 
-  void _applyRepair({
+  void _toggleRepairCandidate({
     required String imageId,
-    required AgentOcrVariant baseline,
-    required OcrRepairSuggestion suggestion,
+    required int suggestionIndex,
     required OcrRepairCandidate candidate,
   }) {
-    final repaired = OcrConsensus.applyRepair(
+    setState(() {
+      final selected = _repairSelections.putIfAbsent(
+        imageId,
+        () => <int, OcrRepairCandidate>{},
+      );
+      if (selected[suggestionIndex]?.text == candidate.text) {
+        selected.remove(suggestionIndex);
+      } else {
+        // One candidate per suspicious word/span.
+        selected[suggestionIndex] = candidate;
+      }
+      if (selected.isEmpty) _repairSelections.remove(imageId);
+    });
+  }
+
+  void _applySelectedRepairs({
+    required String imageId,
+    required AgentOcrVariant baseline,
+    required List<OcrRepairSuggestion> repairs,
+  }) {
+    final selected = _repairSelections[imageId];
+    if (selected == null || selected.isEmpty) return;
+    final selections = <OcrRepairSelection>[
+      for (final entry in selected.entries)
+        if (entry.key >= 0 &&
+            entry.key < repairs.length &&
+            repairs[entry.key].candidates.any(
+              (candidate) => candidate.text == entry.value.text,
+            ))
+          OcrRepairSelection(
+            suggestion: repairs[entry.key],
+            candidate: entry.value,
+          ),
+    ];
+    final repaired = OcrConsensus.applyRepairs(
       baseline: baseline,
-      suggestion: suggestion,
-      candidate: candidate,
+      selections: selections,
       id: 'repair-${DateTime.now().microsecondsSinceEpoch}',
     );
     if (repaired == null) return;
+    setState(() => _repairSelections.remove(imageId));
     widget.onReanalyze?.call(imageId, repaired);
   }
 }
@@ -622,9 +693,31 @@ class _GenerateButton extends StatelessWidget {
 }
 
 class _RepairCandidateButton extends StatelessWidget {
-  const _RepairCandidateButton({required this.label, required this.onTap});
+  const _RepairCandidateButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RepairChip(label: label, selected: selected, onTap: onTap);
+  }
+}
+
+class _RepairChip extends StatelessWidget {
+  const _RepairChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
   final VoidCallback onTap;
 
   @override
@@ -632,27 +725,38 @@ class _RepairCandidateButton extends StatelessWidget {
     final theme = Theme.of(context);
     return Semantics(
       button: true,
+      selected: selected,
       label: label,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(
-            AgentTokens.citationChipHeight / 2,
+            AgentTokens.ocrVariantChipHeight / 2,
           ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               minHeight: AgentTokens.actionTapTarget,
               minWidth: AgentTokens.citationChipMinWidth,
             ),
-            child: Center(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              widthFactor: 1,
+              heightFactor: 1,
               child: Container(
-                height: AgentTokens.citationChipHeight,
+                height: AgentTokens.ocrVariantChipHeight,
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                 decoration: BoxDecoration(
-                  color: AgentTokens.citationSurface,
+                  color: selected
+                      ? AgentTokens.citationSurface
+                      : AppColors.surfaceMuted,
                   borderRadius: BorderRadius.circular(
-                    AgentTokens.citationChipHeight / 2,
+                    AgentTokens.ocrVariantChipHeight / 2,
+                  ),
+                  border: Border.all(
+                    color: selected
+                        ? AgentTokens.citationText
+                        : AgentTokens.evidenceBorder,
                   ),
                 ),
                 child: Center(
@@ -660,7 +764,9 @@ class _RepairCandidateButton extends StatelessWidget {
                     label,
                     style: theme.textTheme.bodySmall?.copyWith(
                       fontSize: AgentTokens.citationChip,
-                      color: AgentTokens.citationText,
+                      color: selected
+                          ? AgentTokens.citationText
+                          : AppColors.textSecondary,
                     ),
                   ),
                 ),

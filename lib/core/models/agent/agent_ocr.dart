@@ -181,3 +181,11 @@ class OcrRepairSuggestion {
   final int end;
   final List<OcrRepairCandidate> candidates;
 }
+
+/// One user-selected replacement: exactly one candidate per suspicious span.
+class OcrRepairSelection {
+  const OcrRepairSelection({required this.suggestion, required this.candidate});
+
+  final OcrRepairSuggestion suggestion;
+  final OcrRepairCandidate candidate;
+}

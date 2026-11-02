@@ -122,7 +122,16 @@ AgentOcrVariantsState _state({String repairBaselineId = 'var-1'}) {
           original: 'ニチ',
           start: 4,
           end: 6,
-          candidates: <OcrRepairCandidate>[OcrRepairCandidate(text: 'バン')],
+          candidates: <OcrRepairCandidate>[
+            OcrRepairCandidate(text: 'バン'),
+            OcrRepairCandidate(text: 'パン'),
+          ],
+        ),
+        OcrRepairSuggestion(
+          original: 'ハ',
+          start: 6,
+          end: 7,
+          candidates: <OcrRepairCandidate>[OcrRepairCandidate(text: 'バ')],
         ),
       ],
     },
@@ -232,7 +241,7 @@ void main() {
   });
 
   testWidgets(
-    'applies a dictionary repair as a new dictionary-repair variant',
+    'selects one candidate per word and applies multiple selected words',
     (tester) async {
       AgentOcrVariant? selected;
       await _pumpPanel(
@@ -243,12 +252,51 @@ void main() {
         },
       );
 
+      Color? chipColor(String label) {
+        final container = tester.widget<Container>(
+          find
+              .ancestor(of: find.text(label), matching: find.byType(Container))
+              .first,
+        );
+        return (container.decoration as BoxDecoration?)?.color;
+      }
+
+      FilledButton actionButton() => tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, '使用此版本重新分析'),
+      );
+
       expect(find.text('词典候选'), findsOneWidget);
+      expect(selected, isNull);
+      expect(find.text('使用此版本重新分析'), findsOneWidget);
+      // No selection: candidates stay grey and the bottom-right action button
+      // is disabled.
+      expect(chipColor('バン'), AppColors.surfaceMuted);
+      expect(actionButton().onPressed, isNull);
+
       await tester.tap(find.text('バン'));
+      await tester.pump();
+      expect(selected, isNull);
+      expect(chipColor('バン'), AgentTokens.citationSurface);
+      expect(chipColor('パン'), AppColors.surfaceMuted);
+      expect(actionButton().onPressed, isNotNull);
+
+      // Selecting another candidate for the same word replaces the first one.
+      await tester.tap(find.text('パン'));
+      await tester.pump();
+      expect(chipColor('バン'), AppColors.surfaceMuted);
+      expect(chipColor('パン'), AgentTokens.citationSurface);
+
+      // A different word can keep its own selection at the same time.
+      await tester.tap(find.text('バ'));
+      await tester.pump();
+      expect(chipColor('パン'), AgentTokens.citationSurface);
+      expect(chipColor('バ'), AgentTokens.citationSurface);
+
+      await tester.tap(find.text('使用此版本重新分析'));
       await tester.pump();
 
       expect(selected, isNotNull);
-      expect(selected!.text, '何卒コンバンハ');
+      expect(selected!.text, '何卒コンパンバ');
       expect(selected!.engine, 'dictionary_repair');
       expect(selected!.origin, AgentQuoteOrigin.dictionaryRepair);
     },

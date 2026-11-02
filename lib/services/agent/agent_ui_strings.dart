@@ -545,6 +545,25 @@ class AgentUiStrings {
   String get providerSmallModelSummary => _pick('简单模型', 'Fast model', '高速モデル');
   String get providerComplexModelSummary =>
       _pick('复杂模型', 'Complex model', '複雑モデル');
+  String get providerMaxOutputTokens =>
+      _pick('最大输出 tokens（可选）', 'Max output tokens (optional)', '最大出力トークン（任意）');
+  String get providerMaxOutputTokensHint => _pick(
+    '建议留空；留空使用默认',
+    'Recommended: leave blank for default',
+    '空欄を推奨（既定値を使用）',
+  );
+  String get providerMaxOutputTokensHelp => _pick(
+    'OpenAI-compatible 建议留空，由服务端/模型决定 max_tokens；仅当服务要求该参数或需要限制输出时填写。Anthropic 留空时使用分析请求默认值。填写后作为该服务的 max_tokens，推理模型请避免过小。',
+    'For OpenAI-compatible services, leave this blank and let the provider/model decide max_tokens; set it only if the service requires it or you need to limit output. For Anthropic, blank uses the analysis default. A value becomes this service\'s max_tokens; avoid very small values for reasoning models.',
+    'OpenAI 互換サービスでは空欄を推奨します（max_tokens はサービス/モデルが決定）。サービスが必須とする場合や出力を制限したい場合のみ入力してください。Anthropic で空欄の場合は解析リクエストの既定値を使用します。入力値はこのサービスの max_tokens になり、推論モデルでは小さすぎる値に注意してください。',
+  );
+  String get providerMaxOutputTokensInvalid => _pick(
+    '请输入正整数，或留空使用默认',
+    'Enter a positive integer, or leave blank for the default',
+    '正の整数を入力するか、空欄で既定値を使用してください',
+  );
+  String get providerMaxOutputTokensSummary =>
+      _pick('最大输出 tokens', 'Max output tokens', '最大出力トークン');
   String get providerApiKey => _pick('接口密钥（API Key）', 'API key', 'API キー');
   String get providerApiKeyKeep =>
       _pick('留空则不修改', 'Leave blank to keep', '空欄なら変更しません');

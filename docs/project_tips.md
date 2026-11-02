@@ -1236,13 +1236,16 @@ salvage 删除选项后的二次归一化。
 `reasoningChars` 但 `textChars=0`，provider 再走一次非流式 fallback，重复一遍长
 推理，耗时翻倍。
 
-**正确做法**：OpenAI-compatible payload 不发送 `max_tokens`，由服务端/模型默认
-输出上限决定；Anthropic 仍必须发送。解析 SSE 的 `finish_reason`；若
-`textChars==0 && reasoningChars>0`，直接返回 `PROVIDER_EMPTY_OUTPUT`，不再发第二次
-请求，只有无 reasoning、无正文的真正空流才 fallback。日志记录 SSE 事件数、
-text/reasoning 字符数和 finish_reason。app 没有 reasoning-effort/thinking-off
-参数；要真正缩短思考时间，应把复杂模型改成非推理模型（如 deepseek-chat/flash）。
-流式进度更新节流（当前 250ms），避免上万 delta 触发大量 Riverpod 更新。
+**正确做法**：OpenAI-compatible payload 默认不发送 `max_tokens`，由服务端/模型
+默认输出上限决定；provider 设置里可填可选 `maxOutputTokens`（设置页最后一个
+输入框，OpenAI-compatible 建议留空），大于 0 时作为该服务的 `max_tokens` 发送。
+Anthropic 仍必须发送，并优先 provider 值。解析 SSE 的
+`finish_reason`；若 `textChars==0 && reasoningChars>0`，直接返回
+`PROVIDER_EMPTY_OUTPUT`，不再发第二次请求，只有无 reasoning、无正文的真正空流才
+fallback。日志记录 SSE 事件数、text/reasoning 字符数和 finish_reason。app 没有
+reasoning-effort/thinking-off 参数；要真正缩短思考时间，应把复杂模型改成非推理
+模型（如 deepseek-chat/flash）。流式进度更新节流（当前 250ms），避免上万 delta
+触发大量 Riverpod 更新。
 
 
 
@@ -1302,4 +1305,4 @@ text/reasoning 字符数和 finish_reason。app 没有 reasoning-effort/thinking
 | 每次运行都提示“覆盖审查不可用” | 用紧凑覆盖输入、单项容错、空 sufficient 规范化；保留真实请求失败 warning（`T-131`） |
 | Agent 长结果下滑/展开依据词典卡顿一次 | 展开内容分块跨帧构建，限制同时播放的淡入动画；缩略图按显示尺寸解码（`T-132`） |
 | “可能的理解”多个选项都显示 70%、合计 140% | 模型不输出概率；管线把多个 OPTION 的相对权重归一化为总和 100%，不要改 prompt 要概率（`T-133`） |
-| 推理模型只有 reasoning_content、textChars=0，耗时翻倍 | OpenAI-compatible 不发送 max_tokens；reasoning-only 直接报 `PROVIDER_EMPTY_OUTPUT`，不重试；建议改用非推理模型（`T-134`） |
+| 推理模型只有 reasoning_content、textChars=0，耗时翻倍 | OpenAI-compatible 默认不发送 max_tokens；provider 可选 `maxOutputTokens`；reasoning-only 直接报 `PROVIDER_EMPTY_OUTPUT`，不重试；建议改用非推理模型（`T-134`） |

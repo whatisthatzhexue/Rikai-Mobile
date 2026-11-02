@@ -302,13 +302,16 @@ Phase 0–5 已全部完成并发布 1.0（验收记录见 `docs/project-history
 `phase*-status.md`）。Phase 6 P6.1–P6.5 已实现；2026-10-31 实机反馈 Wave 1–3
 （F1b/F6/F7）已实现，Wave 4 设备回归验收待做；P6.6 多 OCR 核心已于 2026-11-02
 实现（自动化测试）。同日后续修正：provider 请求预校验/非法字符清理/400 按真实
-error body 分类（不设统一 max_tokens 上限；OpenAI-compatible 不发送 max_tokens，
-只有 reasoning、无正文时快速失败且不重复请求）、覆盖审查紧凑输入/单项容错/独立预算
+error body 分类（不设统一 max_tokens 上限；OpenAI-compatible 默认不发送
+max_tokens，provider 可选 maxOutputTokens 覆盖；只有 reasoning、无正文时快速失败
+且不重复请求）、覆盖审查紧凑输入/单项容错/独立预算
 （`AgentLimits.coverage*`，CJK 系数 1.0）/自动修正日志/规范化后修复、多 OCR
 每图独立 loading/可点缩略图、UniDic 空输入清除。多 OCR 显式对比改为
 `(engine, mode)` 组合（Paddle 横向/Manga 纵向/Paddle 纵向/auto，最多 4 个），
 OCR 插件新增可选 `engine` 约束；版本 chip 左对齐/自动换行/固定尺寸，差异高亮
-使用独立暖色 token，展开的详细解析分块跨帧构建并限制淡入动画。多个“可能的
+使用独立暖色 token，展开的详细解析分块跨帧构建并限制淡入动画。词典修复候选
+改为多选 chip（同一词最多一个、不同词可多选，未选灰色）；“使用此版本重新分析”
+统一为右下角蓝色大按钮，至少选中一个才启用。多个“可能的
 理解”不再显示解析器原始 0.5/0.7 权重，而是在 `normalizeAnalysis`/
 `salvageAnalysis` 中归一化为总和 100%（模型仍不输出概率）。Agent 输出质检样本
 存于 `docs/agent_output/YYYY-MM-DD-HH-mm.txt`。P6.6 真机验收与 P6.7 未完成。

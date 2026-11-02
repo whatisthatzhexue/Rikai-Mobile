@@ -180,7 +180,9 @@ class AnthropicProvider implements LlmPort {
     }
     final payload = <String, Object?>{
       'model': request.model.trim(),
-      'max_tokens': validatedProviderMaxTokens(request),
+      'max_tokens': config.maxOutputTokens > 0
+          ? config.maxOutputTokens
+          : validatedProviderMaxTokens(request),
       'messages': messages,
       'stream': stream,
     };

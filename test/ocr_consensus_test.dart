@@ -353,6 +353,36 @@ void main() {
         expect(repaired.origin, AgentQuoteOrigin.dictionaryRepair);
         expect(repaired.engine, 'dictionary_repair');
         expect(baseline.text, '何卒コンニチハ');
+
+        final multi = OcrConsensus.applyRepairs(
+          baseline: baseline,
+          selections: const <OcrRepairSelection>[
+            OcrRepairSelection(
+              suggestion: OcrRepairSuggestion(
+                original: 'ニチ',
+                start: 4,
+                end: 6,
+                candidates: <OcrRepairCandidate>[
+                  OcrRepairCandidate(text: 'パン'),
+                ],
+              ),
+              candidate: OcrRepairCandidate(text: 'パン'),
+            ),
+            OcrRepairSelection(
+              suggestion: OcrRepairSuggestion(
+                original: 'ハ',
+                start: 6,
+                end: 7,
+                candidates: <OcrRepairCandidate>[OcrRepairCandidate(text: 'バ')],
+              ),
+              candidate: OcrRepairCandidate(text: 'バ'),
+            ),
+          ],
+          id: 'repair-2',
+        );
+        expect(multi, isNotNull);
+        expect(multi!.text, '何卒コンパンバ');
+        expect(baseline.text, '何卒コンニチハ');
       },
     );
   });

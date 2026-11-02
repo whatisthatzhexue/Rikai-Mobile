@@ -132,7 +132,9 @@ P6.5 已接入五个按钮（拍照识别/查句子/查单词/历史记录/词�
 - 状态/错误：等待、生成中、失败、降级、离线均有视觉标识；失败保留已生成内容，
   错误卡出现在消息下方，不弹全局对话框、不整屏 loading。
 - OCR 版本区（P6.6）：版本 chip（引擎/模式/置信度/词典命中率）、差异高亮、修复
-  建议“采用/忽略”；切换版本后按缓存重新分析。
+  候选选择（未选灰色、选中蓝色；同一词最多一个、不同词可同时多选）；右下角
+  蓝色大按钮“使用此版本重新分析”至少在选中一个候选时启用；切换版本后按缓存
+  重新分析。
 - 熟悉期 sheet：词典标题、采样数、生成档案预览/编辑、保存/本次跳过/不再询问；
   UniDic 单独展示；确认前不得写入档案。多个已生成档案进入应用级队列，逐个
   处理；离开页面不丢失、不自动跳过，全部处理完才进入查词。
@@ -593,7 +595,9 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
 - 对版本不一致的 span，用 `mdict.suggest`/prefix lookup 查候选，计算词典命中
   和上下文一致性；不依赖假名/汉字比例等语言专属判断。
 - 输出 `OcrRepairSuggestion {original, candidates:[{text, citationIds, score}],
-  reason}`；用户点“采用”才替换，生成 `SourceVersion(origin: dictionary_repair)`。
+  reason}`；用户为每个词/span 最多选择一个候选，可同时选择多个词；点击右下角
+  蓝色“使用此版本重新分析”大按钮后，按 UTF-16 偏移从后往前一次性应用所有选择，
+  生成 `SourceVersion(origin: dictionary_repair)`。没有任何选择时该按钮灰色禁用。
 - 模型可以提出修正建议，但只能作为建议显示；必须带 citation 或标“模型猜测”，
   不得覆盖原文引用，不得静默替换。OCR 修复只能通过本地 OCR/UniDic/MDict 工具
   完成，禁止把图片上传给 LLM。
@@ -729,15 +733,16 @@ LlmProvider
   - id / displayName
   - baseUrl / protocol
   - smallModel / complexModel
-  - capabilities {streaming}
+  - capabilities {streaming, max_output_tokens}
   - streamChat(LlmRequest) -> Stream<LlmEvent>
 ```
 
 - 首版适配：
   - OpenAI-compatible（DeepSeek/自定义 endpoint）：`POST {baseUrl}/chat/completions`，
-    `Authorization: Bearer`，文本 messages；不发送 `response_format`/`json_schema`，
-    也不发送 `max_tokens`（由服务端/模型默认输出上限决定，避免推理模型把预算全部
-    消耗在 reasoning_content 上）。
+    `Authorization: Bearer`，文本 messages；不发送 `response_format`/`json_schema`。
+    默认不发送 `max_tokens`（由服务端/模型默认输出上限决定，避免推理模型把预算
+    全部消耗在 reasoning_content 上）；provider 可选设置
+    `maxOutputTokens > 0` 时发送该值，设置页建议 OpenAI-compatible 留空。
   - Anthropic Claude：`POST https://api.anthropic.com/v1/messages`，
     `x-api-key` + `anthropic-version: 2026-10-21`；内容块只有 `text`。
 - Dart 没有官方 Anthropic SDK，首版用 `dio` 直连；不引入通用 LLM SDK。
@@ -748,8 +753,9 @@ LlmProvider
 - 发送前统一 preflight：model 去空白非空、丢弃空白 message、至少一条非 system、
   Anthropic 合并连续同 role、`maxTokens` 必须是正整数；本地无效请求直接返回
   `INVALID_ARGUMENTS`，不发送网络请求。**不假设统一输出上限**：不同模型能力差异
-  很大（例如 deepseek-flash 远高于 8,192）。OpenAI-compatible 不发送
-  `max_tokens`；Anthropic 必填。HTTP 400 按 provider 返回的 error body 分类
+  很大（例如 deepseek-flash 远高于 8,192）。OpenAI-compatible 默认不发送
+  `max_tokens`，provider 设置 `maxOutputTokens` 时发送；Anthropic 必填，优先
+  provider 值，否则用请求值。HTTP 400 按 provider 返回的 error body 分类
   （上下文超限、输出参数不支持、reasoning/tool 参数不兼容、通用参数无效），并在
   debug 记录请求 shape，不盲目降额。
 - 流式收到 `reasoning_content` 但正文为空时，返回 `PROVIDER_EMPTY_OUTPUT` 并
@@ -776,7 +782,7 @@ LlmProvider
 
 | 表 | 关键字段 |
 |---|---|
-| `agent_providers` | id, kind, display_name, base_url, small_model, complex_model, timeout_seconds, capabilities_json（不含 Key） |
+| `agent_providers` | id, kind, display_name, base_url, small_model, complex_model, timeout_seconds, capabilities_json（streaming/max_output_tokens，不含 Key） |
 | `agent_sessions` | id, title, created_at, updated_at, mode, provider_id, small_model, complex_model, dictionary_ids_json, dictionary_mode, status |
 | `agent_runs` | id, session_id, status, started_at, finished_at, error_code, input_summary, truncated |
 | `agent_messages` | id, run_id, role, content_markdown, created_at, model_id, stage |
@@ -811,10 +817,11 @@ SharedPreferences，但不得混入 Key。
 - OCR 版本区（P6.6 核心已实现，2026-11-02）：标题“文字识别结果”；每张图显示
   与用户消息相同的可点缩略图（全屏查看，按显示尺寸解码）；版本 chip 左对齐并
   自动换行，所有状态同高且预留推荐图标槽位；置信度/词典命中胶囊（不使用假名
-  比例）、差异高亮（`AgentTokens.diffHighlightSurface/Text`）、词典候选“采用”
-  （不采用即保持不变）、切换版本后重新分析；每图的对比 loading/error 独立，可
-  同时发起，底层 OCR 调用串行排队。详细解析展开时按小块跨帧构建，长结果不整页
-  一次性建树。真机视觉验收待做。
+  比例）、差异高亮（`AgentTokens.diffHighlightSurface/Text`）、词典候选多选
+  （未选灰色、选中蓝色；同一词最多一个，不同词可同时选择）；右下角蓝色大按钮
+  “使用此版本重新分析”至少选中一个才启用，否则灰色，不自动应用；切换版本后
+  重新分析；每图的对比 loading/error 独立，可同时发起，底层 OCR 调用串行排队。
+  详细解析展开时按小块跨帧构建，长结果不整页一次性建树。真机视觉验收待做。
 - 熟悉期 sheet：档案预览/编辑、保存/本次跳过/不再询问；确认前不写档案。
 - 设置：provider 列表/新增/编辑、Base URL、small/complex 模型、API Key 掩码输入
   与显示切换、测试连接（显式发送最小文本请求）、三态配置标签、隐私说明、清除

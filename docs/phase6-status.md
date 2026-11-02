@@ -362,12 +362,14 @@ P6.6 implementation (2026-11-02, multi-OCR core):
   non-system message, merges consecutive Anthropic roles, sanitizes unpaired
   UTF-16 surrogates/control characters, and requires a positive `maxTokens`.
   It deliberately does **not** impose a universal output ceiling: model limits
-  differ (deepseek-flash is far above 8,192). OpenAI-compatible requests omit
-  `max_tokens` entirely (provider/model defaults apply); Anthropic keeps the
-  required `max_tokens`. HTTP 400 responses are classified from the real error
-  body (context length, unsupported output parameter, reasoning/tool parameter
-  mismatch, generic invalid parameter) and debug logs record only request shape,
-  not prompt text or keys.
+  differ (deepseek-flash is far above 8,192). Providers have an optional
+  `maxOutputTokens` (persisted in `capabilities_json` as `max_output_tokens`;
+  0 = unset): OpenAI-compatible omits `max_tokens` when unset and sends it when
+  set; Anthropic always sends `max_tokens`, preferring the provider value over
+  the request builder's 12,000. HTTP 400 responses are classified from the real
+  error body (context length, unsupported output parameter, reasoning/tool
+  parameter mismatch, generic invalid parameter) and debug logs record only
+  request shape, not prompt text or keys.
 - **Reasoning-only stream**: if SSE produced `reasoning_content` but no text,
   the provider now raises `PROVIDER_EMPTY_OUTPUT` immediately instead of
   repeating the same expensive request non-streaming. `finish_reason` is logged
@@ -428,6 +430,16 @@ P6.6 implementation (2026-11-02, multi-OCR core):
   `AgentFadeIn.maxAnimatedItems` blocks run the staggered fade, so expanding a
   dictionary evidence card no longer builds the whole result tree and starts
   dozens of animations in one frame. The inline `ExpansionTile` UX is unchanged.
+- **Dictionary repair selection**: repair candidates now use the same chip design
+  as OCR variants. Unselected candidates stay grey; selecting another candidate
+  for the same word replaces the previous one; different words can each keep one
+  selection. The “re-analyze with this variant” action stays a bottom-right blue
+  `FilledButton.tonal` in both the dictionary-repair section and the OCR-variant
+  diff section; it is enabled only when at least one candidate is selected and
+  grey/disabled otherwise. Applying selections uses `OcrConsensus.applyRepairs`,
+  which replaces spans from the end backwards so multiple words can be applied
+  in one new `dictionary_repair` variant without invalidating earlier UTF-16
+  offsets.
 - **Interpretation percentages**: the tag parser assigns OPTION blocks relative
   weights (0.5 without citations, 0.7 with citations), not model probabilities.
   `normalizeAnalysis` and `salvageAnalysis` now normalize multiple OPTION blocks
@@ -461,9 +473,12 @@ Current known gaps:
 - Provider 400 handling now reports the actual error-body category, but it does
   not automatically repair context-length or model-specific parameter problems;
   the user still needs to shorten input or adjust the model/provider.
-- There is no per-provider `max_tokens` setting. OpenAI-compatible requests omit
-  `max_tokens` and use provider/model defaults; Anthropic sends the request
-  builder's value (12,000 for analysis).
+- Provider settings now include an optional `maxOutputTokens` as the last input
+  field (Agent settings dialog, blank = default) and recommend leaving it blank
+  for OpenAI-compatible services. OpenAI-compatible omits `max_tokens` when
+  blank; Anthropic uses it when set, otherwise the request builder's value
+  (12,000 for analysis). This is an explicit per-service choice, not a universal
+  ceiling.
 - Long reasoning-model latency is a model-choice issue, not a removable request
   parameter. The app has no reasoning-effort/thinking-off setting; selecting a
   non-reasoning complex model (for example deepseek-chat/flash) is the current

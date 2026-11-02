@@ -216,6 +216,7 @@ class AgentSettingsPage extends ConsumerWidget {
       smallModel: result.smallModel.trim(),
       complexModel: result.complexModel.trim(),
       supportsStreaming: true,
+      maxOutputTokens: result.maxOutputTokens,
     );
     final store = ref.read(agentStoreProvider);
     await store.saveProvider(config);
@@ -316,6 +317,15 @@ class _ProviderRow extends StatelessWidget {
                     color: AppColors.textSecondary,
                   ),
                 ),
+                if (provider.maxOutputTokens > 0)
+                  Text(
+                    '${strings.providerMaxOutputTokensSummary}：'
+                    '${provider.maxOutputTokens}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: AppTypography.helper,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -346,6 +356,7 @@ class AgentProviderDraft {
     required this.baseUrl,
     required this.smallModel,
     required this.complexModel,
+    required this.maxOutputTokens,
     required this.apiKey,
   });
 
@@ -354,6 +365,7 @@ class AgentProviderDraft {
   final String baseUrl;
   final String smallModel;
   final String complexModel;
+  final int maxOutputTokens;
   final String apiKey;
 }
 
@@ -373,8 +385,10 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   late final TextEditingController _baseUrl;
   late final TextEditingController _smallModel;
   late final TextEditingController _complexModel;
+  late final TextEditingController _maxOutputTokens;
   late final TextEditingController _apiKey;
   String? _baseUrlError;
+  String? _maxOutputTokensError;
 
   @override
   void initState() {
@@ -387,6 +401,11 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     );
     _smallModel = TextEditingController(text: initial?.smallModel ?? '');
     _complexModel = TextEditingController(text: initial?.complexModel ?? '');
+    _maxOutputTokens = TextEditingController(
+      text: (initial?.maxOutputTokens ?? 0) > 0
+          ? initial!.maxOutputTokens.toString()
+          : '',
+    );
     _apiKey = TextEditingController();
   }
 
@@ -396,6 +415,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     _baseUrl.dispose();
     _smallModel.dispose();
     _complexModel.dispose();
+    _maxOutputTokens.dispose();
     _apiKey.dispose();
     super.dispose();
   }
@@ -420,6 +440,19 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       setState(() => _baseUrlError = error);
       return;
     }
+    var maxOutputTokens = 0;
+    final rawMaxOutputTokens = _maxOutputTokens.text.trim();
+    if (rawMaxOutputTokens.isNotEmpty) {
+      final parsed = int.tryParse(rawMaxOutputTokens);
+      if (parsed == null || parsed <= 0) {
+        setState(
+          () => _maxOutputTokensError =
+              widget.strings.providerMaxOutputTokensInvalid,
+        );
+        return;
+      }
+      maxOutputTokens = parsed;
+    }
     Navigator.of(context).pop(
       AgentProviderDraft(
         kind: _preset.kind,
@@ -427,6 +460,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         baseUrl: _baseUrl.text,
         smallModel: _smallModel.text,
         complexModel: _complexModel.text,
+        maxOutputTokens: maxOutputTokens,
         apiKey: _apiKey.text,
       ),
     );
@@ -518,6 +552,23 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                   isDense: true,
                 ),
               ),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                key: const ValueKey('agent-provider-max-output-tokens'),
+                controller: _maxOutputTokens,
+                keyboardType: TextInputType.number,
+                onChanged: (_) {
+                  if (_maxOutputTokensError != null) {
+                    setState(() => _maxOutputTokensError = null);
+                  }
+                },
+                decoration: InputDecoration(
+                  labelText: widget.strings.providerMaxOutputTokens,
+                  hintText: widget.strings.providerMaxOutputTokensHint,
+                  errorText: _maxOutputTokensError,
+                  isDense: true,
+                ),
+              ),
               const SizedBox(height: AppSpacing.md),
               Text(
                 widget.strings.providerSmallModelHelp,
@@ -530,6 +581,15 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               const SizedBox(height: AppSpacing.xxs),
               Text(
                 widget.strings.providerComplexModelHelp,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: AppTypography.helper,
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
+                widget.strings.providerMaxOutputTokensHelp,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: AppTypography.helper,
                   color: AppColors.textSecondary,

@@ -42,6 +42,8 @@ void main() {
     expect(find.text('接口地址'), findsOneWidget);
     expect(find.text('快速模型'), findsOneWidget);
     expect(find.text('高精度模型'), findsOneWidget);
+    expect(find.text('最大输出 tokens（可选）'), findsOneWidget);
+    expect(find.textContaining('OpenAI-compatible 建议留空'), findsOneWidget);
     expect(find.text('快速模型用于词典档案和资料检查。'), findsOneWidget);
     expect(find.text('高精度模型用于最终解析。'), findsOneWidget);
     expect(find.textContaining('API 的访问地址'), findsNothing);
@@ -49,6 +51,14 @@ void main() {
     expect(find.text('Base URL'), findsNothing);
     expect(find.text('Small model'), findsNothing);
     expect(find.text('Complex model'), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-provider-max-output-tokens')),
+      '0',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+    expect(find.text('请输入正整数，或留空使用默认'), findsOneWidget);
 
     final baseUrl = tester.widget<TextField>(
       find.byKey(const ValueKey('agent-provider-base-url')),

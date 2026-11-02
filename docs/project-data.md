@@ -39,11 +39,11 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **333** |
+| 当前 test/testWidgets 声明数 | **336** |
 | 当前测试文件数 | **75** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | 333 passed |
-| 最近 `flutter build apk --debug` | success（2026-11-02 provider 推理修正后） |
+| 最近 `flutter test` | 336 passed |
+| 最近 `flutter build apk --debug` | success（2026-11-02 provider 可选输出上限后） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
 > 该数字对应当前未提交工作区（Wave 3 + prompt 集中/覆盖标签/raw surface + P6.6）。
@@ -66,8 +66,9 @@
 | Prompt/覆盖标签/raw 兜底 | 295 | agent_prompts 集中、coverage 标签、模式无新增继续、UniDic raw surface |
 | P6.6 多 OCR 核心 | 321 | 质量/diff、版本比较、词典候选、用户确认后重新分析；设备验收待做 |
 | P6.6 稳定性修正 | 332 | provider 预校验/400 分类、覆盖审查独立预算与容错、多 OCR 每图状态/UI、UniDic 清除 |
-| Provider 推理修正 | 333 | OpenAI-compatible 不发送 max_tokens、reasoning-only 快速失败不重试、流式进度节流 |
-| 当前 | **333** | 见 §2.1 |
+| Provider 推理修正 | 333 | OpenAI-compatible 默认不发送 max_tokens、reasoning-only 快速失败不重试、流式进度节流 |
+| Provider 可选输出上限 | 336 | provider 设置 maxOutputTokens、OpenAI/Anthropic payload 覆盖与持久化测试 |
+| 当前 | **336** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
@@ -180,7 +181,8 @@ arm64 真机性能另需复测。
 | 熟悉期每词典样本 | 12 | `DictionaryFamiliarizationService` |
 | UniDic 熟悉样本句 | 4 | `UnidicFamiliarizationService` |
 | 熟悉期 batch tokens | 4,000（最多 6,000） | 当前服务 |
-| 分析请求 maxTokens | 12,000（仅 Anthropic 发送） | `analysis_prompts.dart`；OpenAI-compatible 不发送 `max_tokens` |
+| 分析请求 maxTokens | 12,000（仅 Anthropic 发送） | `analysis_prompts.dart`；provider 可选 `maxOutputTokens` 覆盖 |
+| Provider 最大输出 tokens | 可选，0=未设置 | Agent 设置页；存于 `capabilities_json.max_output_tokens` |
 | 模型额外工具调用 | 0 | 当前固定流水线、模型无工具 |
 | 每词典档案 Markdown | 2,000 字符 | **设计/契约目标；当前代码未强制** |
 | 输入 variants / sources | 4 / 8 | Schema 契约上限；当前 UI 单图 |

@@ -384,8 +384,9 @@ class AgentStore
       'small_model': provider.smallModel,
       'complex_model': provider.complexModel,
       'timeout_seconds': provider.timeoutSeconds,
-      'capabilities_json': jsonEncode(<String, bool>{
+      'capabilities_json': jsonEncode(<String, Object?>{
         'streaming': provider.supportsStreaming,
+        'max_output_tokens': provider.maxOutputTokens,
       }),
       'created_at': now,
       'updated_at': now,

@@ -325,6 +325,9 @@ OcrRepairSuggestion (local)
   original, start, end, candidates[
     {text, dictionaryIds, score}
   ]
+
+OcrRepairSelection (local)
+  suggestion, candidate  // at most one per suggestion/word
 ```
 
 硬规则：
@@ -334,6 +337,12 @@ OcrRepairSuggestion (local)
   citation 直接套到新文本。
 - 不自动合并版本、不静默替换原文；`dictionary_repair` 只在用户采用候选后生成
   新的本地变体。
+- 修复候选 UI：未选灰色，选中浅蓝底/蓝字；同一 suggestion 最多选一个候选，
+  不同 suggestion 可同时各选一个。至少一个选中时右下角的蓝色
+  `FilledButton.tonal`“使用此版本重新分析”才启用；无选择时该按钮灰色禁用。
+  该按钮与切换 OCR 版本时的同名按钮保持同一右下角大按钮样式。
+- 应用多个选择时 `OcrConsensus.applyRepairs` 按 suggestion 起点从后往前替换，
+  保持其余 UTF-16 offset 不变；重叠或越界选择被忽略，原 variant 不被修改。
 - 质量评分、diff 和候选只在本机计算；不得把图片、路径、base64、完整 HTML 或
   API Key 放入这些对象或 provider 请求。
 - `AgentRunResult.ocrQuality` 以 `image_id` 为键，仅用于本地 UI。
@@ -766,11 +775,15 @@ validate(analysis, evidence, quotes, mode):
   message；至少保留一条非 system 消息；Anthropic 合并连续同 role 消息。任一条件
   不满足时抛 `INVALID_ARGUMENTS`，不发 HTTP 请求。
 - `LlmRequest` 仍带 `maxTokens`，但发送策略按 provider 不同：
-  - **OpenAI-compatible 不发送 `max_tokens`**。不同服务/模型对隐藏 reasoning
+  - **OpenAI-compatible 默认不发送 `max_tokens`**。不同服务/模型对隐藏 reasoning
     是否计入预算没有统一语义；固定 12,000 曾导致推理模型只输出
     `reasoning_content`、正文为空。由服务端/模型默认输出上限决定。
-  - **Anthropic 必须发送 `max_tokens`**，使用请求构造器的值（分析 12,000）。
-  - 本地仍校验 `maxTokens` 为正整数；HTTP 400 由 provider 的真实 error body
+  - 可选的 provider 级 `maxOutputTokens`（持久化在 `capabilities_json` 的
+    `max_output_tokens`；0=未设置）：大于 0 时作为该服务的 `max_tokens` 发送，
+    OpenAI-compatible 与 Anthropic 都适用。
+  - **Anthropic 必须发送 `max_tokens`**：优先使用 provider 的
+    `maxOutputTokens`，否则使用请求构造器的值（分析 12,000）。
+  - 本地仍校验请求 `maxTokens` 为正整数；HTTP 400 由 provider 的真实 error body
     分类：上下文超限、输出参数不支持、reasoning/tool 参数不兼容、通用参数无效。
     debug 只记录请求 shape（model/message 数/roles/prompt 字符数/max_tokens
     是否存在/stream），不记录正文或 Key。

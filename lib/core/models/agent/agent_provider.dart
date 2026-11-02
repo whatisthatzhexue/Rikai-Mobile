@@ -80,6 +80,7 @@ class AgentProviderConfig {
     required this.complexModel,
     this.timeoutSeconds = 180,
     this.supportsStreaming = true,
+    this.maxOutputTokens = 0,
   });
 
   final String id;
@@ -90,6 +91,11 @@ class AgentProviderConfig {
   final String complexModel;
   final int timeoutSeconds;
   final bool supportsStreaming;
+
+  /// Optional provider-level `max_tokens` override. Zero means "use the
+  /// provider default" (OpenAI-compatible) or the request builder's value
+  /// (Anthropic). It is never a universal hard ceiling.
+  final int maxOutputTokens;
 
   String get normalizedBaseUrl {
     var value = baseUrl.trim();
@@ -108,6 +114,7 @@ class AgentProviderConfig {
     String? complexModel,
     int? timeoutSeconds,
     bool? supportsStreaming,
+    int? maxOutputTokens,
   }) {
     return AgentProviderConfig(
       id: id ?? this.id,
@@ -118,6 +125,7 @@ class AgentProviderConfig {
       complexModel: complexModel ?? this.complexModel,
       timeoutSeconds: timeoutSeconds ?? this.timeoutSeconds,
       supportsStreaming: supportsStreaming ?? this.supportsStreaming,
+      maxOutputTokens: maxOutputTokens ?? this.maxOutputTokens,
     );
   }
 
@@ -129,11 +137,18 @@ class AgentProviderConfig {
     'small_model': smallModel,
     'complex_model': complexModel,
     'timeout_seconds': timeoutSeconds,
-    'capabilities': {'streaming': supportsStreaming},
+    'max_output_tokens': maxOutputTokens,
+    'capabilities': {
+      'streaming': supportsStreaming,
+      'max_output_tokens': maxOutputTokens,
+    },
   };
 
   factory AgentProviderConfig.fromJson(Map<String, Object?> json) {
     final capabilities = agentMap(json['capabilities']);
+    final parsedMaxOutputTokens = agentInt(
+      json['max_output_tokens'] ?? capabilities['max_output_tokens'],
+    );
     return AgentProviderConfig(
       id: agentString(json['id']),
       kind: AgentProviderKind.fromWire(json['kind']),
@@ -143,6 +158,7 @@ class AgentProviderConfig {
       complexModel: agentString(json['complex_model']),
       timeoutSeconds: agentInt(json['timeout_seconds'], 180),
       supportsStreaming: agentBool(capabilities['streaming'], true),
+      maxOutputTokens: parsedMaxOutputTokens < 0 ? 0 : parsedMaxOutputTokens,
     );
   }
 }

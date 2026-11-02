@@ -255,12 +255,11 @@ class OpenAiCompatibleProvider implements LlmPort {
   }
 
   Map<String, Object?> _payload(LlmRequest request, bool stream) {
-    // Validate the local budget contract, but do not send max_tokens to an
-    // OpenAI-compatible endpoint. Providers/models disagree about whether
-    // hidden reasoning counts against it; sending a fixed 12k budget made
-    // reasoning models emit only reasoning_content and no final answer.
-    validatedProviderMaxTokens(request);
-    return <String, Object?>{
+    // Do not send a request-wide max_tokens by default: providers/models
+    // disagree about whether hidden reasoning counts against it, and a fixed
+    // 12k budget made reasoning models emit only reasoning_content. A provider
+    // can opt into an explicit limit in its settings.
+    final payload = <String, Object?>{
       'model': request.model.trim(),
       'messages': validatedProviderMessages(request)
           .map(
@@ -272,5 +271,9 @@ class OpenAiCompatibleProvider implements LlmPort {
           .toList(),
       'stream': stream,
     };
+    if (config.maxOutputTokens > 0) {
+      payload['max_tokens'] = config.maxOutputTokens;
+    }
+    return payload;
   }
 }

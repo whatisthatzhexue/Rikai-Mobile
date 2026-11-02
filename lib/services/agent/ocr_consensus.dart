@@ -391,22 +391,57 @@ abstract final class OcrConsensus {
     required OcrRepairCandidate candidate,
     required String id,
   }) {
-    if (suggestion.start < 0 ||
-        suggestion.end < suggestion.start ||
-        suggestion.end > baseline.text.length) {
-      return null;
-    }
-    final replaced = baseline.text.replaceRange(
-      suggestion.start,
-      suggestion.end,
-      candidate.text,
+    return applyRepairs(
+      baseline: baseline,
+      selections: <OcrRepairSelection>[
+        OcrRepairSelection(suggestion: suggestion, candidate: candidate),
+      ],
+      id: id,
     );
-    if (replaced == baseline.text) return null;
+  }
+
+  /// Applies at most one candidate per suspicious span. Selections are applied
+  /// from the end of the text backwards so earlier UTF-16 offsets stay valid
+  /// when replacements change the text length. Overlapping or out-of-range
+  /// selections are ignored; the original variant is never mutated.
+  static AgentOcrVariant? applyRepairs({
+    required AgentOcrVariant baseline,
+    required List<OcrRepairSelection> selections,
+    required String id,
+  }) {
+    if (selections.isEmpty) return null;
+    final ordered = <OcrRepairSelection>[...selections]
+      ..sort(
+        (left, right) =>
+            right.suggestion.start.compareTo(left.suggestion.start),
+      );
+    var text = baseline.text;
+    var previousStart = text.length;
+    var changed = false;
+    for (final selection in ordered) {
+      final suggestion = selection.suggestion;
+      if (suggestion.start < 0 ||
+          suggestion.end < suggestion.start ||
+          suggestion.end > text.length ||
+          suggestion.end > previousStart) {
+        continue;
+      }
+      final replaced = text.replaceRange(
+        suggestion.start,
+        suggestion.end,
+        selection.candidate.text,
+      );
+      if (replaced == text) continue;
+      text = replaced;
+      previousStart = suggestion.start;
+      changed = true;
+    }
+    if (!changed) return null;
     return AgentOcrVariant(
       id: id,
       engine: 'dictionary_repair',
       mode: baseline.mode,
-      text: replaced,
+      text: text,
       confidence: baseline.confidence,
       elapsedMs: 0,
       origin: AgentQuoteOrigin.dictionaryRepair,
