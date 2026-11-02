@@ -260,12 +260,19 @@ void main() {
       expect(state.loading, isFalse);
       expect(state.errorCode, isNull);
       expect(ocr.calls, <OcrMode>[OcrMode.horizontal, OcrMode.vertical]);
-      expect(state.extraVariants['img-1'], hasLength(1));
-      expect(state.extraVariants['img-1']!.single.mode, OcrMode.horizontal);
+      expect(state.extraVariants['img-1'], hasLength(2));
+      expect(
+        state.extraVariants['img-1']!.map((variant) => variant.mode),
+        containsAll(<OcrMode>[OcrMode.horizontal, OcrMode.vertical]),
+      );
       expect(state.qualities['img-1'], containsPair('var-1', isNotNull));
       expect(
         state.qualities['img-1'],
         containsPair('var-img-1-horizontal-paddle_v5', isNotNull),
+      );
+      expect(
+        state.qualities['img-1'],
+        containsPair('var-img-1-vertical-paddle_v5', isNotNull),
       );
       expect(state.generatedImages, contains('img-1'));
       expect(state.repairs['img-1'], isNotEmpty);
@@ -303,7 +310,7 @@ void main() {
         dictionaries: const <DictionaryInfo>[_dictionary],
       );
       final first = container.read(agentOcrVariantsProvider);
-      final switched = first.extraVariants['img-1']!.single;
+      final switched = first.extraVariants['img-1']!.first;
 
       await controller.generate(
         images: <AgentImageInput>[
@@ -366,6 +373,63 @@ void main() {
       expect(state.extraVariants, isEmpty);
     },
   );
+
+  test('loading and cancellation are tracked per image', () async {
+    final ocr = _BlockingOcr();
+    final container = ProviderContainer(
+      overrides: [
+        agentRunServicesProvider.overrideWithValue(
+          ({required bool needsOcr, bool Function()? isCancelled}) async =>
+              _services(ocr),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(agentOcrVariantsProvider.notifier);
+    const baselines = <String, List<AgentOcrVariant>>{
+      'img-1': <AgentOcrVariant>[_baseline],
+      'img-2': <AgentOcrVariant>[_baseline],
+    };
+
+    final first = controller.generate(
+      images: const <AgentImageInput>[
+        AgentImageInput(id: 'img-1', localPath: '/tmp/one.png'),
+      ],
+      baselineVariants: baselines,
+      dictionaries: const <DictionaryInfo>[_dictionary],
+    );
+    await ocr.started.future;
+    expect(
+      container.read(agentOcrVariantsProvider).loadingImageIds,
+      contains('img-1'),
+    );
+
+    final second = controller.generate(
+      images: const <AgentImageInput>[
+        AgentImageInput(id: 'img-2', localPath: '/tmp/two.png'),
+      ],
+      baselineVariants: baselines,
+      dictionaries: const <DictionaryInfo>[_dictionary],
+    );
+    expect(
+      container.read(agentOcrVariantsProvider).loadingImageIds,
+      containsAll(<String>['img-1', 'img-2']),
+    );
+
+    controller.cancelImage('img-2');
+    expect(
+      container.read(agentOcrVariantsProvider).loadingImageIds,
+      isNot(contains('img-2')),
+    );
+    expect(
+      container.read(agentOcrVariantsProvider).loadingImageIds,
+      contains('img-1'),
+    );
+
+    controller.cancelImage('img-1');
+    await Future.wait(<Future<void>>[first, second]);
+    expect(container.read(agentOcrVariantsProvider).loadingImageIds, isEmpty);
+  });
 
   test('baseline OCR failure is reported with a stable code', () async {
     final ocr = _FakeOcr(throwOnAuto: true);

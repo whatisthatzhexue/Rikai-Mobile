@@ -655,11 +655,18 @@ class AgentOrchestrator {
           input: envelope,
           evidence: evidence,
           userRequest: userRequest,
+          maxTokens: limits.coverageReviewMaxTokens,
         ),
         cancellation,
       );
-    } on AgentRunFailure {
+    } on AgentRunFailure catch (error) {
       if (cancellation?.isCancelled == true) rethrow;
+      if (kDebugMode) {
+        debugPrint(
+          '[AgentCoverage] request failed '
+          '${error.code.wireName}: ${error.message}',
+        );
+      }
       return _CoverageOutcome(
         evidence: evidence,
         warnings: <String>[agentCoverageUnavailable(uiLanguage)],
@@ -669,10 +676,19 @@ class AgentOrchestrator {
     var parsed = parseCoverageReview(
       raw,
       expectedSourceId: primarySourceId ?? '',
+      debugLog: _coverageDebug,
     );
     review = parsed.review;
+    if (kDebugMode && parsed.normalizedText != raw) {
+      debugPrint(
+        '[AgentCoverage] normalized response before parse/repair '
+        'chars=${raw.length} -> ${parsed.normalizedText.length}',
+      );
+    }
     if (review == null) {
-      // One bounded format/tag-integrity repair; never loop.
+      // One bounded format/tag-integrity repair; never loop. The repair sees
+      // the normalized text so it cannot repeat an already fixed wrapper
+      // error; normalization is idempotent.
       try {
         final repaired = await _collect(
           llm,
@@ -682,21 +698,35 @@ class AgentOrchestrator {
             input: envelope,
             evidence: evidence,
             userRequest: userRequest,
-            rawOutput: raw,
+            rawOutput: parsed.normalizedText,
             errors: parsed.errors,
+            maxTokens: limits.coverageReviewMaxTokens,
           ),
           cancellation,
         );
         parsed = parseCoverageReview(
           repaired,
           expectedSourceId: primarySourceId ?? '',
+          debugLog: _coverageDebug,
         );
         review = parsed.review;
-      } on AgentRunFailure {
+      } on AgentRunFailure catch (error) {
         if (cancellation?.isCancelled == true) rethrow;
+        if (kDebugMode) {
+          debugPrint(
+            '[AgentCoverage] repair failed '
+            '${error.code.wireName}: ${error.message}',
+          );
+        }
       }
     }
     if (review == null) {
+      if (kDebugMode) {
+        debugPrint(
+          '[AgentCoverage] parse failed chars=${raw.length} '
+          'errors=${parsed.errors.join('；')} head=${_debugHead(raw)}',
+        );
+      }
       return _CoverageOutcome(
         evidence: evidence,
         warnings: <String>[agentCoverageUnavailable(uiLanguage)],
@@ -1055,6 +1085,10 @@ class _CoverageOutcome {
   final AgentEvidenceBundle evidence;
   final List<String> warnings;
   final bool fallbackUsed;
+}
+
+void _coverageDebug(String message) {
+  if (kDebugMode) debugPrint('[AgentCoverage] $message');
 }
 
 String _debugHead(String raw) {

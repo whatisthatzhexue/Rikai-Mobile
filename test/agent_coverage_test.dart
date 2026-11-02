@@ -3,7 +3,9 @@ import 'package:rikai_mobile/core/models/agent/agent_coverage.dart';
 import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
 import 'package:rikai_mobile/core/models/agent/agent_input.dart';
 import 'package:rikai_mobile/core/models/agent/agent_limits.dart';
+import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
 import 'package:rikai_mobile/services/agent/agent_coverage_parser.dart';
+import 'package:rikai_mobile/services/agent/agent_prompts.dart';
 import 'package:rikai_mobile/services/agent/coverage_support.dart';
 
 const _input = AgentInputEnvelope(
@@ -24,6 +26,7 @@ AgentCitation _citation({
   required String snippet,
   String dictionaryId = 'dict-a',
   int order = 0,
+  String matchedKey = '',
 }) {
   return AgentCitation(
     id: id,
@@ -32,6 +35,7 @@ AgentCitation _citation({
     dictionaryTitle: dictionaryId,
     dictionaryOrder: order,
     entryKey: entryKey,
+    matchedKey: matchedKey,
     headword: entryKey,
     snippet: snippet,
     toolCallId: 'call-1',
@@ -92,6 +96,66 @@ AgentCoverageReview _review({
 }
 
 void main() {
+  test('coverage budget is derived from its own MISSING/duplicate limits', () {
+    const limits = AgentLimits.standard;
+    final standard = limits.coverageReviewMaxTokens;
+    final smaller = const AgentLimits(
+      maxCoverageMissing: 5,
+      maxCoverageDuplicateGroups: 2,
+    ).coverageReviewMaxTokens;
+    expect(standard, greaterThan(4096));
+    expect(smaller, lessThan(standard));
+    expect(smaller, greaterThan(1024));
+
+    final expectedChars =
+        AgentLimits.coverageRootAndNotesChars +
+        limits.maxCoverageMissing *
+            (AgentLimits.coverageQueryChars +
+                AgentLimits.coverageRefsChars +
+                AgentLimits.coverageReasonChars +
+                AgentLimits.coverageTagChars) +
+        limits.maxCoverageDuplicateGroups *
+            (AgentLimits.coverageDuplicateKeyChars +
+                AgentLimits.coverageReasonChars +
+                AgentLimits.coverageTagChars);
+    expect(
+      standard,
+      (expectedChars / AgentLimits.coverageCharsPerToken).ceil() +
+          AgentLimits.coverageSafetyTokens,
+    );
+    // Coverage reasons are frequently Chinese/Japanese, where some tokenizers
+    // approach one UTF-16 code unit per token. The coefficient must stay at or
+    // below 1.0 so the derived ceiling does not undercount.
+    expect(AgentLimits.coverageCharsPerToken, lessThanOrEqualTo(1.0));
+  });
+
+  test('coverage prompt is compact and keeps its configured output budget', () {
+    final request = buildCoverageRequest(
+      model: 'small',
+      language: AgentResponseLanguage.chinese,
+      input: _input,
+      evidence: _evidence(<AgentCitation>[
+        _citation(
+          id: 'source-1',
+          entryKey: '何卒',
+          matchedKey: '何卒・一致',
+          snippet: 'なにとぞ。',
+        ),
+      ]),
+      userRequest: '解释这句话',
+    );
+    expect(request.maxTokens, AgentLimits.standard.coverageReviewMaxTokens);
+    final text = request.messages.map((message) => message.text).join('\n');
+    expect(text, contains('rikai.agent.coverage_input.v1'));
+    expect(text, contains('"tokens"'));
+    expect(text, contains('"start":0'));
+    expect(text, contains('"citations"'));
+    expect(text, contains('"entry_key":"何卒"'));
+    expect(text, contains('"matched_key":"何卒・一致"'));
+    expect(text, isNot(contains('"variants"')));
+    expect(text, isNot(contains('"lookup_candidates"')));
+  });
+
   test('parses a valid coverage review', () {
     final parsed = parseCoverageReview('''
 [COVERAGE verdict="missing"]
@@ -126,9 +190,35 @@ void main() {
     ]);
   });
 
-  test('parses a sufficient coverage review', () {
+  test(
+    'parses sufficient reviews, including empty unclosed/self-closing tags',
+    () {
+      for (final raw in <String>[
+        '[COVERAGE verdict="sufficient"][/COVERAGE]',
+        '[COVERAGE verdict="sufficient"]',
+        '[COVERAGE verdict="sufficient" /]',
+        '```text\n[COVERAGE verdict="sufficient"][/COVERAGE]\n```',
+      ]) {
+        final normalized = normalizeCoverageResponseText(raw);
+        expect(
+          normalizeCoverageResponseText(normalized),
+          normalized,
+          reason: 'normalization must be idempotent: $raw',
+        );
+        final parsed = parseCoverageReview(raw, expectedSourceId: 'src-1');
+        expect(parsed.errors, isEmpty, reason: raw);
+        expect(parsed.review?.verdict, AgentCoverageVerdict.sufficient);
+        expect(parsed.review?.missing, isEmpty);
+        expect(parsed.normalizedText, normalized);
+      }
+    },
+  );
+
+  test('a sufficient verdict ignores stray item blocks', () {
     final parsed = parseCoverageReview(
-      '[COVERAGE verdict="sufficient"][/COVERAGE]',
+      '[COVERAGE verdict="sufficient"]\n'
+      '[MISSING kind="word" query="何卒" refs="t1"]x[/MISSING]\n'
+      '[/COVERAGE]',
       expectedSourceId: 'src-1',
     );
     expect(parsed.errors, isEmpty);
@@ -136,13 +226,46 @@ void main() {
     expect(parsed.review?.missing, isEmpty);
   });
 
-  test('rejects malformed or unbalanced coverage tags', () {
+  test('one malformed missing item does not discard the whole review', () {
+    final logs = <String>[];
+    final parsed = parseCoverageReview(
+      '''
+[COVERAGE verdict="missing"]
+[MISSING kind="word" query="" refs="t1"]bad[/MISSING]
+[MISSING kind="vocabulary" query="何卒" refs="source-1" priority="99"]缺少用法[/MISSING]
+[MISSING kind="grammar" query="のに" refs="p1"]缺少语法[/MISSING]
+[DUPLICATE keep="何卒"]bad duplicate[/DUPLICATE]
+[DUPLICATE dictionary="dict-a" keep="何卒" remove="何卒（副）"]重复[/DUPLICATE]
+[/COVERAGE]
+''',
+      expectedSourceId: 'src-1',
+      debugLog: logs.add,
+    );
+    expect(parsed.errors, isEmpty);
+    expect(parsed.review?.missing, hasLength(2));
+    expect(parsed.review?.missing.first.kind, AgentCoverageKind.word);
+    expect(parsed.review?.missing.first.sourceRefs, <String>['src-1']);
+    expect(parsed.review?.missing.first.priority, 5);
+    expect(parsed.review?.duplicateGroups, hasLength(1));
+
+    // Automatic corrections must be visible in debug logs; they must not
+    // silently rewrite model output.
+    expect(logs, contains('dropped MISSING[0] query="" (chars=0)'));
+    expect(logs, contains('normalized MISSING[1] kind="vocabulary" -> "word"'));
+    expect(logs, contains('normalized MISSING[1] ref="source-1" -> "src-1"'));
+    expect(logs, contains('normalized MISSING[1] priority="99" -> 5'));
+    expect(
+      logs,
+      contains('dropped DUPLICATE[0] dictionary="" keep="何卒" removeCount=0'),
+    );
+  });
+
+  test('rejects responses without a coverage root or with a bad verdict', () {
     for (final raw in <String>[
       'not coverage tags',
       '[COVERAGE verdict="missing"]\n[MISSING kind="word" query="何卒" refs="t1"]缺少用法[/MISSING]',
       '[COVERAGE verdict="missing"]\n[MISSING kind="word" query="何卒" refs="t1"]缺少用法',
       '[COVERAGE verdict="wrong"][/COVERAGE]',
-      '[COVERAGE verdict="sufficient"]\n[MISSING kind="word" query="何卒" refs="t1"]x[/MISSING]\n[/COVERAGE]',
     ]) {
       final parsed = parseCoverageReview(raw, expectedSourceId: 'src-1');
       expect(parsed.review, isNull, reason: raw);

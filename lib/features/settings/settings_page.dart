@@ -90,8 +90,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     }
   }
 
+  void _clearUnidicPath() {
+    _pathController.clear();
+    setState(() => _validation = null);
+    ref.read(appSettingsProvider.notifier).setUnidicPath('');
+    ref.invalidate(mecabServiceProvider);
+    RikaiToast.show(context, '已清除 UniDic 路径');
+  }
+
   Future<void> _validateAndSave() async {
-    final input = UnidicValidator.normalizePath(_pathController.text);
+    final raw = _pathController.text.trim();
+    if (raw.isEmpty) {
+      _clearUnidicPath();
+      return;
+    }
+    final input = UnidicValidator.normalizePath(raw);
     if (!await ensurePathAccess(context, ref, input)) return;
     if (!mounted) return;
     setState(() {
@@ -571,6 +584,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
                     )
                   : const Icon(Icons.fact_check_outlined, size: AppSizes.icon),
               label: Text(_validating ? '正在校验…' : '校验并保存'),
+            ),
+            TextButton.icon(
+              onPressed: _validating ? null : _clearUnidicPath,
+              icon: const Icon(Icons.clear_all_outlined, size: AppSizes.icon),
+              label: const Text('清除'),
             ),
           ],
         ),

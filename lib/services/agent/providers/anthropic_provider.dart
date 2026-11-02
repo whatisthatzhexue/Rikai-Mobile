@@ -120,6 +120,12 @@ class AnthropicProvider implements LlmPort {
         '[AgentProvider] Anthropic error ${error.runtimeType}: '
         '${providerErrorDetail(error)}',
       );
+      if (error is DioException && error.response?.statusCode == 400) {
+        debugPrint(
+          '[AgentProvider] Anthropic 400 request shape: '
+          '${providerRequestShape(payload)}',
+        );
+      }
       throw mapProviderError(error, fallbackMessage: '模型服务请求失败');
     }
   }
@@ -146,21 +152,35 @@ class AnthropicProvider implements LlmPort {
   Map<String, Object?> _payload(LlmRequest request, bool stream) {
     final system = <String>[];
     final messages = <Map<String, Object?>>[];
-    for (final message in request.messages) {
+    for (final message in validatedProviderMessages(request)) {
       if (message.role == LlmRole.system) {
-        if (message.text.isNotEmpty) system.add(message.text);
+        system.add(message.text.trim());
+        continue;
+      }
+      final role = message.role == LlmRole.assistant ? 'assistant' : 'user';
+      // Anthropic requires alternating roles. Merge accidental consecutive
+      // messages of the same role instead of letting the API reject them.
+      if (messages.isNotEmpty && messages.last['role'] == role) {
+        final content = messages.last['content'] as List<Map<String, Object?>>;
+        content.add(<String, Object?>{'type': 'text', 'text': message.text});
         continue;
       }
       messages.add(<String, Object?>{
-        'role': message.role == LlmRole.assistant ? 'assistant' : 'user',
+        'role': role,
         'content': <Map<String, Object?>>[
           <String, Object?>{'type': 'text', 'text': message.text},
         ],
       });
     }
+    if (messages.isEmpty) {
+      throw const AgentCapabilityException(
+        AgentToolErrorCode.invalidArguments,
+        '请求缺少用户消息',
+      );
+    }
     final payload = <String, Object?>{
-      'model': request.model,
-      'max_tokens': request.maxTokens,
+      'model': request.model.trim(),
+      'max_tokens': validatedProviderMaxTokens(request),
       'messages': messages,
       'stream': stream,
     };

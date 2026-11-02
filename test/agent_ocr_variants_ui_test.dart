@@ -64,6 +64,39 @@ AgentRunResult _result() {
   );
 }
 
+AgentRunResult _twoImageResult() {
+  final base = _result();
+  return AgentRunResult(
+    input: const AgentInputEnvelope(
+      sessionId: 's1',
+      mode: AgentMode.strict,
+      sources: <AgentSourceInput>[
+        AgentSourceInput(
+          id: 'src-1',
+          kind: AgentSourceKind.imageOcr,
+          imageId: 'img-1',
+          selectedVariantId: 'var-1',
+          variants: <AgentOcrVariant>[_baseline],
+        ),
+        AgentSourceInput(
+          id: 'src-2',
+          kind: AgentSourceKind.imageOcr,
+          imageId: 'img-2',
+          selectedVariantId: 'var-1',
+          variants: <AgentOcrVariant>[_baseline],
+        ),
+      ],
+    ),
+    evidence: base.evidence,
+    quotes: base.quotes,
+    analysis: base.analysis,
+    validation: base.validation,
+    sources: base.sources,
+    dictionaryProfiles: base.dictionaryProfiles,
+    ocrQuality: base.ocrQuality,
+  );
+}
+
 AgentOcrVariantsState _state({String repairBaselineId = 'var-1'}) {
   return AgentOcrVariantsState(
     extraVariants: const <String, List<AgentOcrVariant>>{
@@ -93,6 +126,8 @@ Future<void> _pumpPanel(
   WidgetTester tester, {
   required void Function(String imageId, AgentOcrVariant variant) onReanalyze,
   AgentOcrVariantsState? variantsState,
+  AgentRunResult? result,
+  List<String> imagePaths = const <String>['/tmp/test-image.png'],
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -100,9 +135,10 @@ Future<void> _pumpPanel(
       home: Scaffold(
         body: SingleChildScrollView(
           child: AgentOcrVariantsPanel(
-            result: _result(),
+            result: result ?? _result(),
             variantsState: variantsState ?? _state(),
             strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            imagePaths: imagePaths,
             onReanalyze: onReanalyze,
           ),
         ),
@@ -124,8 +160,12 @@ void main() {
       },
     );
 
-    expect(find.text('OCR 版本'), findsOneWidget);
-    expect(find.text('识别质量偏低，建议对比其他 OCR 版本'), findsOneWidget);
+    expect(find.text('文字识别结果'), findsOneWidget);
+    expect(find.text('文字识别质量偏低，建议对比其他结果'), findsOneWidget);
+    expect(find.byKey(const ValueKey('agent-ocr-image-1')), findsOneWidget);
+    expect(find.text('置信度'), findsOneWidget);
+    expect(find.text('词典命中'), findsOneWidget);
+    expect(find.textContaining('假名'), findsNothing);
     expect(find.text('paddle_v5 · 自动 · 90%'), findsOneWidget);
 
     await tester.tap(find.text('paddle_v5 · 横向 · 80%'));
@@ -170,5 +210,21 @@ void main() {
     );
 
     expect(find.text('词典候选'), findsNothing);
+  });
+
+  testWidgets('comparison loading is scoped to one image', (tester) async {
+    await _pumpPanel(
+      tester,
+      onReanalyze: (imageId, variant) {},
+      result: _twoImageResult(),
+      imagePaths: const <String>['/tmp/one.png', '/tmp/two.png'],
+      variantsState: const AgentOcrVariantsState(
+        loadingImageIds: <String>{'img-1'},
+      ),
+    );
+
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.text('正在对比横向/纵向识别…'), findsOneWidget);
+    expect(find.text('对比识别'), findsOneWidget);
   });
 }

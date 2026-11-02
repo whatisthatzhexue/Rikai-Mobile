@@ -9,9 +9,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const MethodChannel _storageChannel = MethodChannel('rikai/storage_permission');
 
-Future<void> _pumpApp(WidgetTester tester) async {
+Future<void> _pumpApp(
+  WidgetTester tester, {
+  Map<String, Object> extraPreferences = const <String, Object>{},
+}) async {
   SharedPreferences.setMockInitialValues({
     'flutter.app_onboarding_completed': true,
+    ...extraPreferences,
   });
   final preferences = await SharedPreferences.getInstance();
   await tester.pumpWidget(
@@ -196,6 +200,35 @@ void main() {
     await tester.tap(find.text('5 条'));
     await tester.pumpAndSettle();
     expect(find.text('最多 5 条'), findsOneWidget);
+  });
+
+  testWidgets('empty UniDic input clears the saved path', (tester) async {
+    const path = '/sdcard/Download/unidic-cwj-202512';
+    await tester.binding.setSurfaceSize(const Size(1080, 2400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await _pumpApp(
+      tester,
+      extraPreferences: <String, Object>{'flutter.unidic_path': path},
+    );
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.controller?.text, path);
+
+    await tester.enterText(find.byType(TextField), '');
+    await tester.tap(find.text('校验并保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已清除 UniDic 路径'), findsOneWidget);
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString('flutter.unidic_path') ?? '', '');
+    // Let the toast timer expire before the test framework checks for pending
+    // timers.
+    await tester.pump(const Duration(seconds: 4));
   });
 
   testWidgets('search page shows the empty dictionary state', (tester) async {

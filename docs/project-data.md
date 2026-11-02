@@ -39,11 +39,11 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **321** |
+| 当前 test/testWidgets 声明数 | **332** |
 | 当前测试文件数 | **75** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | 321 passed |
-| 最近 `flutter build apk --debug` | success（P6.6 多 OCR 核心实现后） |
+| 最近 `flutter test` | 332 passed |
+| 最近 `flutter build apk --debug` | success（2026-11-02 Agent/OCR 稳定性修正后） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
 > 该数字对应当前未提交工作区（Wave 3 + prompt 集中/覆盖标签/raw surface + P6.6）。
@@ -65,7 +65,8 @@
 | Wave 3 | 291 | F1b 语言后校验、F6 四种模式递进/AgentLimits、F7 覆盖审查与一次回退 |
 | Prompt/覆盖标签/raw 兜底 | 295 | agent_prompts 集中、coverage 标签、模式无新增继续、UniDic raw surface |
 | P6.6 多 OCR 核心 | 321 | 质量/diff、版本比较、词典候选、用户确认后重新分析；设备验收待做 |
-| 当前 | **321** | 见 §2.1 |
+| P6.6 稳定性修正 | 332 | provider 预校验/400 分类、覆盖审查独立预算与容错、多 OCR 每图状态/UI、UniDic 清除 |
+| 当前 | **332** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 

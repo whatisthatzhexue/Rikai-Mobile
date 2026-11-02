@@ -196,6 +196,12 @@ class OpenAiCompatibleProvider implements LlmPort {
         '[AgentProvider] OpenAI-compatible error '
         '${error.runtimeType}: ${providerErrorDetail(error)}',
       );
+      if (error is DioException && error.response?.statusCode == 400) {
+        debugPrint(
+          '[AgentProvider] OpenAI-compatible 400 request shape: '
+          '${providerRequestShape(payload)}',
+        );
+      }
       throw mapProviderError(error, fallbackMessage: '模型服务请求失败');
     }
   }
@@ -232,8 +238,8 @@ class OpenAiCompatibleProvider implements LlmPort {
 
   Map<String, Object?> _payload(LlmRequest request, bool stream) {
     final payload = <String, Object?>{
-      'model': request.model,
-      'messages': request.messages
+      'model': request.model.trim(),
+      'messages': validatedProviderMessages(request)
           .map(
             (message) => <String, Object?>{
               'role': message.role.name,
@@ -241,7 +247,7 @@ class OpenAiCompatibleProvider implements LlmPort {
             },
           )
           .toList(),
-      'max_tokens': request.maxTokens,
+      'max_tokens': validatedProviderMaxTokens(request),
       'stream': stream,
     };
     return payload;

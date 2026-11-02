@@ -9,9 +9,6 @@ class OcrQuality {
   const OcrQuality({
     required this.charCount,
     required this.meaningfulChars,
-    required this.kanaRatio,
-    required this.kanjiRatio,
-    required this.latinRatio,
     required this.duplicateNoiseRatio,
     this.meanConfidence = 0,
     this.dictionaryHitRate,
@@ -29,12 +26,10 @@ class OcrQuality {
   /// UTF-16 length (same unit as token/quote offsets).
   final int charCount;
 
-  /// Letters, digits, kana and CJK ideographs; punctuation and whitespace are
-  /// excluded.
+  /// Letters, digits, kana, CJK ideographs and other scripts; punctuation and
+  /// whitespace are excluded. No script-specific ratio is used for quality or
+  /// ranking, so the same logic also works for non-Japanese MDict dictionaries.
   final int meaningfulChars;
-  final double kanaRatio;
-  final double kanjiRatio;
-  final double latinRatio;
 
   /// Share of characters that belong to runs of the same meaningful character
   /// three or more times long. Repeating OCR garbage is a useful local signal.

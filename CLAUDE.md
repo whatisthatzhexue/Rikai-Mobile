@@ -293,8 +293,11 @@ OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）�
 Phase 0–5 已全部完成并发布 1.0（验收记录见 `docs/project-history.md` 与各
 `phase*-status.md`）。Phase 6 P6.1–P6.5 已实现；2026-10-31 实机反馈 Wave 1–3
 （F1b/F6/F7）已实现，Wave 4 设备回归验收待做；P6.6 多 OCR 核心已于 2026-11-02
-实现（自动化测试），P6.6 真机验收与 P6.7 未完成。当前进度、验证记录与工作队列
-只维护在以下文档，本文件不再复述：
+实现（自动化测试）。同日后续修正：provider 请求预校验/非法字符清理/400 按真实
+error body 分类（不设统一 max_tokens 上限）、覆盖审查紧凑输入/单项容错/独立预算
+（`AgentLimits.coverage*`，CJK 系数 1.0）/自动修正日志/规范化后修复、多 OCR
+每图独立 loading/可点缩略图、UniDic 空输入清除。P6.6 真机验收与 P6.7 未完成。
+当前进度、验证记录与工作队列只维护在以下文档，本文件不再复述：
 
 - 实现进度与验证记录：`docs/phase6-status.md`
 - F1–F17 状态、Wave 计划与验收：`docs/agent_docs/device-feedback-2026-10-31.md`

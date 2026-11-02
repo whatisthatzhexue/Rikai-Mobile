@@ -78,6 +78,7 @@ void main() {
         .stream(
           const LlmRequest(
             model: 'large',
+            maxTokens: 12000,
             messages: <LlmMessage>[
               LlmMessage(
                 role: LlmRole.user,
@@ -90,6 +91,7 @@ void main() {
 
     expect(capturedAuthorization, 'Bearer test-key');
     expect(capturedBody!['model'], 'large');
+    expect(capturedBody!['max_tokens'], 12000);
     expect(capturedBody!.containsKey('image'), isFalse);
     expect(capturedBody!.containsKey('image_url'), isFalse);
     expect(capturedBody!['stream'], isFalse);
@@ -124,6 +126,7 @@ void main() {
         .stream(
           const LlmRequest(
             model: 'large',
+            maxTokens: 12000,
             messages: <LlmMessage>[
               LlmMessage(
                 role: LlmRole.user,

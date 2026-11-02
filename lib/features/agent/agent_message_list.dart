@@ -167,12 +167,14 @@ class AgentMessageList extends ConsumerWidget {
               result: result,
               variantsState: ref.watch(agentOcrVariantsProvider),
               strings: strings,
+              imagePaths: run.sentImagePaths,
               onGenerate: run.isRunning || onGenerateOcrVariants == null
                   ? null
                   : (imageId) =>
                         unawaited(onGenerateOcrVariants!(result, imageId)),
-              onCancelGenerate: () =>
-                  ref.read(agentOcrVariantsProvider.notifier).cancel(),
+              onCancelGenerate: (imageId) => ref
+                  .read(agentOcrVariantsProvider.notifier)
+                  .cancelImage(imageId),
               onReanalyze: run.isRunning || onReanalyzeOcrVariant == null
                   ? null
                   : (imageId, variant) =>

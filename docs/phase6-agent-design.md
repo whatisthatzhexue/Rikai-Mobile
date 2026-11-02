@@ -435,6 +435,16 @@ NOTES 的父子关系、同一 COVERAGE 下 NOTES 唯一和标签闭合；解析
 一次格式修复，仍失败则保留原证据并显示 warning。内部 `coverage.v1` JSON 仅作
 DTO/序列化结构，不参与模型响应，当前也没有持久化调用。
 
+2026-11-02 起降低“覆盖审查不可用”的误报：输入改为紧凑投影（选中文本 + token/
+pattern id + 清洗 citation 摘要，保留 offset 与 entry_key/matched_key，不再发送
+全部 variants/完整 evidence JSON）；单项畸形 MISSING/DUPLICATE 只丢弃该项，每次
+自动修正都记录项序号/原值/修正值；空 sufficient 块允许缺结束标签/自闭合，修复
+请求复用规范化后的文本（幂等）；输出预算由 `AgentLimits.coverageReviewMaxTokens`
+按 MISSING/duplicate 上限、reason 长度、标签开销和安全边际独立计算（系数和开销
+常量见 `AgentLimits.coverage*`，`coverageCharsPerToken=1.0` 按 CJK 保守取值，不
+跟随分析请求）；debug 模式记录脱敏后的请求/解析失败原因。真实请求失败（400/超时
+等）仍保留证据并显示 warning，不把失败伪装成成功。
+
 - 未达上限（流程 A）：按缺失关键词补充检索，仍按 exact→prefix→suffix→
   incremental；**某模式无新增也继续下一个模式**，直到上限或无 eligible target。
 - 已达上限（流程 B）：本地先验证同词典、摘要大部分重合（字符 bigram 重合或包含
@@ -534,9 +544,11 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
 
 ### 6.6 预算、取消与截断
 
-- 当前源文本/target/citation/每典/摘要/profile/Provider/覆盖审查预算统一见
-  `docs/project-data.md` §8；代码必须通过 `AgentLimits`/请求级 policy 读取，不得在
-  orchestrator、EvidenceBuilder、schema 和 UI 各写一份数字。
+- 当前源文本/target/citation/每典/摘要/profile/Provider/覆盖审查 missing/duplicate
+  上限统一见 `docs/project-data.md` §8；代码必须通过 `AgentLimits`/请求级 policy
+  读取，不得在 orchestrator、EvidenceBuilder、schema 和 UI 各写一份数字。覆盖审查
+  的输出 token 预算由 `AgentLimits.coverageReviewMaxTokens` 从这些上限和
+  `AgentLimits.coverage*` 常量派生，不单独配置。
 - 历史 tool loop 预算（6 次/单工具 60s/总 90s）仅作未来参考，不是当前实现。
 - 超预算时显示“已按预算缩减，未分析的部分不会出现在结果中”，并允许用户缩小范围；
   记录 `truncated` 标记。
@@ -558,7 +570,8 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
   selected`。
 - 默认只生成一个 `auto` 版本；用户点“多版本识别”或系统判定质量低时，顺序补跑
   `horizontal`/`vertical`/旋转候选（Manga 可用时）。
-- 质量参考：平均置信度、假名覆盖率、有效字符数、重复噪声、分词后内容词词典命中率。
+- 质量参考：平均置信度、有效字符数、重复噪声、分词后内容词词典命中率。
+  **不使用假名比例/假名匹配**，以便未来支持非日语 MDict 词典。
 - 版本差异用字符/token diff 高亮；**不自动合并，也不得静默只保留一个版本**；由
   用户选择最终 `analysis_text`。多个版本冲突且无法确定时，候选版本和对应依据一起
   展示给用户。
@@ -566,8 +579,8 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
 
 ### 7.2 词典辅助 OCR 修复
 
-- 对版本不一致的 span，用 `mdict.suggest`/prefix lookup 查候选，计算词典命中、
-  假名/汉字合理性和上下文一致性。
+- 对版本不一致的 span，用 `mdict.suggest`/prefix lookup 查候选，计算词典命中
+  和上下文一致性；不依赖假名/汉字比例等语言专属判断。
 - 输出 `OcrRepairSuggestion {original, candidates:[{text, citationIds, score}],
   reason}`；用户点“采用”才替换，生成 `SourceVersion(origin: dictionary_repair)`。
 - 模型可以提出修正建议，但只能作为建议显示；必须带 citation 或标“模型猜测”，
@@ -719,6 +732,12 @@ LlmProvider
   `max_tokens` + effort 控制；不发送 JSON schema。复杂分析可用 adaptive
   thinking；thinking 内容不展示、不作为 citation，最终以标签解析和 validator
   校验为准。
+- 发送前统一 preflight：model 去空白非空、丢弃空白 message、至少一条非 system、
+  Anthropic 合并连续同 role、`max_tokens` 必须是正整数；本地无效请求直接返回
+  `INVALID_ARGUMENTS`，不发送网络请求。**不假设统一输出上限**：不同模型能力差异
+  很大（例如 deepseek-flash 远高于 8,192）。HTTP 400 按 provider 返回的 error
+  body 分类（上下文超限、输出参数不支持、reasoning/tool 参数不兼容、通用参数
+  无效），并在 debug 记录请求 shape，不盲目降额。
 - 请求构造器只有 `LlmTextPart`，没有 image 类型；运行时 `assertNoImagePayload`，
   测试捕获原始请求体断言无 `image`/`image_url`/`input_image`/`base64`/`data:image`/
   本地路径。
@@ -770,8 +789,11 @@ SharedPreferences，但不得混入 Key。
   独立标签。
 - 状态/错误：空闲/提交中/流式/完成/中断/降级/离线/错误均有视觉标识；失败保留
   已生成内容，错误卡出现在消息下方，不弹全局对话框、不整屏 loading。
-- OCR 版本区（P6.6 核心已实现，2026-11-02）：版本 chip、质量指标、差异高亮、
-  词典候选“采用”（不采用即保持不变）、切换版本后重新分析；真机视觉验收待做。
+- OCR 版本区（P6.6 核心已实现，2026-11-02）：标题“文字识别结果”；每张图显示
+  与用户消息相同的可点缩略图（全屏查看）；版本 chip、置信度/词典命中胶囊
+  （不使用假名比例）、差异高亮、词典候选“采用”（不采用即保持不变）、切换版本后
+  重新分析；每图的对比 loading/error 独立，可同时发起，底层 OCR 调用串行排队。
+  真机视觉验收待做。
 - 熟悉期 sheet：档案预览/编辑、保存/本次跳过/不再询问；确认前不写档案。
 - 设置：provider 列表/新增/编辑、Base URL、small/complex 模型、API Key 掩码输入
   与显示切换、测试连接（显式发送最小文本请求）、三态配置标签、隐私说明、清除

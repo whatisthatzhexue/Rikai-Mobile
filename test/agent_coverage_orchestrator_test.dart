@@ -195,7 +195,7 @@ void main() {
     ]);
     final provider = FakeProvider(
       responseSequence: <String>[
-        '$_coverageMissing[/COVERAGE]',
+        '```text\n$_coverageMissing[/COVERAGE]\n```',
         _coverageMissing,
         _analysisTagged,
       ],
@@ -223,6 +223,9 @@ void main() {
         .join('\n');
     expect(repairPrompt, contains('FORMAT CORRECTION TASK'));
     expect(repairPrompt, contains('多余的结束标签 [/COVERAGE]'));
+    // The repair request must use the normalized response, not the raw one,
+    // so a wrapper error fixed by normalization cannot repeat.
+    expect(repairPrompt, isNot(contains('```')));
   });
 
   test('flow B prunes a verified duplicate before supplementing', () async {

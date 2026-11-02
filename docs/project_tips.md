@@ -4,8 +4,8 @@
 > 其它文档只引用 `T-###`，不再复制误区正文；**今后的新误区只在本文件追加**。
 >
 > - last_migrated: 2026-11-01（从原交接文档 §5 迁移，共 129 条）
-> - last_updated: 2026-11-01
-> - 编号说明：条目使用连续的 `T-001`–`T-129`；原文档 §5.14 的 #122–#130
+> - last_updated: 2026-11-02（新增 T-130–T-131）
+> - 编号说明：条目使用连续的 `T-001`–`T-131`；原文档 §5.14 的 #122–#130
 >   顺延为 `T-121`–`T-129`。编号一经发布不再复用。
 >
 > **何时查看**：遇到报错、异常行为、构建失败或准备重复试错时；接手 OCR、
@@ -18,7 +18,7 @@
 ## 0. 使用与维护
 
 1. **查找**：先按症状查附录 A；再按域名读对应章节。
-2. **新增**：只在本文件追加 `T-130` 起的连续编号；如适用，同时在附录 A 增加
+2. **新增**：只在本文件按当前末尾编号继续追加；如适用，同时在附录 A 增加
    症状行。不要往其他文档写误区正文。
 3. **失效**：确认某条不再适用时，保留编号并标注“已失效 / 已被 `T-###` 取代”；
    不要复用编号。
@@ -1171,7 +1171,38 @@ block JSON），UI 保存用 fake `HistoryStore`。若将来必须测数据库�
 --split-per-abi --config-only` 重新生成 release 注册文件，再跑正式 release
 build；`flutter clean` 不一定能解决。不要改注册文件本身。
 
-## 附录 A：症状 → 处理速查
+## 14. Agent 请求与覆盖审查（T-130–T-131）
+
+### T-130 模型偶尔直接返回 HTTP 400（请求格式/参数不合法）
+
+**误区**：把所有 400 都归因于 `max_tokens` 过大，或反过来写死一个统一上限
+（例如 8,192）。不同模型能力差异很大，deepseek-flash 的输出上限远高于 8,192；
+盲目降额既解释不了错误，也可能截断结果。
+
+**正确做法**：发送前只做结构/类型校验（`provider_payload.dart`）：model 非空；
+丢弃空白 message；至少一条非 system；Anthropic 合并连续同 role；清理未配对
+UTF-16 surrogate 和 C0 控制字符；`max_tokens` 必须是正整数。发生 400 时读取
+provider 的真实 error body 并分类（上下文超限、输出参数不支持、reasoning/tool
+参数不兼容、通用参数无效）；debug 只记录请求 shape（model/消息数/roles/字符数/
+max_tokens 类型/stream），不记录正文/Key。不要用 UI 重试掩盖 400，也不要恢复
+`temperature/top_p/top_k`、`response_format` 或 tools。
+
+### T-131 每次运行都提示“覆盖审查不可用”
+
+**误区**：把覆盖审查当成必需步骤；发送完整 input envelope（含全部 variants）和
+完整 evidence JSON；一个 MISSING 项属性不合法就让整份 review 失败；只给一次修复
+且输出预算过小；把空 sufficient 块缺少结束标签当成结构错误。
+
+**正确做法**：覆盖审查是可选增强。输入改为紧凑投影（选中文本 + token/pattern id
++ 清洗 citation 摘要，保留 offset 与 entry_key/matched_key）；单项畸形只丢弃该项，
+并记录每次自动修正的原值/修正值；空 sufficient/自闭合标签先规范化，修复请求使用
+规范化后的文本（幂等）；输出预算由 `AgentLimits.coverageReviewMaxTokens` 按 MISSING/
+duplicate 上限、reason 长度、标签开销和安全边际独立计算，系数/开销常量统一在
+`AgentLimits.coverage*`（`coverageCharsPerToken=1.0`，CJK 保守），不跟随分析请求；
+解析失败保留原证据并在 debug 记录脱敏原因。真实 provider 请求失败仍显示 warning，
+不能伪装成审查成功。
+
+
 
 > 先按症状定位 `T-###`，再阅读对应条目；本表不重复完整做法。
 
@@ -1225,3 +1256,5 @@ build；`flutter clean` 不一定能解决。不要改注册文件本身。
 | 主页使用前须知仍在按钮下方 | 按“须知 → 功能按钮区 → 边界说明”的 Column 顺序排列，不再垂直居中；数量/文案按当前产品定义（`T-068`） |
 | 语料仍是缩略图/点击进文本阅读 | 大照片完整 contain + 右上删除 + OCR + 日期；点击进语料详情（`T-069`） |
 | 语料详情只显示 OCR 或只显示分词 | 两段都显示；OCR 原文 + ReaderBlock 分词，可点词查词（`T-070`） |
+| 模型偶尔返回 HTTP 400 / “请求格式不合法” | 校验 model/消息/类型并清理非法字符；按真实 error body 分类，不要盲目压低 max_tokens（`T-130`） |
+| 每次运行都提示“覆盖审查不可用” | 用紧凑覆盖输入、单项容错、空 sufficient 规范化；保留真实请求失败 warning（`T-131`） |

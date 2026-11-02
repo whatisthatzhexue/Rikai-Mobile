@@ -358,26 +358,25 @@ class AgentUiStrings {
   );
 
   // P6.6 multi-OCR comparison / dictionary-assisted repair.
-  String get ocrVersionsTitle => _pick('OCR 版本', 'OCR variants', 'OCR バージョン');
-  String ocrImageLabel(int index) =>
-      _pick('图片 $index', 'Image $index', '画像 $index');
+  String get ocrVersionsTitle =>
+      _pick('文字识别结果', 'Text recognition results', '文字認識結果');
+  String get ocrImageUnavailable =>
+      _pick('图片不可用', 'Image unavailable', '画像を表示できません');
   String get ocrModeAuto => _pick('自动', 'Auto', '自動');
   String get ocrModeHorizontal => _pick('横向', 'Horizontal', '横書き');
   String get ocrModeVertical => _pick('纵向', 'Vertical', '縦書き');
   String get ocrRecommended => _pick('推荐', 'Recommended', '推奨');
-  String ocrConfidence(int percent) =>
-      _pick('置信度 $percent%', 'Confidence $percent%', '信頼度 $percent%');
-  String ocrKanaRatio(int percent) =>
-      _pick('假名 $percent%', 'Kana $percent%', 'かな $percent%');
-  String ocrDictionaryHit(int percent) =>
-      _pick('词典命中 $percent%', 'Dictionary hit $percent%', '辞書ヒット $percent%');
+  String get ocrConfidenceLabel => _pick('置信度', 'Confidence', '信頼度');
+  String get ocrDictionaryHitLabel => _pick('词典命中', 'Dictionary hit', '辞書ヒット');
+  String ocrPercent(int percent) => '$percent%';
+  String get ocrUnknownValue => '—';
   String get ocrQualityLow => _pick(
-    '识别质量偏低，建议对比其他 OCR 版本',
-    'OCR quality looks low; compare other variants',
-    'OCR 品質が低い可能性があります。他のバージョンと比較してください',
+    '文字识别质量偏低，建议对比其他结果',
+    'Text recognition quality looks low; compare other results',
+    '文字認識の品質が低い可能性があります。他の結果と比較してください',
   );
   String get ocrVariantsGenerate =>
-      _pick('多版本识别', 'Compare OCR variants', 'OCR バージョンを比較');
+      _pick('对比识别', 'Compare recognition', '認識結果を比較');
   String get ocrVariantsRegenerate => _pick('重新对比', 'Compare again', 'もう一度比較');
   String get ocrVariantsLoading => _pick(
     '正在对比横向/纵向识别…',
@@ -385,12 +384,12 @@ class AgentUiStrings {
     '横書き/縦書き OCR を比較中…',
   );
   String get ocrVariantsUnavailable => _pick(
-    '没有可用的其他 OCR 版本',
-    'No other OCR variant is available',
-    '利用できる他の OCR バージョンはありません',
+    '没有可用的其他文字识别结果',
+    'No other text recognition result is available',
+    '利用できる他の文字認識結果はありません',
   );
   String get ocrVariantsFailed =>
-      _pick('多版本识别失败', 'OCR comparison failed', 'OCR 比較に失敗しました');
+      _pick('文字识别对比失败', 'Text recognition comparison failed', '文字認識の比較に失敗しました');
   String get ocrCancelComparison => _pick('停止对比', 'Stop comparison', '比較を停止');
   String get ocrDiffTitle => _pick('差异预览', 'Difference preview', '差分プレビュー');
   String get ocrDiffHint => _pick(

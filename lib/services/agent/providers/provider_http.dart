@@ -111,6 +111,65 @@ String? openAiTextContent(Object? content) {
   return null;
 }
 
+enum ProviderBadRequestKind {
+  contextLength,
+  outputLimit,
+  reasoningContent,
+  invalidParameter,
+  unknown,
+}
+
+/// Classify the provider's own error text. No universal `max_tokens` ceiling is
+/// assumed: context and parameter problems are reported from the actual body.
+ProviderBadRequestKind classifyProviderBadRequest(String detail) {
+  final text = detail.toLowerCase();
+  if (text.contains('context length') ||
+      text.contains('context_length') ||
+      text.contains('maximum context') ||
+      text.contains('too many tokens') ||
+      text.contains('prompt is too long') ||
+      text.contains('reduce the length')) {
+    return ProviderBadRequestKind.contextLength;
+  }
+  if (text.contains('max_completion_tokens') ||
+      text.contains('max_tokens') ||
+      text.contains('max output')) {
+    return ProviderBadRequestKind.outputLimit;
+  }
+  if (text.contains('reasoning_content') ||
+      text.contains('reasoning content') ||
+      text.contains('thinking')) {
+    return ProviderBadRequestKind.reasoningContent;
+  }
+  if (text.contains('invalid') ||
+      text.contains('unsupported') ||
+      text.contains('missing') ||
+      text.contains('required') ||
+      text.contains('expected') ||
+      text.contains('parameter')) {
+    return ProviderBadRequestKind.invalidParameter;
+  }
+  return ProviderBadRequestKind.unknown;
+}
+
+String providerBadRequestMessage(int status, String detail) {
+  final suffix = detail.isEmpty ? '' : '：$detail';
+  switch (classifyProviderBadRequest(detail)) {
+    case ProviderBadRequestKind.contextLength:
+      return '上下文超限（HTTP $status）$suffix；请缩短文本或减少词典依据后重试';
+    case ProviderBadRequestKind.outputLimit:
+      return '模型拒绝了输出参数（HTTP $status）$suffix；请检查模型名称与 max_tokens 能力';
+    case ProviderBadRequestKind.reasoningContent:
+      return '模型思考模式/推理参数不兼容（HTTP $status）$suffix；请检查模型与 provider 类型';
+    case ProviderBadRequestKind.invalidParameter:
+      return '模型请求参数无效（HTTP $status）$suffix';
+    case ProviderBadRequestKind.unknown:
+      return detail.isEmpty
+          ? '模型请求被拒绝（HTTP $status），请检查模型名、Base URL 和参数'
+          : '模型请求被拒绝（HTTP $status）$suffix';
+  }
+}
+
 AgentCapabilityException mapProviderError(
   Object error, {
   String fallbackMessage = '模型服务请求失败',
@@ -159,9 +218,7 @@ AgentCapabilityException mapProviderError(
     if (status == 400 || status == 404 || status == 422) {
       return AgentCapabilityException(
         AgentToolErrorCode.invalidArguments,
-        detail.isEmpty
-            ? '模型请求被拒绝（HTTP $status），请检查模型名、Base URL 和参数'
-            : '模型请求被拒绝（HTTP $status）：$detail',
+        providerBadRequestMessage(status!, detail),
         cause: error,
       );
     }
@@ -194,6 +251,35 @@ AgentCapabilityException mapProviderError(
     fallbackMessage,
     cause: error,
   );
+}
+
+/// Metadata-only request shape for 400 diagnostics. It never includes prompt
+/// text, dictionary snippets, image paths or API keys.
+String providerRequestShape(Map<String, Object?> payload) {
+  final rawMessages = payload['messages'];
+  final messages = rawMessages is List ? rawMessages : const <Object?>[];
+  final roles = <String>[];
+  var promptChars = 0;
+  for (final message in messages) {
+    if (message is Map) {
+      roles.add(message['role']?.toString() ?? '?');
+      final content = message['content'];
+      if (content is String) {
+        promptChars += content.length;
+      } else if (content is List) {
+        for (final part in content) {
+          if (part is Map && part['text'] is String) {
+            promptChars += (part['text'] as String).length;
+          }
+        }
+      }
+    }
+  }
+  final maxTokens = payload['max_tokens'];
+  return 'model=${payload['model']} messages=${messages.length} '
+      'roles=${roles.join(',')} promptChars=$promptChars '
+      'max_tokens=$maxTokens (${maxTokens.runtimeType}) '
+      'stream=${payload['stream']}';
 }
 
 String providerErrorDetail(Object error) {

@@ -83,6 +83,8 @@
 | R-AGENT-18 | MUST | 默认输出/UI 语言为中文（zh）；旧 `follow` 必须映射为 `zh`；禁止按输入文本的假名/拉丁字符推断语言（F1/F17） | 日语输入 + 默认设置 → 中文 UI/结果；旧 `follow` → 中文；不得读取 `sourceText` 推断 | `device-feedback` F1/F17 |
 | R-AGENT-19 | MUST | 所有 Agent prompt 文本与请求构造集中在 `lib/services/agent/agent_prompts.dart`；其他文件不得硬编码 prompt | 代码审查：orchestrator/parser/controller/UI 无 prompt 字符串 | `agent_prompts.dart` |
 | R-AGENT-20 | MUST | 多 OCR 版本只由用户显式触发；不得自动合并版本或静默替换原文；采用变体/词典候选后必须重新分词、查词和分析；图片/路径/base64/Key 不得进入该流程或 provider 请求 | 变体/修复测试；请求体断言无图片/路径/Key | `phase6-agent-contracts` §3.1 |
+| R-AGENT-21 | MUST | Provider 请求发送前必须本地校验：model 非空、丢弃空白消息、至少一条非 system、Anthropic 合并连续 role、清理非法 Unicode/控制字符、`max_tokens` 为正整数；不得假设统一输出上限，400 必须按真实 error body 分类 | provider payload/HTTP body 测试 | `phase6-agent-contracts` §11 |
+| R-AGENT-22 | MUST | 覆盖审查是可选增强：使用 `AgentLimits.coverageReviewMaxTokens` 独立预算（MISSING/duplicate 上限 × 长度 + 标签开销 + 安全边际），不跟随分析请求；单项畸形只丢弃该项，标签/请求失败保留原证据；不得让整次 run 失败或伪装成功 | coverage parser/orchestrator/预算测试 | `phase6-agent-contracts` §5.1 |
 
 ## 5. UI / UX（R-UI）
 
@@ -132,6 +134,7 @@
 | R-DOC-08 | MUST | 数据变更更新 `last_verified`/`last_verified_code_commit`；规则变更更新本文件版本/日期；历史值标注“历史值” | 文档审查 | 数据文件头部 |
 | R-DOC-09 | MUST | 误区/踩坑与解决方案只在误区文件维护（`T-###`）；其他文档只引用 T-ID/链接 | 在其他文档新增误区正文 | 误区文件 |
 | R-DOC-10 | MUST | 阶段开发历史只在历史文件汇总；交接文档只保留当前状态/下一步；详细 phase 快照留在 phase status | 在交接文档复制 Phase 0–5 流水账 | 历史文件 |
+| R-DOC-11 | MUST | 修改 `docs/project-data.md` 中**原有 Agent 相关数据**（预算、token 上限、测试基线、Agent UI 固定文案等）前，必须先取得用户明确同意 | 未经同意直接改既有 Agent 数据行 | `docs/project-data.md` |
 
 ## 8. 当前未来/部分规则
 
@@ -147,7 +150,9 @@
 | R-AGENT-19 prompt centralization | implemented | 所有 Agent prompt 文本/请求构造集中在 `agent_prompts.dart`；旧 prompt 文件为兼容 re-export |
 | R-UI-09 F4/F9 | partial | 短胶囊/3.5 行规范已定，设备/窄屏验收待 Wave 4 |
 | F11 多图 | implemented | Wave 2：相机/相册多选、追加、移除；上限 6 见统一预算常量 |
-| P6.6 multi-OCR | implemented (automation) | 2026-11-02 用户指示后实现：显式多版本、质量/diff、词典候选、用户确认后重新分析；真机视觉/OCR/词典质量验收待 Wave 4 |
+| P6.6 multi-OCR | implemented (automation) | 2026-11-02 用户指示后实现：显式多版本、质量/diff、词典候选、用户确认后重新分析；UI 标题/缩略图/每图独立状态/无假名比例已修正；真机验收待 Wave 4 |
+| R-AGENT-21 provider payload | implemented | model/messages 预校验、Anthropic role 合并、非法 Unicode/控制字符清理、`max_tokens` 正整数校验；400 按真实 error body 分类，不设统一上限 |
+| R-AGENT-22 coverage stability | implemented | 紧凑输入、单项容错、空 sufficient 规范化、独立预算公式、debug 诊断；真实请求失败仍 warning |
 | P6.7 | future | annotation DSL/Markdown/ruby/pitch/历史/发布尚未开始 |
 
 ## 9. 变更流程

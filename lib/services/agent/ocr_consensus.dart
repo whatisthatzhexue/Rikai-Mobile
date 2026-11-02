@@ -26,8 +26,6 @@ abstract final class OcrConsensus {
   static const int maxRepairChunkChars = 6;
   static const int maxHitRateWords = 12;
 
-  static final RegExp _repairRuns = RegExp(r'[぀-ヿ㐀-䶿一-鿿ｦ-ﾟA-Za-z0-9]{2,}');
-
   /// Assess a variant using the text itself and an optional locally measured
   /// dictionary hit signal.
   static OcrQuality assess({
@@ -37,27 +35,12 @@ abstract final class OcrConsensus {
   }) {
     final text = variant.text;
     var meaningful = 0;
-    var kana = 0;
-    var kanji = 0;
-    var latin = 0;
     for (final rune in text.runes) {
-      if (!_isMeaningfulRune(rune)) continue;
-      meaningful++;
-      if (_isKanaRune(rune)) {
-        kana++;
-      } else if (_isKanjiRune(rune)) {
-        kanji++;
-      } else if (_isLatinRune(rune)) {
-        latin++;
-      }
+      if (_isMeaningfulRune(rune)) meaningful++;
     }
-    final denominator = meaningful == 0 ? 1 : meaningful;
     return OcrQuality(
       charCount: text.length,
       meaningfulChars: meaningful,
-      kanaRatio: kana / denominator,
-      kanjiRatio: kanji / denominator,
-      latinRatio: latin / denominator,
       duplicateNoiseRatio: _duplicateNoiseRatio(text),
       meanConfidence: variant.confidence,
       dictionaryHitRate: dictionaryHitRate,
@@ -328,17 +311,13 @@ abstract final class OcrConsensus {
       if (span.end > text.length || span.start < 0) continue;
       final spanText = text.substring(span.start, span.end);
       var cursor = 0;
-      for (final match in _repairRuns.allMatches(spanText)) {
+      for (final chunkInfo in _repairChunks(spanText)) {
         if (suggestions.length >= maxSuggestions || queries >= maxQueries) {
           break;
         }
-        var chunk = match.group(0)!;
-        final local = span.start + match.start;
-        if (local < cursor) continue;
-        if (chunk.length > maxRepairChunkChars) {
-          chunk = chunk.substring(0, maxRepairChunkChars);
-        }
-        if (chunk.length < 2) continue;
+        final chunk = chunkInfo.text;
+        final local = span.start + chunkInfo.start;
+        if (local < cursor || chunk.length < 2) continue;
         cursor = local + chunk.length;
         queries++;
         LookupResult exact;
@@ -362,13 +341,9 @@ abstract final class OcrConsensus {
         if (queries >= maxQueries) break;
         queries++;
         List<String> rawSuggestions;
-        final firstRune = chunk.runes.first;
-        final prefixLength = _isKanaRune(firstRune) || _isKanjiRune(firstRune)
-            ? 1
-            : math.min(2, chunk.length);
         try {
           rawSuggestions = await lookupPort.suggest(
-            prefix: chunk.substring(0, prefixLength),
+            prefix: chunk.substring(0, 1),
             dictionaries: dictionaries,
             limit: 5,
           );
@@ -579,6 +554,41 @@ abstract final class OcrConsensus {
     return (lengthScore + sameLength).clamp(0.0, 1.0).toDouble();
   }
 
+  /// Split a changed span into script-neutral 2–6 character chunks. Runs are
+  /// bounded by punctuation/whitespace, so no kana/Latin assumption is made.
+  static List<({String text, int start})> _repairChunks(String text) {
+    final chunks = <({String text, int start})>[];
+    final buffer = StringBuffer();
+    var runStart = -1;
+    var offset = 0;
+
+    void flush() {
+      if (buffer.isEmpty) return;
+      var value = buffer.toString();
+      if (value.length > maxRepairChunkChars) {
+        value = value.substring(0, maxRepairChunkChars);
+      }
+      if (value.length >= 2) {
+        chunks.add((text: value, start: runStart));
+      }
+      buffer.clear();
+      runStart = -1;
+    }
+
+    for (final rune in text.runes) {
+      final length = rune > 0xffff ? 2 : 1;
+      if (_isMeaningfulRune(rune)) {
+        if (runStart < 0) runStart = offset;
+        buffer.writeCharCode(rune);
+      } else {
+        flush();
+      }
+      offset += length;
+    }
+    flush();
+    return chunks;
+  }
+
   static String? _firstUsableCandidate(Token token) {
     for (final raw in token.lookupCandidates) {
       final value = raw.trim();
@@ -593,29 +603,23 @@ abstract final class OcrConsensus {
 
   static int? _firstRune(String text) => text.isEmpty ? null : text.runes.first;
 
-  static bool _isMeaningfulRune(int rune) =>
-      _isKanaRune(rune) ||
-      _isKanjiRune(rune) ||
-      _isLatinRune(rune) ||
-      _isDigitRune(rune);
-
-  static bool _isKanaRune(int rune) =>
-      (rune >= 0x3040 && rune <= 0x30ff) ||
-      (rune >= 0x31f0 && rune <= 0x31ff) ||
-      (rune >= 0xff66 && rune <= 0xff9f);
-
-  static bool _isKanjiRune(int rune) =>
-      (rune >= 0x3400 && rune <= 0x4dbf) ||
-      (rune >= 0x4e00 && rune <= 0x9fff) ||
-      (rune >= 0xf900 && rune <= 0xfaff) ||
-      (rune >= 0x20000 && rune <= 0x3134f);
-
-  static bool _isLatinRune(int rune) =>
-      (rune >= 0x41 && rune <= 0x5a) ||
-      (rune >= 0x61 && rune <= 0x7a) ||
-      (rune >= 0xff21 && rune <= 0xff3a) ||
-      (rune >= 0xff41 && rune <= 0xff5a);
-
-  static bool _isDigitRune(int rune) =>
-      (rune >= 0x30 && rune <= 0x39) || (rune >= 0xff10 && rune <= 0xff19);
+  /// Script-neutral meaningful-character test. It does not classify kana,
+  /// kanji, Latin or any other language specifically, so OCR quality works for
+  /// other-language dictionaries too. Whitespace, control and common
+  /// punctuation/symbol ranges are excluded.
+  static bool _isMeaningfulRune(int rune) {
+    if (rune <= 0x20) return false;
+    if (rune >= 0x7f && rune <= 0xa0) return false;
+    if (rune >= 0xa1 && rune <= 0xbf) return false;
+    if (rune == 0xd7 || rune == 0xf7) return false;
+    if (rune >= 0x2000 && rune <= 0x206f) return false;
+    if (rune >= 0x3000 && rune <= 0x303f) return false;
+    if (rune == 0x30a0 || rune == 0x30fb) return false;
+    if (rune >= 0xff01 && rune <= 0xff0f) return false;
+    if (rune >= 0xff1a && rune <= 0xff20) return false;
+    if (rune >= 0xff3b && rune <= 0xff40) return false;
+    if (rune >= 0xff5b && rune <= 0xff65) return false;
+    if (rune >= 0x1f000 && rune <= 0x1faff) return false;
+    return true;
+  }
 }

@@ -1,11 +1,22 @@
 import '../../core/models/agent/agent_coverage.dart';
 import 'tag_block_integrity.dart';
 
+typedef CoverageDebugLog = void Function(String message);
+
 class CoverageParseResult {
-  const CoverageParseResult({this.review, this.errors = const <String>[]});
+  const CoverageParseResult({
+    this.review,
+    this.errors = const <String>[],
+    this.normalizedText = '',
+  });
 
   final AgentCoverageReview? review;
   final List<String> errors;
+
+  /// The text actually parsed, after safe tag normalization. A repair request
+  /// must use this instead of the raw response so it cannot repeat a structural
+  /// error that normalization already fixed.
+  final String normalizedText;
 }
 
 const _coverageBlockTags = <String>{
@@ -15,10 +26,32 @@ const _coverageBlockTags = <String>{
   'NOTES',
 };
 
+const _kindAliases = <String, AgentCoverageKind>{
+  'word': AgentCoverageKind.word,
+  'vocabulary': AgentCoverageKind.word,
+  'term': AgentCoverageKind.word,
+  'grammar': AgentCoverageKind.grammar,
+  'grammar_pattern': AgentCoverageKind.grammar,
+  'sense': AgentCoverageKind.sense,
+  'meaning': AgentCoverageKind.sense,
+  'usage': AgentCoverageKind.usage,
+  'translation': AgentCoverageKind.usage,
+  'reading': AgentCoverageKind.reading,
+  'pronunciation': AgentCoverageKind.reading,
+  'example': AgentCoverageKind.example,
+  'example_sentence': AgentCoverageKind.example,
+  'context': AgentCoverageKind.context,
+};
+
 final _coverageBlockPattern = RegExp(
   r'\[COVERAGE\b([^\]]*)\]([\s\S]*?)\[/COVERAGE\]',
   caseSensitive: false,
 );
+final _coverageOpenPattern = RegExp(
+  r'\[COVERAGE\b([^\]]*)\]',
+  caseSensitive: false,
+);
+final _coverageClosePattern = RegExp(r'\[/COVERAGE\]', caseSensitive: false);
 final _missingPattern = RegExp(
   r'\[MISSING\b([^\]]*)\]([\s\S]*?)\[/MISSING\]',
   caseSensitive: false,
@@ -31,14 +64,54 @@ final _notesPattern = RegExp(
   r'\[NOTES\]([\s\S]*?)\[/NOTES\]',
   caseSensitive: false,
 );
-final _sourceRefPattern = RegExp(r'^(t\d+|p\d+|src-\d+)$');
+final _childBlockPattern = RegExp(
+  r'\[(?:/?)(MISSING|DUPLICATE|NOTES)\b',
+  caseSensitive: false,
+);
+
+/// Models often return a single empty `[COVERAGE verdict="sufficient"]` tag
+/// (or a self-closing tag) instead of the paired block. That response is
+/// unambiguous and safe; normalize it before integrity checking instead of
+/// spending a repair call and then showing "coverage unavailable".
+///
+/// This function is idempotent: normalizing an already normalized response
+/// returns it unchanged.
+String normalizeCoverageResponseText(String raw) => _normalizeCoverageTags(raw);
+
+String _normalizeCoverageTags(String raw) {
+  var text = raw.replaceAll('\r\n', '\n');
+  text = text.replaceAll(
+    RegExp(r'^\s*```[A-Za-z0-9_-]*\s*$', multiLine: true),
+    '',
+  );
+  text = text.replaceAll('```', '');
+  final opens = _coverageOpenPattern.allMatches(text).toList(growable: false);
+  final closes = _coverageClosePattern.allMatches(text).length;
+  if (opens.length != 1 || closes != 0) return text;
+  final open = opens.single;
+  final after = text.substring(open.end);
+  if (_childBlockPattern.hasMatch(after)) return text;
+  var attrs = open.group(1) ?? '';
+  if (RegExp(r'/\s*$').hasMatch(attrs)) {
+    attrs = attrs.replaceFirst(RegExp(r'/\s*$'), '');
+    final openTag = '[COVERAGE$attrs]';
+    text = text.replaceRange(open.start, open.end, openTag);
+    final insertAt = open.start + openTag.length;
+    return '${text.substring(0, insertAt)}[/COVERAGE]'
+        '${text.substring(insertAt)}';
+  }
+  final insertAt = open.end;
+  return '${text.substring(0, insertAt)}[/COVERAGE]'
+      '${text.substring(insertAt)}';
+}
 
 /// Reports unbalanced or mis-nested coverage blocks. Parsing is reported as
 /// failed when this returns anything, so the caller can request one repair.
 List<String> coverageTagIntegrityErrors(String raw) {
+  final normalized = normalizeCoverageResponseText(raw);
   final errors = <String>[
     ...tagBlockIntegrityErrors(
-      raw,
+      normalized,
       blockTags: _coverageBlockTags,
       rootOnlyTags: const <String>{'COVERAGE'},
       requiredParent: const <String, String>{
@@ -49,7 +122,7 @@ List<String> coverageTagIntegrityErrors(String raw) {
       singleInParent: const <String>{'NOTES'},
     ),
   ];
-  final blocks = _coverageBlockPattern.allMatches(raw).length;
+  final blocks = _coverageBlockPattern.allMatches(normalized).length;
   if (blocks == 0) {
     errors.add('缺少 [COVERAGE] 块');
   } else if (blocks > 1) {
@@ -61,11 +134,19 @@ List<String> coverageTagIntegrityErrors(String raw) {
 CoverageParseResult parseCoverageReview(
   String raw, {
   required String expectedSourceId,
+  CoverageDebugLog? debugLog,
 }) {
-  final errors = <String>[...coverageTagIntegrityErrors(raw)];
-  final blocks = _coverageBlockPattern.allMatches(raw).toList(growable: false);
+  final normalized = normalizeCoverageResponseText(raw);
+  void note(String message) => debugLog?.call(message);
+  final errors = <String>[...coverageTagIntegrityErrors(normalized)];
+  final blocks = _coverageBlockPattern
+      .allMatches(normalized)
+      .toList(growable: false);
   if (blocks.length != 1) {
-    return CoverageParseResult(errors: _unique(errors));
+    return CoverageParseResult(
+      errors: _unique(errors),
+      normalizedText: normalized,
+    );
   }
 
   final block = blocks.single;
@@ -82,93 +163,139 @@ CoverageParseResult parseCoverageReview(
   }
 
   final missing = <AgentCoverageMissing>[];
-  for (final match in _missingPattern.allMatches(body)) {
-    final itemAttrs = match.group(1) ?? '';
-    final kindValue = _attr(itemAttrs, 'kind').toLowerCase();
-    AgentCoverageKind? kind;
-    for (final value in AgentCoverageKind.values) {
-      if (value.wireName == kindValue) {
-        kind = value;
-        break;
+  if (verdict == AgentCoverageVerdict.missing) {
+    var itemIndex = 0;
+    for (final match in _missingPattern.allMatches(body)) {
+      final index = itemIndex++;
+      final itemAttrs = match.group(1) ?? '';
+      final kindValue = _attr(itemAttrs, 'kind').toLowerCase();
+      final kind =
+          _kindAliases[kindValue] ?? AgentCoverageKind.fromWire(kindValue);
+      if (kindValue != kind.wireName) {
+        note(
+          'normalized MISSING[$index] kind="${_logValue(kindValue)}" '
+          '-> "${kind.wireName}"',
+        );
       }
+      final query = _attr(itemAttrs, 'query').trim();
+      if (query.isEmpty || query.length > 100) {
+        note(
+          'dropped MISSING[$index] query="${_logValue(query)}" '
+          '(chars=${query.length})',
+        );
+        continue;
+      }
+      final rawRefs = _listAttr(itemAttrs, 'refs');
+      // Models sometimes confuse a citation id (`source-1`) with a source id.
+      // With one primary source, map it back instead of discarding the item.
+      final refs = <String>[];
+      for (final ref in rawRefs) {
+        if (RegExp(r'^source-\d+$').hasMatch(ref) &&
+            expectedSourceId.isNotEmpty) {
+          note(
+            'normalized MISSING[$index] ref="$ref" -> '
+            '"$expectedSourceId"',
+          );
+          refs.add(expectedSourceId);
+        } else {
+          refs.add(ref);
+        }
+      }
+      if (refs.isEmpty || refs.length > 8) {
+        note(
+          'dropped MISSING[$index] refs="${_logValue(rawRefs.join(','))}" '
+          '(count=${refs.length})',
+        );
+        continue;
+      }
+      var reason = (match.group(2) ?? '').trim();
+      if (reason.length > 500) {
+        note(
+          'truncated MISSING[$index] reason '
+          'chars=${reason.length} -> 500',
+        );
+        reason = reason.substring(0, 500);
+      }
+      final priorityValue = _attr(itemAttrs, 'priority');
+      final parsedPriority = priorityValue.isEmpty
+          ? 3
+          : int.tryParse(priorityValue);
+      final priority = (parsedPriority ?? 3).clamp(1, 5);
+      if (priorityValue.isNotEmpty &&
+          (parsedPriority == null || parsedPriority != priority)) {
+        note(
+          'normalized MISSING[$index] '
+          'priority="${_logValue(priorityValue)}" -> $priority',
+        );
+      }
+      missing.add(
+        AgentCoverageMissing(
+          kind: kind,
+          query: query,
+          sourceRefs: refs,
+          reason: reason,
+          priority: priority,
+        ),
+      );
     }
-    if (kind == null) {
-      errors.add('MISSING kind 无效');
-      continue;
-    }
-    final query = _attr(itemAttrs, 'query').trim();
-    if (query.isEmpty || query.length > 100) {
-      errors.add('MISSING query 长度无效');
-      continue;
-    }
-    final refs = _listAttr(itemAttrs, 'refs');
-    if (refs.isEmpty ||
-        refs.length > 8 ||
-        refs.any((ref) => !_sourceRefPattern.hasMatch(ref))) {
-      errors.add('MISSING refs 无效');
-      continue;
-    }
-    final reason = (match.group(2) ?? '').trim();
-    if (reason.isEmpty || reason.length > 500) {
-      errors.add('MISSING reason 长度无效');
-      continue;
-    }
-    final priorityValue = _attr(itemAttrs, 'priority');
-    final priority = priorityValue.isEmpty ? 3 : int.tryParse(priorityValue);
-    if (priority == null || priority < 1 || priority > 5) {
-      errors.add('MISSING priority 无效');
-      continue;
-    }
-    missing.add(
-      AgentCoverageMissing(
-        kind: kind,
-        query: query,
-        sourceRefs: refs,
-        reason: reason,
-        priority: priority,
-      ),
-    );
   }
 
   final duplicateGroups = <AgentCoverageDuplicateGroup>[];
-  for (final match in _duplicatePattern.allMatches(body)) {
-    final itemAttrs = match.group(1) ?? '';
-    final dictionaryId = _attrAny(itemAttrs, const <String>[
-      'dictionary',
-      'dictionary_id',
-    ]);
-    final keep = _attrAny(itemAttrs, const <String>['keep', 'keep_entry_key']);
-    final remove = _listAttrAny(itemAttrs, const <String>[
-      'remove',
-      'remove_entry_keys',
-    ]);
-    final reason = (match.group(2) ?? '').trim();
-    if (dictionaryId.isEmpty ||
-        keep.isEmpty ||
-        remove.isEmpty ||
-        reason.isEmpty) {
-      errors.add('DUPLICATE 字段无效');
-      continue;
+  if (verdict == AgentCoverageVerdict.missing) {
+    var itemIndex = 0;
+    for (final match in _duplicatePattern.allMatches(body)) {
+      final index = itemIndex++;
+      final itemAttrs = match.group(1) ?? '';
+      final dictionaryId = _attrAny(itemAttrs, const <String>[
+        'dictionary',
+        'dictionary_id',
+      ]);
+      final keep = _attrAny(itemAttrs, const <String>[
+        'keep',
+        'keep_entry_key',
+      ]);
+      final remove = _listAttrAny(itemAttrs, const <String>[
+        'remove',
+        'remove_entry_keys',
+      ]);
+      var reason = (match.group(2) ?? '').trim();
+      if (reason.length > 500) {
+        note(
+          'truncated DUPLICATE[$index] reason '
+          'chars=${reason.length} -> 500',
+        );
+        reason = reason.substring(0, 500);
+      }
+      // One malformed suggestion must not discard the whole review. The
+      // orchestrator verifies every duplicate locally before removing
+      // anything, so dropping this item is safe.
+      if (dictionaryId.isEmpty || keep.isEmpty || remove.isEmpty) {
+        note(
+          'dropped DUPLICATE[$index] dictionary="${_logValue(dictionaryId)}" '
+          'keep="${_logValue(keep)}" removeCount=${remove.length}',
+        );
+        continue;
+      }
+      duplicateGroups.add(
+        AgentCoverageDuplicateGroup(
+          dictionaryId: dictionaryId,
+          keepEntryKey: keep,
+          removeEntryKeys: remove,
+          reason: reason,
+        ),
+      );
     }
-    duplicateGroups.add(
-      AgentCoverageDuplicateGroup(
-        dictionaryId: dictionaryId,
-        keepEntryKey: keep,
-        removeEntryKeys: remove,
-        reason: reason,
-      ),
-    );
   }
 
   final notes = _notesPattern.firstMatch(body)?.group(1)?.trim() ?? '';
-  if (verdict == AgentCoverageVerdict.sufficient &&
-      (missing.isNotEmpty || duplicateGroups.isNotEmpty)) {
-    errors.add('verdict=sufficient 时不得返回 MISSING/DUPLICATE');
-  }
   if (errors.isNotEmpty) {
-    return CoverageParseResult(errors: _unique(errors));
+    return CoverageParseResult(
+      errors: _unique(errors),
+      normalizedText: normalized,
+    );
   }
   return CoverageParseResult(
+    normalizedText: normalized,
     review: AgentCoverageReview(
       sourceId: expectedSourceId,
       verdict: verdict!,
@@ -183,6 +310,14 @@ CoverageParseResult parseCoverageReview(
 
 List<String> _unique(List<String> values) =>
     List<String>.unmodifiable(values.toSet());
+
+/// Debug-only value preview. It collapses whitespace and truncates so a
+/// malformed model item cannot flood the log with prompt-sized content.
+String _logValue(String value) {
+  final singleLine = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (singleLine.length <= 40) return singleLine;
+  return '${singleLine.substring(0, 40)}…';
+}
 
 String _attrAny(String attrs, List<String> names) {
   for (final name in names) {

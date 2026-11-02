@@ -331,11 +331,12 @@ P6.6 implementation (2026-11-02, multi-OCR core):
   provenance records `dictionary_repair` locally without serializing paths or
   origins to the provider.
 - `OcrConsensus` (`lib/services/agent/ocr_consensus.dart`) computes local
-  quality (confidence, kana/kanji/latin ratio, duplicate-noise ratio, bounded
-  dictionary hit rate), bounded character diff (prefix/suffix + LCS for small
-  middles), deterministic variant ranking, and bounded dictionary-backed repair
-  suggestions. No provider call, image upload or automatic text replacement is
-  involved.
+  quality (confidence, script-neutral meaningful characters, duplicate-noise
+  ratio, bounded dictionary hit rate), bounded character diff (prefix/suffix +
+  LCS for small middles), deterministic variant ranking, and bounded
+  dictionary-backed repair suggestions. No kana ratio/matching is used, so the
+  signal remains usable for non-Japanese dictionaries. No provider call, image
+  upload or automatic text replacement is involved.
 - `AgentOcrVariantsController` (`lib/state/agent_ocr_variants.dart`) is
   app-scoped. It runs horizontal/vertical alternatives only after the user asks
   for a comparison, dedupes identical text, reports a stable error code on
@@ -352,6 +353,50 @@ P6.6 implementation (2026-11-02, multi-OCR core):
   panel widget tests. Real-device visual/OCR quality and real dictionary
   suggestion quality remain Wave 4/P6.6 device acceptance.
 
+2026-11-02 stability/feedback fixes:
+
+- **Provider HTTP 400 hardening**: before any request the adapter validates a
+  non-empty model, drops whitespace-only messages, requires at least one
+  non-system message, merges consecutive Anthropic roles, sanitizes unpaired
+  UTF-16 surrogates/control characters, and requires a positive `max_tokens`.
+  It deliberately does **not** impose a universal output ceiling: model limits
+  differ (deepseek-flash is far above 8,192). HTTP 400 responses are classified
+  from the real error body (context length, unsupported output parameter,
+  reasoning/tool parameter mismatch, generic invalid parameter) and debug logs
+  record only request shape, not prompt text or keys.
+- **P6.6 UI feedback**: the card title is “文字识别结果”; each image is shown as
+  a tappable thumbnail using the same full-screen viewer as user messages;
+  quality shows “置信度” and “词典命中” capsules with plain percentage values.
+  Kana ratio/matching was removed from OCR quality and ranking, and character
+  classification is script-neutral for future non-Japanese dictionaries.
+- **Per-image comparison state**: `loadingImageIds` / per-image error codes
+  replace the single global loading flag; comparing image 1 no longer shows a
+  spinner on image 2 and no longer blocks image 2's comparison. Native OCR calls
+  are serialized through an internal queue; UI state remains independent.
+- **Missing alternative variants**: text-equality dedupe was removed (auto and
+  horizontal often return identical text but are still distinct options), OCR
+  readiness is awaited before checking vertical availability, and `auto` is
+  offered as an alternative when the baseline used horizontal/vertical. The empty
+  copy is now “没有可用的其他文字识别结果”.
+- **Coverage review stability**: compact coverage input (selected text,
+  token/pattern ids, cleaned citation snippets plus retained token/pattern
+  offsets and citation `entry_key`/`matched_key`/`headword`), per-item tolerant
+  parsing (one malformed MISSING/DUPLICATE no longer discards the review),
+  normalization of empty/self-closing sufficient blocks, and debug diagnostics
+  for request/parse failures. Every automatic correction (unknown kind, source-N
+  remap, priority clamp, truncation) is logged with item index and before/after
+  values. Repair requests reuse the normalized text, and normalization is
+  idempotent. Its output budget is derived independently by
+  `AgentLimits.coverageReviewMaxTokens` from the MISSING/duplicate caps, reason
+  length, tag overhead and a safety margin; the estimator uses
+  `AgentLimits.coverageCharsPerToken = 1.0` (conservative for CJK) and all
+  overhead values live in named `AgentLimits.coverage*` constants. It does not
+  follow the analysis request or a global provider ceiling. Genuine request
+  failures still keep evidence and show the warning.
+- **UniDic path clearing**: empty input (or the explicit “清除” button) clears the
+  saved path and invalidates the MeCab service; non-empty invalid paths are still
+  rejected and never saved.
+
 Current known gaps:
 
 - Wave 4 device acceptance is not done: real provider/API key, arm64 Agent
@@ -367,6 +412,14 @@ Current known gaps:
 - P6.6 device acceptance is pending: horizontal/vertical variant quality on
   real manga pages, dictionary candidate usefulness against the real 463k-entry
   dictionary, contrast/overflow at 200% font, and re-analysis latency.
+- Native OCR calls are serialized through a queue; two image comparisons show
+  independent loading/error state and can both be started, but the second waits
+  for the first engine call to finish.
+- Provider 400 handling now reports the actual error-body category, but it does
+  not automatically repair context-length or model-specific parameter problems;
+  the user still needs to shorten input or adjust the model/provider.
+- There is no per-provider `max_tokens` setting; the app sends the request
+  builder's value (12,000 for analysis) and relies on provider/model capability.
 - P6.6 does not yet show per-variant citations before the user commits to a
   re-analysis; citations are rebuilt after the selected variant is analyzed.
   All variants are in the input envelope, but only the selected variant is

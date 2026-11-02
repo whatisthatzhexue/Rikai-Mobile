@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
 
@@ -8,6 +10,7 @@ import '../../services/agent/agent_run.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../services/agent/ocr_consensus.dart';
 import '../../state/agent_ocr_variants.dart';
+import 'agent_message_widgets.dart' show openAgentImageViewer;
 
 /// P6.6: explicit multi-OCR comparison, diff preview and dictionary-backed
 /// repair suggestions. It never applies a variant or repair automatically.
@@ -17,6 +20,7 @@ class AgentOcrVariantsPanel extends StatefulWidget {
     required this.result,
     required this.variantsState,
     required this.strings,
+    this.imagePaths = const <String>[],
     this.onGenerate,
     this.onCancelGenerate,
     this.onReanalyze,
@@ -25,8 +29,12 @@ class AgentOcrVariantsPanel extends StatefulWidget {
   final AgentRunResult result;
   final AgentOcrVariantsState variantsState;
   final AgentUiStrings strings;
+
+  /// Local image paths used only for the thumbnail and full-screen viewer.
+  /// Never sent to the provider or persisted by this widget.
+  final List<String> imagePaths;
   final void Function(String imageId)? onGenerate;
-  final VoidCallback? onCancelGenerate;
+  final void Function(String imageId)? onCancelGenerate;
 
   /// Called with the selected/prepared variant and the opaque image id.
   final void Function(String imageId, AgentOcrVariant variant)? onReanalyze;
@@ -128,19 +136,13 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
         ? widget.variantsState.repairs[imageId] ?? const <OcrRepairSuggestion>[]
         : const <OcrRepairSuggestion>[];
     final generated = widget.variantsState.generatedImages.contains(imageId);
-    final loading = widget.variantsState.loading;
-    final errorCode = widget.variantsState.errorCode;
+    final loading = widget.variantsState.loadingImageIds.contains(imageId);
+    final errorCode = widget.variantsState.errorFor(imageId);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          widget.strings.ocrImageLabel(imageNumber),
-          style: theme.textTheme.bodySmall?.copyWith(
-            fontSize: AgentTokens.helper,
-            color: AppColors.textSecondary,
-          ),
-        ),
+        _buildImageHeader(context, imageNumber),
         const SizedBox(height: AppSpacing.xxs),
         Wrap(
           spacing: AppSpacing.xs,
@@ -158,13 +160,7 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
           ],
         ),
         const SizedBox(height: AppSpacing.xxs),
-        Text(
-          _qualityLine(comparison.quality),
-          style: theme.textTheme.bodySmall?.copyWith(
-            fontSize: AgentTokens.helper,
-            color: AppColors.textSecondary,
-          ),
-        ),
+        _QualityMetrics(quality: comparison.quality, strings: widget.strings),
         if (comparison.quality.isLowQuality) ...[
           const SizedBox(height: AppSpacing.xxs),
           Text(
@@ -195,7 +191,9 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
                 ),
               ),
               TextButton(
-                onPressed: widget.onCancelGenerate,
+                onPressed: widget.onCancelGenerate == null
+                    ? null
+                    : () => widget.onCancelGenerate!(imageId),
                 child: Text(widget.strings.ocrCancelComparison),
               ),
             ],
@@ -349,17 +347,60 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
     return '$engine · $mode$confidence';
   }
 
-  String _qualityLine(OcrQuality quality) {
-    final parts = <String>[
-      if (quality.meanConfidence > 0)
-        widget.strings.ocrConfidence((quality.meanConfidence * 100).round()),
-      widget.strings.ocrKanaRatio((quality.kanaRatio * 100).round()),
-      if (quality.dictionaryHitRate != null)
-        widget.strings.ocrDictionaryHit(
-          (quality.dictionaryHitRate! * 100).round(),
+  Widget _buildImageHeader(BuildContext context, int imageNumber) {
+    final theme = Theme.of(context);
+    final path = imageNumber - 1 < widget.imagePaths.length
+        ? widget.imagePaths[imageNumber - 1]
+        : '';
+    if (path.isEmpty) {
+      return Row(
+        children: [
+          Container(
+            width: AgentTokens.sentImageWidth,
+            height: AgentTokens.sentImageHeight,
+            color: AppColors.surfaceMuted,
+            alignment: Alignment.center,
+            child: const Icon(Icons.broken_image_outlined, size: AppSizes.icon),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            widget.strings.ocrImageUnavailable,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: AgentTokens.helper,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      );
+    }
+    return Semantics(
+      button: true,
+      image: true,
+      label: '${widget.strings.ocrVersionsTitle} $imageNumber',
+      child: GestureDetector(
+        key: ValueKey('agent-ocr-image-$imageNumber'),
+        onTap: () => openAgentImageViewer(context, path),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: Image.file(
+            File(path),
+            width: AgentTokens.sentImageWidth,
+            height: AgentTokens.sentImageHeight,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Container(
+              width: AgentTokens.sentImageWidth,
+              height: AgentTokens.sentImageHeight,
+              color: AppColors.surfaceMuted,
+              alignment: Alignment.center,
+              child: const Icon(
+                Icons.broken_image_outlined,
+                size: AppSizes.icon,
+              ),
+            ),
+          ),
         ),
-    ];
-    return parts.join(' · ');
+      ),
+    );
   }
 
   void _applyRepair({
@@ -376,6 +417,77 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
     );
     if (repaired == null) return;
     widget.onReanalyze?.call(imageId, repaired);
+  }
+}
+
+class _QualityMetrics extends StatelessWidget {
+  const _QualityMetrics({required this.quality, required this.strings});
+
+  final OcrQuality quality;
+  final AgentUiStrings strings;
+
+  @override
+  Widget build(BuildContext context) {
+    final confidence = quality.meanConfidence > 0
+        ? strings.ocrPercent((quality.meanConfidence * 100).round())
+        : strings.ocrUnknownValue;
+    final hitRate = quality.dictionaryHitRate != null
+        ? strings.ocrPercent((quality.dictionaryHitRate! * 100).round())
+        : strings.ocrUnknownValue;
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.xxs,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _MetricPill(label: strings.ocrConfidenceLabel, value: confidence),
+        _MetricPill(label: strings.ocrDictionaryHitLabel, value: hitRate),
+      ],
+    );
+  }
+}
+
+class _MetricPill extends StatelessWidget {
+  const _MetricPill({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          height: AgentTokens.citationChipHeight,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceMuted,
+            borderRadius: BorderRadius.circular(
+              AgentTokens.citationChipHeight / 2,
+            ),
+            border: Border.all(color: AgentTokens.evidenceBorder),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: AgentTokens.citationChip,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xxs),
+        Text(
+          value,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontSize: AgentTokens.helper,
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
   }
 }
 

@@ -66,6 +66,7 @@ void main() {
         .stream(
           const LlmRequest(
             model: 'large',
+            maxTokens: 12000,
             messages: <LlmMessage>[
               LlmMessage(
                 role: LlmRole.system,
@@ -83,6 +84,7 @@ void main() {
     expect(capturedHeaders['x-api-key'], 'test-key');
     expect(capturedHeaders['anthropic-version'], '2026-10-21');
     expect(capturedBody!['system'], 'system rules');
+    expect(capturedBody!['max_tokens'], 12000);
     expect(capturedBody!.containsKey('image'), isFalse);
     expect(capturedBody!.containsKey('temperature'), isFalse);
     expect(events.any((event) => event.type == LlmEventType.done), isTrue);

@@ -307,8 +307,9 @@ AgentOcrVariant (serialized subset)
   origin: ocr | dictionary_repair   // local only, not serialized
 
 OcrQuality (local)
-  charCount, meaningfulChars, kanaRatio, kanjiRatio, latinRatio,
-  duplicateNoiseRatio, meanConfidence, dictionaryHitRate?, contentWords
+  charCount, meaningfulChars (script-neutral), duplicateNoiseRatio,
+  meanConfidence, dictionaryHitRate?, contentWords
+  // No kana/kanji/Latin ratio is used for quality or ranking.
 
 OcrTextDiff (local)
   baseSpans[], candidateSpans[]  // {text, start, end, changed}, UTF-16
@@ -495,6 +496,28 @@ COVERAGE 根块唯一、MISSING/DUPLICATE/NOTES 必须位于 COVERAGE 内、同�
 不是模型响应格式；当前代码没有 coverage JSON 的持久化调用，“存储结构”不能写成
 已使用。
 
+2026-11-02 稳定性修正（已实现）：
+
+- 单个畸形 `MISSING`/`DUPLICATE` 项（未知 kind、`source-1` 形式 refs、priority
+  越界等）只丢弃该项，不再让整份 review 失效并弹“覆盖审查不可用”；未知 kind
+  映射到 word，priority 夹到 1–5，reason 截断到 500 字符。**每次自动修正或丢弃**
+  （kind、refs、priority、reason 截断）都写入 debug 日志，包含项序号、原值和修正
+  后值；`source-N` 映射到主 source 也记录原值，避免静默改写。
+- `[COVERAGE verdict="sufficient"]` 缺少结束标签、写成自闭合或包在 Markdown
+  fence 中时，解析器会先规范化；`verdict=sufficient` 下多余的 MISSING/DUPLICATE
+  被忽略。修复请求使用**规范化后的文本**（规范化幂等），不会再次提交原始 wrapper
+  错误。
+- 覆盖审查输入改为紧凑投影（仅选中文本、token/pattern id、清洗 citation 摘要），
+  不再发送完整 input envelope（含全部 variants）和完整 evidence JSON。token/
+  pattern 的 start/end、citation 的 `entry_key`/`matched_key`/`headword` 与
+  citation→token 的 `citation_ids` 保留；只去掉内部 `tool_call_id` 等编排字段。
+- 覆盖审查使用**独立预算** `AgentLimits.coverageReviewMaxTokens`，由 MISSING 上限 ×
+  （query/refs/reason/标签开销）+ duplicate 上限 × （dictionary/keys/reason/标签
+  开销）+ 根块/NOTES + 安全边际计算，不跟随分析请求的 maxTokens。系数与各项开销
+  常量统一在 `AgentLimits.coverage*`（`coverageCharsPerToken` 取 1.0，按 CJK 可能
+  接近 1 UTF-16 单元/token 保守取值）；本契约不复制具体数值。仍只做一次修复；
+  真实 provider 的 400/超时保留证据并产生 warning，debug 记录脱敏错误码/解析原因。
+
 ```text
 [COVERAGE verdict="missing"]
 [MISSING kind="usage" query="何卒" refs="t12,p3" priority="1"]缺少正式请求语境下的释义[/MISSING]
@@ -672,8 +695,11 @@ idle
 ## 9. 预算默认值
 
 当前实现/计划中的源文本、target、citation、每词典条数、摘要、profile、Provider
-超时/重试、图片与覆盖审查预算统一见 `docs/project-data.md` §8。本契约不复制这些
-数字；代码/测试读取 `AgentLimits`/请求级 policy，文档引用 project-data。
+超时/重试、图片与覆盖审查 missing/duplicate 上限统一见 `docs/project-data.md` §8。
+本契约不复制这些数字；代码/测试读取 `AgentLimits`/请求级 policy，文档引用
+project-data。覆盖审查的**输出 token 预算**不是独立配置项，而是由
+`AgentLimits.coverageReviewMaxTokens` 按上述上限和 `AgentLimits.coverage*` 常量
+派生；具体系数/开销只在该类维护。
 
 历史 tool loop 预算（6 次/单工具 60s/总 90s）仅作未来契约参考，不是当前实现。
 超预算时设置 `truncated=true`，UI 显示“已按预算缩减，未分析的部分不会出现在结果
@@ -716,6 +742,14 @@ validate(analysis, evidence, quotes, mode):
 - 当前 `LlmRequest` 含 `model`、`messages`、`maxTokens`、`stream`；**不含
   `responseFormat`、`tools`**。输出格式由 system prompt 的标签协议约束。若未来
   恢复 tool loop，才增加 tools/tool_result 契约。
+- 发送前本地校验（`provider_payload.dart`）：model 去空白后非空；丢弃空白
+  message；至少保留一条非 system 消息；Anthropic 合并连续同 role 消息。任一条件
+  不满足时抛 `INVALID_ARGUMENTS`，不发 HTTP 请求。
+- `max_tokens` 不做任意统一上限（不同模型能力不同，例如 deepseek-flash 的
+  输出上限远高于 8,192）。发送前只校验它是正整数；HTTP 400 由 provider 的
+  真实 error body 分类：上下文超限、输出参数不支持、reasoning/tool 参数不兼容、
+  通用参数无效。debug 只记录请求 shape（model/message 数/roles/prompt 字符数/
+  max_tokens 类型/stream），不记录正文或 Key。
 - `LlmMessage.content` 只有 `LlmTextPart`；**没有 image/file 类型**。
 - 发送前 `assertNoImagePayload`：递归检查 JSON 键/值，禁止
   `image`、`image_url`、`input_image`、`base64`、`data:image`、`file://`、
