@@ -4,8 +4,8 @@
 > 其它文档只引用 `T-###`，不再复制误区正文；**今后的新误区只在本文件追加**。
 >
 > - last_migrated: 2026-11-01（从原交接文档 §5 迁移，共 129 条）
-> - last_updated: 2026-11-02（新增 T-130–T-131）
-> - 编号说明：条目使用连续的 `T-001`–`T-131`；原文档 §5.14 的 #122–#130
+> - last_updated: 2026-11-02（新增 T-130–T-134）
+> - 编号说明：条目使用连续的 `T-001`–`T-134`；原文档 §5.14 的 #122–#130
 >   顺延为 `T-121`–`T-129`。编号一经发布不再复用。
 >
 > **何时查看**：遇到报错、异常行为、构建失败或准备重复试错时；接手 OCR、
@@ -44,6 +44,7 @@
 | §5.12 Phase 4.5 OCR 收敛 | §11 | T-082–T-112 |
 | §5.13 Agent v2 设计期 | §12 | T-113–T-120 |
 | §5.14 Phase 5 语料/引导 | §13 | T-121–T-129 |
+| 新增（Agent 请求/覆盖/滚动/解释概率/推理空正文） | §14 | T-130–T-134 |
 
 ## 1. 架构与 OCR（T-001–T-005）
 
@@ -1171,7 +1172,7 @@ block JSON），UI 保存用 fake `HistoryStore`。若将来必须测数据库�
 --split-per-abi --config-only` 重新生成 release 注册文件，再跑正式 release
 build；`flutter clean` 不一定能解决。不要改注册文件本身。
 
-## 14. Agent 请求与覆盖审查（T-130–T-131）
+## 14. Agent 请求、覆盖审查、结果滚动与解释概率（T-130–T-134）
 
 ### T-130 模型偶尔直接返回 HTTP 400（请求格式/参数不合法）
 
@@ -1201,6 +1202,47 @@ duplicate 上限、reason 长度、标签开销和安全边际独立计算，系
 `AgentLimits.coverage*`（`coverageCharsPerToken=1.0`，CJK 保守），不跟随分析请求；
 解析失败保留原证据并在 debug 记录脱敏原因。真实 provider 请求失败仍显示 warning，
 不能伪装成审查成功。
+
+### T-132 Agent 长结果下滑/展开依据词典时卡顿一次
+
+**误区**：把长结果整棵 `Column` 一次性塞进展开的 `ExpansionTile`；每个段落/证据组
+都启动一个 520ms 的 `TweenAnimationBuilder`；懒加载列表里的缩略图用
+`Image.file` 全尺寸解码。结果展开或滚到依据词典时，一帧内完成大量 build/layout、
+启动几十个动画或解码整张照片，表现为下滑中途卡顿一次。
+
+**正确做法**：展开的详细解析按小块跨帧追加（`_ProgressiveResultBody`，首批 4 块、
+之后每帧 3 块），每个词典依据组内的 citation 行也使用同一分块器；淡入只保留前
+`AgentFadeIn.maxAnimatedItems` 个块，其余直接渲染。Agent 缩略图统一用
+`agentThumbnailCacheSize` 计算 `cacheWidth`/`cacheHeight`，按显示尺寸解码。不要把
+`ListView` 的 cacheExtent 当成修复；问题是一次构建量，不是预加载距离。语料详情页
+的同类滚动问题另按该页的 sliver 分块策略处理。
+
+### T-133 “可能的理解” A/B 都显示 70%，加起来 140%
+
+**误区**：把每个 OPTION 的数字当成模型给出的独立概率；直接改 prompt 要求模型输出
+概率或要求 A+B=100%。标签协议明确禁止模型输出 confidence/百分比，解析器只是给
+OPTION 一个 0.5/0.7 的启发式相对权重；两个都带 citation 的选项自然都显示 70%。
+
+**正确做法**：保持“模型不输出数值”，在管线里归一化。`normalizeAnalysis` 和
+`salvageAnalysis` 在存在多个 OPTION 时按相对权重用最大余数法分配整数百分比，使总和
+为 100%（两个 0.7 → 50%/50%；三个 → 34%/33%/33%）；只有一个 OPTION 时保留启发式
+值。不要把这个展示约束写成 prompt 规则。新增/修改归一化逻辑时同时检查严格模式
+salvage 删除选项后的二次归一化。
+
+### T-134 推理模型只输出 reasoning_content、正文为空并重复请求
+
+**误区**：给所有 OpenAI-compatible 请求固定填 `max_tokens=12000`，并假设越大越
+安全；推理模型可能把预算全部消耗在隐藏 reasoning 上，SSE 结束时有
+`reasoningChars` 但 `textChars=0`，provider 再走一次非流式 fallback，重复一遍长
+推理，耗时翻倍。
+
+**正确做法**：OpenAI-compatible payload 不发送 `max_tokens`，由服务端/模型默认
+输出上限决定；Anthropic 仍必须发送。解析 SSE 的 `finish_reason`；若
+`textChars==0 && reasoningChars>0`，直接返回 `PROVIDER_EMPTY_OUTPUT`，不再发第二次
+请求，只有无 reasoning、无正文的真正空流才 fallback。日志记录 SSE 事件数、
+text/reasoning 字符数和 finish_reason。app 没有 reasoning-effort/thinking-off
+参数；要真正缩短思考时间，应把复杂模型改成非推理模型（如 deepseek-chat/flash）。
+流式进度更新节流（当前 250ms），避免上万 delta 触发大量 Riverpod 更新。
 
 
 
@@ -1258,3 +1300,6 @@ duplicate 上限、reason 长度、标签开销和安全边际独立计算，系
 | 语料详情只显示 OCR 或只显示分词 | 两段都显示；OCR 原文 + ReaderBlock 分词，可点词查词（`T-070`） |
 | 模型偶尔返回 HTTP 400 / “请求格式不合法” | 校验 model/消息/类型并清理非法字符；按真实 error body 分类，不要盲目压低 max_tokens（`T-130`） |
 | 每次运行都提示“覆盖审查不可用” | 用紧凑覆盖输入、单项容错、空 sufficient 规范化；保留真实请求失败 warning（`T-131`） |
+| Agent 长结果下滑/展开依据词典卡顿一次 | 展开内容分块跨帧构建，限制同时播放的淡入动画；缩略图按显示尺寸解码（`T-132`） |
+| “可能的理解”多个选项都显示 70%、合计 140% | 模型不输出概率；管线把多个 OPTION 的相对权重归一化为总和 100%，不要改 prompt 要概率（`T-133`） |
+| 推理模型只有 reasoning_content、textChars=0，耗时翻倍 | OpenAI-compatible 不发送 max_tokens；reasoning-only 直接报 `PROVIDER_EMPTY_OUTPUT`，不重试；建议改用非推理模型（`T-134`） |

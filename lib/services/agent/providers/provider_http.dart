@@ -275,11 +275,12 @@ String providerRequestShape(Map<String, Object?> payload) {
       }
     }
   }
-  final maxTokens = payload['max_tokens'];
+  final maxTokens = payload.containsKey('max_tokens')
+      ? '${payload['max_tokens']} (${payload['max_tokens'].runtimeType})'
+      : 'omitted';
   return 'model=${payload['model']} messages=${messages.length} '
       'roles=${roles.join(',')} promptChars=$promptChars '
-      'max_tokens=$maxTokens (${maxTokens.runtimeType}) '
-      'stream=${payload['stream']}';
+      'max_tokens=$maxTokens stream=${payload['stream']}';
 }
 
 String providerErrorDetail(Object error) {

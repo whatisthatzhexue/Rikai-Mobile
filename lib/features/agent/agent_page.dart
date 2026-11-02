@@ -306,7 +306,15 @@ class _AgentPageState extends ConsumerState<AgentPage> {
         for (final variant in extras[id] ?? const <AgentOcrVariant>[])
           variant.id: variant,
       };
+      final selectedId = id == imageId ? selected.id : source.selectedVariantId;
       if (id == imageId) all[selected.id] = selected;
+      // Keep the selected variant plus the highest-priority alternatives and
+      // stay within the four-variant provider contract.
+      final ordered = <AgentOcrVariant>[
+        if (selectedId != null && all[selectedId] != null) all[selectedId]!,
+        for (final variant in all.values)
+          if (variant.id != selectedId) variant,
+      ].take(AgentOcrVariant.maxPerSource).toList(growable: false);
       final localPath = imageIndex < run.sentImagePaths.length
           ? run.sentImagePaths[imageIndex]
           : '';
@@ -314,10 +322,8 @@ class _AgentPageState extends ConsumerState<AgentPage> {
         AgentImageInput(
           id: id,
           localPath: localPath,
-          variants: all.values.toList(growable: false),
-          selectedVariantId: id == imageId
-              ? selected.id
-              : source.selectedVariantId,
+          variants: ordered,
+          selectedVariantId: selectedId,
         ),
       );
       imageIndex++;

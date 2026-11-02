@@ -29,6 +29,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   int _runSerial = 0;
   int _textChars = 0;
   int _reasoningChars = 0;
+  DateTime? _lastProgressAt;
   AgentUiLanguage _uiLanguage = AgentUiLanguage.chinese;
   Future<void> Function()? _cancelOcr;
 
@@ -119,6 +120,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     _cancellation = token;
     _textChars = 0;
     _reasoningChars = 0;
+    _lastProgressAt = null;
     _cancelOcr = null;
     final startedAt = DateTime.now();
     state = AgentRunSnapshot(
@@ -338,6 +340,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     _cancelOcr = null;
     _textChars = 0;
     _reasoningChars = 0;
+    _lastProgressAt = null;
     ref.read(agentProfileInboxProvider.notifier).clearAll();
     state = AgentRunSnapshot.idle;
   }
@@ -354,6 +357,16 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   }
 
   void _publishProgress(AgentCancellation token) {
+    // Reasoning models can emit >10k tiny deltas. The UI shows elapsed time,
+    // not the character counter, so publishing every delta only causes
+    // thousands of Riverpod state updates/rebuilds.
+    final now = DateTime.now();
+    final last = _lastProgressAt;
+    if (last != null &&
+        now.difference(last) < const Duration(milliseconds: 250)) {
+      return;
+    }
+    _lastProgressAt = now;
     final received = _textChars > _reasoningChars
         ? _textChars
         : _reasoningChars;

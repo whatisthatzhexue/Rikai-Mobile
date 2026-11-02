@@ -108,6 +108,7 @@ class ToolResult {
 | `PROVIDER_AUTH_FAILED` | 401/403 | 否 |
 | `PROVIDER_RATE_LIMITED` | 429 | 是（退避） |
 | `PROVIDER_UNAVAILABLE` | 5xx/网络失败 | 是（最多 2 次） |
+| `PROVIDER_EMPTY_OUTPUT` | 流式只返回 reasoning_content、正文为空 | 否（换模型/调整输出上限） |
 | `PROVIDER_REFUSED` | 模型拒绝 | 否 |
 | `VALIDATION_FAILED` | 模型输出未通过标签/引用/原文校验 | 视情况修复一次 |
 | `INTERNAL_ERROR` | 未分类内部错误 | 否 |
@@ -221,15 +222,20 @@ class ToolResult {
 ### 2.4 `ocr.recognize`（orchestratorOnly）
 
 - 可见性：orchestratorOnly；模型不可见，不能传入路径。
-- 输入：`{"image_handle": "img-1", "mode": "auto"}`
+- 输入：`{"image_handle": "img-1", "mode": "auto"}`；可选增加
+  `"engine": "paddle_v5"` 或 `"engine": "manga_ocr"`。
 - 输出：`{"engine": "paddle_v5", "elapsed_ms": 1200, "confidence": 0.93, "text": "...", "blocks": [...]}`
 - 约束：
   - `image_handle` 只在本机解析为私有路径；路径/文件名/base64 永不进入模型请求。
-  - 必须先 `ensureReady`；`auto` 保持 Phase 4.5 单引擎语义。
-  - 多版本由编排器按需多次调用 `ocr.recognize`（auto/horizontal/vertical），不暴露
-    给模型。
-- 错误：`MODEL_MISSING`、`MODEL_INVALID`、`IMAGE_DECODE_FAILED`、`TOOL_TIMEOUT`、
-  `TOOL_CANCELLED`、`INTERNAL_ERROR`。
+  - 必须先 `ensureReady`；省略 `engine` 时保持 Phase 4.5 的单引擎 best-of 语义。
+  - `engine` 是本地可选约束：`paddle_v5` 或 `manga_ocr`。设置后原生侧必须返回该
+    引擎，不能静默回落到另一个引擎；MangaOCR 只允许竖向组合。
+  - 多版本由编排器按需多次调用 `ocr.recognize`，显式组合为
+    `paddle_v5/horizontal`、`manga_ocr/vertical`、`paddle_v5/vertical`，再以
+    `auto` 补足；不暴露给模型。
+- 错误：`MODEL_MISSING`、`MODEL_INVALID`、`UNSUPPORTED_ENGINE`、
+  `UNSUPPORTED_MODE`、`IMAGE_DECODE_FAILED`、`TOOL_TIMEOUT`、`TOOL_CANCELLED`、
+  `INTERNAL_ERROR`。
 
 ### 2.5 `dictionary.sample`（orchestratorOnly）
 
@@ -333,6 +339,15 @@ OcrRepairSuggestion (local)
 - `AgentRunResult.ocrQuality` 以 `image_id` 为键，仅用于本地 UI。
 - 变体文本会进入 provider 的 `variants[]`；`origin` 不序列化。当前只把选中变体
   写入 `AgentSourceVersion`，所有变体的持久化留给 P6.7 历史工作。
+- 版本组合按 `(engine, mode)` 唯一，最多 4 个（含选中版本）。显式对比的优先级为
+  `paddle_v5/horizontal`、`manga_ocr/vertical`、`paddle_v5/vertical`、`auto`；
+  同一引擎+朝向只保留一个结果。模型/朝向标签必须来自原生实际返回的 engine、
+  不能把回落结果伪装成另一个模型。
+- 差异高亮使用 `AgentTokens.diffHighlightSurface`/`diffHighlightText`；版本 chip
+  左对齐并在 `Wrap` 中自动换行，所有状态固定同一高度并预留推荐图标槽位。
+- 展开的详细解析按小块跨帧追加（`_ProgressiveResultBody`），每个词典依据组内的
+  citation 行也使用同一分块器；只让前 `AgentFadeIn.maxAnimatedItems` 个块播放
+  淡入。长结果不能在一帧内构建整棵结果树。
 
 ## 4. 证据包 `rikai.agent.evidence.v1`
 
@@ -404,7 +419,8 @@ OcrRepairSuggestion (local)
 
 > **2026-11-01 运行时格式**：模型输出下面的标签文本，不再输出 JSON。
 > 解析器：`lib/services/agent/analysis_tag_parser.dart`。标签内的正文按目标语言
-> 纯文本输出；`type` 只出现在标签属性中，前端根据 type 渲染推断类别和固定置信度。
+> 纯文本输出；`type` 只出现在标签属性中，前端根据 type 渲染推断类别和代码分配的
+> 置信度（多个 OPTION 会归一化为总和 100%）。
 
 ```text
 [TRANSLATION quote="q1"]translated text[/TRANSLATION]
@@ -421,7 +437,11 @@ OcrRepairSuggestion (local)
 - `type`：`fact` / `structure` / `inference` / `translation`。解析器也容忍旧内部名
   `dictionary_fact` / `structural_analysis` / `context_inference`。
 - 置信度由解析器分配（fact 0.95、structure 0.9、inference 0.6、translation
-  0.95；OPTION 0.5/0.7），模型不输出数值。
+  0.95；OPTION 先给 0.5/0.7 的相对权重），模型不输出数值。存在多个 OPTION 时，
+  `normalizeAnalysis`/`salvageAnalysis` 用最大余数法把相对权重归一化为总和
+  100% 的相对置信度（例如两个都标 0.7 的选项显示 50%/50%，三个显示
+  34%/33%/33%）；单个 OPTION 保留启发式值。这样 2 个选项不会再显示
+  70%+70%=140%，也不需要在 prompt 中要求模型输出概率。
 - 解析器会剥离正文中泄漏的 `context_inference`/`dictionary_fact`/
   `structural_analysis`、`(90%)`、`置信度: …` 和 `[source-N]` 标记。
 - 至少需要一条 TRANSLATION 和一条 SEGMENT。解析后还检查标签块完整性：未闭合、
@@ -745,18 +765,26 @@ validate(analysis, evidence, quotes, mode):
 - 发送前本地校验（`provider_payload.dart`）：model 去空白后非空；丢弃空白
   message；至少保留一条非 system 消息；Anthropic 合并连续同 role 消息。任一条件
   不满足时抛 `INVALID_ARGUMENTS`，不发 HTTP 请求。
-- `max_tokens` 不做任意统一上限（不同模型能力不同，例如 deepseek-flash 的
-  输出上限远高于 8,192）。发送前只校验它是正整数；HTTP 400 由 provider 的
-  真实 error body 分类：上下文超限、输出参数不支持、reasoning/tool 参数不兼容、
-  通用参数无效。debug 只记录请求 shape（model/message 数/roles/prompt 字符数/
-  max_tokens 类型/stream），不记录正文或 Key。
+- `LlmRequest` 仍带 `maxTokens`，但发送策略按 provider 不同：
+  - **OpenAI-compatible 不发送 `max_tokens`**。不同服务/模型对隐藏 reasoning
+    是否计入预算没有统一语义；固定 12,000 曾导致推理模型只输出
+    `reasoning_content`、正文为空。由服务端/模型默认输出上限决定。
+  - **Anthropic 必须发送 `max_tokens`**，使用请求构造器的值（分析 12,000）。
+  - 本地仍校验 `maxTokens` 为正整数；HTTP 400 由 provider 的真实 error body
+    分类：上下文超限、输出参数不支持、reasoning/tool 参数不兼容、通用参数无效。
+    debug 只记录请求 shape（model/message 数/roles/prompt 字符数/max_tokens
+    是否存在/stream），不记录正文或 Key。
+- 流式收到 reasoning_content 但没有任何正文时，抛 `PROVIDER_EMPTY_OUTPUT`，
+  **不再重复一次非流式请求**；只有真正空流（无 reasoning、无正文）才回退到
+  非流式。日志记录 SSE 事件数、text/reasoning 字符数和 `finish_reason`。
 - `LlmMessage.content` 只有 `LlmTextPart`；**没有 image/file 类型**。
 - 发送前 `assertNoImagePayload`：递归检查 JSON 键/值，禁止
   `image`、`image_url`、`input_image`、`base64`、`data:image`、`file://`、
   `content://`、`.jpg/.png/.webp/.heic` 路径。
 - Anthropic：`x-api-key` + `anthropic-version: 2026-10-21`；
   `POST /v1/messages`；不发送 `temperature/top_p/top_k`。
-- OpenAI-compatible：`Authorization: Bearer`；`POST /chat/completions`。
+- OpenAI-compatible：`Authorization: Bearer`；`POST /chat/completions`；不发送
+  `max_tokens`、`temperature`、`top_p`、`top_k`。
 - 两种 provider 都不发送 `response_format`、`json_schema` 或 `output_config`；
   模型输出由标签协议和解析器校验。
 - 测试捕获实际 HTTP body，断言不含图片/路径/Key；请求日志只记录

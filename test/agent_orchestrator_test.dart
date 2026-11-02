@@ -85,6 +85,7 @@ class _FakeOcr implements OcrPort {
   Future<OcrRun> recognize({
     required OcrHandle image,
     required OcrMode mode,
+    String? engine,
   }) async {
     calls++;
     return const OcrRun(

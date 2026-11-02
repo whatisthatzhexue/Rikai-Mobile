@@ -30,6 +30,14 @@ const _horizontal = AgentOcrVariant(
   confidence: 0.8,
 );
 
+const _mangaVertical = AgentOcrVariant(
+  id: 'var-3',
+  engine: 'manga_ocr',
+  mode: OcrMode.vertical,
+  text: '何卒コンバンハ',
+  confidence: 0.7,
+);
+
 AgentRunResult _result() {
   final quality = OcrConsensus.assess(
     variant: _baseline,
@@ -100,11 +108,12 @@ AgentRunResult _twoImageResult() {
 AgentOcrVariantsState _state({String repairBaselineId = 'var-1'}) {
   return AgentOcrVariantsState(
     extraVariants: const <String, List<AgentOcrVariant>>{
-      'img-1': <AgentOcrVariant>[_horizontal],
+      'img-1': <AgentOcrVariant>[_horizontal, _mangaVertical],
     },
     qualities: <String, Map<String, OcrQuality>>{
       'img-1': <String, OcrQuality>{
         'var-2': OcrConsensus.assess(variant: _horizontal),
+        'var-3': OcrConsensus.assess(variant: _mangaVertical),
       },
     },
     repairs: const <String, List<OcrRepairSuggestion>>{
@@ -167,10 +176,55 @@ void main() {
     expect(find.text('词典命中'), findsOneWidget);
     expect(find.textContaining('假名'), findsNothing);
     expect(find.text('paddle_v5 · 自动 · 90%'), findsOneWidget);
+    expect(find.text('paddle_v5 · 横向 · 80%'), findsOneWidget);
+    expect(find.text('manga_ocr · 纵向 · 70%'), findsOneWidget);
+
+    // Chips start at the left edge and wrap as a group instead of each one
+    // occupying a centered full-width row.
+    final autoTopLeft = tester.getTopLeft(find.text('paddle_v5 · 自动 · 90%'));
+    final horizontalTopLeft = tester.getTopLeft(
+      find.text('paddle_v5 · 横向 · 80%'),
+    );
+    expect(autoTopLeft.dy, horizontalTopLeft.dy);
+    expect(autoTopLeft.dx, lessThan(horizontalTopLeft.dx));
+
+    // The thumbnail decodes at display resolution; a full photo decode was
+    // the mid-scroll hitch for long results.
+    final thumbnail = tester.widget<Image>(
+      find.descendant(
+        of: find.byKey(const ValueKey('agent-ocr-image-1')),
+        matching: find.byType(Image),
+      ),
+    );
+    expect(thumbnail.image, isA<ResizeImage>());
+    final resized = thumbnail.image as ResizeImage;
+    expect(resized.width, isNotNull);
+    expect(resized.height, isNotNull);
+
+    final horizontalChip = find
+        .ancestor(
+          of: find.text('paddle_v5 · 横向 · 80%'),
+          matching: find.byType(InkWell),
+        )
+        .first;
+    final chipSize = tester.getSize(horizontalChip);
 
     await tester.tap(find.text('paddle_v5 · 横向 · 80%'));
     await tester.pump();
     expect(find.text('高亮文字与其他版本不一致'), findsOneWidget);
+    expect(tester.getSize(horizontalChip), chipSize);
+
+    final diff = tester.widget<Text>(
+      find.byKey(const ValueKey('agent-ocr-diff')),
+    );
+    final spans = (diff.textSpan! as TextSpan).children!.whereType<TextSpan>();
+    final changed = spans.where((span) => span.style?.backgroundColor != null);
+    expect(changed, isNotEmpty);
+    expect(
+      changed.first.style!.backgroundColor,
+      AgentTokens.diffHighlightSurface,
+    );
+    expect(changed.first.style!.color, AgentTokens.diffHighlightText);
 
     await tester.tap(find.text('使用此版本重新分析'));
     await tester.pump();

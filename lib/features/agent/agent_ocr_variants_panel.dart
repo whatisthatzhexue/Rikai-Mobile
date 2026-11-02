@@ -11,6 +11,7 @@ import '../../services/agent/agent_ui_strings.dart';
 import '../../services/agent/ocr_consensus.dart';
 import '../../state/agent_ocr_variants.dart';
 import 'agent_message_widgets.dart' show openAgentImageViewer;
+import 'agent_thumbnail.dart';
 
 /// P6.6: explicit multi-OCR comparison, diff preview and dictionary-backed
 /// repair suggestions. It never applies a variant or repair automatically.
@@ -145,6 +146,7 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
         _buildImageHeader(context, imageNumber),
         const SizedBox(height: AppSpacing.xxs),
         Wrap(
+          alignment: WrapAlignment.start,
           spacing: AppSpacing.xs,
           runSpacing: AppSpacing.xxs,
           children: [
@@ -386,6 +388,15 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
             File(path),
             width: AgentTokens.sentImageWidth,
             height: AgentTokens.sentImageHeight,
+            cacheWidth: agentThumbnailCacheSize(
+              context,
+              AgentTokens.sentImageWidth,
+            ),
+            cacheHeight: agentThumbnailCacheSize(
+              context,
+              AgentTokens.sentImageHeight,
+            ),
+            filterQuality: FilterQuality.low,
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) => Container(
               width: AgentTokens.sentImageWidth,
@@ -518,22 +529,25 @@ class _VariantChip extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(
-            AgentTokens.citationChipHeight / 2,
+            AgentTokens.ocrVariantChipHeight / 2,
           ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               minHeight: AgentTokens.actionTapTarget,
             ),
-            child: Center(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              widthFactor: 1,
+              heightFactor: 1,
               child: Container(
-                height: AgentTokens.citationChipHeight,
+                height: AgentTokens.ocrVariantChipHeight,
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                 decoration: BoxDecoration(
                   color: selected
                       ? AgentTokens.citationSurface
                       : AppColors.surfaceMuted,
                   borderRadius: BorderRadius.circular(
-                    AgentTokens.citationChipHeight / 2,
+                    AgentTokens.ocrVariantChipHeight / 2,
                   ),
                   border: Border.all(
                     color: selected
@@ -545,7 +559,9 @@ class _VariantChip extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 220),
+                      constraints: const BoxConstraints(
+                        maxWidth: AgentTokens.ocrVariantChipMaxWidth,
+                      ),
                       child: Text(
                         label,
                         maxLines: 1,
@@ -558,16 +574,23 @@ class _VariantChip extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (recommended) ...[
-                      const SizedBox(width: AppSpacing.xxs),
-                      Icon(
-                        Icons.auto_awesome,
-                        size: AgentTokens.citationChip,
-                        color: selected
-                            ? AgentTokens.citationText
-                            : AppColors.textSecondary,
-                      ),
-                    ],
+                    // Reserve the icon slot even when this variant is not the
+                    // recommended one, so selecting a chip never changes its
+                    // width and all chips share the same visual size.
+                    const SizedBox(width: AppSpacing.xs),
+                    SizedBox(
+                      width: AgentTokens.citationChip,
+                      height: AgentTokens.citationChip,
+                      child: recommended
+                          ? Icon(
+                              Icons.auto_awesome,
+                              size: AgentTokens.citationChip,
+                              color: selected
+                                  ? AgentTokens.citationText
+                                  : AppColors.textSecondary,
+                            )
+                          : null,
+                    ),
                   ],
                 ),
               ),
@@ -678,14 +701,15 @@ class _HighlightedText extends StatelessWidget {
                 text: span.text,
                 style: span.changed
                     ? base?.copyWith(
-                        backgroundColor: AgentTokens.citationSurface,
-                        color: AgentTokens.citationText,
+                        backgroundColor: AgentTokens.diffHighlightSurface,
+                        color: AgentTokens.diffHighlightText,
                         fontWeight: FontWeight.w600,
                       )
-                    : base,
+                    : base?.copyWith(color: AppColors.textSecondary),
               ),
           ],
         ),
+        key: const ValueKey('agent-ocr-diff'),
         maxLines: 6,
         overflow: TextOverflow.ellipsis,
       ),

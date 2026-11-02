@@ -50,6 +50,15 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
   生命周期细节见 [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md)。
 - 修复问题时更新对应权威文档的进展节（见下文“问题状态”），不要在本文件复制状态。
 
+## 输出质检样本
+
+[`../agent_output/`](../agent_output/) 保存 Agent 实际运行输出的 Markdown 质检样本，
+命名规则为 `YYYY-MM-DD-HH-mm.txt`（本地时间，一次运行一个文件）。它用于人工检查
+译文、逐句理解、可能的理解、未解决项和词典依据；不是模型原始响应或请求日志，
+不得放入图片、路径、base64 或 API Key。发现展示问题时先定位管线/解析器原因，
+不要把展示要求直接写进 prompt；目录说明见
+[`../agent_output/README.md`](../agent_output/README.md)。
+
 ## 问题状态
 
 本文件不维护状态副本；各项状态以下列为准：

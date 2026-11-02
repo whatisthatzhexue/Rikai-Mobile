@@ -384,10 +384,12 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   相对 `analysis_text`，统一 UTF-16（与 `Token.start/end` 一致）。用户手工编辑
   生成新的 `SourceVersion(origin: user_edit)`，不覆盖原 OCR。
 - 多 OCR 按需：默认 `auto`。若平均置信度低、或分词后内容词词典命中率低于阈值
-  （初始 0.35），提示“再跑横向/竖向对比”；用户确认后顺序执行并生成 `variants[]`。
-  不改变现有 Phase 4.5 “auto 只返回一个引擎”的照片集行为。P6.6 核心已于
-  2026-11-02 实现：显式“多版本识别”、横向/纵向补跑、质量评分、差异预览与用户
-  确认后的重新分析；真实漫画页/大词典质量验收仍待设备完成。
+  （初始 0.35），提示“再跑模型×朝向对比”；用户确认后顺序执行并生成 `variants[]`。
+  显式对比组合为 `paddle_v5/horizontal`、`manga_ocr/vertical`、
+  `paddle_v5/vertical`，必要时以 `auto` 补足，最多 4 个。不改变现有 Phase 4.5
+  “auto 只返回一个引擎”的照片集行为。P6.6 核心已于 2026-11-02 实现：显式
+  “多版本识别”、模型×朝向组合、质量评分、差异预览与用户确认后的重新分析；
+  真实漫画页/大词典质量验收仍待设备完成。
 
 ### 6.3 Stage 1：分词与证据（Step 1）
 
@@ -471,9 +473,12 @@ Stage 0 envelope + Stage 1 evidence + 已确认的 dictionary profiles。输出�
 `lib/services/agent/analysis_tag_parser.dart` 用正则解析为 `AgentAnalysis`。
 模型只写正文，`type` 在标签属性中；置信度和内部标记由代码生成/剥离。解析器还
 校验标签块完整性（未闭合、错序、越界嵌套、重复单例标签）；解析或完整性失败时
-只发送一次格式纠错请求，要求正文不变、仅补齐标签。旧 JSON 输出回退和
-`response_format`/`json_schema` 请求均已移除；下面的 JSON 结构仅作为内部
-DTO/存储结构，不是模型响应格式：
+只发送一次格式纠错请求，要求正文不变、仅补齐标签。**多个 `[OPTION]` 的置信度
+不是各选项独立的概率**：解析器只给 0.5/0.7 的相对权重，`normalizeAnalysis`/
+`salvageAnalysis` 会归一化为总和 100% 的分布（两个选项 50/50，三个
+34/33/33），避免出现 70%+70%=140%；不要为此在 prompt 中要求模型输出概率。
+旧 JSON 输出回退和 `response_format`/`json_schema` 请求均已移除；下面的 JSON
+结构仅作为内部 DTO/存储结构，不是模型响应格式：
 
 ```json
 {
@@ -560,16 +565,22 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
 
 > **2026-11-02 P6.6 核心实现**：`OcrConsensus` 负责本地质量评分、字符级 diff、
 > 版本排序和有界词典候选；`AgentOcrVariantsController` 在用户点击“多版本识别”
-> 后才补跑横向/纵向；`AgentOcrVariantsPanel` 展示 chip、质量、差异高亮和候选。
-> 采用候选或切换版本会创建新的本地 OCR 变体并重新分析，绝不静默改写上一次结果。
-> 图片、路径、base64 和 API Key 不进入该流程或 provider 请求。
+> 后才按模型×朝向组合补跑（可选 `engine` 约束）；`AgentOcrVariantsPanel` 展示
+> chip、质量、差异高亮和候选。采用候选或切换版本会创建新的本地 OCR 变体并重新
+> 分析，绝不静默改写上一次结果。图片、路径、base64 和 API Key 不进入该流程或
+> provider 请求。
 
 ### 7.1 OCR 版本模型
 
 - `OcrVariant`：`id, engine, mode, text, confidence, elapsedMs, fingerprint,
   selected`。
-- 默认只生成一个 `auto` 版本；用户点“多版本识别”或系统判定质量低时，顺序补跑
-  `horizontal`/`vertical`/旋转候选（Manga 可用时）。
+- 默认只生成一个 `auto` 版本；用户点“多版本识别”或系统判定质量低时，按
+  **模型 × 朝向** 顺序补跑 `paddle_v5/horizontal`、`manga_ocr/vertical`、
+  `paddle_v5/vertical`，最后以 `auto` 补足。原生 `ocr.recognize` 接受可选
+  `engine` 约束；设置后必须返回该引擎，不能静默回落到另一个模型。MangaOCR
+  只支持竖向，不能伪装成横向结果。
+- 每个 `(engine, mode)` 组合只保留一个变体，最多 4 个（含选中版本）。这样用户
+  看到的每个 chip 都对应真实模型/朝向，而不是同一模型的三次朝向重跑。
 - 质量参考：平均置信度、有效字符数、重复噪声、分词后内容词词典命中率。
   **不使用假名比例/假名匹配**，以便未来支持非日语 MDict 词典。
 - 版本差异用字符/token diff 高亮；**不自动合并，也不得静默只保留一个版本**；由
@@ -724,7 +735,9 @@ LlmProvider
 
 - 首版适配：
   - OpenAI-compatible（DeepSeek/自定义 endpoint）：`POST {baseUrl}/chat/completions`，
-    `Authorization: Bearer`，文本 messages；不发送 `response_format`/`json_schema`。
+    `Authorization: Bearer`，文本 messages；不发送 `response_format`/`json_schema`，
+    也不发送 `max_tokens`（由服务端/模型默认输出上限决定，避免推理模型把预算全部
+    消耗在 reasoning_content 上）。
   - Anthropic Claude：`POST https://api.anthropic.com/v1/messages`，
     `x-api-key` + `anthropic-version: 2026-10-21`；内容块只有 `text`。
 - Dart 没有官方 Anthropic SDK，首版用 `dio` 直连；不引入通用 LLM SDK。
@@ -733,11 +746,17 @@ LlmProvider
   thinking；thinking 内容不展示、不作为 citation，最终以标签解析和 validator
   校验为准。
 - 发送前统一 preflight：model 去空白非空、丢弃空白 message、至少一条非 system、
-  Anthropic 合并连续同 role、`max_tokens` 必须是正整数；本地无效请求直接返回
+  Anthropic 合并连续同 role、`maxTokens` 必须是正整数；本地无效请求直接返回
   `INVALID_ARGUMENTS`，不发送网络请求。**不假设统一输出上限**：不同模型能力差异
-  很大（例如 deepseek-flash 远高于 8,192）。HTTP 400 按 provider 返回的 error
-  body 分类（上下文超限、输出参数不支持、reasoning/tool 参数不兼容、通用参数
-  无效），并在 debug 记录请求 shape，不盲目降额。
+  很大（例如 deepseek-flash 远高于 8,192）。OpenAI-compatible 不发送
+  `max_tokens`；Anthropic 必填。HTTP 400 按 provider 返回的 error body 分类
+  （上下文超限、输出参数不支持、reasoning/tool 参数不兼容、通用参数无效），并在
+  debug 记录请求 shape，不盲目降额。
+- 流式收到 `reasoning_content` 但正文为空时，返回 `PROVIDER_EMPTY_OUTPUT` 并
+  停止，不再发送一次非流式请求；只有无 reasoning、无正文的真正空流才回退。
+  推理模型的长 reasoning 是模型时间，去掉请求参数不能消除；需要更快响应时应改用
+  非推理模型或支持低 reasoning effort 的模型，当前 app 不提供 reasoning-effort
+  参数。
 - 请求构造器只有 `LlmTextPart`，没有 image 类型；运行时 `assertNoImagePayload`，
   测试捕获原始请求体断言无 `image`/`image_url`/`input_image`/`base64`/`data:image`/
   本地路径。
@@ -790,10 +809,12 @@ SharedPreferences，但不得混入 Key。
 - 状态/错误：空闲/提交中/流式/完成/中断/降级/离线/错误均有视觉标识；失败保留
   已生成内容，错误卡出现在消息下方，不弹全局对话框、不整屏 loading。
 - OCR 版本区（P6.6 核心已实现，2026-11-02）：标题“文字识别结果”；每张图显示
-  与用户消息相同的可点缩略图（全屏查看）；版本 chip、置信度/词典命中胶囊
-  （不使用假名比例）、差异高亮、词典候选“采用”（不采用即保持不变）、切换版本后
-  重新分析；每图的对比 loading/error 独立，可同时发起，底层 OCR 调用串行排队。
-  真机视觉验收待做。
+  与用户消息相同的可点缩略图（全屏查看，按显示尺寸解码）；版本 chip 左对齐并
+  自动换行，所有状态同高且预留推荐图标槽位；置信度/词典命中胶囊（不使用假名
+  比例）、差异高亮（`AgentTokens.diffHighlightSurface/Text`）、词典候选“采用”
+  （不采用即保持不变）、切换版本后重新分析；每图的对比 loading/error 独立，可
+  同时发起，底层 OCR 调用串行排队。详细解析展开时按小块跨帧构建，长结果不整页
+  一次性建树。真机视觉验收待做。
 - 熟悉期 sheet：档案预览/编辑、保存/本次跳过/不再询问；确认前不写档案。
 - 设置：provider 列表/新增/编辑、Base URL、small/complex 模型、API Key 掩码输入
   与显示切换、测试连接（显式发送最小文本请求）、三态配置标签、隐私说明、清除

@@ -11,6 +11,7 @@ import '../../services/agent/agent_run.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../capture/photo_viewer_page.dart';
 import 'agent_progress_view.dart';
+import 'agent_thumbnail.dart';
 
 class AgentUserBubble extends StatelessWidget {
   const AgentUserBubble({
@@ -121,6 +122,16 @@ class AgentUserBubble extends StatelessWidget {
                                             File(imagePaths[index]),
                                             width: AgentTokens.sentImageWidth,
                                             height: AgentTokens.sentImageHeight,
+                                            cacheWidth: agentThumbnailCacheSize(
+                                              context,
+                                              AgentTokens.sentImageWidth,
+                                            ),
+                                            cacheHeight:
+                                                agentThumbnailCacheSize(
+                                                  context,
+                                                  AgentTokens.sentImageHeight,
+                                                ),
+                                            filterQuality: FilterQuality.low,
                                             fit: BoxFit.cover,
                                             errorBuilder:
                                                 (

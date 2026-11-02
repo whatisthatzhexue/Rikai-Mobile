@@ -178,6 +178,7 @@ class RikaiOcrPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
             return
         }
         val mode = args?.get("mode") as? String ?: "auto"
+        val forcedEngine = args?.get("engine") as? String
         cancelRequested.set(false)
         val replied = AtomicBoolean(false)
         val job = scope.launch(start = CoroutineStart.ATOMIC) {
@@ -186,6 +187,7 @@ class RikaiOcrPlugin : FlutterPlugin, MethodChannel.MethodCallHandler,
                     val nativeResult = engine.recognize(
                         imagePath = imagePath,
                         mode = mode,
+                        forcedEngine = forcedEngine,
                         onProgress = { stage, current, total ->
                             emitProgress(stage, current, total)
                         },

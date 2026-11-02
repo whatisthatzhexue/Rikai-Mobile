@@ -16,6 +16,7 @@ enum AgentToolErrorCode {
   providerAuthFailed('PROVIDER_AUTH_FAILED'),
   providerRateLimited('PROVIDER_RATE_LIMITED'),
   providerUnavailable('PROVIDER_UNAVAILABLE'),
+  providerEmptyOutput('PROVIDER_EMPTY_OUTPUT'),
   validationFailed('VALIDATION_FAILED'),
   internalError('INTERNAL_ERROR');
 

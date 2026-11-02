@@ -159,6 +159,12 @@ abstract final class AgentTokens {
   static const Color citationSurface = AppColors.blue50;
   static const Color citationText = AppColors.blue700;
   static const Color supplementSurface = AppColors.surfaceMuted;
+
+  /// Changed OCR spans need to read as a real highlight, not as a muted grey
+  /// card. The warm surface is deliberately distinct from citation blue and
+  /// keeps enough contrast for 12sp helper text.
+  static const Color diffHighlightSurface = Color(0xFFFFE8C2);
+  static const Color diffHighlightText = Color(0xFF7A3E00);
   static const Color strictBadge = AppColors.header;
   static const Color looseBadge = AppColors.surfaceMuted;
 
@@ -169,6 +175,8 @@ abstract final class AgentTokens {
   static const double citationChip = 12;
   static const double citationChipHeight = 24;
   static const double citationChipMinWidth = 48;
+  static const double ocrVariantChipHeight = AppSizes.chip;
+  static const double ocrVariantChipMaxWidth = 220;
   static const double stageText = 14;
   static const double badge = 12;
   static const double evidenceRadius = AppRadius.md;

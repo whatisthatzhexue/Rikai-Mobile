@@ -174,6 +174,11 @@ class AgentUiStrings {
         'The model service is unavailable',
         'モデルサービスを利用できません',
       ),
+      AgentToolErrorCode.providerEmptyOutput => _pick(
+        '模型只返回了思考内容，没有生成正文；请改用非推理模型或调整输出上限',
+        'The model returned only reasoning content and no answer; use a non-reasoning model or adjust the output limit',
+        'モデルが思考内容のみを返し、本文を生成しませんでした。非推論モデルに変更するか出力上限を調整してください',
+      ),
       AgentToolErrorCode.validationFailed => _pick(
         '模型返回格式无效',
         'The model returned an invalid format',

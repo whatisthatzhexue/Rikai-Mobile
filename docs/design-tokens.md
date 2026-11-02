@@ -258,6 +258,8 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 | 证据标题 | `agentEvidenceTitle` | 16sp/600，`textPrimary` |
 | 证据摘要 | `agentEvidenceBody` | 14sp，`textSecondary`，完整换行 |
 | citation chip | `agentCitationChip` | 短胶囊：视觉高 24–28、12sp、`blue50` 底 + `blue700` 字，水平内边距 8，`Wrap` 间距/行距 4，触控 ≥40；自动换行，不使用长条/整行 |
+| OCR 版本 chip | `agentOcrVariantChip` | 视觉高 28、12sp；左对齐 `Wrap` 自动换行；选中/未选中同尺寸并预留推荐图标槽位 |
+| OCR 差异高亮 | `agentDiffHighlight` | `diffHighlightSurface` 暖色底 + `diffHighlightText` 深色字；不复用 citation 蓝 |
 | 严格徽标 | `agentStrictBadge` | `header` 底 + 白字，12sp |
 | 宽松徽标 | `agentLooseBadge` | `surfaceMuted` 底 + `textPrimary`，12sp |
 | 阶段文字 | `agentStageText` | 14sp，`primary`；spinner 16dp |
@@ -302,10 +304,15 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
   “本会话设置”展开面板内，模式切换放在“本次词典”标题行，Chip 预留 3.5 行高度
   （第 4 行半可见）并内部滚动；
   **会话级独立**，不写查词全局偏好。该条是对 §“查词词典筛选”全局规则的明确例外。
-- OCR 版本 chip 高 28、12sp（触控热区 ≥40dp）；质量标签胶囊高 24、12sp，数值
-  14sp 正文；差异高亮用 `blue50` 底 + `blue700` 字；修复建议按钮为次按钮，不自动
-  应用。标题为“文字识别结果”，每图显示可点缩略图；**不显示假名比例**，为其他
-  语言词典保留扩展性。P6.6 已实现该区域，真机视觉/200% 字号验收待做。
+- OCR 版本 chip 高 28、12sp（触控热区 ≥40dp），左对齐并在 `Wrap` 中自动换行；
+  选中/未选中同高、同内边距，推荐图标槽位始终预留，点击不会改变 chip 大小。
+  质量标签胶囊高 24、12sp，数值 14sp 正文；差异高亮使用
+  `AgentTokens.diffHighlightSurface`（暖色高亮底）+ `diffHighlightText`（深色
+  差异字），不得复用 citation 的浅蓝底/深蓝字；修复建议按钮为次按钮，不自动
+  应用。标题为“文字识别结果”，每图显示可点缩略图（按显示尺寸解码）；**不显示
+  假名比例**，为其他语言词典保留扩展性。展开的详细解析按小块跨帧追加，只让前
+  `AgentFadeIn.maxAnimatedItems` 个块播放淡入。P6.6 已实现该区域，真机视觉/
+  200% 字号验收待做。
 - 熟悉期 sheet 占屏幕高度 80%，可滚动；主按钮“保存并信任”深蓝，次按钮“本次跳过”
   白底描边，“不再询问”用复选框；不弹系统键盘。
 - 未配置 provider 的空态用 16sp 正文 + 14sp 说明 + 一个主按钮“去设置”；错误态

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_tokens.dart';
 import '../../services/agent/agent_ui_strings.dart';
+import 'agent_thumbnail.dart';
 
 Widget buildAgentComposer(
   BuildContext context, {
@@ -53,6 +54,15 @@ Widget buildAgentComposer(
                               File(imagePaths[index]),
                               width: AgentTokens.imageThumbnail,
                               height: AgentTokens.imageThumbnail,
+                              cacheWidth: agentThumbnailCacheSize(
+                                context,
+                                AgentTokens.imageThumbnail,
+                              ),
+                              cacheHeight: agentThumbnailCacheSize(
+                                context,
+                                AgentTokens.imageThumbnail,
+                              ),
+                              filterQuality: FilterQuality.low,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stack) =>
                                   Container(

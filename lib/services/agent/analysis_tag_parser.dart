@@ -1,6 +1,12 @@
 import '../../core/models/agent/agent_analysis.dart';
 import 'tag_block_integrity.dart';
 
+/// Parser-side weights for OPTION blocks. The model does not emit numbers;
+/// multiple options are normalized by `normalizeAnalysis`/`salvageAnalysis`
+/// into a distribution summing to 100%.
+const double _optionCitedWeight = 0.7;
+const double _optionUncitedWeight = 0.5;
+
 const _analysisBlockTags = <String>{
   'TRANSLATION',
   'SEGMENT',
@@ -210,7 +216,9 @@ AgentAnalysis? parseTaggedAnalysis(String raw, {required String sourceId}) {
             ? String.fromCharCode(64 + optionIndex)
             : _attr(attrs, 'label'),
         meaning: meaning,
-        confidence: citations.isEmpty ? 0.5 : 0.7,
+        confidence: citations.isEmpty
+            ? _optionUncitedWeight
+            : _optionCitedWeight,
         citationIds: citations,
       ),
     );

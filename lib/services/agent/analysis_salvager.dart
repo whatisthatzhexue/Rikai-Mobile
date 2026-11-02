@@ -2,6 +2,7 @@ import '../../core/models/agent/agent_analysis.dart';
 import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
 import '../../core/models/agent/agent_quote.dart';
+import 'analysis_normalizer.dart';
 
 class AnalysisSalvageResult {
   const AnalysisSalvageResult({required this.analysis, required this.notes});
@@ -200,7 +201,9 @@ AnalysisSalvageResult salvageAnalysis({
     sourceId: sourceId,
     translation: translations,
     segments: segments,
-    interpretations: interpretations,
+    // Strict-mode removal can leave a different set of options; re-normalize
+    // so the displayed percentages always sum to 100.
+    interpretations: normalizeInterpretationConfidences(interpretations),
     unresolved: unresolved,
     citationsUsed: used.toList(growable: false),
     modelSupplements: supplements,

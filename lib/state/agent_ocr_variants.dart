@@ -192,16 +192,24 @@ class AgentOcrVariantsController extends Notifier<AgentOcrVariantsState> {
 
     // The baseline is never its own "alternative". Source variants from a
     // previous re-analysis and variants generated but not yet used are both
-    // kept, so switching back and forth does not lose choices.
-    final imageExtras = <AgentOcrVariant>[
-      for (final variant in known)
-        if (variant.id != baseline.id) variant,
-      for (final variant
-          in state.extraVariants[image.id] ?? const <AgentOcrVariant>[])
-        if (variant.id != baseline.id &&
-            !known.any((existing) => existing.id == variant.id))
-          variant,
-    ];
+    // kept, so switching back and forth does not lose choices. The provider
+    // contract allows four variants per source, so alternatives are capped at
+    // three and always include the selected variant separately.
+    final imageExtras = <AgentOcrVariant>[];
+    void addExtra(AgentOcrVariant variant) {
+      if (variant.id == baseline.id) return;
+      if (imageExtras.length >= _maxAlternatives) return;
+      if (imageExtras.any((existing) => existing.id == variant.id)) return;
+      imageExtras.add(variant);
+    }
+
+    for (final variant in known) {
+      addExtra(variant);
+    }
+    for (final variant
+        in state.extraVariants[image.id] ?? const <AgentOcrVariant>[]) {
+      addExtra(variant);
+    }
     for (final variant in imageExtras) {
       if (imageQuality.containsKey(variant.id)) continue;
       imageQuality[variant.id] = await _assess(
@@ -213,35 +221,45 @@ class AgentOcrVariantsController extends Notifier<AgentOcrVariantsState> {
       if (!current()) return;
     }
 
-    final modes = <OcrMode>{
-      if (image.mode != OcrMode.auto) OcrMode.auto,
-      if (image.mode != OcrMode.horizontal) OcrMode.horizontal,
-      if (services.ocrPort.verticalAvailable && image.mode != OcrMode.vertical)
-        OcrMode.vertical,
-    };
+    // Generate a model x orientation matrix instead of asking the same model
+    // for three orientations. A forced engine either returns that engine or
+    // fails, so the UI never presents two PaddleOCR results as different
+    // models. Order is: Paddle horizontal, Manga vertical, Paddle vertical,
+    // then auto (the first three win the four-variant budget).
+    final specs = _alternativeSpecs(
+      baseline: baseline,
+      paddleAvailable: services.ocrPort.horizontalAvailable,
+      mangaAvailable: services.ocrPort.verticalAvailable,
+    );
     AgentToolErrorCode? modeError;
     var modeSucceeded = false;
-    for (final mode in modes) {
+    for (final spec in specs) {
       if (!current()) return;
+      if (imageExtras.length >= _maxAlternatives) break;
+      if (_hasSpecCombination(known, spec) ||
+          _hasSpecCombination(imageExtras, spec)) {
+        continue;
+      }
       try {
         final run = await _enqueueOcr(
           image.id,
           epoch,
           () => services.ocrPort.recognize(
             image: LocalOcrHandle(id: image.id, localPath: image.localPath),
-            mode: mode,
+            mode: spec.mode,
+            engine: spec.engine,
           ),
         );
         modeSucceeded = true;
         final variant = _variantFromRun(image.id, run);
-        // Same mode/engine is the same result; do not show duplicates. Text
-        // equality is deliberately NOT used: auto and horizontal often return
-        // the same text, and the user still needs to see both engine/mode
-        // options.
-        if (known.any((item) => item.id == variant.id) ||
+        // Deduplicate the actual result combo, not text. auto/horizontal can
+        // share text but remain distinct options; forced engines guarantee
+        // that the model shown on the chip is the model that produced it.
+        if (_hasVariantCombination(known, variant) ||
             imageExtras.any((item) => item.id == variant.id)) {
           continue;
         }
+        if (imageExtras.length >= _maxAlternatives) continue;
         imageExtras.add(variant);
         known.add(variant);
         imageQuality[variant.id] = await _assess(
@@ -253,9 +271,9 @@ class AgentOcrVariantsController extends Notifier<AgentOcrVariantsState> {
         if (!current()) return;
       } on AgentCapabilityException catch (error) {
         if (error.code == AgentToolErrorCode.toolCancelled) return;
-        // One unavailable mode (for example MangaOCR) must not hide the
-        // other mode's result; remember the error for the no-alternative
-        // case so the UI can show a stable code instead of "unavailable".
+        // One unavailable engine/orientation (for example MangaOCR missing)
+        // must not hide the other combinations; remember the error for the
+        // no-alternative case so the UI can show a stable code.
         modeError ??= error.code;
       } catch (_) {
         modeError ??= AgentToolErrorCode.internalError;
@@ -484,6 +502,60 @@ class AgentOcrVariantsController extends Notifier<AgentOcrVariantsState> {
     );
   }
 
+  static const int _maxAlternatives = AgentOcrVariant.maxPerSource - 1;
+
+  List<_VariantSpec> _alternativeSpecs({
+    required AgentOcrVariant baseline,
+    required bool paddleAvailable,
+    required bool mangaAvailable,
+  }) {
+    final specs = <_VariantSpec>[
+      if (paddleAvailable)
+        const _VariantSpec(
+          mode: OcrMode.horizontal,
+          engine: OcrEngineId.paddleV5,
+        ),
+      if (mangaAvailable)
+        const _VariantSpec(
+          mode: OcrMode.vertical,
+          engine: OcrEngineId.mangaOcr,
+        ),
+      if (paddleAvailable)
+        const _VariantSpec(
+          mode: OcrMode.vertical,
+          engine: OcrEngineId.paddleV5,
+        ),
+      const _VariantSpec(mode: OcrMode.auto),
+    ];
+    final filtered = <_VariantSpec>[
+      for (final spec in specs)
+        if (!(spec.mode == baseline.mode &&
+            (spec.engine == null || spec.engine == baseline.engine)))
+          spec,
+    ];
+    return filtered.take(_maxAlternatives).toList(growable: false);
+  }
+
+  bool _hasSpecCombination(List<AgentOcrVariant> variants, _VariantSpec spec) {
+    for (final variant in variants) {
+      if (variant.mode != spec.mode) continue;
+      // An unforced auto request is already represented by any auto variant;
+      // a forced request must match the exact engine that would be shown.
+      if (spec.engine == null || variant.engine == spec.engine) return true;
+    }
+    return false;
+  }
+
+  bool _hasVariantCombination(
+    List<AgentOcrVariant> variants,
+    AgentOcrVariant candidate,
+  ) {
+    return variants.any(
+      (variant) =>
+          variant.mode == candidate.mode && variant.engine == candidate.engine,
+    );
+  }
+
   AgentOcrVariant _variantFromRun(String imageId, OcrRun run) {
     return AgentOcrVariant(
       id: 'var-$imageId-${run.mode.name}-${run.engine}',
@@ -494,6 +566,13 @@ class AgentOcrVariantsController extends Notifier<AgentOcrVariantsState> {
       elapsedMs: run.elapsedMs,
     );
   }
+}
+
+class _VariantSpec {
+  const _VariantSpec({required this.mode, this.engine});
+
+  final OcrMode mode;
+  final String? engine;
 }
 
 Map<String, T> _withoutKey<T>(Map<String, T> map, String key) {

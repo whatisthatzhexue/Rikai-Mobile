@@ -190,10 +190,12 @@ class RikaiOcr {
   Future<OcrResult> recognize({
     required String imagePath,
     OcrMode mode = OcrMode.auto,
+    String? engine,
   }) async {
     final raw = await _invoke('recognize', {
       'imagePath': imagePath,
       'mode': mode.name,
+      'engine': ?engine,
     });
     if (raw is! Map) {
       throw const OcrException('bad_result', 'Native OCR returned no result');

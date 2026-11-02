@@ -5,6 +5,12 @@ abstract interface class OcrHandle {
   String get id;
 }
 
+/// Native OCR engine identifiers used by the Agent combination matrix.
+abstract final class OcrEngineId {
+  static const String paddleV5 = 'paddle_v5';
+  static const String mangaOcr = 'manga_ocr';
+}
+
 /// The only handle type that can resolve a local image for on-device OCR.
 class LocalOcrHandle implements OcrHandle {
   const LocalOcrHandle({required this.id, required this.localPath});
@@ -36,7 +42,15 @@ class OcrRun {
 abstract interface class OcrPort {
   Future<void> ensureReady();
 
-  Future<OcrRun> recognize({required OcrHandle image, required OcrMode mode});
+  /// Runs OCR with an optional engine constraint. `null` keeps the native
+  /// best-of behaviour. When [engine] is set, the adapter must return that
+  /// engine or fail; callers use this to build distinct model/orientation
+  /// combinations instead of silently receiving the same model three times.
+  Future<OcrRun> recognize({
+    required OcrHandle image,
+    required OcrMode mode,
+    String? engine,
+  });
 
   bool get horizontalAvailable;
   bool get verticalAvailable;

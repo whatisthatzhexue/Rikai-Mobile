@@ -328,11 +328,18 @@ internal class PaddleOcrEngine {
     fun recognize(
         imagePath: String,
         mode: String,
+        forcedEngine: String? = null,
         onProgress: (stage: String, current: Int, total: Int) -> Unit,
         isCancelled: () -> Boolean,
     ): NativeOcrResult {
         if (mode != "auto" && mode != "horizontal" && mode != "vertical") {
             throw OcrFailure("UNSUPPORTED_MODE", "不支持的识别模式：$mode")
+        }
+        if (forcedEngine != null &&
+            forcedEngine != "paddle_v5" &&
+            forcedEngine != "manga_ocr"
+        ) {
+            throw OcrFailure("UNSUPPORTED_ENGINE", "不支持的 OCR 引擎：$forcedEngine")
         }
         val det = detSession ?: throw OcrFailure("ENGINE_ERROR", "OCR 模型尚未初始化")
         val rec = recSession ?: throw OcrFailure("ENGINE_ERROR", "OCR 模型尚未初始化")
@@ -369,6 +376,12 @@ internal class PaddleOcrEngine {
                 "vertical" -> true
                 "auto" -> TextLayoutHeuristic.isVertical(quads)
                 else -> false
+            }
+            if (forcedEngine == "manga_ocr" && !useVertical) {
+                throw OcrFailure(
+                    "UNSUPPORTED_MODE",
+                    "MangaOCR 只支持竖向识别，不能用于当前横向布局",
+                )
             }
 
             // A phone held diagonally produces a small constant baseline skew.
@@ -409,8 +422,25 @@ internal class PaddleOcrEngine {
                 }
             }
             if (useVertical) {
-                val mangaReady = ensureMangaLoaded()
-                if (mode == "vertical" && !mangaReady) {
+                // The Agent can ask for a specific model/orientation
+                // combination. Without a constraint the native pipeline keeps
+                // its existing best-of behaviour, so photo-set OCR does not
+                // change. A forced MangaOCR request must fail loudly instead of
+                // silently falling back to PaddleOCR.
+                val wantsManga = forcedEngine == null || forcedEngine == "manga_ocr"
+                val wantsPaddle = forcedEngine == null || forcedEngine == "paddle_v5"
+                val mangaReady = wantsManga && ensureMangaLoaded()
+                if (forcedEngine == "manga_ocr" && !mangaReady) {
+                    throw if (!mangaError.isNullOrBlank()) {
+                        OcrFailure("MODEL_INVALID", "MangaOCR 模型无法使用：$mangaError")
+                    } else {
+                        OcrFailure(
+                            "MODEL_MISSING",
+                            "竖向识别需要先在「OCR 模型」中下载 MangaOCR 模型",
+                        )
+                    }
+                }
+                if (mode == "vertical" && forcedEngine == null && !mangaReady) {
                     throw if (!mangaError.isNullOrBlank()) {
                         OcrFailure("MODEL_INVALID", "MangaOCR 模型无法使用：$mangaError")
                     } else {
@@ -439,7 +469,7 @@ internal class PaddleOcrEngine {
                         ),
                     )
                 }
-                if (quads.isNotEmpty()) {
+                if (wantsPaddle && quads.isNotEmpty()) {
                     val paddleBlocks = recognizePaddleQuads(
                         bitmap = activeBitmap,
                         quads = quads,
@@ -462,9 +492,11 @@ internal class PaddleOcrEngine {
                 // Dense tategaki pages sometimes read better after rotating the
                 // image 90° and letting PaddleOCR's horizontal recognizer look
                 // at it. Only pay for those extra passes when both primary
-                // candidates look weak; a clean result already wins.
+                // candidates look weak; a clean result already wins. Forced
+                // MangaOCR requests never add Paddle candidates.
                 val bestPrimaryScore = candidates.maxOfOrNull { it.score } ?: 0.0
-                if (quads.isNotEmpty() &&
+                if (wantsPaddle &&
+                    quads.isNotEmpty() &&
                     bestPrimaryScore < VERTICAL_ROTATION_RETRY_SCORE
                 ) {
                     for (degrees in listOf(-90f, 90f)) {
@@ -506,13 +538,17 @@ internal class PaddleOcrEngine {
                 // PaddleOCR's confidence is often slightly higher on clean
                 // bubbles; require a clear quality win before replacing the
                 // vertical model, so ordinary manga pages stay on MangaOCR.
-                val best = when {
-                    mangaCandidate == null -> paddleCandidate
-                    paddleCandidate == null -> mangaCandidate
-                    paddleCandidate.score >
-                        mangaCandidate.score + CANDIDATE_SWITCH_MARGIN ->
-                        paddleCandidate
-                    else -> mangaCandidate
+                val best = when (forcedEngine) {
+                    "manga_ocr" -> mangaCandidate
+                    "paddle_v5" -> paddleCandidate
+                    else -> when {
+                        mangaCandidate == null -> paddleCandidate
+                        paddleCandidate == null -> mangaCandidate
+                        paddleCandidate.score >
+                            mangaCandidate.score + CANDIDATE_SWITCH_MARGIN ->
+                            paddleCandidate
+                        else -> mangaCandidate
+                    }
                 }
                 onProgress("done", 1, 1)
                 if (best != null) {
@@ -525,7 +561,7 @@ internal class PaddleOcrEngine {
                     )
                 }
                 return NativeOcrResult(
-                    engine = "paddle_v5",
+                    engine = forcedEngine ?: "paddle_v5",
                     elapsedMs = SystemClock.elapsedRealtime() - started,
                     width = activeBitmap.width,
                     height = activeBitmap.height,

@@ -338,9 +338,11 @@ P6.6 implementation (2026-11-02, multi-OCR core):
   signal remains usable for non-Japanese dictionaries. No provider call, image
   upload or automatic text replacement is involved.
 - `AgentOcrVariantsController` (`lib/state/agent_ocr_variants.dart`) is
-  app-scoped. It runs horizontal/vertical alternatives only after the user asks
-  for a comparison, dedupes identical text, reports a stable error code on
-  failure, and supports stop/clear.
+  app-scoped. After the user asks for a comparison it runs unique
+  `(engine, mode)` combinations (`paddle_v5/horizontal`, `manga_ocr/vertical`,
+  `paddle_v5/vertical`, then `auto`), never dedupes by text (text equality is not
+  a duplicate signal), reports a stable error code on failure, and supports
+  stop/clear.
 - `AgentOcrVariantsPanel` shows variant chips (engine/mode/confidence), quality
   metrics, low-quality warning, difference preview with highlighted changed
   spans, dictionary candidates, and an explicit “re-analyze with this variant”
@@ -358,12 +360,20 @@ P6.6 implementation (2026-11-02, multi-OCR core):
 - **Provider HTTP 400 hardening**: before any request the adapter validates a
   non-empty model, drops whitespace-only messages, requires at least one
   non-system message, merges consecutive Anthropic roles, sanitizes unpaired
-  UTF-16 surrogates/control characters, and requires a positive `max_tokens`.
+  UTF-16 surrogates/control characters, and requires a positive `maxTokens`.
   It deliberately does **not** impose a universal output ceiling: model limits
-  differ (deepseek-flash is far above 8,192). HTTP 400 responses are classified
-  from the real error body (context length, unsupported output parameter,
-  reasoning/tool parameter mismatch, generic invalid parameter) and debug logs
-  record only request shape, not prompt text or keys.
+  differ (deepseek-flash is far above 8,192). OpenAI-compatible requests omit
+  `max_tokens` entirely (provider/model defaults apply); Anthropic keeps the
+  required `max_tokens`. HTTP 400 responses are classified from the real error
+  body (context length, unsupported output parameter, reasoning/tool parameter
+  mismatch, generic invalid parameter) and debug logs record only request shape,
+  not prompt text or keys.
+- **Reasoning-only stream**: if SSE produced `reasoning_content` but no text,
+  the provider now raises `PROVIDER_EMPTY_OUTPUT` immediately instead of
+  repeating the same expensive request non-streaming. `finish_reason` is logged
+  with the SSE counters. Only a completely empty stream (no reasoning, no text)
+  falls back. Stream progress publishes at most every 250 ms because reasoning
+  models can emit >10k tiny deltas and the UI shows elapsed time, not characters.
 - **P6.6 UI feedback**: the card title is “文字识别结果”; each image is shown as
   a tappable thumbnail using the same full-screen viewer as user messages;
   quality shows “置信度” and “词典命中” capsules with plain percentage values.
@@ -396,6 +406,39 @@ P6.6 implementation (2026-11-02, multi-OCR core):
 - **UniDic path clearing**: empty input (or the explicit “清除” button) clears the
   saved path and invalidates the MeCab service; non-empty invalid paths are still
   rejected and never saved.
+- **P6.6 model x orientation matrix**: `OcrPort.recognize` now accepts an optional
+  engine constraint. The native OCR plugin forces `paddle_v5` or `manga_ocr` when
+  requested (default null keeps the existing best-of behavior) and rejects
+  MangaOCR horizontal requests. The Agent generates up to four unique
+  `(engine, mode)` variants: `paddle_v5/horizontal`, `manga_ocr/vertical`,
+  `paddle_v5/vertical`, then `auto`, so horizontal and vertical no longer show
+  near-identical PaddleOCR results under different labels. Maximum four variants
+  per source is enforced in the controller and re-analysis.
+- **P6.6 UI feedback**: variant chips are left-aligned and wrap by row; each chip
+  has a fixed 28dp height and reserves the recommendation icon slot, so selection
+  never changes its size. Diff highlights use the dedicated warm
+  `AgentTokens.diffHighlightSurface`/`diffHighlightText` pair instead of the
+  citation blue, and unchanged text is muted. Agent thumbnails decode at display
+  resolution via `cacheWidth`/`cacheHeight` to avoid a full-photo decode when a
+  lazily built card enters the viewport.
+- **Expanded evidence scroll jank**: `AgentResultView` now splits its expanded
+  detail into small blocks and appends them across frames
+  (`_ProgressiveResultBody`, 4 initial + 3 per frame); each dictionary
+  `_EvidenceGroup` uses the same chunker for its citation rows. Only the first
+  `AgentFadeIn.maxAnimatedItems` blocks run the staggered fade, so expanding a
+  dictionary evidence card no longer builds the whole result tree and starts
+  dozens of animations in one frame. The inline `ExpansionTile` UX is unchanged.
+- **Interpretation percentages**: the tag parser assigns OPTION blocks relative
+  weights (0.5 without citations, 0.7 with citations), not model probabilities.
+  `normalizeAnalysis` and `salvageAnalysis` now normalize multiple OPTION blocks
+  to integer percentages summing to 100 (two 0.7 options become 50%/50%; three
+  become 34%/33%/33%). A single OPTION keeps its heuristic value. The prompt
+  still forbids model-emitted confidence values; no prompt rule was added for
+  this display invariant.
+- **Agent output corpus**: `docs/agent_output/` now stores Markdown output
+  samples named `YYYY-MM-DD-HH-mm.txt` for manual quality inspection; see
+  [`agent_output/README.md`](agent_output/README.md). These files are not
+  provider logs and contain no image paths or keys.
 
 Current known gaps:
 
@@ -418,8 +461,14 @@ Current known gaps:
 - Provider 400 handling now reports the actual error-body category, but it does
   not automatically repair context-length or model-specific parameter problems;
   the user still needs to shorten input or adjust the model/provider.
-- There is no per-provider `max_tokens` setting; the app sends the request
-  builder's value (12,000 for analysis) and relies on provider/model capability.
+- There is no per-provider `max_tokens` setting. OpenAI-compatible requests omit
+  `max_tokens` and use provider/model defaults; Anthropic sends the request
+  builder's value (12,000 for analysis).
+- Long reasoning-model latency is a model-choice issue, not a removable request
+  parameter. The app has no reasoning-effort/thinking-off setting; selecting a
+  non-reasoning complex model (for example deepseek-chat/flash) is the current
+  way to shorten analysis time. Automated tests cannot prove real provider
+  latency.
 - P6.6 does not yet show per-variant citations before the user commits to a
   re-analysis; citations are rebuilt after the selected variant is analyzed.
   All variants are in the input envelope, but only the selected variant is
@@ -430,6 +479,10 @@ Current known gaps:
 - P6.7 之后的任务级流式规划：
   [`task-level-streaming-plan.md`](agent_docs/task-level-streaming-plan.md)
   （规划中，未实现）。
+
+Agent output quality samples are stored under `docs/agent_output/` as
+`YYYY-MM-DD-HH-mm.txt` Markdown copies (one run per file). They are manual
+inspection fixtures, not provider logs; see that directory's README.
 
 ## Tests and build
 

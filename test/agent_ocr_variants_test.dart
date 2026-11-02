@@ -41,7 +41,7 @@ class _FakeOcr implements OcrPort {
   _FakeOcr({this.throwOnAuto = false});
 
   final bool throwOnAuto;
-  final List<OcrMode> calls = <OcrMode>[];
+  final List<(OcrMode, String?)> calls = <(OcrMode, String?)>[];
   bool cancelled = false;
 
   @override
@@ -62,37 +62,27 @@ class _FakeOcr implements OcrPort {
   Future<OcrRun> recognize({
     required OcrHandle image,
     required OcrMode mode,
+    String? engine,
   }) async {
-    calls.add(mode);
-    if (throwOnAuto && mode == OcrMode.auto) {
+    calls.add((mode, engine));
+    if (throwOnAuto && mode == OcrMode.auto && engine == null) {
       throw const AgentCapabilityException(
         AgentToolErrorCode.modelMissing,
         'OCR 模型未安装',
       );
     }
-    return switch (mode) {
-      OcrMode.auto => const OcrRun(
-        engine: 'paddle_v5',
-        mode: OcrMode.auto,
-        text: '何卒コンニチハ',
-        elapsedMs: 10,
-        confidence: 0.9,
-      ),
-      OcrMode.horizontal => const OcrRun(
-        engine: 'paddle_v5',
-        mode: OcrMode.horizontal,
-        text: '何卒コンバンハ',
-        elapsedMs: 11,
-        confidence: 0.8,
-      ),
-      OcrMode.vertical => const OcrRun(
-        engine: 'paddle_v5',
-        mode: OcrMode.vertical,
-        text: '何卒コンバンハ',
-        elapsedMs: 12,
-        confidence: 0.7,
-      ),
-    };
+    final effectiveEngine = engine ?? 'paddle_v5';
+    return OcrRun(
+      engine: effectiveEngine,
+      mode: mode,
+      text: mode == OcrMode.auto ? '何卒コンニチハ' : '何卒コンバンハ',
+      elapsedMs: 10 + mode.index,
+      confidence: switch (mode) {
+        OcrMode.auto => 0.9,
+        OcrMode.horizontal => 0.8,
+        OcrMode.vertical => 0.7,
+      },
+    );
   }
 }
 
@@ -121,6 +111,7 @@ class _BlockingOcr implements OcrPort {
   Future<OcrRun> recognize({
     required OcrHandle image,
     required OcrMode mode,
+    String? engine,
   }) async {
     calls.add(mode);
     if (!started.isCompleted) started.complete();
@@ -224,7 +215,7 @@ class _UnusedSamplePort implements DictionarySamplePort {
 
 void main() {
   test(
-    'generates alternatives, dedupes identical text and suggests repairs',
+    'generates distinct engine/orientation combinations and suggests repairs',
     () async {
       final ocr = _FakeOcr();
       final container = ProviderContainer(
@@ -259,16 +250,30 @@ void main() {
       final state = container.read(agentOcrVariantsProvider);
       expect(state.loading, isFalse);
       expect(state.errorCode, isNull);
-      expect(ocr.calls, <OcrMode>[OcrMode.horizontal, OcrMode.vertical]);
-      expect(state.extraVariants['img-1'], hasLength(2));
+      expect(ocr.calls, <(OcrMode, String?)>[
+        (OcrMode.horizontal, 'paddle_v5'),
+        (OcrMode.vertical, 'manga_ocr'),
+        (OcrMode.vertical, 'paddle_v5'),
+      ]);
+      expect(state.extraVariants['img-1'], hasLength(3));
       expect(
         state.extraVariants['img-1']!.map((variant) => variant.mode),
         containsAll(<OcrMode>[OcrMode.horizontal, OcrMode.vertical]),
+      );
+      expect(
+        state.extraVariants['img-1']!
+            .map((variant) => '${variant.engine}|${variant.mode.name}')
+            .toSet(),
+        hasLength(3),
       );
       expect(state.qualities['img-1'], containsPair('var-1', isNotNull));
       expect(
         state.qualities['img-1'],
         containsPair('var-img-1-horizontal-paddle_v5', isNotNull),
+      );
+      expect(
+        state.qualities['img-1'],
+        containsPair('var-img-1-vertical-manga_ocr', isNotNull),
       );
       expect(
         state.qualities['img-1'],

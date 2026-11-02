@@ -145,6 +145,7 @@ void main() {
         ),
       ),
     );
+    await tester.pumpAndSettle();
 
     expect(find.text('原文'), findsOneWidget);
     expect(find.text('逐句理解'), findsOneWidget);

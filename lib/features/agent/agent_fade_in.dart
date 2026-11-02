@@ -7,13 +7,20 @@ class AgentFadeIn extends StatelessWidget {
     super.key,
     required this.index,
     required this.child,
+    this.enabled = true,
   });
+
+  /// Only the first few result blocks animate. A long expanded analysis must
+  /// not start dozens of opacity/translate animations in the same frame.
+  static const int maxAnimatedItems = 4;
 
   final int index;
   final Widget child;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
+    if (!enabled) return child;
     final start = (index * 0.08).clamp(0.0, 0.55).toDouble();
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: 1),

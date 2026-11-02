@@ -123,6 +123,7 @@ class OpenAiCompatibleProvider implements LlmPort {
       var sseEvents = 0;
       var textChars = 0;
       var reasoningChars = 0;
+      var lastFinishReason = '';
       await for (final data in sseDataEvents(body.stream)) {
         if (cancellation?.isCancelled == true) {
           throw const AgentCapabilityException(
@@ -151,6 +152,10 @@ class OpenAiCompatibleProvider implements LlmPort {
         if (choices is! List || choices.isEmpty) continue;
         final choice = choices.first;
         if (choice is! Map) continue;
+        final finishReason = choice['finish_reason'];
+        if (finishReason is String && finishReason.isNotEmpty) {
+          lastFinishReason = finishReason;
+        }
         final delta = choice['delta'];
         if (delta is Map) {
           final reasoning = delta['reasoning_content'];
@@ -167,9 +172,22 @@ class OpenAiCompatibleProvider implements LlmPort {
       }
       debugPrint(
         '[AgentProvider] SSE events=$sseEvents textChars=$textChars '
-        'reasoningChars=$reasoningChars',
+        'reasoningChars=$reasoningChars finish=$lastFinishReason',
       );
       if (textChars == 0) {
+        if (reasoningChars > 0) {
+          // Some reasoning models spend the entire output budget on
+          // reasoning_content and never emit content. Repeating the same
+          // expensive request non-streaming only doubles latency.
+          debugPrint(
+            '[AgentProvider] reasoning-only stream with no content; '
+            'not retrying',
+          );
+          throw const AgentCapabilityException(
+            AgentToolErrorCode.providerEmptyOutput,
+            '模型只返回了思考内容，没有生成正文；请改用非推理模型或调整模型输出上限',
+          );
+        }
         debugPrint(
           '[AgentProvider] empty stream; falling back to non-streaming',
         );
@@ -237,7 +255,12 @@ class OpenAiCompatibleProvider implements LlmPort {
   }
 
   Map<String, Object?> _payload(LlmRequest request, bool stream) {
-    final payload = <String, Object?>{
+    // Validate the local budget contract, but do not send max_tokens to an
+    // OpenAI-compatible endpoint. Providers/models disagree about whether
+    // hidden reasoning counts against it; sending a fixed 12k budget made
+    // reasoning models emit only reasoning_content and no final answer.
+    validatedProviderMaxTokens(request);
+    return <String, Object?>{
       'model': request.model.trim(),
       'messages': validatedProviderMessages(request)
           .map(
@@ -247,9 +270,7 @@ class OpenAiCompatibleProvider implements LlmPort {
             },
           )
           .toList(),
-      'max_tokens': validatedProviderMaxTokens(request),
       'stream': stream,
     };
-    return payload;
   }
 }

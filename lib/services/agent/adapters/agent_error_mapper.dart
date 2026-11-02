@@ -36,6 +36,8 @@ AgentCapabilityException mapAgentError(
     final code = switch (error.code) {
       'MODEL_MISSING' => AgentToolErrorCode.modelMissing,
       'MODEL_INVALID' => AgentToolErrorCode.modelInvalid,
+      'UNSUPPORTED_ENGINE' ||
+      'UNSUPPORTED_MODE' => AgentToolErrorCode.invalidArguments,
       'CANCELLED' => AgentToolErrorCode.toolCancelled,
       'BUSY' => AgentToolErrorCode.internalError,
       _ => AgentToolErrorCode.internalError,

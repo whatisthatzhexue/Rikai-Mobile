@@ -38,6 +38,7 @@ class OcrPortAdapter implements OcrPort {
   Future<OcrRun> recognize({
     required OcrHandle image,
     required OcrMode mode,
+    String? engine,
   }) async {
     if (image is! LocalOcrHandle) {
       throw const AgentCapabilityException(
@@ -50,7 +51,14 @@ class OcrPortAdapter implements OcrPort {
       final result = await _service.recognize(
         imagePath: image.localPath,
         mode: mode,
+        engine: engine,
       );
+      if (engine != null && result.engine != engine) {
+        throw const AgentCapabilityException(
+          AgentToolErrorCode.modelInvalid,
+          'OCR 引擎未按请求返回',
+        );
+      }
       final blocks = result.blocks;
       final average = blocks.isEmpty
           ? 0.0

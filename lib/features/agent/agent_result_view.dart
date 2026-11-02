@@ -46,188 +46,313 @@ class AgentResultView extends StatelessWidget {
     }
     final orders = grouped.keys.toList()..sort();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (result.evidence.truncated)
+    final blocks = <Widget>[];
+    if (result.evidence.truncated) {
+      blocks.add(
+        Text(
+          strings.resultTruncated,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontSize: AgentTokens.helper,
+            color: AppColors.warning,
+          ),
+        ),
+      );
+    }
+    if (result.evidence.structureUnavailable) {
+      blocks.add(
+        Text(
+          strings.structureUnavailable,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontSize: AgentTokens.helper,
+            color: AppColors.warning,
+          ),
+        ),
+      );
+    }
+    if (result.evidence.dictionaryIssues.isNotEmpty) {
+      blocks.add(
+        Text(
+          strings.dictionaryLookupFailed(
+            result.evidence.dictionaryIssues
+                .map((issue) => issue.dictionaryTitle)
+                .join('、'),
+          ),
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontSize: AgentTokens.helper,
+            color: AppColors.warning,
+          ),
+        ),
+      );
+    }
+    if (!result.validation.valid) {
+      blocks.add(
+        Text(
+          strings.validationPartial,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontSize: AgentTokens.helper,
+            color: AppColors.warning,
+          ),
+        ),
+      );
+    }
+    for (final warning in result.warnings) {
+      blocks.add(
+        Text(
+          warning,
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontSize: AgentTokens.helper,
+            color: AppColors.warning,
+          ),
+        ),
+      );
+    }
+    if (result.profileWarnings.isNotEmpty) {
+      blocks.add(const SizedBox(height: AppSpacing.sm));
+      for (final warning in result.profileWarnings) {
+        blocks.add(
           Text(
-            strings.resultTruncated,
+            strings.profileWarning(warning),
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: AgentTokens.helper,
               color: AppColors.warning,
             ),
           ),
-        if (result.evidence.structureUnavailable)
-          Text(
-            strings.structureUnavailable,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontSize: AgentTokens.helper,
-              color: AppColors.warning,
-            ),
-          ),
-        if (result.evidence.dictionaryIssues.isNotEmpty)
-          Text(
-            strings.dictionaryLookupFailed(
-              result.evidence.dictionaryIssues
-                  .map((issue) => issue.dictionaryTitle)
-                  .join('、'),
-            ),
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontSize: AgentTokens.helper,
-              color: AppColors.warning,
-            ),
-          ),
-        if (!result.validation.valid)
-          Text(
-            strings.validationPartial,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontSize: AgentTokens.helper,
-              color: AppColors.warning,
-            ),
-          ),
-        for (final warning in result.warnings)
-          Text(
-            warning,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontSize: AgentTokens.helper,
-              color: AppColors.warning,
-            ),
-          ),
-        if (result.profileWarnings.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.sm),
-          for (final warning in result.profileWarnings)
-            Text(
-              strings.profileWarning(warning),
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontSize: AgentTokens.helper,
-                color: AppColors.warning,
-              ),
-            ),
-        ],
-        if (result.unavailableProfiles.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.sm),
-          for (final issue in result.unavailableProfiles)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Text(
-                    strings.noProfile(issue.title, issue.reason),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      fontSize: AgentTokens.helper,
-                      color: AppColors.warning,
-                    ),
+        );
+      }
+    }
+    if (result.unavailableProfiles.isNotEmpty) {
+      blocks.add(const SizedBox(height: AppSpacing.sm));
+      for (final issue in result.unavailableProfiles) {
+        blocks.add(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  strings.noProfile(issue.title, issue.reason),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: AgentTokens.helper,
+                    color: AppColors.warning,
                   ),
                 ),
-                if (onRetryProfile != null)
-                  _RetryProfileAction(
-                    issue: issue,
-                    strings: strings,
-                    onRetry: onRetryProfile!,
-                  ),
-              ],
-            ),
-        ],
-        if (result.quotes.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.md),
-          _SectionTitle(strings.originalText),
-          for (final quote in result.quotes)
-            Container(
-              margin: const EdgeInsets.only(top: AppSpacing.xs),
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceMuted,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
-              child: Text(
-                quote.text,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontSize: AgentTokens.body,
-                  color: AppColors.textPrimary,
+              if (onRetryProfile != null)
+                _RetryProfileAction(
+                  issue: issue,
+                  strings: strings,
+                  onRetry: onRetryProfile!,
                 ),
+            ],
+          ),
+        );
+      }
+    }
+    if (result.quotes.isNotEmpty) {
+      blocks.add(const SizedBox(height: AppSpacing.md));
+      blocks.add(_SectionTitle(strings.originalText));
+      for (final quote in result.quotes) {
+        blocks.add(
+          Container(
+            margin: const EdgeInsets.only(top: AppSpacing.xs),
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceMuted,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Text(
+              quote.text,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontSize: AgentTokens.body,
+                color: AppColors.textPrimary,
               ),
             ),
-        ],
-        if (result.analysis.segments.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.md),
-          _SectionTitle(strings.segmentUnderstanding),
-          for (final (index, segment) in result.analysis.segments.indexed)
-            AgentFadeIn(
-              index: index,
-              child: _SegmentBlock(
-                segment: segment,
-                quote: quotes[segment.quoteId],
-                citations: citations,
-                citationNumbers: citationNumbers,
-                onCitationTap: onCitationTap,
-                strings: strings,
-              ),
-            ),
-        ],
-        if (result.analysis.interpretations.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.md),
-          _SectionTitle(strings.possibleUnderstandings),
-          for (final interpretation in result.analysis.interpretations)
-            _InterpretationBlock(
-              interpretation: interpretation,
+          ),
+        );
+      }
+    }
+    if (result.analysis.segments.isNotEmpty) {
+      blocks.add(const SizedBox(height: AppSpacing.md));
+      blocks.add(_SectionTitle(strings.segmentUnderstanding));
+      for (final (index, segment) in result.analysis.segments.indexed) {
+        blocks.add(
+          AgentFadeIn(
+            index: index,
+            enabled: index < AgentFadeIn.maxAnimatedItems,
+            child: _SegmentBlock(
+              segment: segment,
+              quote: quotes[segment.quoteId],
               citations: citations,
               citationNumbers: citationNumbers,
               onCitationTap: onCitationTap,
               strings: strings,
             ),
-        ],
-        if (result.analysis.unresolved.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.md),
-          _SectionTitle(strings.unresolvedTitle),
-          for (final unresolved in result.analysis.unresolved)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.xs),
-              child: Text(
-                _unresolvedReason(unresolved, strings),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontSize: AgentTokens.helper,
-                  color: AppColors.warning,
-                ),
+          ),
+        );
+      }
+    }
+    if (result.analysis.interpretations.isNotEmpty) {
+      blocks.add(const SizedBox(height: AppSpacing.md));
+      blocks.add(_SectionTitle(strings.possibleUnderstandings));
+      for (final interpretation in result.analysis.interpretations) {
+        blocks.add(
+          _InterpretationBlock(
+            interpretation: interpretation,
+            citations: citations,
+            citationNumbers: citationNumbers,
+            onCitationTap: onCitationTap,
+            strings: strings,
+          ),
+        );
+      }
+    }
+    if (result.analysis.unresolved.isNotEmpty) {
+      blocks.add(const SizedBox(height: AppSpacing.md));
+      blocks.add(_SectionTitle(strings.unresolvedTitle));
+      for (final unresolved in result.analysis.unresolved) {
+        blocks.add(
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.xs),
+            child: Text(
+              _unresolvedReason(unresolved, strings),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontSize: AgentTokens.helper,
+                color: AppColors.warning,
               ),
             ),
-        ],
-        if (result.analysis.modelSupplements.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.md),
-          _SectionTitle(strings.modelSupplements),
-          for (final supplement in result.analysis.modelSupplements)
-            Container(
-              margin: const EdgeInsets.only(top: AppSpacing.xs),
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: AgentTokens.supplementSurface,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-              ),
-              child: Text(
-                supplement.text,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontSize: AgentTokens.helper,
-                  color: AppColors.textPrimary,
-                ),
+          ),
+        );
+      }
+    }
+    if (result.analysis.modelSupplements.isNotEmpty) {
+      blocks.add(const SizedBox(height: AppSpacing.md));
+      blocks.add(_SectionTitle(strings.modelSupplements));
+      for (final supplement in result.analysis.modelSupplements) {
+        blocks.add(
+          Container(
+            margin: const EdgeInsets.only(top: AppSpacing.xs),
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AgentTokens.supplementSurface,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Text(
+              supplement.text,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontSize: AgentTokens.helper,
+                color: AppColors.textPrimary,
               ),
             ),
-        ],
-        if (orders.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.md),
-          _SectionTitle(strings.dictionaryEvidence),
-          for (final (index, order) in orders.indexed)
-            AgentFadeIn(
-              index: index,
-              child: _EvidenceGroup(
-                citations: grouped[order]!,
-                citationNumbers: citationNumbers,
-                onCitationTap: onCitationTap,
-                strings: strings,
-              ),
+          ),
+        );
+      }
+    }
+    if (orders.isNotEmpty) {
+      blocks.add(const SizedBox(height: AppSpacing.md));
+      blocks.add(_SectionTitle(strings.dictionaryEvidence));
+      for (final (index, order) in orders.indexed) {
+        blocks.add(
+          AgentFadeIn(
+            index: index,
+            enabled: index < AgentFadeIn.maxAnimatedItems,
+            child: _EvidenceGroup(
+              citations: grouped[order]!,
+              citationNumbers: citationNumbers,
+              onCitationTap: onCitationTap,
+              strings: strings,
             ),
-        ],
-      ],
+          ),
+        );
+      }
+    }
+
+    // A long expanded analysis is built in small chunks across frames. The
+    // first screenful appears immediately; later segments/evidence groups are
+    // appended without blocking one frame on the whole result.
+    return _ProgressiveResultBody(
+      revision: Object.hash(result, strings.language),
+      blocks: blocks,
     );
   }
+}
+
+/// Builds a bounded number of result blocks per frame. It keeps the existing
+/// inline ExpansionTile UX while avoiding the single long frame that made the
+/// expanded evidence card hitch on long results.
+class _ProgressiveResultBody extends StatefulWidget {
+  const _ProgressiveResultBody({required this.revision, required this.blocks});
+
+  final int revision;
+  final List<Widget> blocks;
+
+  static const int initialCount = 4;
+  static const int step = 3;
+
+  @override
+  State<_ProgressiveResultBody> createState() => _ProgressiveResultBodyState();
+}
+
+class _ProgressiveResultBodyState extends State<_ProgressiveResultBody> {
+  late int _visibleCount;
+  bool _chunkScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _visibleCount = _min(
+      _ProgressiveResultBody.initialCount,
+      widget.blocks.length,
+    );
+    _scheduleNextChunk();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProgressiveResultBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.revision != oldWidget.revision) {
+      _visibleCount = _min(
+        _ProgressiveResultBody.initialCount,
+        widget.blocks.length,
+      );
+      _scheduleNextChunk();
+      return;
+    }
+    if (_visibleCount > widget.blocks.length) {
+      _visibleCount = widget.blocks.length;
+    } else if (widget.blocks.length > oldWidget.blocks.length &&
+        _visibleCount < _ProgressiveResultBody.initialCount) {
+      _visibleCount = _min(
+        _ProgressiveResultBody.initialCount,
+        widget.blocks.length,
+      );
+      _scheduleNextChunk();
+    }
+  }
+
+  void _scheduleNextChunk() {
+    if (_chunkScheduled || _visibleCount >= widget.blocks.length) return;
+    _chunkScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _chunkScheduled = false;
+      if (!mounted || _visibleCount >= widget.blocks.length) return;
+      setState(() {
+        _visibleCount = _min(
+          _visibleCount + _ProgressiveResultBody.step,
+          widget.blocks.length,
+        );
+      });
+      _scheduleNextChunk();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: widget.blocks.take(_visibleCount).toList(growable: false),
+    );
+  }
+
+  static int _min(int left, int right) => left < right ? left : right;
 }
 
 class _RetryProfileAction extends StatefulWidget {
@@ -565,49 +690,54 @@ class _EvidenceGroup extends StatelessWidget {
             ),
           ),
           children: [
-            for (final citation in citations)
-              InkWell(
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                onTap: () => onCitationTap(citation),
-                child: Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.sm),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+            _ProgressiveResultBody(
+              revision: Object.hashAll(citations),
+              blocks: [
+                for (final citation in citations)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    onTap: () => onCitationTap(citation),
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.sm),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              citation.entryKey,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                fontSize: AgentTokens.evidenceTitle,
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.w600,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  citation.entryKey,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    fontSize: AgentTokens.evidenceTitle,
+                                    color: AppColors.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
-                            ),
+                              _CitationChip(
+                                citation: citation,
+                                number: citationNumbers[citation.id] ?? 0,
+                                onTap: onCitationTap,
+                                strings: strings,
+                              ),
+                            ],
                           ),
-                          _CitationChip(
-                            citation: citation,
-                            number: citationNumbers[citation.id] ?? 0,
-                            onTap: onCitationTap,
-                            strings: strings,
+                          const SizedBox(height: AppSpacing.xxs),
+                          Text(
+                            citation.snippet,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontSize: AgentTokens.helper,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        citation.snippet,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontSize: AgentTokens.helper,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
+              ],
+            ),
           ],
         ),
       ),

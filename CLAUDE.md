@@ -39,7 +39,7 @@ Agent 对话式 UI）；实现入口为 `lib/core/theme/app_tokens.dart`。
 何时查看：新增或修改任何 UI 前；检查页面是否硬编码颜色/字号/间距。
 
 `docs/project_tips.md`：
-内容：项目误区/踩坑与解决方案（`T-001`–`T-129`），含症状 → 处理速查附录。
+内容：项目误区/踩坑与解决方案（`T-001`–`T-134`），含症状 → 处理速查附录。
 何时查看：遇到报错、异常行为或准备重复试错前；接手 OCR/UniDic/MDict/采集/UI/
 Agent 改动前。**今后的误区只在该文件新增。**
 
@@ -97,6 +97,12 @@ Agent 改动前。**今后的误区只在该文件新增。**
 `docs/phase6-status.md`：
 内容：Phase 6 当前实现记录（P6.1–P6.5、Wave 进展、已知差距）。
 何时查看：确认 Agent 已实现/未实现范围；更新进度时。
+
+`docs/agent_output/`：
+内容：Agent 实际输出的 Markdown 质检样本；文件名
+`YYYY-MM-DD-HH-mm.txt`，一次运行一个文件，不含图片/路径/Key。
+何时查看：质检 Agent 译文/理解/依据、对比管线修复前后输出时；新增样本按
+该目录 README 命名。
 
 `docs/agent_docs/README.md`：
 内容：Agent 文档导航与硬规则（开发前必读顺序）。
@@ -284,7 +290,9 @@ OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）�
      置信度、日文假名覆盖、重复噪声计算统一质量分，只有 Paddle 明显更好
      （分差 >0.04）才切换；最佳主候选低于 0.80 时才尝试 ±90° 旋转后的
      Paddle。最终仍只返回一个引擎，不要恢复按区域混合输出。手动 vertical
-     在缺少 MangaOCR 时仍明确报 `MODEL_MISSING`。
+     在缺少 MangaOCR 时仍明确报 `MODEL_MISSING`。Agent 多版本对比可传可选
+     `engine` 约束强制 `paddle_v5`/`manga_ocr`；省略时保持上述 best-of，
+     照片集路径不传该参数，行为不变。MangaOCR 只允许竖向组合。
    - 照片集“旋转”只改私有会话副本 90°，清该照片 OCR 缓存后重新识别；旋转会
      立即中断正在进行的 OCR，不要让用户先手动取消。不要改设备原图。
 
@@ -294,9 +302,16 @@ Phase 0–5 已全部完成并发布 1.0（验收记录见 `docs/project-history
 `phase*-status.md`）。Phase 6 P6.1–P6.5 已实现；2026-10-31 实机反馈 Wave 1–3
 （F1b/F6/F7）已实现，Wave 4 设备回归验收待做；P6.6 多 OCR 核心已于 2026-11-02
 实现（自动化测试）。同日后续修正：provider 请求预校验/非法字符清理/400 按真实
-error body 分类（不设统一 max_tokens 上限）、覆盖审查紧凑输入/单项容错/独立预算
+error body 分类（不设统一 max_tokens 上限；OpenAI-compatible 不发送 max_tokens，
+只有 reasoning、无正文时快速失败且不重复请求）、覆盖审查紧凑输入/单项容错/独立预算
 （`AgentLimits.coverage*`，CJK 系数 1.0）/自动修正日志/规范化后修复、多 OCR
-每图独立 loading/可点缩略图、UniDic 空输入清除。P6.6 真机验收与 P6.7 未完成。
+每图独立 loading/可点缩略图、UniDic 空输入清除。多 OCR 显式对比改为
+`(engine, mode)` 组合（Paddle 横向/Manga 纵向/Paddle 纵向/auto，最多 4 个），
+OCR 插件新增可选 `engine` 约束；版本 chip 左对齐/自动换行/固定尺寸，差异高亮
+使用独立暖色 token，展开的详细解析分块跨帧构建并限制淡入动画。多个“可能的
+理解”不再显示解析器原始 0.5/0.7 权重，而是在 `normalizeAnalysis`/
+`salvageAnalysis` 中归一化为总和 100%（模型仍不输出概率）。Agent 输出质检样本
+存于 `docs/agent_output/YYYY-MM-DD-HH-mm.txt`。P6.6 真机验收与 P6.7 未完成。
 当前进度、验证记录与工作队列只维护在以下文档，本文件不再复述：
 
 - 实现进度与验证记录：`docs/phase6-status.md`
@@ -359,7 +374,7 @@ error body 分类（不设统一 max_tokens 上限）、覆盖审查紧凑输入
 ## 5. 项目误区 → 解决方案
 
 > **已迁移**：原 §5.1–§5.14 的 129 条误区/解决方案已移至
-> `docs/project_tips.md`（`T-001`–`T-129`）。**今后的误区只在该文件新增**；
+> `docs/project_tips.md`（`T-001`–`T-134`）。**今后的误区只在该文件新增**；
 > 本文件不再保留误区正文。
 >
 > 何时查看：遇到报错/异常行为/准备重复试错前；先查

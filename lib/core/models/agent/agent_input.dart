@@ -56,6 +56,10 @@ class AgentDictionaryRef {
 
 /// One on-device OCR result. [text] is normalized/composed, never a path.
 class AgentOcrVariant {
+  /// Maximum number of variants carried by one source in the provider input
+  /// envelope. The selected variant counts toward the limit.
+  static const int maxPerSource = 4;
+
   const AgentOcrVariant({
     required this.id,
     required this.engine,

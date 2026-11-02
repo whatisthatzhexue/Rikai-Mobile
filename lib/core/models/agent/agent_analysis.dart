@@ -193,6 +193,10 @@ class AgentInterpretation {
   final String id;
   final String label;
   final String meaning;
+
+  /// Relative confidence. When multiple OPTION blocks exist the pipeline
+  /// normalizes the parser's heuristic weights so the rendered percentages
+  /// sum to 100; a single option keeps its heuristic value.
   final double confidence;
   final List<String> citationIds;
 

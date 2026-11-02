@@ -125,8 +125,9 @@ class OcrService {
   Future<OcrResult> recognize({
     required String imagePath,
     OcrMode mode = OcrMode.auto,
+    String? engine,
   }) {
-    return _ocr.recognize(imagePath: imagePath, mode: mode);
+    return _ocr.recognize(imagePath: imagePath, mode: mode, engine: engine);
   }
 
   Future<void> cancel() => _ocr.cancel();
