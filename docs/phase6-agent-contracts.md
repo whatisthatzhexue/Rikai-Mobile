@@ -24,9 +24,9 @@
 > 见 `docs/project-data.md`。本文件只保留 Agent 字段、错误码、状态机和未来
 > tool 契约，不重复规则正文或当前实现数值。
 
-- 状态：**P6.1–P6.5 核心、Wave 1–3 与 P6.6 多 OCR 核心已实现；P6.6 真机验收与
-  P6.7 未完成**；与 `docs/phase6-agent-design.md` v2 配套。实现状态见
-  `docs/phase6-status.md`。
+- 状态：**P6.1–P6.5 核心、Wave 1–3 与 P6.6 多 OCR 核心已实现，P6.6 自动化收尾
+  于 2026-11-03 完成；P6.6 真机验收与 P6.7 未完成**；与
+  `docs/phase6-agent-design.md` v2 配套。实现状态见 `docs/phase6-status.md`。
   **2026-10-31 实机反馈的 F1–F17 修正计划见
   `docs/agent_docs/device-feedback-2026-10-31.md`；Wave 1–3 已实现（应用级档案
   队列/语言默认与文案、F1b 语言后校验、F6 检索递进、F7 覆盖审查）；Wave 4

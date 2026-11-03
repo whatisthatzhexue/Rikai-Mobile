@@ -7,8 +7,9 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 
 > **Status: P6.1–P6.5 core and 2026-10-31 feedback Waves 1–3 are implemented;
 > Wave 4 device acceptance is still pending. P6.6 multi-OCR core is implemented
-> (2026-11-02, automated tests only); P6.7 (annotation DSL/Markdown/ruby/pitch/
-> release) is not implemented.**
+> (2026-11-02) and its automated closeout completed on 2026-11-03; P6.6 device
+> acceptance remains pending. P6.7 (safe rich text/ruby/pitch, annotation DSL,
+> history/release) is not implemented.**
 > Follow `docs/agent_docs/device-feedback-2026-10-31.md` for the remaining
 > Wave 4 device checks. **Current test/device/build/environment numbers are
 > centralized in `docs/project-data.md`; do not copy them here.** Normative
@@ -355,6 +356,22 @@ P6.6 implementation (2026-11-02, multi-OCR core):
   panel widget tests. Real-device visual/OCR quality and real dictionary
   suggestion quality remain Wave 4/P6.6 device acceptance.
 
+P6.6 automated closeout (2026-11-03):
+
+- The P6.6 implementation is frozen for automated verification: `flutter
+  analyze` is clean, the suite has 350 declarations (366 executed cases) in 77
+  files, and the debug APK builds. The current test baseline is recorded in
+  `docs/project-data.md` §2.1.
+- No new P6.6 feature is added in this closeout. The remaining P6.6 work is
+  device acceptance (real manga pages, forced MangaOCR, the real 463k-entry
+  dictionary, 200% font, re-analysis latency) and the gaps listed below.
+- Known functional gaps kept for P6.7: the comparison panel is mounted only
+  when a displayable result exists, so a run that fails before producing one
+  has no multi-OCR entry; per-variant citations are still rebuilt only after
+  the user commits a variant; only the selected variant is written to
+  `AgentSourceVersion`, and all-variant persistence belongs to the P6.7
+  history work.
+
 2026-11-02 stability/feedback fixes:
 
 - **Provider HTTP 400 hardening**: before any request the adapter validates a
@@ -509,6 +526,10 @@ Current known gaps:
 - P6.6 device acceptance is pending: horizontal/vertical variant quality on
   real manga pages, dictionary candidate usefulness against the real 463k-entry
   dictionary, contrast/overflow at 200% font, and re-analysis latency.
+- P6.6 variant comparison is mounted only when a displayable result exists
+  (`agent_message_list.dart`); an OCR/analysis failure before that point has no
+  multi-OCR comparison or repair entry yet. Keep this as a documented P6.6/P6.7
+  follow-up rather than claiming every failure path is covered.
 - Native OCR calls are serialized through a queue; two image comparisons show
   independent loading/error state and can both be started, but the second waits
   for the first engine call to finish.

@@ -4,10 +4,10 @@
 > 开发数据统计和固定 UI 文案以本文件为准。其他文档只引用本文件对应小节，不再
 > 复制具体数值；历史记录可以保留“当时值”，但必须标注为历史快照。
 >
-> - last_verified: 2026-11-01
-> - last_verified_code_commit: `c6094b5`（`fix: OCR模型页面操作逻辑修正`）
-> - last_doc_sync: 2026-11-01（引用结构整理；补记 Agent 语言默认值决策，不改变
->   代码验证结果）
+> - last_verified: 2026-11-03
+> - last_verified_code_commit: `04bf192`（`fix: 修复富文本后处理逻辑和prompt不统一`）
+> - last_doc_sync: 2026-11-03（P6.6 自动化收尾：同步测试基线、多图/多变体描述与
+>   当前提交锚点）
 > - 设备基线: `Medium_Phone_API_36.1`（x86_64 模拟器，API 36）；无 arm64 真机
 > - 维护规则：数据变化时只改本文件，并同步更新 `last_verified`/
 >   `last_verified_code_commit`；其他文档的引用链接不需要改。不要把本文件自身的
@@ -39,14 +39,14 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **336** |
-| 当前测试文件数 | **75** |
+| 当前 test/testWidgets 声明数 | **350** |
+| 当前测试文件数 | **77** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | 336 passed |
-| 最近 `flutter build apk --debug` | success（2026-11-02 provider 可选输出上限后） |
+| 最近 `flutter test` | **366 passed**（声明 350；参数化/循环用例产生 366 个执行用例） |
+| 最近 `flutter build apk --debug` | success（2026-11-03 P6.6 收尾验证） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
-> 该数字对应当前未提交工作区（Wave 3 + prompt 集中/覆盖标签/raw surface + P6.6）。
+> 该数字对应 P6.6 自动化收尾工作区（含 Wave 3、P6.6 多 OCR、P7.0 富文本修正）。
 > 新增/删除测试后只更新本节。
 
 ### 2.2 历史测试基线（不要当作当前值）
@@ -68,7 +68,8 @@
 | P6.6 稳定性修正 | 332 | provider 预校验/400 分类、覆盖审查独立预算与容错、多 OCR 每图状态/UI、UniDic 清除 |
 | Provider 推理修正 | 333 | OpenAI-compatible 默认不发送 max_tokens、reasoning-only 快速失败不重试、流式进度节流 |
 | Provider 可选输出上限 | 336 | provider 设置 maxOutputTokens、OpenAI/Anthropic payload 覆盖与持久化测试 |
-| 当前 | **336** | 见 §2.1 |
+| P6.6 收尾 / P7.0 富文本修正 | 366（声明 350） | 富文本/YOMI 标签处理、结果渲染与 P6.6 多 OCR 回归；真机验收待做 |
+| 当前 | **366（声明 350）** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
@@ -185,7 +186,7 @@ arm64 真机性能另需复测。
 | Provider 最大输出 tokens | 可选，0=未设置 | Agent 设置页；存于 `capabilities_json.max_output_tokens` |
 | 模型额外工具调用 | 0 | 当前固定流水线、模型无工具 |
 | 每词典档案 Markdown | 2,000 字符 | **设计/契约目标；当前代码未强制** |
-| 输入 variants / sources | 4 / 8 | Schema 契约上限；当前 UI 单图 |
+| 输入 variants / sources | 4 / 8 | Schema 契约上限；当前 UI 支持多图（最多 6），每图最多 4 个 `(engine, mode)` 变体（P6.6） |
 | 每次 run 图片数 | 6 | `AgentLimits.maxImagesPerRun`（F11 已实现） |
 | 覆盖审查 missing / duplicate / fallback | 20 / 10 / 1 | `AgentLimits`（F7 已实现，单次回退） |
 | 历史 tool loop | 6 次 / 60s / 90s | **未来参考，不是当前实现** |
@@ -230,7 +231,7 @@ arm64 真机性能另需复测。
 
 | 项 | 值 |
 |---|---|
-| 最近验证代码提交 | `40a480d` + Wave 2 follow-up 未提交工作区 |
+| 最近验证代码提交 | `04bf192`（P6.6 自动化收尾验证基线） |
 | Phase 5 基线 | `2534c3a` |
 | Phase 6 P6.1–P6.5 提交起点 | `7be4b81` |
 | Phase 6 文档提交 | `b208456` |
