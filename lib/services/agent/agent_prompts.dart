@@ -42,6 +42,18 @@ Rules:
 - Do not write confidence values, percentages, "置信度", context_inference,
   dictionary_fact or any internal marker in the prose.
 - Return at least one TRANSLATION and one SEGMENT.
+
+READING ANNOTATIONS:
+- In TRANSLATION and MEANING prose only, when a surface form is immediately
+  followed by its reading in parentheses, wrap only the parenthetical reading
+  in [YOMI]...[/YOMI]:
+  base[YOMI]（reading）[/YOMI]
+  Replace the placeholders with the actual surface form and reading.
+- YOMI is only for a reading annotation. Never use it for ordinary
+  parenthetical explanations, translations, citations, quoted source text,
+  WORD reading fields, GRAMMAR, OPTION, UNRESOLVED or SUPPLEMENT.
+- Keep YOMI tags balanced and un-nested. Never move a YOMI block to another
+  surface form. A repair pass must preserve every YOMI block unchanged.
 - quote and id attributes must come from the provided quotes/token/pattern ids.
   Copy quoted text only through the quote id; do not rewrite or concatenate the
   original text.
@@ -101,7 +113,14 @@ String structureUnavailableInstruction() {
       'unresolved; never claim token/grammar analysis in this run.';
 }
 
-String defaultImageUserRequest() => '解释这段日文并给出词典依据';
+String defaultImageUserRequest(AgentResponseLanguage language) {
+  return switch (language) {
+    AgentResponseLanguage.chinese => '解释这段日文并给出词典依据',
+    AgentResponseLanguage.english =>
+      'Explain this Japanese text and cite dictionary evidence.',
+    AgentResponseLanguage.japanese => 'この日本語を説明し、辞書の根拠を示してください。',
+  };
+}
 
 String buildAnalysisUserPrompt({
   required AgentInputEnvelope input,
@@ -163,9 +182,12 @@ Your previous response failed validation or tag-integrity checks. Keep every
 word of readable text unchanged. Do not translate, rewrite, summarize, delete or
 add any content.
 Only add or fix the missing plain-text tags so the response matches the tag
-format above. If a required quote/id/citation is missing, reuse the exact ids
-from the provided evidence; never invent new ones. Return only the corrected
-tagged text, with no explanation.
+format above. Preserve every well-formed [YOMI]...[/YOMI] block exactly; if a
+YOMI block is unbalanced, close it without changing its content. Never add,
+delete, move, reorder or rewrite a YOMI annotation. If a required
+quote/id/citation is missing, reuse the exact ids from the provided evidence;
+never invent new ones. Return only the corrected tagged text, with no
+explanation.
 '''),
         ],
       ),
@@ -220,9 +242,10 @@ LANGUAGE CORRECTION TASK:
 Your previous response used the wrong language in some human-readable prose.
 Rewrite only those prose fields into the selected answer language. Keep every
 tag, attribute, quote id, token/pattern id, citation id, citation, word form,
-reading and quoted source text unchanged. Do not add, remove, merge or split
-claims. Do not change the epistemic type of any segment. Return only the
-corrected tagged text, with no explanation.
+reading and quoted source text unchanged. Preserve every existing
+[YOMI]...[/YOMI] block exactly; never add, delete, move, reorder or rewrite one.
+Do not add, remove, merge or split claims. Do not change the epistemic type of
+any segment. Return only the corrected tagged text, with no explanation.
 '''),
         ],
       ),
@@ -626,6 +649,9 @@ String buildDictionaryProfileBatchUserPrompt(
 /// Rich-text formatting is a post-processing task: the model may only insert
 /// inline formatting tags between existing characters. The caller must still
 /// strip the tags and compare the result with the original text before using it.
+///
+/// Closing tags use a forward slash (`[/TAG]`). Backslashes in this project
+/// appear only inside Dart regular-expression literals, never in prompt text.
 LlmRequest buildRichTextPostProcessRequest({
   required String model,
   required String text,
@@ -638,19 +664,35 @@ LlmRequest buildRichTextPostProcessRequest({
         role: LlmRole.system,
         parts: <LlmTextPart>[
           LlmTextPart('''
-你的任务是给提供的文本插入格式标签。绝对禁止修改、删除或增加原文中的任何一个字符（包括标点符号、空格、换行）。你只能在原文的字符之间插入[RUBY=xxx]、[BOLD] 和[UNDERLINE] 标签。输出必须包含完整的原文。
+Your task is to insert display-formatting tags into the provided text. It is
+absolutely forbidden to modify, delete or add any character of the original
+text (including punctuation, spaces and line breaks), except that you may
+delete a complete [YOMI]...[/YOMI] block only when you replace its reading
+annotation with an equivalent [RUBY] span. You may only insert [RUBY=xxx],
+[BOLD] and [UNDERLINE] tags between existing characters of the original text.
+The output must contain the complete original text except for whole YOMI
+blocks you are allowed to delete.
 
-标签格式：
-[RUBY=なにとぞ]何卒[/RUBY]
-[BOLD]词条标题[/BOLD]
-[UNDERLINE]重点内容[/UNDERLINE]
+TAG FORMAT:
+[RUBY=reading]base[/RUBY]
+[BOLD]short text[/BOLD]
+[UNDERLINE]short text[/UNDERLINE]
 
-规则：
-- 标签必须成对，禁止嵌套标签。
-- RUBY 的方括号内只写平假名/片假名读音；方括号后的 base 必须是原文中连续的日文文本。
-- BOLD/UNDERLINE 只能包住原文中已有的短文本，不能跨行。
-- 不输出 Markdown、HTML、代码块、解释、前后缀或任何额外文字。
-- 如果无法确定，原样返回原文。
+Rules:
+- Tags must be paired and must not nest.
+- RUBY is language-agnostic. Replace the placeholders with the actual reading
+  and source text. Its bracket contains a pronunciation annotation only;
+  markup and line breaks are forbidden. The base after the opening tag must be
+  contiguous text copied from the original, whatever its script.
+- Never output a RUBY whose reading is identical to its base, for example
+  [RUBY=reading]reading[/RUBY]. If they are identical, do not add RUBY.
+- The input may contain [YOMI]...[/YOMI] pronunciation annotations, for
+  example base[YOMI]（reading）[/YOMI]. You may delete the whole block (tags and
+  enclosed content) only when converting that reading to RUBY. Otherwise keep
+  the block exactly as supplied. Never add, rewrite, move or nest a YOMI block.
+- BOLD/UNDERLINE only wrap short existing text and must not cross a line break.
+- Do not output Markdown, HTML, code fences, explanations, prefixes or suffixes.
+- If you are uncertain, return the original text exactly.
 '''),
         ],
       ),

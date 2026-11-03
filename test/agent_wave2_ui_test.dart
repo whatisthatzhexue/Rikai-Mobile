@@ -274,6 +274,37 @@ void main() {
     expect(markdown, isNot(contains('/tmp/')));
   });
 
+  test('copyable Markdown strips YOMI wrappers but keeps the reading', () {
+    const yomiAnalysis = AgentAnalysis(
+      sourceId: 'src-1',
+      translation: <AgentTranslation>[
+        AgentTranslation(quoteId: 'q1', text: '请多关照[YOMI]（ます）[/YOMI]。'),
+      ],
+      segments: <AgentSegment>[
+        AgentSegment(
+          id: 'seg-1',
+          quoteId: 'q1',
+          interpretation: '请务必[YOMI]（ます）[/YOMI]。',
+          epistemic: AgentEpistemic.dictionaryFact,
+        ),
+      ],
+    );
+    final result = AgentRunResult(
+      input: _result.input,
+      evidence: _result.evidence,
+      quotes: _result.quotes,
+      analysis: yomiAnalysis,
+      validation: _result.validation,
+      sources: _result.sources,
+      dictionaryProfiles: _result.dictionaryProfiles,
+    );
+    final markdown = buildAgentResultMarkdown(result, _strings);
+
+    expect(markdown, contains('请多关照（ます）。'));
+    expect(markdown, contains('请务必（ます）。'));
+    expect(markdown, isNot(contains('[YOMI]')));
+  });
+
   testWidgets('retry dictionary shows a spinner while the request is running', (
     tester,
   ) async {

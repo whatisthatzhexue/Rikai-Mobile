@@ -310,8 +310,9 @@ Phase 0–5 已全部完成并发布 1.0（验收记录见 `docs/project-history
 实现（自动化测试）。同日后续修正：provider 请求预校验/非法字符清理/400 按真实
 error body 分类（不设统一 max_tokens 上限；OpenAI-compatible 默认不发送
 max_tokens，provider 可选 maxOutputTokens 覆盖；只有 reasoning、无正文时快速失败
-且不重复请求）、结果摘要富文本后处理（RUBY/BOLD/UNDERLINE，剥离标签逐字符
-diff，失败降级纯文本；P7.0 增量，完整 P7 计划见
+且不重复请求）、结果摘要富文本后处理（RUBY/BOLD/UNDERLINE；结果生成模型用
+`[YOMI]` 标记读音，后处理允许整块删除 YOMI，保留块必须内容/位置不变；剥离标签
+逐字符 diff，冗余 RUBY 取消，失败降级纯文本；P7.0 增量，完整 P7 计划见
 `docs/agent_docs/p7-task-decomposition-plan.md`）、覆盖审查紧凑输入/单项容错/独立预算
 （`AgentLimits.coverage*`，CJK 系数 1.0）/自动修正日志/规范化后修复、多 OCR
 每图独立 loading/可点缩略图、UniDic 空输入清除。多 OCR 显式对比改为
@@ -499,7 +500,7 @@ lib/services/agent/agent_validator.dart                       # schema/quote/ord
 lib/services/agent/agent_language_validator.dart              # F1b 结果人类字段语言后校验
 lib/services/agent/agent_prompts.dart                         # 所有 Agent prompt 文本/请求构造（禁止散落硬编码）
 lib/services/agent/rich_text_post_processor.dart              # P7.0 摘要富文本后处理/diff 防线
-lib/core/utils/rich_text_tags.dart                            # RUBY/BOLD/UNDERLINE 标签解析/剥离
+lib/core/utils/rich_text_tags.dart                            # RUBY/BOLD/UNDERLINE/YOMI 标签解析/剥离
 lib/features/agent/agent_rich_text.dart                       # Agent 富文本渲染（ruby/bold/underline）
 lib/services/agent/agent_coverage_parser.dart                 # F7 [COVERAGE] 标签解析/完整性
 lib/services/agent/coverage_support.dart                      # F7 可追溯性/重复验证/证据合并

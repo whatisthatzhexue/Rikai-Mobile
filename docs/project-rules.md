@@ -85,7 +85,7 @@
 | R-AGENT-20 | MUST | 多 OCR 版本只由用户显式触发；不得自动合并版本或静默替换原文；采用变体/词典候选后必须重新分词、查词和分析；图片/路径/base64/Key 不得进入该流程或 provider 请求 | 变体/修复测试；请求体断言无图片/路径/Key | `phase6-agent-contracts` §3.1 |
 | R-AGENT-21 | MUST | Provider 请求发送前必须本地校验：model 非空、丢弃空白消息、至少一条非 system、Anthropic 合并连续 role、清理非法 Unicode/控制字符、`max_tokens` 为正整数；不得假设统一输出上限，400 必须按真实 error body 分类 | provider payload/HTTP body 测试 | `phase6-agent-contracts` §11 |
 | R-AGENT-22 | MUST | 覆盖审查是可选增强：使用 `AgentLimits.coverageReviewMaxTokens` 独立预算（MISSING/duplicate 上限 × 长度 + 标签开销 + 安全边际），不跟随分析请求；单项畸形只丢弃该项，标签/请求失败保留原证据；不得让整次 run 失败或伪装成功 | coverage parser/orchestrator/预算测试 | `phase6-agent-contracts` §5.1 |
-| R-AGENT-23 | MUST | 富文本后处理只能插入 `[RUBY]`/`[BOLD]`/`[UNDERLINE]` 显示标签，不得改动原文；采用前必须剥离标签后与原文逐字符严格相等，否则丢弃并降级纯文本 | `rich_text_tags`/processor/orchestrator 测试；`T-135` | `rich_text_post_processor.dart`、契约 §5.3 |
+| R-AGENT-23 | MUST | 富文本后处理只能插入 `[RUBY]`/`[BOLD]`/`[UNDERLINE]` 显示标签，不得改动原文；唯一例外是整块删除 `[YOMI]...[/YOMI]`（仅当替换为等价 RUBY）。采用前必须剥离标签、按 YOMI 规则比较后与原文逐字符严格相等；保留的 YOMI 必须内容/位置不变，冗余 RUBY（读音等于 base）必须移除；否则丢弃并降级纯文本 | `rich_text_tags`/processor/orchestrator 测试；`T-135` | `rich_text_post_processor.dart`、契约 §5.3 |
 
 ## 5. UI / UX（R-UI）
 

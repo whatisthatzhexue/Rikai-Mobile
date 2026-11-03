@@ -8,12 +8,110 @@ final RegExp richTextTagPattern = RegExp(
   caseSensitive: false,
 );
 
-final RegExp _kanaReadingPattern = RegExp(r'^[ぁ-ゖァ-ヺー・]+$');
+/// A reading gloss emitted by the result-generation model. The rich-text
+/// formatter may delete the whole block when it adds an equivalent RUBY span.
+final RegExp yomiBlockPattern = RegExp(
+  r'\[YOMI\]([\s\S]*?)\[/YOMI\]',
+  caseSensitive: false,
+);
+
+final RegExp yomiTagPattern = RegExp(r'\[/?YOMI\]', caseSensitive: false);
+
+final RegExp _yomiOpenClosePattern = RegExp(
+  r'\[(/?YOMI)\]',
+  caseSensitive: false,
+);
+
+final RegExp _rubyBlockPattern = RegExp(
+  r'\[RUBY=([^\]]*)\]([\s\S]*?)\[/RUBY\]',
+  caseSensitive: false,
+);
+
+/// Reading annotations are intentionally language-agnostic and do not
+/// enumerate scripts. Brackets, control characters and line breaks are not
+/// permitted.
+final RegExp _readingPattern = RegExp(r'^[^\[\]\r\n\x00-\x1F]+$');
 
 String stripRichTextTags(String text) =>
     text.replaceAll(richTextTagPattern, '');
 
-/// True when every tag is paired, not nested, and RUBY readings are kana.
+/// Removes the YOMI tags but keeps the parenthetical reading for plain display.
+String stripYomiTags(String text) => text.replaceAll(yomiTagPattern, '');
+
+/// Removes whole YOMI blocks (tags + reading). Used only by the diff guard so
+/// the formatter is allowed to replace a gloss with RUBY.
+String stripYomiBlocks(String text) => text.replaceAll(yomiBlockPattern, '');
+
+List<String> yomiContents(String text) => <String>[
+  for (final match in yomiBlockPattern.allMatches(text)) match.group(1) ?? '',
+];
+
+bool isWellFormedYomi(String text) {
+  var depth = 0;
+  for (final match in _yomiOpenClosePattern.allMatches(text)) {
+    final closing = (match.group(1) ?? '').startsWith('/');
+    if (closing) {
+      if (depth == 0) return false;
+      depth--;
+    } else {
+      if (depth > 0) return false;
+      depth++;
+    }
+  }
+  return depth == 0;
+}
+
+/// Removes a RUBY pair when its reading is identical to its base. Such a pair
+/// adds no information and is the most common model-generated noise, e.g.
+/// `[RUBY=reading]reading[/RUBY]`.
+String stripRedundantRubyTags(String text) {
+  return text.replaceAllMapped(_rubyBlockPattern, (match) {
+    final reading = (match.group(1) ?? '').trim();
+    final base = match.group(2) ?? '';
+    if (reading.isNotEmpty && reading == base) return base;
+    return match.group(0) ?? '';
+  });
+}
+
+/// True when every YOMI block kept in [candidate] also exists, unchanged and
+/// at the same base position, in [source]. Deletion is allowed; creation,
+/// rewriting and moving are not.
+bool allowsYomiDeletion(String source, String candidate) {
+  final original = _yomiBlocks(source);
+  final kept = _yomiBlocks(candidate);
+  var index = 0;
+  for (final block in kept) {
+    var found = false;
+    while (index < original.length) {
+      final sourceBlock = original[index++];
+      if (sourceBlock.content == block.content &&
+          sourceBlock.before == block.before) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) return false;
+  }
+  return true;
+}
+
+List<({String content, String before})> _yomiBlocks(String text) {
+  return <({String content, String before})>[
+    for (final match in yomiBlockPattern.allMatches(text))
+      (
+        content: match.group(1) ?? '',
+        // Compare the base text before the annotation, ignoring formatting
+        // tags. This prevents a kept annotation from being moved onto a
+        // different surface while still allowing whole-block deletion.
+        before: stripRichTextTags(
+          stripYomiBlocks(text.substring(0, match.start)),
+        ),
+      ),
+  ];
+}
+
+/// True when every tag is paired, not nested, and every RUBY reading is a safe
+/// pronunciation annotation.
 bool isWellFormedRichText(String text) {
   final stack = <String>[];
   for (final match in richTextTagPattern.allMatches(text)) {
@@ -22,7 +120,7 @@ bool isWellFormedRichText(String text) {
     if (lower.startsWith('ruby=')) {
       if (stack.isNotEmpty) return false;
       final reading = raw.substring('ruby='.length).trim();
-      if (reading.isEmpty || !_kanaReadingPattern.hasMatch(reading)) {
+      if (reading.isEmpty || !_readingPattern.hasMatch(reading)) {
         return false;
       }
       final close = text.indexOf('[/RUBY]', match.end);

@@ -82,7 +82,46 @@ void main() {
       );
       expect(prompt, contains('Simplified Chinese'));
       expect(prompt, contains('word forms, readings and dictionary examples'));
+      expect(prompt, contains('[YOMI] blocks are allowed'));
+      expect(
+        prompt,
+        contains('Do not answer in Japanese merely when the source'),
+      );
       expect(prompt, isNot(contains('same language as the user request')));
     },
   );
+
+  test('analysis prompt requires YOMI for reading annotations', () {
+    final prompt = analysisSystemPrompt(
+      AgentMode.strict,
+      AgentResponseLanguage.chinese,
+    );
+    expect(prompt, contains('READING ANNOTATIONS'));
+    expect(prompt, contains('base[YOMI]（reading）[/YOMI]'));
+    expect(prompt, contains('Never move a YOMI block'));
+  });
+
+  test('prompt closing tags use a forward slash', () {
+    final prompt = analysisSystemPrompt(
+      AgentMode.strict,
+      AgentResponseLanguage.chinese,
+    );
+    expect(prompt, contains('[/TRANSLATION]'));
+    expect(prompt, isNot(contains(r'[\/TRANSLATION]')));
+  });
+
+  test('default image request follows the selected output language', () {
+    expect(
+      defaultImageUserRequest(AgentResponseLanguage.chinese),
+      contains('解释这段日文'),
+    );
+    expect(
+      defaultImageUserRequest(AgentResponseLanguage.english),
+      contains('Explain this Japanese text'),
+    );
+    expect(
+      defaultImageUserRequest(AgentResponseLanguage.japanese),
+      contains('この日本語'),
+    );
+  });
 }

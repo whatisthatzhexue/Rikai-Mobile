@@ -271,7 +271,7 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 | 对话气泡圆角 | `agentBubbleRadius` | 16（`AppRadius.xl`）；指向发送者的一角 4（`agentBubbleTailRadius`） |
 | 消息最大宽度 | `agentMessageMaxWidth` | 80%（字号放大到 200% 时允许 90%，禁止满宽） |
 | 模型/模式标签 | `agentModelLabel` | 12sp，`textSecondary`，位于 AI 气泡顶部 |
-| 富文本振假名/强调 | `rubyReadingSize`/`rubyReadingColor`/`richTextUnderlineColor` | RUBY 读音为主字号 55%、`primary`；BOLD `w600`；UNDERLINE `primary` 下划线；只用于显示标签，不改变正文 |
+| 富文本读音/强调 | `rubyReadingSize`/`rubyReadingColor`/`richTextUnderlineColor` | RUBY 发音标注为主字号 55%、`primary`；BOLD `w600`；UNDERLINE `primary` 下划线；只用于显示标签，不改变正文 |
 | 系统/工具消息 | `agentSystemMessage` | 居中、14sp、`textSecondary`、无气泡 |
 | 会话设置条 | `agentSessionSettingsBar` | 可见高 32、触控 ≥40，`surfaceMuted`，14sp；展开面板复用现有筛选条 |
 | 状态条 | `agentStatusBar` | 高 24–32，`surfaceMuted`，14sp，不遮挡消息 |

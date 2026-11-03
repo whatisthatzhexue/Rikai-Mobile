@@ -86,4 +86,32 @@ Some prose context_inference（90%） that should be ignored.
       );
     },
   );
+
+  test(
+    'preserves YOMI annotations and rejects malformed ones structurally',
+    () {
+      const raw = '''
+[TRANSLATION quote="q1"]请多关照[YOMI]（ます）[/YOMI]。[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]正式请求[YOMI]（ます）[/YOMI]。[/MEANING]
+[WORD id="t1"]何卒||请务必|source-1[/WORD]
+[/SEGMENT]
+''';
+      expect(analysisTagIntegrityErrors(raw), isEmpty);
+      final analysis = parseTaggedAnalysis(raw, sourceId: 'src-1');
+      expect(analysis, isNotNull);
+      expect(analysis!.translation.single.text, contains('[YOMI]（ます）[/YOMI]'));
+      expect(
+        analysis.segments.single.interpretation,
+        contains('[YOMI]（ます）[/YOMI]'),
+      );
+      expect(
+        analysisTagIntegrityErrors(
+          '[TRANSLATION quote="q1"]请多关照[YOMI]（ます）[/TRANSLATION]'
+          '[SEGMENT type="fact" quote="q1"][MEANING]解释[/MEANING][/SEGMENT]',
+        ),
+        isNotEmpty,
+      );
+    },
+  );
 }

@@ -1,4 +1,5 @@
 import '../../core/models/agent/agent_analysis.dart';
+import '../../core/utils/rich_text_tags.dart';
 import 'tag_block_integrity.dart';
 
 /// Parser-side weights for OPTION blocks. The model does not emit numbers;
@@ -21,7 +22,7 @@ const _analysisBlockTags = <String>{
 /// Reports unbalanced or mis-nested analysis blocks. Parsing may still succeed
 /// on a truncated response; callers use these errors to request repair.
 List<String> analysisTagIntegrityErrors(String raw) {
-  return tagBlockIntegrityErrors(
+  final errors = tagBlockIntegrityErrors(
     raw,
     blockTags: _analysisBlockTags,
     rootOnlyTags: const <String>{
@@ -37,7 +38,11 @@ List<String> analysisTagIntegrityErrors(String raw) {
       'GRAMMAR': 'SEGMENT',
     },
     singleInParent: const <String>{'MEANING'},
-  );
+  ).toList();
+  if (!isWellFormedYomi(raw)) {
+    errors.add('YOMI 标签必须成对且不能嵌套');
+  }
+  return List<String>.unmodifiable(errors);
 }
 
 /// Parses the flat, tag-delimited analysis format used by the new prompts.

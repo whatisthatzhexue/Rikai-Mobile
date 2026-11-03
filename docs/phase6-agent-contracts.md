@@ -586,8 +586,10 @@ COVERAGE 根块唯一、MISSING/DUPLICATE/NOTES 必须位于 COVERAGE 内、同�
 
 - `AgentResponseLanguage` 默认 `zh`；旧 `follow` 迁移为 `zh`，不得按输入假名/
   拉丁字符推断语言。**已实现**。
-- system prompt 要求所有人类可读字段使用目标语言；日语仅用于原文 quote、词形、
-  读音、词典例句。**已实现**；`AgentUiStrings` 同步 Agent 本地文案。
+- system prompt 要求所有人类可读字段使用目标语言；源语言形式仅用于原文 quote、
+  词形、读音、词典例句，以及紧邻 `[YOMI]` 发音标注的表面形。RUBY/YOMI 是语言
+  无关的发音标注，不限定书写系统。**已实现**；`AgentUiStrings` 同步 Agent 本地
+  文案。
 - 结果后校验只检查人类可读字段（translation/segments interpretation/word
   sense/grammar explanation/unresolved reason/model supplement），不检查原文
   与 citation 摘要。偏离目标语言时允许一次语言修复；仍偏离则保留结果并显示
@@ -603,17 +605,32 @@ COVERAGE 根块唯一、MISSING/DUPLICATE/NOTES 必须位于 COVERAGE 内、同�
 结果生成后，可选一次轻量模型后处理，只允许插入显示标签：
 
 ```text
-[RUBY=なにとぞ]何卒[/RUBY]
+[RUBY=reading]base[/RUBY]
 [BOLD]短文本[/BOLD]
 [UNDERLINE]短文本[/UNDERLINE]
 ```
 
-- 标签必须成对、禁止嵌套；RUBY 的 `base` 必须是原文连续文本，读音只允许假名。
-- 模型不得修改、删除或增加原文任何字符（含标点/空格/换行）；prompt 使用固定
-  严苛约束，见 `agent_prompts.dart` 的 `buildRichTextPostProcessRequest`。
-- 代码端必须先用 `stripRichTextTags` 剥离标签，再与原文逐字符严格比较；只有完全
-  相等才采用。任何差异、未闭合/嵌套标签、空输出或 provider 失败都丢弃后处理结果，
-  降级渲染纯文本，不影响核心结果。
+结果生成模型可在 `[TRANSLATION]` 与 `[MEANING]` 的解释文字中，把紧邻表面形的
+读音标注包成 `[YOMI]（读音）[/YOMI]`，例如：
+
+```text
+base[YOMI]（reading）[/YOMI]
+```
+
+- 标签必须成对、禁止嵌套；RUBY 的 `base` 必须是原文连续文本。RUBY 是语言无关的
+  发音标注，不限定书写系统，但不能包含标签或换行。
+- 富文本后处理模型不得修改、删除或增加原文任何字符（含标点/空格/换行）；唯一
+  例外是：当它把某个 YOMI 读音替换为等价 RUBY 时，可以删除整个 YOMI 块（标签及
+  包裹内容）。不得新增、改写、移动或嵌套 YOMI 块。prompt 使用固定严苛约束，
+  见 `agent_prompts.dart` 的 `buildRichTextPostProcessRequest`。
+- 代码端必须先用 `stripRichTextTags` 剥离显示标签，并按 YOMI 规则比较：
+  删除的 YOMI 块允许消失；保留的 YOMI 块必须内容不变、位置不变。随后与原文逐字符
+  严格比较；只有完全相等才采用。任何差异、未闭合/嵌套标签、改写/移动 YOMI、空
+  输出或 provider 失败都丢弃后处理结果，降级渲染纯文本，不影响核心结果。
+- 每个 RUBY 的读音不得与被标注 base 完全相同（如 `[RUBY=reading]reading[/RUBY]`）；
+  这类冗余 RUBY 会被移除，保留 base 文本。
+- 保留的 YOMI 块在显示/导出前只剥离标签，保留括号读音（`base（reading）`）；不会
+  把标签原文泄漏到 UI 或 Markdown。
 - 首版作用于 `AgentRunResult.richSummary`（assistant summary）；`buildAgentResultMarkdown`
   仍使用纯文本，复制结果不带标签。失败不回退 run，也不写用户可见错误。
 - 标签只用于本地 Flutter 富文本渲染，不执行 HTML/JS/Markdown，不进入 provider

@@ -4,6 +4,7 @@ import '../../core/models/agent/agent_analysis.dart';
 import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_quote.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/utils/rich_text_tags.dart';
 import '../../services/agent/agent_run.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../services/agent/familiarization/dictionary_familiarization_service.dart'
@@ -472,7 +473,7 @@ class _SegmentBlock extends StatelessWidget {
             ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            segment.interpretation,
+            stripYomiTags(segment.interpretation),
             style: theme.textTheme.bodyLarge?.copyWith(
               fontSize: AgentTokens.body,
               color: AppColors.textPrimary,

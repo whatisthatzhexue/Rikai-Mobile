@@ -46,6 +46,14 @@ const _analysisTagged = '''
 [/SEGMENT]
 ''';
 
+const _analysisWithYomi = '''
+[TRANSLATION quote="q1"]请多关照：何卒[YOMI]（なにとぞ）[/YOMI]。[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]正式请求[/MEANING]
+[WORD id="t1"]何卒||请务必|source-1[/WORD]
+[/SEGMENT]
+''';
+
 const _analysisWithoutCitation = '''
 [TRANSLATION quote="q1"]请多关照。[/TRANSLATION]
 [SEGMENT type="fact" quote="q1"]
@@ -666,6 +674,36 @@ void main() {
     expect(stages, contains(AgentStage.formatting));
     expect(provider.requests, hasLength(2));
   });
+
+  test(
+    'rich-text post-processing may replace a YOMI reading with RUBY',
+    () async {
+      const rich = '请多关照：[RUBY=なにとぞ]何卒[/RUBY]。';
+      final provider = FakeProvider(
+        responseSequence: <String>[_analysisWithYomi, rich],
+      );
+
+      final result =
+          await _orchestrator(
+            provider: provider,
+            limits: const AgentLimits(
+              maxCoverageFallback: 0,
+              enableRichTextPostProcess: true,
+            ),
+          ).run(
+            const AgentRunRequest(
+              sessionId: 's1',
+              mode: AgentMode.strict,
+              dictionaries: <DictionaryInfo>[_dictionary],
+              provider: _provider,
+              userText: '何卒',
+            ),
+          );
+
+      expect(result.richSummary, rich);
+      expect(provider.requests, hasLength(2));
+    },
+  );
 
   test('rich-text output that changes the text falls back to plain', () async {
     final provider = FakeProvider(

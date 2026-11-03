@@ -1252,13 +1252,19 @@ reasoning-effort/thinking-off 参数；要真正缩短思考时间，应把复�
 **误区**：相信模型“只插标签”，直接渲染后处理输出；或只用长度/包含关系判断，
 未逐字符校验。模型可能顺手改标点、删空格、改写词形，导致结果与已校验内容不一致。
 
-**正确做法**：后处理只允许在原文之间插入 `[RUBY=読み]base[/RUBY]`、
-`[BOLD]...[/BOLD]`、`[UNDERLINE]...[/UNDERLINE]`。代码必须先用
-`stripRichTextTags` 剥离所有标签，再与原始字符串**逐字符严格比较**（不 trim、
-不做 Unicode 规范化）；只有完全相等且标签成对、不嵌套、RUBY 读音为假名时才采用。
-任何差异、未闭合/嵌套标签、空输出或 provider 失败都直接丢弃格式化结果，渲染纯
-文本；不弹用户错误、不重试、不把失败输出交给前端。相关实现：
-`rich_text_post_processor.dart`、`rich_text_tags.dart`；契约 §5.3。
+**正确做法**：后处理只允许在原文之间插入 `[RUBY=reading]base[/RUBY]`、
+`[BOLD]...[/BOLD]`、`[UNDERLINE]...[/UNDERLINE]`。结果生成模型会把表面形后的
+读音标注成 `base[YOMI]（reading）[/YOMI]`；后处理可以把整个 YOMI 块（标签和括号
+内容）替换成等价 RUBY，但不得新增、改写、移动或嵌套 YOMI。代码必须先用
+`stripRichTextTags` 剥离显示标签，按 YOMI 规则允许整块删除、要求保留块内容/位置
+不变，再与原始字符串**逐字符严格比较**（不 trim、不做 Unicode 规范化）；只有完全
+相等且标签成对、不嵌套、RUBY 读音为安全发音标注（不限定书写系统）时才采用。
+每个 RUBY 的读音不得等于 base（如 `[RUBY=reading]reading[/RUBY]`），这类冗余
+RUBY 必须取消。保留的 YOMI 只剥离标签，显示/导出为 `base（reading）`。任何差异、
+未闭合/嵌套标签、空输出或 provider 失败都直接丢弃格式化结果，渲染纯文本；不弹
+用户错误、不重试、不把失败输出交给前端。相关实现：`rich_text_post_processor.dart`、
+`rich_text_tags.dart`；契约 §5.3。内部 Prompt 指令统一英文，闭合标签统一用正斜杠
+`[/TAG]`。
 
 ### T-136 SSE 已收到 finish=stop，UI 仍等数秒才显示结果
 

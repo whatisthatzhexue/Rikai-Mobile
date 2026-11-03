@@ -1,5 +1,6 @@
 import '../../core/models/agent/agent_analysis.dart';
 import '../../core/models/agent/agent_profile.dart';
+import '../../core/utils/rich_text_tags.dart';
 
 /// Reports human-readable analysis fields that clearly do not use the selected
 /// answer language. Source quotes, word forms, readings and dictionary
@@ -43,7 +44,8 @@ class AgentLanguageValidator {
     }.toList(growable: false)..sort((a, b) => b.length.compareTo(a.length));
 
     String prepare(String text) {
-      var prepared = _stripParentheticals(text);
+      var prepared = stripYomiTags(text);
+      prepared = _stripParentheticals(prepared);
       prepared = _stripQuotes(prepared);
       for (final term in allowed) {
         prepared = prepared.replaceAll(term, ' ');

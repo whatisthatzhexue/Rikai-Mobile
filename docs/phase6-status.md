@@ -455,23 +455,37 @@ P6.6 implementation (2026-11-02, multi-OCR core):
 P7.0 rich-text post-processing (2026-11-03, incremental):
 
 - After a validated analysis, one small-model pass inserts only
-  `[RUBY=読み]base[/RUBY]`, `[BOLD]...[/BOLD]` and `[UNDERLINE]...[/UNDERLINE]`
-  into the assistant summary. The prompt uses the fixed strict constraint:
-  no character may be changed/deleted/added.
+  `[RUBY=reading]base[/RUBY]`, `[BOLD]...[/BOLD]` and
+  `[UNDERLINE]...[/UNDERLINE]` into the assistant summary. The prompt uses the
+  fixed strict constraint: no character may be changed/deleted/added, except a
+  whole YOMI block may be deleted when replaced by equivalent RUBY.
+- The analysis prompt now asks the result-generation model to wrap reading
+  annotations in `[YOMI]...[/YOMI]` inside `[TRANSLATION]` and `[MEANING]`,
+  e.g. `base[YOMI]（reading）[/YOMI]`. Repair/language-repair prompts preserve
+  YOMI blocks exactly.
 - `rich_text_tags.dart` strips every known tag and checks tag balance/nesting
-  and kana-only ruby readings. The processor accepts the result only when the
-  stripped text equals the original **character for character** (no trim or
-  Unicode normalization). Any change, malformed tag, empty output or provider
-  failure discards the formatted result and renders plain text; the run itself
-  is not failed and no user-facing error is shown.
-- `AgentRunResult.richSummary` carries the accepted text; `AgentRichText`
-  renders ruby/bold/underline with the shared `AgentTokens` ruby tokens. The
-  formatted Markdown export remains plain and the detailed structured view is
-  unchanged in P7.0.
+  and safe pronunciation annotations without assuming a script. It also
+  verifies retained YOMI blocks are unchanged and in the same base position;
+  whole-block deletion is allowed. Redundant RUBY pairs whose reading equals
+  the base (e.g. `[RUBY=reading]reading[/RUBY]`) are removed. The processor
+  accepts the result only when the tag-stripped, YOMI-normalized text equals
+  the original **character for character** (no trim or Unicode normalization).
+  Any change, malformed tag, empty output or provider failure discards the
+  formatted result and renders plain text; the run itself is not failed and no
+  user-facing error is shown.
+- `AgentRunResult.richSummary` carries the accepted text; retained YOMI
+  wrappers are stripped and show as `base（reading）`. `AgentRichText` renders
+  ruby/bold/underline with the shared `AgentTokens` ruby tokens. The formatted
+  Markdown export remains plain and strips YOMI wrappers too; the detailed
+  structured view shows the parenthetical reading.
 - `AgentLimits.enableRichTextPostProcess` (default true) is disabled in tests
   that assert provider request sequences; a `formatting` stage is reported.
+- Internal system Prompt instructions are English-only; validation error text
+  may remain localized. The user/answer language is still controlled by
+  `AgentResponseLanguage`.
 - Tests: `rich_text_post_processor_test.dart`, `agent_rich_text_test.dart`,
-  and rich-text cases in `agent_orchestrator_test.dart`.
+  `analysis_tag_parser_test.dart`, `agent_language_validator_test.dart`, and
+  rich-text cases in `agent_orchestrator_test.dart`.
 - P7.1–P7.4 (task split/model routing/concurrency/streaming) are **not**
   implemented; the plan is in
   [`agent_docs/p7-task-decomposition-plan.md`](agent_docs/p7-task-decomposition-plan.md).

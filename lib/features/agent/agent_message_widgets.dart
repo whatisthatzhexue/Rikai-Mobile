@@ -249,7 +249,7 @@ class AgentAssistantBubble extends StatelessWidget {
         '${mode == AgentMode.strict ? strings.strictShort : strings.looseShort}';
     final summarySource = result == null
         ? ''
-        : result!.richSummary ?? agentSummarySource(result!.analysis);
+        : result!.richSummary ?? agentSummaryDisplayText(result!.analysis);
     final summary = summarySource.isEmpty
         ? strings.assistantFallback
         : summarySource;

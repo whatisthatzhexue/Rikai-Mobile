@@ -15,6 +15,11 @@ class RichTextPostProcessResult {
 
 /// One bounded formatting pass. Any text change or malformed tag is rejected;
 /// the caller then renders the original plain text.
+///
+/// `[YOMI]...[/YOMI]` reading annotations belong to the result-generation
+/// model, not to this pass. A whole YOMI block may be deleted only when the
+/// formatter replaces its reading with RUBY; retained blocks are returned with
+/// their tags stripped, so the UI shows the parenthetical reading.
 class RichTextPostProcessor {
   const RichTextPostProcessor({required LlmPort llm, required String model})
     : _llm = llm,
@@ -65,12 +70,20 @@ class RichTextPostProcessor {
     if (candidate.isEmpty) {
       return const RichTextPostProcessResult(rejectionReason: 'empty_output');
     }
+    if (!isWellFormedYomi(candidate)) {
+      return const RichTextPostProcessResult(rejectionReason: 'malformed_yomi');
+    }
+    if (!allowsYomiDeletion(text, candidate)) {
+      return const RichTextPostProcessResult(rejectionReason: 'yomi_changed');
+    }
     if (!isWellFormedRichText(candidate)) {
       return const RichTextPostProcessResult(rejectionReason: 'malformed_tags');
     }
-    if (stripRichTextTags(candidate) != text) {
+    final normalized = stripRedundantRubyTags(candidate);
+    if (stripRichTextTags(stripYomiBlocks(normalized)) !=
+        stripYomiBlocks(text)) {
       return const RichTextPostProcessResult(rejectionReason: 'text_changed');
     }
-    return RichTextPostProcessResult(taggedText: candidate);
+    return RichTextPostProcessResult(taggedText: stripYomiTags(normalized));
   }
 }

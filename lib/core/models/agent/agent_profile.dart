@@ -55,14 +55,17 @@ enum AgentResponseLanguage {
     AgentResponseLanguage.chinese =>
       'Write every human-readable field (translation, interpretation, word '
           'senses, grammar explanations, unresolved reasons and supplements) '
-          'in Simplified Chinese. Japanese may appear only in quoted source '
-          'text, word forms, readings and dictionary examples. Do not answer '
-          'in Japanese merely because the source text is Japanese.',
+          'in Simplified Chinese. Source-language forms may appear only in '
+          'quoted source text, word forms, readings and dictionary examples. '
+          'Pronunciation annotations in [YOMI] blocks are allowed. Do not '
+          'answer in Japanese merely when the source text is Japanese.',
     AgentResponseLanguage.english =>
       'Write every human-readable field (translation, interpretation, word '
           'senses, grammar explanations, unresolved reasons and supplements) '
-          'in English. Japanese may appear only in quoted source text, word '
-          'forms, readings and dictionary examples.',
+          'in English. Source-language forms may appear only in quoted source '
+          'text, word forms, readings and dictionary examples. Pronunciation '
+          'annotations in [YOMI] blocks are allowed. Do not answer in '
+          'Japanese merely when the source text is Japanese.',
     AgentResponseLanguage.japanese =>
       'Write every human-readable field (translation, interpretation, word '
           'senses, grammar explanations, unresolved reasons and supplements) '

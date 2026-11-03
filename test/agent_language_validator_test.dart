@@ -109,4 +109,15 @@ void main() {
     );
     expect(check.mismatchedFields, isNot(contains('grammar:p1')));
   });
+
+  test('ignores YOMI wrappers when judging readable prose', () {
+    final check = _validator.check(
+      _analysis(
+        translation: '请多关照[YOMI]（ます）[/YOMI]。',
+        meaning: '用于正式请求[YOMI]（ます）[/YOMI]。',
+      ),
+      AgentResponseLanguage.chinese,
+    );
+    expect(check.isMismatch, isFalse);
+  });
 }

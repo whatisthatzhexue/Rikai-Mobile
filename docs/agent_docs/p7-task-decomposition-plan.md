@@ -71,14 +71,20 @@ P6.8 解决“已生成结果如何更早显示”；P7 解决“不要把所有
 输出：只在原文字符之间插入 `[RUBY=读音]base[/RUBY]`、`[BOLD]...[/BOLD]`、
 `[UNDERLINE]...[/UNDERLINE]` 的文本。
 模型：轻量模型或本地模型。
-硬约束：
+硬约束（内部 Prompt 统一英文，实际文本见
+`agent_prompts.dart` 的 `buildRichTextPostProcessRequest`）：
 
-> 你的任务是给提供的文本插入格式标签。绝对禁止修改、删除或增加原文中的任何一个
-> 字符（包括标点符号、空格、换行）。你只能在原文的字符之间插入 `[RUBY=xxx]`、
-> `[BOLD]` 和 `[UNDERLINE]` 标签。输出必须包含完整的原文。
+> It is absolutely forbidden to modify, delete or add any character of the
+> original text (including punctuation, spaces and line breaks), except that
+> a complete `[YOMI]...[/YOMI]` block may be deleted when replaced by an
+> equivalent RUBY span. Only `[RUBY=xxx]`, `[BOLD]` and `[UNDERLINE]` may be
+> inserted. The output must contain the complete original text.
 
-代码端必须剥离标签后与原文逐字符比较；不完全一致就丢弃格式化结果、渲染纯文本。
-标签必须成对、不嵌套，RUBY 读音只允许假名。该任务没有修改原文的权限，因此不能
+结果生成模型可在 `[TRANSLATION]`/`[MEANING]` 中把读音写成
+`base[YOMI]（reading）[/YOMI]`。代码端必须剥离显示标签，并按 YOMI 规则（允许整块
+删除；保留块内容/位置不变）与原文逐字符比较；不完全一致就丢弃格式化结果、渲染
+纯文本。标签必须成对、不嵌套；RUBY 是语言无关的发音标注，不限定书写系统，禁止
+标签/换行；RUBY 读音等于 base 时取消该 RUBY。该任务没有修改原文的权限，因此不能
 用来修错、翻译或补内容。
 
 ### 4.4 可选审查任务

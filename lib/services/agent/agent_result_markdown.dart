@@ -1,5 +1,6 @@
 import '../../core/models/agent/agent_analysis.dart';
 import '../../core/models/agent/agent_evidence.dart';
+import '../../core/utils/rich_text_tags.dart';
 import 'agent_run.dart';
 import 'agent_ui_strings.dart';
 
@@ -34,7 +35,7 @@ String buildAgentResultMarkdown(AgentRunResult result, AgentUiStrings strings) {
       ..writeln('## ${strings.translationTitle}')
       ..writeln();
     for (final item in result.analysis.translation) {
-      buffer.writeln('- ${item.text}');
+      buffer.writeln('- ${stripYomiTags(item.text)}');
     }
     buffer.writeln();
   }
@@ -51,7 +52,7 @@ String buildAgentResultMarkdown(AgentRunResult result, AgentUiStrings strings) {
           ..writeln();
       }
       buffer
-        ..writeln(segment.interpretation)
+        ..writeln(stripYomiTags(segment.interpretation))
         ..writeln();
       final epistemic = switch (segment.epistemic) {
         AgentEpistemic.dictionaryFact => strings.epistemicDictionaryFact,

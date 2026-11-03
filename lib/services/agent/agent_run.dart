@@ -10,6 +10,7 @@ import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/agent/agent_quote.dart';
 import '../../core/models/agent/agent_tool.dart';
 import '../../core/models/dict_info.dart';
+import '../../core/utils/rich_text_tags.dart';
 import 'agent_validator.dart';
 import 'ports/llm_port.dart';
 import 'familiarization/dictionary_familiarization_service.dart'
@@ -119,7 +120,9 @@ class AgentRunResult {
   final Map<String, OcrQuality> ocrQuality;
 
   /// Optional rich-text version of [agentSummarySource]. It is accepted only
-  /// when stripping the formatting tags reproduces the plain source exactly.
+  /// when stripping formatting tags and deleted YOMI blocks reproduces the
+  /// plain source exactly. Any retained YOMI wrappers are removed before this
+  /// value is stored; their parenthetical reading remains.
   final String? richSummary;
 
   List<AgentCitation> get citations => evidence.citations;
@@ -135,9 +138,9 @@ class AgentRunResult {
   }
 }
 
-/// The plain text shown as the assistant bubble's main summary. The rich-text
-/// post-processor must format exactly this string; the UI uses [richSummary]
-/// only when its stripped form equals this value.
+/// The raw assistant summary passed to the rich-text post-processor. It keeps
+/// [YOMI] wrappers so the formatter is allowed to replace a reading annotation
+/// with RUBY while the diff guard verifies every other character.
 String agentSummarySource(AgentAnalysis analysis) {
   if (analysis.translation.isNotEmpty) {
     return analysis.translation.map((item) => item.text).join('\n');
@@ -147,6 +150,11 @@ String agentSummarySource(AgentAnalysis analysis) {
   }
   return '';
 }
+
+/// The plain summary shown when no accepted rich-text form exists. YOMI tags
+/// are removed but their parenthetical reading is kept.
+String agentSummaryDisplayText(AgentAnalysis analysis) =>
+    stripYomiTags(agentSummarySource(analysis));
 
 class AgentRunFailure implements Exception {
   const AgentRunFailure({

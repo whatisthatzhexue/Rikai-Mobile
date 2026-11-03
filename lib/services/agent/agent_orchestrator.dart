@@ -277,7 +277,7 @@ class AgentOrchestrator {
       final llm = _llmFactory(request.provider);
       final requestedUser = request.images.isNotEmpty && userText.isNotEmpty
           ? userText
-          : defaultImageUserRequest();
+          : defaultImageUserRequest(request.responseLanguage);
       final smallModel = request.provider.smallModel.trim().isEmpty
           ? analysisModel
           : request.provider.smallModel.trim();

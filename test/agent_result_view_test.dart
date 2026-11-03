@@ -168,6 +168,49 @@ void main() {
     expect(tapped?.id, 'source-1');
   });
 
+  testWidgets('strips YOMI wrappers in segment interpretations', (
+    tester,
+  ) async {
+    final result = AgentRunResult(
+      input: _result.input,
+      evidence: _result.evidence,
+      quotes: _result.quotes,
+      analysis: AgentAnalysis(
+        sourceId: 'src-1',
+        segments: <AgentSegment>[
+          const AgentSegment(
+            id: 'seg-1',
+            quoteId: 'q1',
+            interpretation: '正式请求[YOMI]（せいしき）[/YOMI]',
+            epistemic: AgentEpistemic.dictionaryFact,
+          ),
+        ],
+      ),
+      validation: _result.validation,
+      sources: _result.sources,
+      dictionaryProfiles: _result.dictionaryProfiles,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentResultView(
+              result: result,
+              onCitationTap: (_) {},
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('正式请求（せいしき）'), findsOneWidget);
+    expect(find.textContaining('[YOMI]'), findsNothing);
+  });
+
   testWidgets('evidence header counts only adopted citations', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

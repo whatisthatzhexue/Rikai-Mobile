@@ -46,7 +46,11 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
   或 UI 中硬编码 prompt 字符串。`analysis_prompts.dart`、`coverage_prompts.dart`、
   `familiarization_prompts.dart` 仅为兼容 re-export，不是独立 prompt 源。
 - **富文本后处理只能插入显示标签**：采用前必须剥离 `[RUBY]`/`[BOLD]`/
-  `[UNDERLINE]` 后与原文逐字符严格比较；不一致就降级纯文本（R-AGENT-23、T-135）。
+  `[UNDERLINE]`，并按 YOMI 规则（允许整块删除、保留块必须内容/位置不变）与原文
+  逐字符严格比较；不一致就降级纯文本。RUBY 读音等于 base 时必须移除该 RUBY。
+  （R-AGENT-23、T-135）
+- **内部系统 Prompt 指令统一英文**：用户/回答语言由 `AgentResponseLanguage` 控制；
+  不要新增中文系统指令（校验错误文本可本地化）。闭合标签统一使用正斜杠 `[/TAG]`。
 - 图片/密钥/运行状态/未实现能力等具体规则见
   [`../project-rules.md`](../project-rules.md) R-SEC/R-AGENT；
   生命周期细节见 [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md)。
