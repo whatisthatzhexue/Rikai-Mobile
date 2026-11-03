@@ -58,6 +58,20 @@ class _RecordingRunController extends AgentRunController {
   }
 }
 
+class _BeautifyRunController extends AgentRunController {
+  @override
+  AgentRunSnapshot build() => const AgentRunSnapshot(
+    runId: 'run-beautify',
+    status: AgentRunStatus.done,
+    sentText: '何卒',
+    richTextFormatting: true,
+  );
+
+  void finishFormatting() {
+    state = state.copyWith(richTextFormatting: false);
+  }
+}
+
 class _FakeImagePicker implements AgentImagePicker {
   @override
   Future<List<String>> pickFromCamera() async => <String>['/tmp/camera.jpg'];
@@ -70,6 +84,58 @@ class _FakeImagePicker implements AgentImagePicker {
 }
 
 void main() {
+  testWidgets(
+    'beautifying banner is dismissible and follows the formatting state',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final preferences = await SharedPreferences.getInstance();
+      final controller = _BeautifyRunController();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            agentProvidersProvider.overrideWith((ref) async => [_provider]),
+            enabledDictionariesProvider.overrideWithValue([_dictionary]),
+            agentRunControllerProvider.overrideWith(() => controller),
+          ],
+          child: MaterialApp(theme: AppTheme.light(), home: const AgentPage()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('界面美化正在进行中…'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(find.text('界面美化正在进行中…'), findsNothing);
+    },
+  );
+
+  testWidgets('beautifying banner closes automatically when formatting ends', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    final controller = _BeautifyRunController();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          agentProvidersProvider.overrideWith((ref) async => [_provider]),
+          enabledDictionariesProvider.overrideWithValue([_dictionary]),
+          agentRunControllerProvider.overrideWith(() => controller),
+        ],
+        child: MaterialApp(theme: AppTheme.light(), home: const AgentPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('界面美化正在进行中…'), findsOneWidget);
+
+    controller.finishFormatting();
+    await tester.pumpAndSettle();
+    expect(find.text('界面美化正在进行中…'), findsNothing);
+  });
+
   testWidgets('home opens the Agent page and shows the provider empty state', (
     tester,
   ) async {

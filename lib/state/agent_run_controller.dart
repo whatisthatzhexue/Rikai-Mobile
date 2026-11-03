@@ -244,13 +244,16 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
             _pendingRichText = rich;
             return;
           }
+          _update(token, (snapshot) {
+            final current = snapshot.result;
+            if (current == null) return snapshot;
+            return snapshot.copyWith(result: current.copyWithRichText(rich));
+          });
+        },
+        onRichTextFormattingChanged: (active) {
           _update(
             token,
-            (snapshot) {
-              final current = snapshot.result;
-              if (current == null) return snapshot;
-              return snapshot.copyWith(result: current.copyWithRichText(rich));
-            },
+            (snapshot) => snapshot.copyWith(richTextFormatting: active),
           );
         },
         // Only the accumulated character count is needed; the raw tagged
@@ -387,6 +390,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       provisionalResult: null,
       retainedResult: null,
       pendingProfileCount: 0,
+      richTextFormatting: false,
       finishedAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -443,6 +447,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       retainedResult: null,
       resultRetainedAfterFailure: fallback != null,
       pendingProfileCount: 0,
+      richTextFormatting: false,
       finishedAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );

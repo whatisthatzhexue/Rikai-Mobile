@@ -59,20 +59,22 @@ class AgentUiStrings {
     '$count image(s) (original images are not saved)',
     '画像 $count 枚（元画像は保存されません）',
   );
-  String get historyClearTitle =>
-      _pick('清空历史记录？', 'Clear history?', '履歴を消去しますか？');
-  String get historyClearBody => _pick(
-    '将删除全部助手历史；语料、词典档案和模型设置不受影响。',
-    'All assistant history will be deleted. Corpus, profiles and model settings are unaffected.',
-    'すべてのアシスタント履歴を削除します。コーパス・辞書プロファイル・モデル設定は残ります。',
-  );
-  String get historyClearAction => _pick('清空', 'Clear', '消去');
   String get historyDeleteTitle =>
       _pick('删除这条记录？', 'Delete this entry?', 'この履歴を削除しますか？');
   String get historyDeleteBody =>
       _pick('删除后无法恢复。', 'This cannot be undone.', '削除すると元に戻せません。');
+  String get historyDeleteSelectedTitle =>
+      _pick('删除选中的记录？', 'Delete selected history?', '選択した履歴を削除しますか？');
+  String historyDeleteSelectedBody(int count) => _pick(
+    '将删除选中的 $count 条分析历史，删除后无法恢复。',
+    'Delete $count selected history entries? This cannot be undone.',
+    '$count 件の選択した履歴を削除します。削除すると元に戻せません。',
+  );
   String get historyDeleted => _pick('已删除', 'Deleted', '削除しました');
-  String get historyCleared => _pick('已清空', 'History cleared', '履歴を消去しました');
+  String get historySelectMode => _pick('多选', 'Select', '選択');
+  String get historyExitSelection => _pick('退出多选', 'Exit selection', '選択を終了');
+  String get historySelectAll => _pick('全选', 'Select all', 'すべて選択');
+  String get historyDeleteSelected => _pick('删除选中', 'Delete selected', '選択を削除');
   String get historyLoadFailed =>
       _pick('无法读取历史记录', 'Unable to read history', '履歴を読み込めません');
   String get historyUnsupportedFormat => _pick(
@@ -169,6 +171,8 @@ class AgentUiStrings {
   );
   String get resultReviewing =>
       _pick('结果已出，正在复核…', 'Result ready; rechecking…', '結果は表示済み、再確認中…');
+  String get beautifyingInProgress =>
+      _pick('界面美化正在进行中…', 'Polishing the result…', '表示を整えています…');
   String get retry => _pick('重试', 'Retry', '再試行');
   String get looseRetry => _pick('宽松重试', 'Retry in loose mode', '緩和モードで再試行');
   String get goSettings => _pick('去设置', 'Settings', '設定');

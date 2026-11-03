@@ -272,6 +272,37 @@ void main() {
       expect(await store.debugRows('agent_citations'), isEmpty);
     });
 
+    test('deletes several runs and their children in one batch', () async {
+      final started = DateTime.fromMillisecondsSinceEpoch(1000);
+      final finished = DateTime.fromMillisecondsSinceEpoch(2000);
+      for (final runId in <String>['run-1', 'run-2']) {
+        await store.saveHistoryRun(
+          runId: runId,
+          sessionId: 'session-$runId',
+          title: runId,
+          userText: runId,
+          status: 'done',
+          mode: AgentMode.strict,
+          providerLabel: 'DeepSeek',
+          smallModel: 'small',
+          complexModel: 'complex',
+          imageCount: 0,
+          startedAt: started,
+          finishedAt: finished,
+          result: runId == 'run-1' ? _sampleResult() : null,
+        );
+      }
+      expect(await store.debugRows('agent_citations'), hasLength(1));
+      expect(await store.debugRows('agent_source_versions'), hasLength(2));
+
+      await store.deleteHistoryRuns(<String>['run-1', 'run-2', 'run-1']);
+
+      expect(await store.listHistory(), isEmpty);
+      expect(await store.debugRows('agent_citations'), isEmpty);
+      expect(await store.debugRows('agent_source_versions'), isEmpty);
+      expect(await store.debugRows('agent_sessions'), isEmpty);
+    });
+
     test('marks in-flight runs interrupted and clears history', () async {
       await store.saveHistoryRun(
         runId: 'run-live',

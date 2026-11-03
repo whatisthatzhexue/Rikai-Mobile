@@ -477,8 +477,9 @@ P7.0 rich-text post-processing (2026-11-03, incremental):
 - After a validated analysis, small-model formatting passes insert
   `[RUBY=reading]base[/RUBY]`, `[BOLD]...[/BOLD]` and
   `[UNDERLINE]...[/UNDERLINE]` into the **detailed** result: the whole “原文”
-  section and each segment interpretation. The AI bubble summary remains plain
-  text and is not formatted. The prompt uses the fixed strict constraint: no
+  section and each segment interpretation. The AI bubble summary renders local
+  RUBY (it does not receive the model's BOLD/UNDERLINE pass). The prompt uses
+  the fixed strict constraint: no
   character may be changed/deleted/added, except a whole YOMI block may be
   deleted when replaced by equivalent RUBY. It has no vague “return the whole
   original text if uncertain” escape; only a specific uncertain word may be
@@ -489,7 +490,10 @@ P7.0 rich-text post-processing (2026-11-03, incremental):
   the word is written. `word（reading）` and
   `word[YOMI]（reading）[/YOMI]` are forbidden. Local word-note sources use the
   same format. Repair/language-repair prompts preserve YOMI blocks exactly.
-  `[TRANSLATION]` stays plain.
+  The formatter prompt requires replacing a source `surface（reading）` with
+  `[RUBY=reading]surface[/RUBY]` (no leftover parentheses) and placing the
+  RUBY inside BOLD/UNDERLINE when the word is emphasized; the local converter
+  is tag-aware as a safety net. `[TRANSLATION]` stays plain.
 - `rich_text_tags.dart` strips every known tag and checks balanced, correctly
   nested tags and safe pronunciation annotations without assuming a script.
   RUBY may be nested inside BOLD/UNDERLINE (and BOLD/UNDERLINE may wrap each
@@ -498,9 +502,12 @@ P7.0 rich-text post-processing (2026-11-03, incremental):
   retained YOMI blocks are unchanged and in the same base position;
   whole-block deletion is allowed. Model RUBY readings are cleaned of full-/
   half-width punctuation before being stored; an empty or base-equal reading
-  removes the RUBY pair. When the formatter wraps an existing
-  `surface（reading）`, the duplicate parentheses are collapsed for display and
-  Markdown export (`richTextToPlain` still emits one `base（reading）`).
+  removes the RUBY pair. The parenthetical converter is tag-aware: when the
+  formatter outputs `[BOLD]surface[/BOLD]（reading）`, the reading is moved
+  inside the emphasis span as `[BOLD][RUBY=reading]surface[/RUBY][/BOLD]` so it
+  inherits bold; duplicate readings after `[/RUBY]`, even across
+  `[/BOLD]`/`[/UNDERLINE]`, are dropped. Markdown export
+  (`richTextToPlain`) still emits one `base（reading）`.
   UNDERLINE is painted by a baseline-relative custom line, not
   `TextStyle.decoration`, so kanji and punctuation such as `；` share the same
   underline height; RUBY bases use the surrounding text metrics so they do not
@@ -515,11 +522,14 @@ P7.0 rich-text post-processing (2026-11-03, incremental):
   pre-converted to RUBY. The formatter prompt keeps only tag format,
   insert-tags-without-changing-text and valid nesting; the “preserve existing
   RUBY”, “do not return unchanged” and “convert YOMI to RUBY” rule groups were
-  removed. Local YOMI→RUBY runs only on provider/validation failure or when
-  the model leaves YOMI in place. Precondition check on the current
-  `docs/agent_output` regression samples: 9/9 annotated readings have matching
-  local evidence (100%). P1 (semantic RUBY-block comparison + local merge) is
-  not applied yet; observe P0 on-device first.
+  removed. `localReadingsToRuby` now runs while building every provisional,
+  final and salvaged result, so the first preview frame already has RUBY;
+  provider/validation failure, retained YOMI/parentheses, or a rejected
+  section falls back to the same local conversion. Precondition check on the
+  current `docs/agent_output` regression samples: 9/9 annotated readings have
+  matching local evidence (100%). The full P1 semantic RUBY-block comparison
+  is still not applied; `copyWithRichText` only keeps the local baseline when
+  a model section is empty or rejected.
 - 2026-11-03 salvage formatting fix: when analysis validation fails and
   `salvageAnalysis` returns a displayable result, the orchestrator now runs the
   same rich-text pass before returning it. Previously the salvage path returned
@@ -527,13 +537,24 @@ P7.0 rich-text post-processing (2026-11-03, incremental):
   BOLD/UNDERLINE even though the post-processor was configured. Debug logs now
   include `[AgentValidation] errors=...` (also `after_repair=...`),
   `[AgentSalvage] errors=...`, and `[AgentRichText] accepted=/changed=/tags=/
-  reason=` so a formatting outage can be distinguished from a validation
-  failure.
+  ruby=/bold=/underline=/local_only=/reason=` so a formatting outage,
+  local-only RUBY fallback and actual model emphasis can be distinguished.
+- 2026-11-03 RUBY-first preview: `_buildResult` pre-fills
+  `richOriginalText`/`richSegmentTexts`/`richSegmentNotes` with
+  `localReadingsToRuby`. The detailed preview therefore shows RUBY as soon as
+  the result appears, instead of showing parentheses until the asynchronous
+  formatter finishes. The AI bubble summary, segment quote lines, non-pitch
+  word-note and grammar-note fallbacks, possible understandings, unresolved
+  reasons and model supplements use the same local conversion, so
+  historical/fallback entries also stop showing bare parenthetical readings.
+  Citation snippets remain dictionary text and are not converted.
 - `AgentRunResult.richOriginalText` carries the whole original section;
   `AgentRunResult.richSegmentTexts` is aligned with `analysis.segments`;
   `AgentRunResult.richSegmentNotes` carries the AI-formatted dictionary-fact
-  word senses/grammar explanations (not citation snippets). Retained YOMI
-  wrappers are stripped and show as `base（reading）`. `AgentRichText` renders
+  word senses/grammar explanations (not citation snippets). All three are
+  pre-filled locally with RUBY before the formatting model runs; retained
+  YOMI and kana parentheses are converted locally, not shown as
+  `base（reading）`. `AgentRichText` renders
   ruby/bold/underline in the detailed original, segment interpretation and
   dictionary-fact notes only. Ruby uses the body text color and aligns the
   annotated base to the line's alphabetic baseline (the reading sits above and
@@ -629,6 +650,11 @@ having a result. Three sequential costs used to sit between them:
    summary with “结果已出，正在复核…”, and the final result replaces it on
    completion. The app controller now passes `onRichTextReady`, so display-only
    formatting starts after the core result and is applied when it arrives.
+   `onRichTextFormattingChanged` drives `AgentRunSnapshot.richTextFormatting`;
+   while true, the Agent page shows a dismissible green “界面美化正在进行中…”
+   banner above the conversation. It disappears automatically on completion,
+   failure or cancellation. Dismissing it only hides the current run's notice
+   and never cancels formatting.
 3. The progress counter now receives only the accumulated character count.
    `_collect` no longer converts the growing buffer to a String on every delta,
    and stage transitions publish the final count; the UI's elapsed label uses a
@@ -747,9 +773,12 @@ plus pitch cases in `evidence_builder_test.dart` and `agent_result_view_test.dar
 - **History UI**: `/agent-history` lists one entry per run (title/date/mode/
   status/provider/image count) and `/agent-history/detail/:runId` is read-only,
   showing the user text, summary, detailed result, citations and OCR variant
-  text. Delete/clear require confirmation and refresh the list immediately
-  after the DB transaction. History citations fall back to the saved snippet
-  when the dictionary cannot be reopened.
+  text. The clear-all action was replaced by the dictionary-profile-style
+  multi-select mode: row checkboxes, select all, and “delete selected” with one
+  confirmation; the batch delete is transactional and refreshes the list
+  immediately. Single-row delete remains available outside selection mode.
+  History citations fall back to the saved snippet when the dictionary cannot
+  be reopened.
 - **Lifecycle**: `AgentHistoryRecorder` is started from app bootstrap, writes
   start/provisional/final states, and marks unfinished runs `interrupted` on
   startup. Profile inbox pending proposals are restored/persisted; dismiss still
@@ -769,9 +798,11 @@ plus pitch cases in `evidence_builder_test.dart` and `agent_result_view_test.dar
 - **Tests/build**: added `agent_history_test`, `agent_history_recorder_test`,
   `agent_history_ui_test`, `agent_store_migration_test`,
   `agent_profile_inbox_persistence_test`, `unidic_accent_parser_test`, plus
-  pitch cases in `evidence_builder_test`/`agent_result_view_test`. Full
-  `flutter test` passed (442 executed, 433 declarations in 85 files) and debug
-  APK built; `docs/project-data.md` was synced with user consent.
+  pitch cases in `evidence_builder_test`/`agent_result_view_test`, plus
+  multi-select history UI/batch-delete and beautifying-banner tests. Full
+  `flutter test` passed (454 executed, 445 declarations in 85 files) and debug
+  APK built; the workspace also contains concurrent rich-text changes from
+  another workstream. `docs/project-data.md` was synced with user consent.
 - **Still pending**: P6.6 failed-run multi-OCR entry and per-variant citation
   preview; P6.7 annotation DSL, provider test connection, accessibility/release
   polish; real-device/visual acceptance.

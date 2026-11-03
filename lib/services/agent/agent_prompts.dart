@@ -234,7 +234,8 @@ Map<String, Object?> _analysisEvidenceJson(AgentEvidenceBundle evidence) {
           'dictionary_title': citation.dictionaryTitle,
           'dictionary_order': citation.dictionaryOrder,
           'entry_key': citation.entryKey,
-          if (citation.matchedKey.isNotEmpty) 'matched_key': citation.matchedKey,
+          if (citation.matchedKey.isNotEmpty)
+            'matched_key': citation.matchedKey,
           'headword': citation.headword,
           'snippet': citation.snippet,
         },
@@ -763,7 +764,9 @@ Your task is to insert display-formatting tags into the provided text. It is
 absolutely forbidden to modify, delete or add any character of the original
 text (including punctuation, spaces and line breaks). You may only insert
 [RUBY=xxx], [BOLD] and [UNDERLINE] tags between existing characters of the
-original text. The output must contain the complete original text.
+original text. The output must contain the complete original text. The only
+exception is a parenthetical reading: `surface（reading）` may be replaced by
+`[RUBY=reading]surface[/RUBY]`; the base characters must not change.
 
 TAG FORMAT:
 [RUBY=reading]base[/RUBY]
@@ -774,9 +777,13 @@ Rules:
 - Tags must be paired and properly nested. RUBY may be placed inside BOLD or
   UNDERLINE, and BOLD/UNDERLINE may wrap each other. Do not put BOLD/UNDERLINE
   inside a RUBY base, and do not nest a tag inside the same tag.
-- If the source already contains a parenthetical reading
-  (surface（reading）), wrap only the base word in RUBY without repeating the
-  reading, for example [RUBY=reading]surface[/RUBY]（reading）.
+- If the source contains a parenthetical reading (surface（reading）), replace
+  the whole annotation with [RUBY=reading]surface[/RUBY]. Do not keep the
+  parentheses and never output both a RUBY pair and a parenthetical reading.
+- When a word with a reading is inside BOLD or UNDERLINE, put the RUBY inside
+  that span so the reading inherits the emphasis, for example
+  [BOLD][RUBY=reading]surface[/RUBY][/BOLD]. Do not close the emphasis tag
+  between the base and its reading.
 - RUBY is language-agnostic. Replace the placeholders with the actual reading
   and source text. Its bracket contains a pronunciation annotation only;
   markup and line breaks are forbidden. The base after the opening tag must be
@@ -820,7 +827,9 @@ Japanese words and Chinese explanations.
 It is absolutely forbidden to modify, delete or add any character of the
 original text (including punctuation, spaces and line breaks). You may only
 insert [RUBY=reading], [BOLD] and [UNDERLINE] tags between existing characters.
-The output must contain the complete original text.
+The output must contain the complete original text. The only exception is a
+parenthetical reading: `surface（reading）` may be replaced by
+`[RUBY=reading]surface[/RUBY]`; the base characters must not change.
 
 TAG FORMAT:
 [RUBY=reading]base[/RUBY]
@@ -841,10 +850,13 @@ Rules:
   inside a RUBY base, and do not nest a tag inside the same tag.
 - Leave any existing [YOMI]...[/YOMI] block exactly as supplied. Do not add,
   delete, move or rewrite one.
-- If the source already contains a parenthetical reading
-  (surface（reading）), wrap only the base word in RUBY without repeating the
-  reading, for example [RUBY=reading]surface[/RUBY]（reading）. The renderer
-  hides the duplicate parenthetical when its content matches the RUBY reading.
+- If the source contains a parenthetical reading (surface（reading）), replace
+  the whole annotation with [RUBY=reading]surface[/RUBY]. Do not keep the
+  parentheses and never output both a RUBY pair and a parenthetical reading.
+- When a word with a reading is inside BOLD or UNDERLINE, put the RUBY inside
+  that span so the reading inherits the emphasis, for example
+  [BOLD][RUBY=reading]surface[/RUBY][/BOLD]. Do not close the emphasis tag
+  between the base and its reading.
 - Do not output Markdown, HTML, code fences, explanations, prefixes or suffixes.
 '''),
         ],

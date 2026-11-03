@@ -111,10 +111,13 @@ AgentRunResult _result() {
   );
 }
 
-AgentHistoryEntry _entry() => AgentHistoryEntry(
-  runId: 'run-1',
+AgentHistoryEntry _entry({
+  String runId = 'run-1',
+  String title = '何卒宜しくお願い致します。',
+}) => AgentHistoryEntry(
+  runId: runId,
   sessionId: 'session-1',
-  title: '何卒宜しくお願い致します。',
+  title: title,
   status: AgentHistoryStatus.done,
   mode: AgentMode.strict,
   startedAt: DateTime.now().subtract(const Duration(seconds: 2)),
@@ -136,6 +139,12 @@ class _MutableHistoryRepository implements AgentHistoryRepository {
   @override
   Future<void> deleteHistoryRun(String runId) async {
     _entries.removeWhere((entry) => entry.runId == runId);
+  }
+
+  @override
+  Future<void> deleteHistoryRuns(Iterable<String> runIds) async {
+    final ids = runIds.toSet();
+    _entries.removeWhere((entry) => ids.contains(entry.runId));
   }
 
   @override
@@ -181,6 +190,9 @@ class _FakeHistoryRepository implements AgentHistoryRepository {
 
   @override
   Future<void> deleteHistoryRun(String runId) async {}
+
+  @override
+  Future<void> deleteHistoryRuns(Iterable<String> runIds) async {}
 
   @override
   Future<List<AgentHistoryEntry>> listHistory() async => entries;
@@ -263,6 +275,41 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('何卒宜しくお願い致します。'), findsNothing);
+    expect(find.text('还没有分析记录'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('multi-select deletes the selected history rows', (tester) async {
+    await tester.pumpWidget(
+      _app(
+        const AgentHistoryPage(),
+        _MutableHistoryRepository(<AgentHistoryEntry>[
+          _entry(runId: 'run-1', title: '一条记录'),
+          _entry(runId: 'run-2', title: '二条记录'),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.checklist), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.checklist));
+    await tester.pumpAndSettle();
+    expect(find.byType(Checkbox), findsNWidgets(2));
+    expect(find.byIcon(Icons.select_all), findsOneWidget);
+    expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.select_all));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.delete_outline));
+    await tester.pumpAndSettle();
+
+    expect(find.text('删除选中的记录？'), findsOneWidget);
+    expect(find.textContaining('2 条'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, '删除'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('一条记录'), findsNothing);
+    expect(find.text('二条记录'), findsNothing);
     expect(find.text('还没有分析记录'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
   });

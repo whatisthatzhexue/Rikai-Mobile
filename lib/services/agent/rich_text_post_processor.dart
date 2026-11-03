@@ -29,12 +29,6 @@ class RichTextPostProcessor {
   final LlmPort _llm;
   final String _model;
 
-  static final RegExp _localYomiPattern = RegExp(
-    r'([぀-ヿ㐀-䶿一-鿿豈-﫿々〆ヶー]+)'
-    r'\[YOMI\]([\s\S]*?)\[\/YOMI\]',
-    caseSensitive: false,
-  );
-
   static final RegExp _rubyBlockPattern = RegExp(
     r'\[RUBY=[^\]]*\][\s\S]*?\[/RUBY\]',
     caseSensitive: false,
@@ -53,24 +47,6 @@ class RichTextPostProcessor {
     return true;
   }
 
-  /// Deterministic fallback for the result model's `word[YOMI]reading[/YOMI]`
-  /// annotations. The formatter is still asked to add tags for other words,
-  /// but a provider/rejection failure must not turn known readings into plain
-  /// parentheticals (or disappear entirely).
-  static String _localYomiRuby(String text) {
-    return text.replaceAllMapped(_localYomiPattern, (match) {
-      final base = match.group(1) ?? '';
-      final reading = cleanReading(match.group(2) ?? '');
-      if (base.isEmpty || reading.isEmpty || reading == base) return base;
-      return '[RUBY=$reading]$base[/RUBY]';
-    });
-  }
-
-  /// Local display fallback for both reading annotation forms: YOMI blocks
-  /// produced by the result model and older `word（reading）` parentheses.
-  static String _localDisplay(String text) =>
-      parentheticalReadingsToRuby(_localYomiRuby(text));
-
   /// Local-only fallback. The formatter is no longer given pre-converted RUBY,
   /// so the fallback converts the result model's own YOMI annotations directly
   /// to RUBY. It never invents a reading for a word that has no YOMI block.
@@ -78,7 +54,7 @@ class RichTextPostProcessor {
     String source,
     String reason,
   ) {
-    final local = _localDisplay(source);
+    final local = localReadingsToRuby(source);
     if (local == source) {
       return RichTextPostProcessResult(rejectionReason: reason);
     }
@@ -253,8 +229,10 @@ class RichTextPostProcessor {
     }
     // If the formatter left YOMI blocks or parenthetical readings in place,
     // convert them locally. This avoids a plain `word（reading）` result when
-    // the model chose not to add RUBY.
-    final local = _localDisplay(normalized);
+    // the model chose not to add RUBY. The converter is tag-aware, so a
+    // reading outside a just-closed BOLD/UNDERLINE is moved back inside the
+    // emphasis span as RUBY (and a duplicate after RUBY is dropped).
+    final local = localReadingsToRuby(normalized);
     if (local != normalized &&
         isWellFormedRichText(local) &&
         stripRichTextTags(local) == sourcePlain) {

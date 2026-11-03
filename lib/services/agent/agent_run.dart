@@ -173,7 +173,12 @@ class AgentRunResult {
 
   /// Returns a copy with display-only formatting applied. Core analysis,
   /// validation, citations and warnings are unchanged.
+  ///
+  /// Sections the formatter rejected or returned empty keep the local RUBY
+  /// baseline built with the result; a failed network pass must not downgrade
+  /// a reading back to `word（reading）`.
   AgentRunResult copyWithRichText(AgentRichTextOutputs rich) {
+    final original = rich.originalText;
     return AgentRunResult(
       input: input,
       evidence: evidence,
@@ -188,10 +193,37 @@ class AgentRunResult {
       coverageFallbackUsed: coverageFallbackUsed,
       ocrQuality: ocrQuality,
       pitchAccents: pitchAccents,
-      richOriginalText: rich.originalText,
-      richSegmentTexts: List<String>.unmodifiable(rich.segmentTexts),
-      richSegmentNotes: List<String>.unmodifiable(rich.segmentNotes),
+      richOriginalText: original != null && original.isNotEmpty
+          ? original
+          : richOriginalText,
+      richSegmentTexts: _mergeRichTextSections(
+        richSegmentTexts,
+        rich.segmentTexts,
+      ),
+      richSegmentNotes: _mergeRichTextSections(
+        richSegmentNotes,
+        rich.segmentNotes,
+      ),
     );
+  }
+
+  static List<String> _mergeRichTextSections(
+    List<String> current,
+    List<String> incoming,
+  ) {
+    if (incoming.isEmpty) return current;
+    final length = incoming.length > current.length
+        ? incoming.length
+        : current.length;
+    return List<String>.unmodifiable(<String>[
+      for (var index = 0; index < length; index++)
+        if (index < incoming.length && incoming[index].isNotEmpty)
+          incoming[index]
+        else if (index < current.length)
+          current[index]
+        else
+          '',
+    ]);
   }
 
   static const String resultSchema = 'rikai.agent.run-result.v1';
@@ -299,9 +331,10 @@ String agentOriginalSource(List<AgentQuoteRef> quotes) {
       .join('\n\n');
 }
 
-/// The raw assistant summary. The AI bubble is deliberately plain text; rich
-/// formatting is only for the detailed original/segment surfaces. This raw
-/// value still keeps YOMI wrappers for [agentSummaryDisplayText].
+/// The raw assistant summary. The AI bubble renders this with `AgentRichText`
+/// after local RUBY conversion; it never receives the model's display-only
+/// BOLD/UNDERLINE pass. This raw value still keeps YOMI wrappers for
+/// [agentSummaryDisplayText] and plain-text consumers.
 String agentSummarySource(AgentAnalysis analysis) {
   if (analysis.translation.isNotEmpty) {
     return analysis.translation.map((item) => item.text).join('\n');
@@ -330,9 +363,9 @@ String _noteYomi(AgentWordNote note) {
   return '[YOMI]$reading[/YOMI]';
 }
 
-/// The plain summary shown in the AI bubble. Any display tags emitted by the
-/// analysis model are converted to plain text; the bubble never uses rich
-/// rendering.
+/// Plain-text rendering of the summary for non-rich consumers. The AI bubble
+/// now renders [agentSummarySource] with `AgentRichText` after local RUBY
+/// conversion; this helper remains for copy/export-style plain text.
 String agentSummaryDisplayText(AgentAnalysis analysis) =>
     richTextToPlain(agentSummarySource(analysis));
 
@@ -368,6 +401,10 @@ typedef AgentStageCallback = void Function(AgentStage stage, String message);
 /// Receives display-only rich text after the core result has been delivered.
 /// The controller applies it to the visible result without blocking `done`.
 typedef AgentRichTextCallback = void Function(AgentRichTextOutputs outputs);
+
+/// Notifies the UI when the display-only rich-text beautification pass starts
+/// or finishes after the core result is already visible.
+typedef AgentRichTextFormattingCallback = void Function(bool active);
 
 /// Fires once the main analysis can be displayed, before optional
 /// repair/language post-checks finish. The final [AgentRunResult] may replace
@@ -412,6 +449,7 @@ class AgentRunSnapshot {
     this.citationCount = 0,
     this.maxEvidenceEntries = 0,
     this.pendingProfileCount = 0,
+    this.richTextFormatting = false,
     this.result,
     this.provisionalResult,
     this.retainedResult,
@@ -448,6 +486,11 @@ class AgentRunSnapshot {
   final int citationCount;
   final int maxEvidenceEntries;
   final int pendingProfileCount;
+
+  /// True while the display-only rich-text beautification agent is still
+  /// running after the main result is visible. The result is already usable;
+  /// this flag only drives the dismissible “界面美化” banner.
+  final bool richTextFormatting;
 
   int get evidenceLimit => maxEvidenceEntries > 0
       ? maxEvidenceEntries
@@ -517,6 +560,7 @@ class AgentRunSnapshot {
     int? citationCount,
     int? maxEvidenceEntries,
     int? pendingProfileCount,
+    bool? richTextFormatting,
     Object? result = _unset,
     Object? provisionalResult = _unset,
     Object? retainedResult = _unset,
@@ -548,6 +592,7 @@ class AgentRunSnapshot {
       citationCount: citationCount ?? this.citationCount,
       maxEvidenceEntries: maxEvidenceEntries ?? this.maxEvidenceEntries,
       pendingProfileCount: pendingProfileCount ?? this.pendingProfileCount,
+      richTextFormatting: richTextFormatting ?? this.richTextFormatting,
       result: identical(result, _unset)
           ? this.result
           : result as AgentRunResult?,

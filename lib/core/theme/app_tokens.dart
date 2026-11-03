@@ -216,6 +216,10 @@ abstract final class AgentTokens {
   static const Color pitchInfoBadgeSurface = Color(0xFFFDECEA);
   static const Color pitchInfoBadgeText = AppColors.error;
 
+  // P7.0 rich-text beautification progress banner (post-result, dismissible).
+  static const Color beautifyBannerSurface = Color(0xFFE8F7F0);
+  static const Color beautifyBannerText = Color(0xFF1B6B49);
+
   /// Rich-text post-processing: ruby reading uses the shared furigana ratio
   /// and the body text color; underline is black and twice the default
   /// thickness.

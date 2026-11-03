@@ -230,8 +230,8 @@
 > 设置。下方“四按钮”历史规则只用于理解旧版；当前以“Phase 6 Agent UI”与自查清单
 > 为准。P6.6 多 OCR token 与 P6.7 历史/声调 token 已实现；DSL/Markdown 受限
 > 预览的规则已记录（仍待实现）。P7.0 的详细解析富文本（原文/逐句理解/词典
-> 事实解释的 RUBY/BOLD/UNDERLINE）已按本节 ruby token 实现；AI 气泡保持
-> 纯文本，仍需真机视觉验收。
+> 事实解释的 RUBY/BOLD/UNDERLINE）已按本节 ruby token 实现；AI 气泡摘要使用
+> 本地 RUBY（不加载模型强调标签），仍需真机视觉验收。
 
 ### Phase 6 Agent UI（基础对话式已实现；完整 v2 验收待补）
 
@@ -275,7 +275,9 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 | 富文本读音/强调 | `rubyReadingSize`/`rubyReadingColor`/`richTextUnderlineColor`/`richTextUnderlineThickness`/`richTextUnderlineOffset` | RUBY 发音标注为主字号 55%、正文色 `textPrimary`；base 使用周围正文相同行高/metrics，以 alphabetic baseline 对齐，读音在上方，不把 base 下沉；BOLD `w600`，RUBY 在 BOLD 内时读音一起加粗；UNDERLINE 正文色 `textPrimary`、粗细 2、baseline 下方固定偏移 2 的自绘线（不用字体 decoration，保证 `；` 与汉字一致），RUBY 读音永不加下划线；只用于显示标签，不改变正文 |
 | 声调高低线 | `agentPitchAccentLine` | 1.5dp、`textSecondary`；高段上轨/低段下轨，アクセント核处垂直下降；线宽按词宽均分为 mora 段，不按汉字字数逐字对齐；有 RUBY/读音时纵向顺序为声调线→读音→词形；声调线是 Ruby 上方的覆盖层，不改变现有 Ruby 布局/行高；汉字词无独立读音/振假名时不画线；只在词注/词典事实行，200% 字号随文字缩放，空间不足时换行或省略，不覆盖文字 |
 | 音调信息徽标 | `agentPitchInfoBadge` | 与 epistemic 徽标同尺寸：12sp、水平内边距 8、上下 2、圆角 6；`pitchInfoBadgeSurface` 浅红底 + `AppColors.error` 字；位于音调词行最前，后接现有音调词，不单独成行；仅本地显示，不进入 provider/导出 |
+| 界面美化横幅 | `agentBeautifyBanner` | 会话上方、浅绿底 + 深绿字/图标（`beautifyBannerSurface/Text`）；14sp、圆角 8、水平内边距 12；单行“界面美化正在进行中…”；右侧 40dp 关闭按钮；仅在富文本后处理运行时显示，完成/失败/取消自动消失；用户关闭只隐藏当前 run 的提示，不取消后处理 |
 | 历史列表行 | `agentHistoryRow` | 最小高 72、白底、1px `divider`；标题 16sp/600，时间/模式/状态 14sp，状态 chip 12sp；触控 ≥48；不显示缩略图/原图 |
+| 历史多选 | `agentHistorySelection` | 复用词典档案管理：AppBar 右侧“多选/退出多选”（`checklist`/`close`）；选择态左侧“全选”、右侧“删除选中”，行首 Checkbox、行尾单条删除隐藏；删除二次确认，完成后退出选择态；不提供独立一键清空 |
 | 历史只读提示 | `agentHistoryReadOnlyBanner` | `surfaceMuted` 底、14sp、`textSecondary`、内边距 12；“历史记录只读；原图未保存”；不遮挡内容 |
 | 历史空态 | `agentHistoryEmpty` | 图标 40、标题 16sp、说明 14sp、主按钮“返回助手”；居中，不整屏 loading |
 | 档案 Markdown 预览 | `agentProfileMarkdownPreview` | 正文 16sp、行内代码 14sp；只渲染白名单语法；链接按纯文本，不加载图片/外链；未知语法原样显示 |
@@ -305,6 +307,9 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 - 历史列表/详情使用现有 Agent 语义 token；不新增缩略图、卡片或时间线样式。
   列表行只显示文字元数据；详情顶部固定只读提示，图片会话显示“图片 N 张（历史
   不保存原图）”，不出现损坏图片占位。
+- 历史删除复用词典档案管理的多选模式：AppBar“多选”进入选择态，行首 Checkbox，
+  选择态提供“全选/删除选中”；不提供独立的一键清空按钮。删除前二次确认，完成后
+  退出选择态。
 - 声调线只出现在逐句理解下方的词注/词典事实行；同一行已有 RUBY 时，声调线在
   词上方、RUBY 在词上/旁，二者不得重叠。无 UniDic 声调数据时整条线省略，不显示
   数字/“推测”占位。
@@ -485,7 +490,7 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 - [ ] provider/模型/语言/隐私/关于分组；API Key 有显示切换/测试连接/三态标签。
 - [ ] Semantics、40dp 触控、200% 字体缩放、对比度；仅浅色主题。
 - [ ] （P6.7）历史一条=一次分析，只读；列表/详情不显示图片/路径/缩略图；
-      citation 失效只显示保存摘要；删除/清空有二次确认。
+      citation 失效只显示保存摘要；单条/多选删除有二次确认（全选后删除等价清空）。
 - [ ] （P6.7）声调只用 UniDic 字段 24–26；只在词注/词典事实行；无数据/越界
       不画线，不用 AI 猜；200% 字号不重叠；音调词行带“音调信息”红色徽标。
 - [ ] （P6.7）DSL 只渲染白名单；HTML/JS/图片/外链不执行；预览=正式渲染；

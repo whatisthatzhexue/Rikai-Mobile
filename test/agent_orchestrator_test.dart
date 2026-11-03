@@ -54,6 +54,14 @@ const _analysisDetailedRich = '''
 [/SEGMENT]
 ''';
 
+const _analysisWithReading = '''
+[TRANSLATION quote="q1"]请多关照。[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]今[YOMI]いま[/YOMI]表示现在[/MEANING]
+[WORD id="t1"]何卒|なにとぞ|请务必|source-1[/WORD]
+[/SEGMENT]
+''';
+
 const _analysisWithYomi = '''
 [TRANSLATION quote="q1"]请多关照：何卒[YOMI]（なにとぞ）[/YOMI]。[/TRANSLATION]
 [SEGMENT type="fact" quote="q1"]
@@ -814,9 +822,11 @@ void main() {
           onRichTextReady: (outputs) => ready.complete(outputs),
         );
 
-    // The core result is delivered before display-only formatting finishes.
-    expect(result.richOriginalText, isNull);
-    expect(result.richSegmentTexts, isEmpty);
+    // The core result is delivered with local RUBY before display-only
+    // formatting finishes.
+    expect(result.richOriginalText, '何卒');
+    expect(result.richSegmentTexts, <String>['正式请求']);
+    expect(result.richSegmentNotes, <String>['何卒：请务必']);
     final outputs = await ready.future.timeout(const Duration(seconds: 5));
     expect(outputs.originalText, rich);
     expect(outputs.segmentTexts, <String>[segmentRich]);
@@ -990,9 +1000,42 @@ void main() {
           ),
         );
 
-    expect(result.richOriginalText, isNull);
+    // The rejected original keeps the local plain baseline rather than
+    // clearing the field; the visible text is still just the source.
+    expect(result.richOriginalText, '何卒');
     expect(result.richSegmentTexts, <String>['正式请求']);
     expect(result.richSegmentNotes, <String>['何卒：请务必']);
     expect(provider.requests, hasLength(4));
+  });
+
+  test('preview already carries local RUBY before formatting', () async {
+    final provider = FakeProvider(responseText: _analysisWithReading);
+    AgentRunResult? preview;
+
+    final result =
+        await _orchestrator(
+          provider: provider,
+          limits: const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: false,
+          ),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.strict,
+            dictionaries: <DictionaryInfo>[_dictionary],
+            provider: _provider,
+            userText: '何卒',
+          ),
+          onProvisionalResult: (value) => preview = value,
+        );
+
+    expect(preview, isNotNull);
+    expect(preview!.richSegmentTexts.single, contains('[RUBY=いま]今[/RUBY]'));
+    expect(preview!.richSegmentTexts.single, isNot(contains('（いま）')));
+    expect(preview!.richSegmentNotes.single, contains('[RUBY=なにとぞ]何卒[/RUBY]'));
+    expect(preview!.richSegmentNotes.single, isNot(contains('（なにとぞ）')));
+    expect(result.richSegmentTexts.single, contains('[RUBY=いま]今[/RUBY]'));
+    expect(result.richSegmentNotes.single, contains('[RUBY=なにとぞ]何卒[/RUBY]'));
   });
 }

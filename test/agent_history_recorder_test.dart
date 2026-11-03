@@ -110,6 +110,9 @@ class _FakeHistoryRepository implements AgentHistoryRepository {
   Future<void> deleteHistoryRun(String runId) async {}
 
   @override
+  Future<void> deleteHistoryRuns(Iterable<String> runIds) async {}
+
+  @override
   Future<void> clearHistory() async {}
 }
 

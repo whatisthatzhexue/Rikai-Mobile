@@ -80,18 +80,24 @@ P6.8 解决“已生成结果如何更早显示”；P7 解决“不要把所有
 > original text (including punctuation, spaces and line breaks). Only
 > `[RUBY=xxx]`, `[BOLD]` and `[UNDERLINE]` may be inserted. The output must
 > contain the complete original text. Leave every `[YOMI]...[/YOMI]` block
-> exactly as supplied.
+> exactly as supplied. The only exception is a parenthetical reading:
+> `surface（reading）` may be replaced by `[RUBY=reading]surface[/RUBY]`; the
+> base characters must not change.
 
 结果生成模型在 `[MEANING]` 中把读音写成 `word[YOMI]reading[/YOMI]`（不带括号；
 单词=读音时只写单词；禁止 `word（reading）` 或 `word[YOMI]（reading）[/YOMI]`）。
-格式化调用**不预注入 RUBY**：模型输入就是结果模型文本与 YOMI；本地 YOMI→RUBY
-只在 provider/校验失败或模型保留 YOMI 时兜底。代码端必须剥离显示标签，并按
+格式化调用**不预注入 RUBY**：模型输入就是结果模型文本与 YOMI；本地
+`localReadingsToRuby` 在 provisional/final/salvage 结果构建时始终执行，预览首帧
+即 RUBY；provider/校验失败、模型保留 YOMI/括号或 section 被拒绝时，同一本地转换
+兜底，模型格式化只追加 BOLD/UNDERLINE。代码端必须剥离显示标签，并按
 YOMI 规则（允许整块删除；保留块内容/位置不变）与原文逐字符比较；不完全一致就
-丢弃该块格式化结果、渲染纯文本。标签必须成对且正确嵌套：RUBY 可在
+丢弃该块格式化结果，保留本地 RUBY 基线。标签必须成对且正确嵌套：RUBY 可在
 BOLD/UNDERLINE 内，BOLD/UNDERLINE 可以相互包裹，但不得进入 RUBY base 或嵌套
 自身；RUBY 读音继承 BOLD、永不加下划线，并以 base 的 alphabetic baseline 对齐。
 RUBY 是语言无关的发音标注，不限定书写系统，禁止标签/换行；RUBY 读音等于 base
-时取消该 RUBY。包住已有 `surface（reading）` 注记时显示/导出只保留一份读音。
+时取消该 RUBY。括号读音转换是标签感知的：包住已有 `surface（reading）` 注记时
+显示只保留一份读音，`[BOLD]surface[/BOLD]（reading）` 会把读音移入 BOLD 内成为
+RUBY（读音继承粗体）；Markdown 导出仍输出 `base（reading）`。
 Prompt 不使用“uncertain 就返回原文”的模糊兜底，也不要求“必须产生变化”。
 该任务没有修改原文的权限，因此不能用来修错、翻译或补内容。
 
@@ -140,7 +146,7 @@ coverage ready   ─┘
 ```
 
 - 先显示翻译，再按任务追加结构/富文本；
-- 富文本只替换已通过 diff 校验的显示文本，失败保留对应纯文本；
+- 富文本只替换已通过 diff 校验的显示文本，失败保留本地 RUBY 基线；
 - 最终对账以 task id/segment id 合并，禁止重复块；
 - 用户滚动位置不被强制改变。
 
@@ -179,8 +185,9 @@ coverage ready   ─┘
 
 ## 10. 实施阶段
 
-1. **P7.0（已增量实现，2026-11-03）**：assistant summary 的富文本后处理：
-   `[RUBY]`/`[BOLD]`/`[UNDERLINE]`、严格 prompt、标签剥离 diff、失败纯文本回退。
+1. **P7.0（已增量实现，2026-11-03）**：详细解析的富文本后处理：
+   `[RUBY]`/`[BOLD]`/`[UNDERLINE]`、严格 prompt、标签剥离 diff、失败保留本地
+   RUBY 基线；AI 气泡摘要只做本地 RUBY，不进入模型格式化。
 2. **P7.1**：把翻译和语法解析拆成独立任务/artifact；保留现有 validator 作为最终
    闸门。
 3. **P7.2**：加入模型路由、任务级预算和 provider 能力检测；仍由用户配置 provider。
@@ -207,7 +214,7 @@ P7 启动前必须先完成 P6.7 与 Wave 4 设备验收；不得在未关闭的
 |---|---|
 | 多任务导致结果不一致 | orchestrator 单点合并；最终 validator 重新校验 |
 | 自由多 Agent 变成不可控辩论 | 单向 DAG；禁止模型间对话/互评；只传结构化 artifact |
-| 格式化模型改动原文 | 剥离标签逐字符 diff；失败回退纯文本（T-135） |
+| 格式化模型改动原文 | 剥离标签逐字符 diff；失败保留本地 RUBY 基线（T-135） |
 | 并发放大 provider 限流/成本 | 有界并发、任务预算、路由快照、429 退避 |
 | 轻量模型格式失败阻塞核心 | 格式化/审查可降级；核心任务独立错误 |
 | 任务产物重复上屏 | task/segment id 对账；最终结果覆盖 partial |
@@ -216,8 +223,9 @@ P7 启动前必须先完成 P6.7 与 Wave 4 设备验收；不得在未关闭的
 
 ## 13. 与当前工作的关系
 
-- P7.0 富文本后处理已落地；它只格式化 assistant summary，**不改变原文、不参与事实
-  生成**。失败时使用纯文本，不影响核心结果。
+- P7.0 富文本后处理已落地；它只格式化详细解析的原文/逐句理解/词典事实解释，
+  **不改变原文、不参与事实生成**。失败时保留本地 RUBY 基线，不影响核心结果；
+  AI 气泡摘要和其他结果 prose 只做本地 RUBY，不进入模型格式化。
 - P7.1–P7.4 尚未实现；当前 Wave 4/P6.7 完成前不启动。
 - P6.8 任务级流式规划见
   [task-level-streaming-plan.md](task-level-streaming-plan.md)；P7 的任务 artifact

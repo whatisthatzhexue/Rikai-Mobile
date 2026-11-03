@@ -12,6 +12,18 @@ import '../../services/agent/agent_ui_strings.dart';
 import '../../state/agent_history_recorder.dart';
 import '../../state/providers.dart';
 
+// Stable keys keep each AppBar action's element tied to the action itself when
+// the selection actions are inserted before the mode toggle.
+const _historySelectAllActionKey = ValueKey<String>(
+  'agent-history-action-select-all',
+);
+const _historyDeleteSelectedActionKey = ValueKey<String>(
+  'agent-history-action-delete-selected',
+);
+const _historySelectionModeActionKey = ValueKey<String>(
+  'agent-history-action-selection-mode',
+);
+
 class AgentHistoryPage extends ConsumerStatefulWidget {
   const AgentHistoryPage({super.key});
 
@@ -21,6 +33,8 @@ class AgentHistoryPage extends ConsumerStatefulWidget {
 
 class _AgentHistoryPageState extends ConsumerState<AgentHistoryPage> {
   late Future<List<AgentHistoryEntry>> _entries;
+  bool _selecting = false;
+  final Set<String> _selected = <String>{};
 
   @override
   void initState() {
@@ -86,12 +100,42 @@ class _AgentHistoryPageState extends ConsumerState<AgentHistoryPage> {
     _reload();
   }
 
-  Future<void> _clear(AgentUiStrings strings) async {
+  void _toggleSelectionMode() {
+    setState(() {
+      _selecting = !_selecting;
+      if (!_selecting) _selected.clear();
+    });
+  }
+
+  void _toggleSelected(String runId) {
+    setState(() {
+      if (!_selected.add(runId)) _selected.remove(runId);
+      _selecting = true;
+    });
+  }
+
+  Future<void> _selectAll() async {
+    try {
+      final entries = await _entries;
+      if (!mounted) return;
+      setState(() {
+        _selected
+          ..clear()
+          ..addAll(entries.map((entry) => entry.runId));
+      });
+    } catch (_) {
+      // The list already shows its load-error state; no extra toast here.
+    }
+  }
+
+  Future<void> _deleteSelected(AgentUiStrings strings) async {
+    final selected = Set<String>.of(_selected);
+    if (selected.isEmpty) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(strings.historyClearTitle),
-        content: Text(strings.historyClearBody),
+        title: Text(strings.historyDeleteSelectedTitle),
+        content: Text(strings.historyDeleteSelectedBody(selected.length)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -99,21 +143,27 @@ class _AgentHistoryPageState extends ConsumerState<AgentHistoryPage> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(strings.historyClearAction),
+            child: Text(strings.delete),
           ),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
     try {
-      await ref.read(agentHistoryRepositoryProvider).clearHistory();
+      await ref
+          .read(agentHistoryRepositoryProvider)
+          .deleteHistoryRuns(selected);
     } catch (_) {
       if (mounted) RikaiToast.show(context, strings.historyLoadFailed);
       return;
     }
     if (!mounted) return;
-    RikaiToast.show(context, strings.historyCleared);
-    _reload();
+    setState(() {
+      _selected.clear();
+      _selecting = false;
+      _entries = _load();
+    });
+    RikaiToast.show(context, strings.historyDeleted);
   }
 
   @override
@@ -123,10 +173,31 @@ class _AgentHistoryPageState extends ConsumerState<AgentHistoryPage> {
       appBar: AppBar(
         title: Text(strings.historyTitle),
         actions: [
+          if (_selecting) ...[
+            IconButton(
+              key: _historySelectAllActionKey,
+              tooltip: strings.historySelectAll,
+              onPressed: _selectAll,
+              icon: const Icon(Icons.select_all),
+            ),
+            IconButton(
+              key: _historyDeleteSelectedActionKey,
+              tooltip: strings.historyDeleteSelected,
+              onPressed: _selected.isEmpty
+                  ? null
+                  : () => _deleteSelected(strings),
+              icon: const Icon(Icons.delete_outline),
+            ),
+          ],
+          // Keep the mode toggle as the rightmost action in both states so the
+          // selection actions do not replace the tapped button's element.
           IconButton(
-            tooltip: strings.historyClearAction,
-            onPressed: () => _clear(strings),
-            icon: const Icon(Icons.delete_sweep_outlined),
+            key: _historySelectionModeActionKey,
+            tooltip: _selecting
+                ? strings.historyExitSelection
+                : strings.historySelectMode,
+            onPressed: _toggleSelectionMode,
+            icon: Icon(_selecting ? Icons.close : Icons.checklist),
           ),
         ],
       ),
@@ -162,7 +233,15 @@ class _AgentHistoryPageState extends ConsumerState<AgentHistoryPage> {
               return _HistoryRow(
                 entry: entry,
                 strings: strings,
-                onTap: () => _open(entry),
+                selecting: _selecting,
+                selected: _selected.contains(entry.runId),
+                onTap: () {
+                  if (_selecting) {
+                    _toggleSelected(entry.runId);
+                  } else {
+                    _open(entry);
+                  }
+                },
                 onDelete: () => _delete(entry, strings),
               );
             },
@@ -177,12 +256,16 @@ class _HistoryRow extends StatelessWidget {
   const _HistoryRow({
     required this.entry,
     required this.strings,
+    required this.selecting,
+    required this.selected,
     required this.onTap,
     required this.onDelete,
   });
 
   final AgentHistoryEntry entry;
   final AgentUiStrings strings;
+  final bool selecting;
+  final bool selected;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
@@ -207,8 +290,12 @@ class _HistoryRow extends StatelessWidget {
             AppSpacing.sm,
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: selecting
+                ? CrossAxisAlignment.center
+                : CrossAxisAlignment.start,
             children: [
+              if (selecting)
+                Checkbox(value: selected, onChanged: (_) => onTap()),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -272,14 +359,15 @@ class _HistoryRow extends StatelessWidget {
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: strings.delete,
-                onPressed: onDelete,
-                icon: const Icon(
-                  Icons.delete_outline,
-                  size: AgentTokens.actionIcon,
+              if (!selecting)
+                IconButton(
+                  tooltip: strings.delete,
+                  onPressed: onDelete,
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    size: AgentTokens.actionIcon,
+                  ),
                 ),
-              ),
             ],
           ),
         ),

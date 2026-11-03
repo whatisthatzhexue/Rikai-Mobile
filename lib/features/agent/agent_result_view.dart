@@ -184,7 +184,7 @@ class AgentResultView extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppRadius.sm),
               ),
               child: AgentRichText(
-                text: stripYomiTags(quote.text),
+                text: stripYomiTags(localReadingsToRuby(quote.text)),
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontSize: AgentTokens.body,
                   color: AppColors.textPrimary,
@@ -244,8 +244,10 @@ class AgentResultView extends StatelessWidget {
         blocks.add(
           Padding(
             padding: const EdgeInsets.only(top: AppSpacing.xs),
-            child: Text(
-              _unresolvedReason(unresolved, strings),
+            child: AgentRichText(
+              text: stripYomiTags(
+                localReadingsToRuby(_unresolvedReason(unresolved, strings)),
+              ),
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontSize: AgentTokens.helper,
                 color: AppColors.warning,
@@ -267,8 +269,8 @@ class AgentResultView extends StatelessWidget {
               color: AgentTokens.supplementSurface,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            child: Text(
-              supplement.text,
+            child: AgentRichText(
+              text: stripYomiTags(localReadingsToRuby(supplement.text)),
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontSize: AgentTokens.helper,
                 color: AppColors.textPrimary,
@@ -517,7 +519,7 @@ class _SegmentBlock extends StatelessWidget {
         children: [
           if (quote != null)
             AgentRichText(
-              text: stripYomiTags(quote!.text),
+              text: stripYomiTags(localReadingsToRuby(quote!.text)),
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontSize: AgentTokens.helper,
                 color: AppColors.textSecondary,
@@ -527,7 +529,7 @@ class _SegmentBlock extends StatelessWidget {
           AgentRichText(
             text: stripYomiTags(
               richInterpretation.isEmpty
-                  ? segment.interpretation
+                  ? localReadingsToRuby(segment.interpretation)
                   : richInterpretation,
             ),
             style: theme.textTheme.bodyLarge?.copyWith(
@@ -577,8 +579,8 @@ class _SegmentBlock extends StatelessWidget {
             for (final note in segment.grammarNotes)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.sm),
-                child: Text(
-                  note.explanation,
+                child: AgentRichText(
+                  text: stripYomiTags(localReadingsToRuby(note.explanation)),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontSize: AgentTokens.helper,
                     color: AppColors.textPrimary,
@@ -630,8 +632,12 @@ class _WordNoteLine extends StatelessWidget {
       reading: note.reading,
       accent: validAccent,
     )) {
-      return Text(
-        '${note.surface}${note.reading.isEmpty ? '' : '（${note.reading}）'}：${note.sense}',
+      return AgentRichText(
+        text: localReadingsToRuby(
+          '${note.surface}'
+          '${note.reading.isEmpty ? '' : '（${note.reading}）'}'
+          '：${note.sense}',
+        ),
         style: style,
       );
     }
@@ -645,7 +651,12 @@ class _WordNoteLine extends StatelessWidget {
           accent: validAccent,
           style: style ?? const TextStyle(),
         ),
-        Flexible(child: Text('：${note.sense}', style: style)),
+        Flexible(
+          child: AgentRichText(
+            text: localReadingsToRuby('：${note.sense}'),
+            style: style,
+          ),
+        ),
       ],
     );
   }
@@ -830,9 +841,13 @@ class _InterpretationBlock extends StatelessWidget {
         runSpacing: AppSpacing.xs,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text(
-            '${interpretation.label}：${interpretation.meaning}'
-            '（${(interpretation.confidence * 100).round()}%）',
+          AgentRichText(
+            text: stripYomiTags(
+              localReadingsToRuby(
+                '${interpretation.label}：${interpretation.meaning}'
+                '（${(interpretation.confidence * 100).round()}%）',
+              ),
+            ),
             style: theme.textTheme.bodyMedium?.copyWith(
               fontSize: AgentTokens.helper,
               color: AppColors.textPrimary,

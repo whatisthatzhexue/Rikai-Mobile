@@ -48,6 +48,7 @@ class _AgentPageState extends ConsumerState<AgentPage> {
   List<_PickedImage> _images = <_PickedImage>[];
   bool _settingsExpanded = false;
   int _imageSerial = 0;
+  String? _dismissedBeautifyRunId;
 
   @override
   void initState() {
@@ -450,6 +451,14 @@ class _AgentPageState extends ConsumerState<AgentPage> {
                       .selectAll(),
                   onOpenSettings: () => context.push('/agent-settings'),
                 ),
+              if (run.richTextFormatting &&
+                  run.runId != null &&
+                  _dismissedBeautifyRunId != run.runId)
+                _BeautifyBanner(
+                  strings: strings,
+                  onClose: () =>
+                      setState(() => _dismissedBeautifyRunId = run.runId),
+                ),
               Expanded(
                 child: AgentMessageList(
                   scrollController: _messagesScroll,
@@ -479,6 +488,69 @@ class _AgentPageState extends ConsumerState<AgentPage> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dismissible progress banner for the post-result rich-text beautification
+/// agent. The core result is already usable; the banner only explains why the
+/// displayed formatting may still change. It is removed automatically when the
+/// controller reports that the formatting pass has finished.
+class _BeautifyBanner extends StatelessWidget {
+  const _BeautifyBanner({required this.strings, required this.onClose});
+
+  final AgentUiStrings strings;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.sm,
+          AppSpacing.lg,
+          0,
+        ),
+        padding: const EdgeInsets.only(
+          left: AppSpacing.md,
+          top: AppSpacing.xxs,
+          bottom: AppSpacing.xxs,
+        ),
+        decoration: BoxDecoration(
+          color: AgentTokens.beautifyBannerSurface,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.auto_awesome,
+              size: AppSizes.iconSmall,
+              color: AgentTokens.beautifyBannerText,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                strings.beautifyingInProgress,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: AgentTokens.helper,
+                  fontWeight: FontWeight.w500,
+                  color: AgentTokens.beautifyBannerText,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: strings.close,
+              onPressed: onClose,
+              visualDensity: VisualDensity.compact,
+              color: AgentTokens.beautifyBannerText,
+              icon: const Icon(Icons.close, size: AgentTokens.actionIcon),
+            ),
+          ],
         ),
       ),
     );

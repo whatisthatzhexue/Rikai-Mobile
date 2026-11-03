@@ -6,11 +6,13 @@ import 'package:flutter/material.dart';
 import '../../core/models/agent/agent_input.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/page_route.dart';
+import '../../core/utils/rich_text_tags.dart';
 import '../../services/agent/agent_messages.dart';
 import '../../services/agent/agent_run.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../capture/photo_viewer_page.dart';
 import 'agent_progress_view.dart';
+import 'agent_rich_text.dart';
 import 'agent_thumbnail.dart';
 
 class AgentUserBubble extends StatelessWidget {
@@ -248,7 +250,9 @@ class AgentAssistantBubble extends StatelessWidget {
         '${mode == AgentMode.strict ? strings.strictShort : strings.looseShort}';
     final summarySource = result == null
         ? ''
-        : agentSummaryDisplayText(result!.analysis);
+        : stripYomiTags(
+            localReadingsToRuby(agentSummarySource(result!.analysis)),
+          );
     final summary = summarySource.isEmpty
         ? strings.assistantFallback
         : summarySource;
@@ -309,8 +313,8 @@ class AgentAssistantBubble extends StatelessWidget {
                   ],
                   if (result != null) ...[
                     const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      summary,
+                    AgentRichText(
+                      text: summary,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         fontSize: AgentTokens.body,
                         height: 1.5,
@@ -325,8 +329,8 @@ class AgentAssistantBubble extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (provisional) ...[
-                    Text(
-                      summary,
+                    AgentRichText(
+                      text: summary,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         fontSize: AgentTokens.body,
                         height: 1.5,
@@ -411,8 +415,8 @@ class AgentAssistantBubble extends StatelessWidget {
                 ],
               )
             else
-              Text(
-                summary,
+              AgentRichText(
+                text: summary,
                 style: theme.textTheme.bodyLarge?.copyWith(
                   fontSize: AgentTokens.body,
                   height: 1.5,

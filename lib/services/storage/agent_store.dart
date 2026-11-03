@@ -918,53 +918,72 @@ class AgentStore
   }
 
   @override
-  Future<void> deleteHistoryRun(String runId) async {
+  Future<void> deleteHistoryRun(String runId) =>
+      deleteHistoryRuns(<String>[runId]);
+
+  @override
+  Future<void> deleteHistoryRuns(Iterable<String> runIds) async {
+    final ids = runIds
+        .where((runId) => runId.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) return;
     final db = await _db();
     await db.transaction((txn) async {
-      final rows = await txn.query(
-        'agent_runs',
-        columns: <String>['session_id'],
-        where: 'id = ?',
-        whereArgs: <Object?>[runId],
-        limit: 1,
-      );
-      final sessionId = rows.isEmpty
-          ? null
-          : rows.first['session_id'] as String?;
-      await txn.delete(
-        'agent_citations',
-        where: 'run_id = ?',
-        whereArgs: <Object?>[runId],
-      );
-      await txn.delete(
-        'agent_source_versions',
-        where: 'run_id = ?',
-        whereArgs: <Object?>[runId],
-      );
-      await txn.delete(
-        'agent_messages',
-        where: 'run_id = ?',
-        whereArgs: <Object?>[runId],
-      );
-      await txn.delete(
-        'agent_tool_calls',
-        where: 'run_id = ?',
-        whereArgs: <Object?>[runId],
-      );
-      await txn.delete(
-        'agent_runs',
-        where: 'id = ?',
-        whereArgs: <Object?>[runId],
-      );
-      if (sessionId == null) return;
-      final remaining = await txn.query(
-        'agent_runs',
-        columns: <String>['id'],
-        where: 'session_id = ?',
-        whereArgs: <Object?>[sessionId],
-        limit: 1,
-      );
-      if (remaining.isEmpty) {
+      final sessionIds = <String>{};
+      // Keep each IN clause below SQLite's variable limit on devices with a
+      // very long history; the default limit is 999.
+      for (var start = 0; start < ids.length; start += 400) {
+        final end = start + 400 < ids.length ? start + 400 : ids.length;
+        final chunk = ids.sublist(start, end);
+        final placeholders = List.filled(chunk.length, '?').join(',');
+        final rows = await txn.query(
+          'agent_runs',
+          columns: <String>['session_id'],
+          where: 'id IN ($placeholders)',
+          whereArgs: chunk,
+        );
+        for (final row in rows) {
+          final sessionId = row['session_id'] as String?;
+          if (sessionId != null && sessionId.isNotEmpty) {
+            sessionIds.add(sessionId);
+          }
+        }
+        await txn.delete(
+          'agent_citations',
+          where: 'run_id IN ($placeholders)',
+          whereArgs: chunk,
+        );
+        await txn.delete(
+          'agent_source_versions',
+          where: 'run_id IN ($placeholders)',
+          whereArgs: chunk,
+        );
+        await txn.delete(
+          'agent_messages',
+          where: 'run_id IN ($placeholders)',
+          whereArgs: chunk,
+        );
+        await txn.delete(
+          'agent_tool_calls',
+          where: 'run_id IN ($placeholders)',
+          whereArgs: chunk,
+        );
+        await txn.delete(
+          'agent_runs',
+          where: 'id IN ($placeholders)',
+          whereArgs: chunk,
+        );
+      }
+      for (final sessionId in sessionIds) {
+        final remaining = await txn.query(
+          'agent_runs',
+          columns: <String>['id'],
+          where: 'session_id = ?',
+          whereArgs: <Object?>[sessionId],
+          limit: 1,
+        );
+        if (remaining.isNotEmpty) continue;
         await txn.delete(
           'agent_sessions',
           where: 'id = ?',

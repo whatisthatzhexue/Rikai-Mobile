@@ -54,5 +54,8 @@ abstract interface class AgentHistoryRepository {
 
   Future<void> deleteHistoryRun(String runId);
 
+  /// Deletes several runs in one transaction. Missing ids are ignored.
+  Future<void> deleteHistoryRuns(Iterable<String> runIds);
+
   Future<void> clearHistory();
 }

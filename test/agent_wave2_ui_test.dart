@@ -14,6 +14,7 @@ import 'package:rikai_mobile/services/agent/agent_validator.dart';
 import 'package:rikai_mobile/services/agent/familiarization/dictionary_familiarization_service.dart';
 import 'package:rikai_mobile/features/agent/agent_composer.dart';
 import 'package:rikai_mobile/features/agent/agent_message_widgets.dart';
+import 'package:rikai_mobile/features/agent/agent_rich_text.dart';
 import 'package:rikai_mobile/features/agent/agent_result_view.dart';
 import 'package:rikai_mobile/features/capture/photo_viewer_page.dart';
 
@@ -101,6 +102,25 @@ const _result = AgentRunResult(
       reason: '档案请求失败',
     ),
   ],
+);
+
+AgentRunResult _resultWithAnalysis(AgentAnalysis analysis) => AgentRunResult(
+  input: _result.input,
+  evidence: _result.evidence,
+  quotes: _result.quotes,
+  analysis: analysis,
+  validation: _result.validation,
+  sources: _result.sources,
+  dictionaryProfiles: _result.dictionaryProfiles,
+  profileWarnings: _result.profileWarnings,
+  unavailableProfiles: _result.unavailableProfiles,
+  warnings: _result.warnings,
+  coverageFallbackUsed: _result.coverageFallbackUsed,
+  ocrQuality: _result.ocrQuality,
+  pitchAccents: _result.pitchAccents,
+  richOriginalText: _result.richOriginalText,
+  richSegmentTexts: _result.richSegmentTexts,
+  richSegmentNotes: _result.richSegmentNotes,
 );
 
 final _strings = AgentUiStrings.of(AgentUiLanguage.chinese);
@@ -261,7 +281,60 @@ void main() {
     expect(find.byTooltip('复制结果为 Markdown'), findsNothing);
   });
 
-  testWidgets('completed assistant bubble stays plain text', (tester) async {
+  testWidgets(
+    'completed assistant bubble renders the summary without raw tags',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AgentAssistantBubble(
+                theme: AppTheme.light(),
+                providerLabel: 'DeepSeek',
+                mode: AgentMode.strict,
+                running: false,
+                provisional: false,
+                cancelled: false,
+                error: null,
+                errorDetail: '',
+                stageMessage: '',
+                startedAt: DateTime(2026, 1, 1),
+                finishedAt: DateTime(2026, 1, 1, 0, 0, 1),
+                progressStep: 4,
+                evidenceCount: 1,
+                citationCount: 1,
+                uiLanguage: AgentUiLanguage.chinese,
+                strings: _strings,
+                result: _result,
+                onRetry: null,
+                onLooseRetry: null,
+                onSettings: () {},
+                onRegenerate: () {},
+                onCopy: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('请多关照。'), findsOneWidget);
+      expect(find.textContaining('[RUBY='), findsNothing);
+    },
+  );
+
+  testWidgets('assistant bubble renders local RUBY in its summary', (
+    tester,
+  ) async {
+    final result = _resultWithAnalysis(
+      const AgentAnalysis(
+        sourceId: 'src-1',
+        translation: <AgentTranslation>[
+          AgentTranslation(quoteId: 'q1', text: '何卒[YOMI]なにとぞ[/YOMI]'),
+        ],
+      ),
+    );
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light(),
@@ -272,7 +345,6 @@ void main() {
               providerLabel: 'DeepSeek',
               mode: AgentMode.strict,
               running: false,
-              provisional: false,
               cancelled: false,
               error: null,
               errorDetail: '',
@@ -284,7 +356,7 @@ void main() {
               citationCount: 1,
               uiLanguage: AgentUiLanguage.chinese,
               strings: _strings,
-              result: _result,
+              result: result,
               onRetry: null,
               onLooseRetry: null,
               onSettings: () {},
@@ -297,7 +369,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('请多关照。'), findsOneWidget);
+    expect(find.byType(AgentRichText), findsWidgets);
+    expect(find.textContaining('何卒'), findsWidgets);
+    expect(find.textContaining('[YOMI]'), findsNothing);
     expect(find.textContaining('[RUBY='), findsNothing);
   });
 

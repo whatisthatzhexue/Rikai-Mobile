@@ -1253,7 +1253,9 @@ reasoning-effort/thinking-off 参数；要真正缩短思考时间，应把复�
 未逐字符校验。模型可能顺手改标点、删空格、改写词形，导致结果与已校验内容不一致。
 
 **正确做法**：后处理只作用于详细解析的“原文”、逐句理解和词典事实解释（词义/语法，
-不含 citation snippet），AI 气泡摘要保持纯文本，避免中文译文被误标注。后处理只允许在原文之间插入 `[RUBY=reading]base[/RUBY]`、
+不含 citation snippet）；AI 气泡摘要、可能的理解、未解决、模型补充、引用行和
+词注/语法注 fallback 用本地 RUBY 渲染（不加载模型 BOLD/UNDERLINE），避免中文
+译文被模型强调标签误标注；citation snippet 仍是词典原文。后处理只允许在原文之间插入 `[RUBY=reading]base[/RUBY]`、
 `[BOLD]...[/BOLD]`、`[UNDERLINE]...[/UNDERLINE]`；注音由 AI 根据文本自身判断，
 不读取 UniDic 读音表。结果生成模型会把 `[MEANING]` 和词条解释开头的读音标注成
 `word[YOMI]reading[/YOMI]`（读音不带括号；单词=读音时只写单词；禁止
@@ -1267,14 +1269,19 @@ RUBY 可以位于 BOLD/UNDERLINE 内，BOLD/UNDERLINE 也可以相互包裹；BO
 （如 `[RUBY=reading]reading[/RUBY]`），这类冗余 RUBY 必须取消。YOMI 内容比较前要
 清洗全角/半角标点；模型输出的 `[RUBY=内容]` 也要先清洗全角/半角标点，清洗后为空
 或等于 base 时移除 RUBY。若后处理把已有的 `surface（reading）` 注记包进 RUBY，
-显示/导出必须折叠成一份读音：base 末尾与 RUBY 读音相同的括号会被隐藏，`[/RUBY]`
-后紧邻的相同括号会被跳过；`richTextToPlain` 仍输出 `base（reading）`。RUBY 位于
+显示必须折叠成一份读音：base 末尾与 RUBY 读音相同的括号会被隐藏，`[/RUBY]` 后
+（即使隔着 `[/BOLD]`/`[/UNDERLINE]`）的相同括号会被本地转换删除；
+`richTextToPlain` 仍输出 `base（reading）`。模型若输出
+`[BOLD]surface[/BOLD]（reading）`，本地转换必须把读音移入强调 span 为
+`[BOLD][RUBY=reading]surface[/RUBY][/BOLD]`，不能留下非粗体括号；
+`[BOLD]surface（reading）[/BOLD]` 同样转 RUBY。RUBY 位于
 BOLD 内时读音随 base 加粗；读音永远不加下划线（即使位于 UNDERLINE 内）；RUBY
 base 使用与周围正文相同的行高/metrics，以 alphabetic baseline 对齐，不能把小字当作
 基线而让 base 下沉。UNDERLINE 不要用 `TextStyle.decoration`（字体/字形 metrics
 会让 `；` 与汉字的下划线高度不同），应使用 baseline 相对偏移的自绘线。保留的
-YOMI 只剥离标签，显示/导出为 `base（reading）`。任何差异、未闭合/错误嵌套标签、空输出或 provider
-失败都直接丢弃该块格式化结果，渲染纯文本；不弹用户错误、不重试、不把失败输出交给
+YOMI 和假名括号读音在结果构建时本地转成 RUBY（预览首帧即可见）；Markdown
+导出仍用 `base（reading）`。任何差异、未闭合/错误嵌套标签、空输出或 provider
+失败都直接丢弃该块格式化结果，保留本地 RUBY 基线；不弹用户错误、不重试、不把失败输出交给
 前端。Prompt 不得使用“uncertain 就返回原文”的模糊兜底；只允许不确定的具体词保持
 原样。相关实现：`rich_text_post_processor.dart`、`rich_text_tags.dart`；契约
 §5.3。内部 Prompt 指令统一英文，闭合标签统一用正斜杠 `[/TAG]`。
@@ -1282,12 +1289,17 @@ YOMI 只剥离标签，显示/导出为 `base（reading）`。任何差异、未
 **2026-11-03 修正**：不再在调用后处理模型前把 YOMI 预转成 RUBY。模型输入保留
 结果模型原始文本和 `word[YOMI]reading[/YOMI]`，prompt 也不再包含“保留已有
 RUBY”“不要原样返回”“把 YOMI 转成 RUBY”三组规则，只保留标签格式、只插标签
-不改字、合法嵌套。本地 YOMI→RUBY 仅在 provider/校验失败或模型保留 YOMI 时兜底。
-预注入会让轻量模型把格式化任务误解为改写任务，增加原样返回/非法输出。改动前的
-回归样本读音/依据覆盖 9/9（100%），见 `docs/agent_output/` 与 `T-135` 相关记录。
-本地兜底同时识别 `word（reading）`（假名读音）并转成等价 RUBY；比较时把
+不改字、合法嵌套。`surface（reading）` → `[RUBY=reading]surface[/RUBY]` 是
+“不改字”规则的唯一例外，base 字符仍不得变化；BOLD/UNDERLINE 内的读音必须
+放在同一强调 span 内。本地 `localReadingsToRuby` 在 provisional/final/salvage 结果
+构建时始终执行，预览首帧即 RUBY；provider/校验失败、模型保留 YOMI/括号或某个
+section 被拒绝时，同一转换兜底，模型格式化只追加 BOLD/UNDERLINE。预注入会让
+轻量模型把格式化任务误解为改写任务，增加原样返回/非法输出。改动前的回归样本
+读音/依据覆盖 9/9（100%），见 `docs/agent_output/` 与 `T-135` 相关记录。本地转换
+同时识别 `word（reading）`（假名读音）并转成等价 RUBY；比较时把
 `word（reading）` 与 `[RUBY=reading]word[/RUBY]` 归一化为同一 base，非假名括号
-（解释性文字）不转换，base 字符仍须完全一致。
+（解释性文字）不转换，base 字符仍须完全一致。转换是标签感知的：BOLD/UNDERLINE
+在读音前关闭时把读音移入强调 span，RUBY 后（含隔着强调闭合标签）的重复括号删除。
 
 ### T-136 SSE 已收到 finish=stop，UI 仍等数秒才显示结果
 

@@ -201,6 +201,84 @@ void main() {
     },
   );
 
+  test('moves a reading outside a closed BOLD back inside as RUBY', () async {
+    const source = '今[YOMI]いま[/YOMI]は大切（たいせつ）';
+    const candidate = '今[YOMI]いま[/YOMI]は[BOLD]大切[/BOLD]（たいせつ）';
+    final result = await RichTextPostProcessor(
+      llm: FakeProvider(responseText: candidate),
+      model: 'small',
+    ).process(source);
+
+    expect(result.accepted, isTrue);
+    expect(
+      result.taggedText,
+      '[RUBY=いま]今[/RUBY]は[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]',
+    );
+    expect(result.taggedText, isNot(contains('（たいせつ）')));
+  });
+
+  test('wraps a reading inside BOLD as RUBY', () async {
+    const source = '大切（たいせつ）';
+    final result = await RichTextPostProcessor(
+      llm: FakeProvider(responseText: '[BOLD]大切（たいせつ）[/BOLD]'),
+      model: 'small',
+    ).process(source);
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, '[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]');
+  });
+
+  test('drops a duplicate reading after a closed BOLD RUBY', () async {
+    const source = '大切（たいせつ）';
+    final result = await RichTextPostProcessor(
+      llm: FakeProvider(
+        responseText: '[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]（たいせつ）',
+      ),
+      model: 'small',
+    ).process(source);
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, '[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]');
+    expect(result.taggedText, isNot(contains('（たいせつ）')));
+  });
+
+  test(
+    'moves a reading outside a closed UNDERLINE back inside as RUBY',
+    () async {
+      const source = '大切（たいせつ）';
+      final result = await RichTextPostProcessor(
+        llm: FakeProvider(responseText: '[UNDERLINE]大切[/UNDERLINE]（たいせつ）'),
+        model: 'small',
+      ).process(source);
+
+      expect(result.accepted, isTrue);
+      expect(result.taggedText, '[UNDERLINE][RUBY=たいせつ]大切[/RUBY][/UNDERLINE]');
+    },
+  );
+
+  test('keeps a non-kana parenthetical outside BOLD', () async {
+    const source = '大切（重要）';
+    final result = await RichTextPostProcessor(
+      llm: FakeProvider(responseText: '[BOLD]大切[/BOLD]（重要）'),
+      model: 'small',
+    ).process(source);
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, '[BOLD]大切[/BOLD]（重要）');
+  });
+
+  test('local display converts YOMI and tag-boundary readings to RUBY', () {
+    expect(localReadingsToRuby('今[YOMI]いま[/YOMI]（いま）は'), '[RUBY=いま]今[/RUBY]は');
+    expect(
+      parentheticalReadingsToRuby('[BOLD]大切[/BOLD]（たいせつ）'),
+      '[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]',
+    );
+    expect(
+      parentheticalReadingsToRuby('[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]（たいせつ）'),
+      '[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]',
+    );
+  });
+
   test('allows a whole YOMI block to be replaced by RUBY', () async {
     const source = 'ます[YOMI]（ます）[/YOMI]';
     final result = await RichTextPostProcessor(
@@ -293,6 +371,13 @@ void main() {
         normalizedPrompt,
         isNot(contains('Convert those YOMI blocks to RUBY')),
       );
+      expect(
+        normalizedPrompt,
+        contains(
+          'replace the whole annotation with [RUBY=reading]surface[/RUBY]',
+        ),
+      );
+      expect(normalizedPrompt, contains('put the RUBY inside that span'));
     },
   );
 

@@ -626,13 +626,14 @@ word[YOMI]reading[/YOMI]
 ```
 
 YOMI 内容是**不带括号**的读音；单词与读音相同（例如假名词）时只写单词，不输出
-YOMI。禁止 `word（reading）` 或 `word[YOMI]（reading）[/YOMI]`，否则后处理会
-同时出现 RUBY 与括号读音。本地生成的词典事实注释（`agentSegmentNotesSource`）
-也使用同一格式；旧数据中的括号读音仍按兼容规则处理。
+YOMI。模型应输出 YOMI；结果构建时本地把 YOMI 和旧式 `word（reading）` 一律转成
+RUBY，预览首帧即可见，不等待后处理模型。禁止模型同时输出 RUBY 与括号读音。
+本地生成的词典事实注释（`agentSegmentNotesSource`）也使用同一格式；旧数据中的
+括号读音仍由本地转换兼容。
 
-AI 气泡摘要（`[TRANSLATION]`）保持纯文本，不参与富文本后处理；RUBY/BOLD/
-UNDERLINE 只用于详细解析的“原文”、逐句理解和词典事实解释（词义/语法，不含
-citation snippet）。原文注音由后处理 AI 生成，不读取
+AI 气泡摘要（`[TRANSLATION]`）用本地 `localReadingsToRuby` 渲染 RUBY，但不参与
+模型 BOLD/UNDERLINE 后处理；RUBY/BOLD/UNDERLINE 的模型格式化只用于详细解析的
+“原文”、逐句理解和词典事实解释（词义/语法，不含 citation snippet）。原文注音由后处理 AI 生成，不读取
 UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标注能从词形和上下文
 确定的读音。
 
@@ -640,40 +641,64 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
   也可以相互包裹；BOLD/UNDERLINE 不得进入 RUBY 的 `base`，同一标签不得嵌套
   自身。RUBY 的 `base` 必须是原文连续文本。RUBY 是语言无关的发音标注，不限定
   书写系统，但不能包含标签或换行。
-- 当 base 末尾已经带有与 RUBY 读音相同的 `（reading）`，或 `[/RUBY]` 后紧邻
-  同一读音的括号注记时，显示/导出只保留一份读音：base 内的重复括号会被隐藏，
-  `[/RUBY]` 后的重复括号会被跳过；`richTextToPlain` 仍输出 `base（reading）`。
+- 当 base 末尾已经带有与 RUBY 读音相同的 `（reading）`，或 `[/RUBY]` 后（即使
+  中间夹着 `[/BOLD]`/`[/UNDERLINE]`）紧邻同一读音的括号注记时，显示只保留一份
+  读音：base 内的重复括号会被隐藏，`[/RUBY]` 后、强调标签外的重复括号会被本地
+  转换删除；`richTextToPlain` 仍输出 `base（reading）` 供 Markdown 纯文本复制。
   RUBY 位于 BOLD 内时读音随 base 一起加粗；任何 RUBY 读音都不加下划线（即使
   位于 UNDERLINE 内）。RUBY base 使用与周围正文相同的行高/metrics，以其
   alphabetic baseline 对齐，读音在其上方，不把 base 下沉。
+- **标签感知的括号读音转换（2026-11-03 追加）**：模型可能输出
+  `[BOLD]surface[/BOLD]（reading）`。本地转换必须把读音移入仍打开的强调 span：
+  `[BOLD][RUBY=reading]surface[/RUBY][/BOLD]`，使读音继承粗体；不能留下
+  `[BOLD]surface[/BOLD]（reading）` 的非粗体括号。`[BOLD]surface（reading）[/BOLD]`
+  同样转换为 RUBY；UNDERLINE 同理（RUBY 读音本身仍不加下划线）。
 - UNDERLINE 不使用 `TextStyle.decoration`（其位置依赖字体/字形 metrics，全角
   `；` 与汉字会落在不同高度），而由 `_UnderlineSpanWidget` 在 alphabetic
   baseline 下方固定偏移处绘制；汉字、标点和 RUBY base 使用同一条基线相对线。
 - 富文本后处理模型不得修改、删除或增加原文任何字符（含标点/空格/换行），只允许
   在字符之间插入 `[RUBY]`/`[BOLD]`/`[UNDERLINE]`。输入中的 YOMI 块按原文保留；
   prompt 要求不得新增、删除、改写、移动或嵌套 YOMI。代码端仍兼容“整块删除
-  YOMI 并替换为等价 RUBY”的旧输出，但不再要求模型做此转换。prompt 见
+  YOMI 并替换为等价 RUBY”的旧输出，但不再要求模型做此转换。prompt 明确要求：
+  源文本已有 `surface（reading）` 时整段替换为 `[RUBY=reading]surface[/RUBY]`，
+  不得保留括号，也不得同时输出 RUBY 和括号；这是“不得改动原文字符”规则的唯一
+  例外（base 字符仍不得变化）。单词位于 BOLD/UNDERLINE 内时 RUBY
+  必须放在同一强调 span 内，不能先关闭强调再写括号读音。prompt 见
   `agent_prompts.dart` 的 `buildRichTextPostProcessRequest` /
   `buildDetailedRubyPostProcessRequest`。
+- **结果构建时的本地显示基线（2026-11-03 追加）**：provisional、正常和 salvage
+  结果在 `_buildResult` 中先用 `localReadingsToRuby` 填充 `richOriginalText`/
+  `richSegmentTexts`/`richSegmentNotes`：YOMI 和假名括号读音都转成 RUBY，标签
+  感知（`[BOLD]base[/BOLD]（reading）` 会变成
+  `[BOLD][RUBY=reading]base[/RUBY][/BOLD]`）。因此用户看到结果预览时已经有
+  RUBY，不必等待 `onRichTextReady`。模型格式化只追加 BOLD/UNDERLINE；某个
+  section 被拒绝或返回空时，`copyWithRichText` 保留本地 RUBY 基线，不退化为
+  括号纯文本。
 - 代码端必须先用 `stripRichTextTags` 剥离显示标签，并按 YOMI 规则比较：
   删除的 YOMI 块允许消失；保留的 YOMI 块必须内容不变、位置不变。**比较前会先去除
   YOMI 内容中的全角/半角标点符号**，因此 `（いま）` 与 `いま` 视为同一读音注记。
   括号读音 `word（reading）` 与 `[RUBY=reading]word[/RUBY]` 也视为同一显示形式：
   比较前本地归一化，base 字符仍需逐字符一致；非假名括号（解释性文字）不转换。
-  随后与原文逐字符严格比较；只有完全相等才采用。任何差异、未闭合/错误嵌套标签、
-  改写/移动 YOMI、空输出或 provider 失败都丢弃后处理结果，降级渲染纯文本，不影响
-  核心结果。
+  标签感知转换发生在比较两侧，因此 `[BOLD]word[/BOLD]（reading）` 的候选输出
+  不会被误判为 `text_changed`。随后与原文逐字符严格比较；只有完全相等才采用。
+  任何差异、未闭合/错误嵌套标签、改写/移动 YOMI、空输出或 provider 失败都丢弃
+  该后处理 section，保留本地 RUBY 基线，不影响核心结果。
 - 模型输出的 `[RUBY=内容]` 也会先清洗内容中的全角/半角标点符号，再作为最终
   RUBY 读音；清洗后为空或等于 base 时移除该 RUBY，只保留 base 文本。
 - 每个 RUBY 的读音不得与被标注 base 完全相同（如 `[RUBY=reading]reading[/RUBY]`）；
   这类冗余 RUBY 会被移除，保留 base 文本。
-- 保留的 YOMI 块在显示/导出前只剥离标签，保留括号读音（`base（reading）`）；不会
-  把标签原文泄漏到 UI 或 Markdown。
-- 当前渲染范围：AI 气泡摘要保持纯 `Text`；详细解析的“原文”使用
+- 结构化结果在显示前把保留的 YOMI 块和假名括号读音本地转成 RUBY（不再把 YOMI
+  直接剥离成括号）；Markdown 复制/导出仍通过 `richTextToPlain` 输出
+  `base（reading）`，不会把标签原文泄漏到 UI 或 Markdown。
+- 当前渲染范围：AI 气泡摘要使用 `AgentRichText` 渲染本地 RUBY（不加载模型
+  BOLD/UNDERLINE）；详细解析的“原文”使用
   `AgentRunResult.richOriginalText`（整个 section 一个结果，不是每个 quote 一个
   字段），逐句理解使用 `AgentRunResult.richSegmentTexts`（与 segments 对齐），
   词典事实中的词义/语法解释使用 `AgentRunResult.richSegmentNotes`（与 segments
-  对齐，不包含 citation snippet）。三者都由 `AgentRichText` 渲染。
+  对齐，不包含 citation snippet）。三者都由 `AgentRichText` 渲染，并在结果
+  构建时预填本地 RUBY；AI 气泡摘要、逐句引用行、无 pitch 数据的词注/语法注、
+  可能的理解、未解决原因和模型补充也通过 `localReadingsToRuby` 显示 RUBY，
+  而不是括号；citation snippet 仍是词典原文，不转换。
   `buildAgentResultMarkdown` 使用 `richTextToPlain` 把 RUBY 转为
   `base（reading）` 并移除 BOLD/UNDERLINE/YOMI 标签，复制结果不带标签。失败
   不回退 run，也不写用户可见错误。
@@ -685,13 +710,16 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
   之后回填富文本，核心结果不再等待格式化；同步调用方（测试/直接调用）仍可等待
   最终结果。2026-11-03 起不再在调用模型前预注入 RUBY：模型输入保留结果模型
   原始文本及 `word[YOMI]reading[/YOMI]`，只做显示标签插入；prompt 也不再要求
-  “保留已有 RUBY”“不要原样返回”“把 YOMI 转成 RUBY”。本地 YOMI→RUBY 只在
-  provider/校验失败或模型保留 YOMI 时作为兜底，已知读音不会退回括号纯文本。
+  “保留已有 RUBY”“不要原样返回”“把 YOMI 转成 RUBY”。本地
+  `localReadingsToRuby` 在结果构建时始终执行（预览首帧即 RUBY），模型
+  `onRichTextReady` 只负责后续 BOLD/UNDERLINE；provider/校验失败、模型保留
+  YOMI/括号或某个 section 被拒绝时，同一本地转换兜底，不会退回括号纯文本。
   该调整的前提检查（当前 `docs/agent_output` 回归样本的读音/依据覆盖 9/9，
   =100%）见 `docs/phase6-status.md`。salvage 路径（校验失败但仍有可显示内容）
   也执行同一格式化，不再因为提前 return 而让用户只看到括号读音；debug 日志
   `[AgentValidation]`/`[AgentSalvage]` 记录失败原因，`[AgentRichText]` 的
-  `changed`/`tags` 区分“原样返回”和“实际产生格式变化”。
+  `tags`/`ruby`/`bold`/`underline`/`local_only` 区分“本地 RUBY”“模型确实加了
+  强调”和“只是原样返回”。
 - 该后处理是 P7 任务解耦的增量原型（见
   `docs/agent_docs/p7-task-decomposition-plan.md`）；完整任务拆分/模型路由/
   并发流式仍待 P7。
@@ -798,7 +826,7 @@ idle
   → coverage（一次覆盖审查，可选补充检索）
   → reasoning
   → validating
-  → formatting（可选富文本后处理；失败回退纯文本）
+  → formatting（可选富文本后处理；失败保留本地 RUBY 基线）
   → done | error | cancelled
 ```
 
@@ -818,11 +846,16 @@ idle
 - `coverage` 是 2026-10-31 F7 的一次性覆盖审查（Wave 3 已实现）；每个请求最多
   触发一次补充检索，`coverageFallbackUsed=true` 后不得再次回退。审查失败、
   schema 无效、query 不可追溯或没有可验证重复时保留原证据并显示 warning。
-- `formatting` 是 2026-11-03 的 P7.0 增量：对已校验的详细结果做富文本后处理；
-  标签剥离 diff 失败、provider 失败或输出为空时直接回退纯文本，不改变 run
-  成功状态，也不产生用户可见错误。App 控制器通过 `onRichTextReady` 接收
-  结果，因此 `done` 可先于格式化完成；同步调用方仍会在 `formatting` 阶段
-  等待最终结果。
+- `formatting` 是 2026-11-03 的 P7.0 增量：对已校验的详细结果追加
+  BOLD/UNDERLINE。结果构建时已经预填本地 RUBY，因此 `formatting` 不是读音
+  可见性的前提；标签剥离 diff 失败、provider 失败或输出为空时保留本地 RUBY
+  基线（强调标签不生效），不回退成括号纯文本，不改变 run 成功状态，也不产生
+  用户可见错误。App 控制器通过 `onRichTextReady` 接收结果，因此 `done` 可先于
+  格式化完成；同步调用方仍会在 `formatting` 阶段等待最终结果。
+- 异步 formatting 通过 `onRichTextFormattingChanged(true/false)` 驱动
+  `AgentRunSnapshot.richTextFormatting`。为 true 时 Agent 页在会话上方显示可
+  关闭的绿色“界面美化正在进行中…”横幅；完成、失败或取消后回调 false，横幅
+  自动消失。关闭横幅只隐藏当前 run 的提示，不取消 formatting，也不改变结果。
 - `validating` 期间，首个可展示分析（parse/validate 后；必要时用本地 salvage）
   必须立即通过 `onProvisionalResult` 交给 UI，不得等待 format/language repair 或
   `formatting` 完成。UI 显示“结果已出，正在复核…”，`done` 时用最终结果替换。
@@ -1061,9 +1094,10 @@ agent_profile_inbox(
 - 启动扫描 `status IN ('preparing','ocr','familiarizing','awaiting_profile',
   'tokenizing','reasoning','validating')` 的 run，统一更新为 `interrupted`，
   写 `finished_at=now`、`updated_at=now`；不自动续跑、不重复请求 provider。
-- 删除单条：按 run_id 删除 `agent_runs`、`agent_messages`、`agent_tool_calls`、
-  `agent_source_versions`、`agent_citations`；若 session 无其他 run，删除
-  `agent_sessions`。清空全部只清 Agent 历史，不删语料/词典档案/provider/Key。
+- 删除单条或多选：按 run_id 删除 `agent_runs`、`agent_messages`、
+  `agent_tool_calls`、`agent_source_versions`、`agent_citations`；若 session 无
+  其他 run，删除 `agent_sessions`。多选在一个事务内级联删除；全选后删除等价于
+  清空 Agent 历史，但同样必须二次确认，且不删语料/词典档案/provider/Key。
 - 历史 citation 点击：按 `dictionary_id + entry_key` 精确查；失败再试
   `matched_key`；仍失败只显示保存的 `snippet`，不打开任意词条。查询必须使用
   当前词典注册表，但不得改变历史中保存的词典顺序。
@@ -1075,7 +1109,7 @@ agent_profile_inbox(
 - `history-entry`/`history-result` codec round-trip；未知 schema 降级。
 - DB v2→v3 迁移；`onCreate` 与迁移后的列一致。
 - 启动扫描 running→interrupted；不自动调用 provider。
-- 删除单条/清空级联；session 清理。
+- 删除单条/多选/清空级联；session 清理；多选 id 去重。
 - 历史 JSON、日志、导出断言不含图片路径/字节/base64/Key/provider body。
 - citation 精确回查、matched_key 回退、词典缺失只显示 snippet。
 - profile inbox 持久化、dismiss 不 skip、全部处理后才进入查词。

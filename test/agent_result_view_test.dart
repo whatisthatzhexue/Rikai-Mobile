@@ -8,6 +8,7 @@ import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
 import 'package:rikai_mobile/features/agent/agent_evidence_panel.dart';
 import 'package:rikai_mobile/features/agent/agent_pitch_accent.dart';
+import 'package:rikai_mobile/features/agent/agent_rich_text.dart';
 import 'package:rikai_mobile/features/agent/agent_result_view.dart';
 import 'package:rikai_mobile/services/agent/agent_run.dart';
 import 'package:rikai_mobile/services/agent/agent_ui_strings.dart';
@@ -271,7 +272,7 @@ void main() {
     );
   });
 
-  testWidgets('strips YOMI wrappers in segment interpretations', (
+  testWidgets('converts YOMI to RUBY in segment interpretations', (
     tester,
   ) async {
     final result = AgentRunResult(
@@ -310,8 +311,16 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('正式请求（せいしき）'), findsOneWidget);
+    final rich = tester.widget<AgentRichText>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is AgentRichText &&
+            widget.text.contains('[RUBY=せいしき]正式请求[/RUBY]'),
+      ),
+    );
+    expect(rich.text, contains('[RUBY=せいしき]正式请求[/RUBY]'));
     expect(find.textContaining('[YOMI]'), findsNothing);
+    expect(find.textContaining('（せいしき）'), findsNothing);
   });
 
   testWidgets('renders RUBY in the original and segment text', (tester) async {

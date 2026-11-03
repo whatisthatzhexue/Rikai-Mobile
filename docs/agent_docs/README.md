@@ -47,12 +47,15 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
   `familiarization_prompts.dart` 仅为兼容 re-export，不是独立 prompt 源。
 - **富文本后处理只用于详细解析**：仅“原文”section、逐句理解与词典事实解释
   （词义/语法，不含 citation snippet）使用 `[RUBY]`/`[BOLD]`/`[UNDERLINE]`；
-  AI 气泡摘要保持纯文本。采用前必须剥离标签，并按 YOMI 规则（允许整块删除、保留
-  块必须内容/位置不变）与原文逐字符严格比较；不一致就降级纯文本。标签必须正确
+  AI 气泡摘要和其他结果 prose（可能的理解/未解决/补充/引用行/词注 fallback）
+  用本地 RUBY 渲染，不加载模型 BOLD/UNDERLINE。采用前必须剥离标签，
+  并按 YOMI 规则（允许整块删除、保留块必须内容/位置不变）与原文逐字符严格比较；
+  不一致就保留结果构建时的本地 RUBY 基线。标签必须正确
   嵌套：RUBY 可在 BOLD/UNDERLINE 内，BOLD/UNDERLINE 可相互包裹，但不得进入
   RUBY base 或嵌套自身。YOMI 内容比较忽略全/半角标点，RUBY 读音先清洗标点；
-  RUBY 读音等于 base 时必须移除该 RUBY。包住已有 `surface（reading）` 时只保留
-  一份读音；RUBY 以 base 的基线对齐，读音继承 BOLD 但永不加下划线。注音由 AI
+  RUBY 读音等于 base 时必须移除该 RUBY。括号读音转换是标签感知的：包住已有
+  `surface（reading）` 时只保留一份读音，BOLD/UNDERLINE 在读音前关闭时把读音
+  移入强调 span；RUBY 以 base 的基线对齐，读音继承 BOLD 但永不加下划线。注音由 AI
   判断，不读取 UniDic 读音表。（R-AGENT-23、T-135）
 - **P6.7 部分实现**：历史一条=一次 run、只读、不存图片/路径；声调只用 UniDic
   字段 24–26，只在词注/词典事实行；这两项已实现并有自动化测试。annotation DSL

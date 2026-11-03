@@ -11,6 +11,7 @@ import '../../core/models/agent/agent_ocr.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/agent/agent_quote.dart';
 import '../../core/models/agent/agent_tool.dart';
+import '../../core/utils/rich_text_tags.dart';
 import 'agent_coverage_parser.dart';
 import 'agent_language_validator.dart';
 import 'agent_messages.dart';
@@ -85,6 +86,7 @@ class AgentOrchestrator {
     AgentProvisionalResultCallback? onProvisionalResult,
     AgentCancellation? cancellation,
     AgentRichTextCallback? onRichTextReady,
+    AgentRichTextFormattingCallback? onRichTextFormattingChanged,
     void Function(int accumulatedChars)? onTextDelta,
     void Function(int accumulatedChars)? onReasoningDelta,
     void Function(int citations)? onEvidenceProgress,
@@ -701,6 +703,7 @@ class AgentOrchestrator {
             model: smallModel,
             cancellation: cancellation,
             onRichTextReady: onRichTextReady,
+            onRichTextFormattingChanged: onRichTextFormattingChanged,
             notify: notify,
             uiLanguage: uiLanguage,
           );
@@ -738,6 +741,7 @@ class AgentOrchestrator {
         model: smallModel,
         cancellation: cancellation,
         onRichTextReady: onRichTextReady,
+        onRichTextFormattingChanged: onRichTextFormattingChanged,
         notify: notify,
         uiLanguage: uiLanguage,
       );
@@ -779,6 +783,7 @@ class AgentOrchestrator {
     required String model,
     required AgentCancellation? cancellation,
     required AgentRichTextCallback? onRichTextReady,
+    required AgentRichTextFormattingCallback? onRichTextFormattingChanged,
     required void Function(AgentStage stage, String message) notify,
     required AgentUiLanguage uiLanguage,
   }) async {
@@ -808,6 +813,7 @@ class AgentOrchestrator {
 
     final richCallback = onRichTextReady;
     if (richCallback != null) {
+      onRichTextFormattingChanged?.call(true);
       Future<void> applyLater() async {
         try {
           final outputs = await format();
@@ -821,6 +827,8 @@ class AgentOrchestrator {
               '(${error.runtimeType}); keeping plain text',
             );
           }
+        } finally {
+          onRichTextFormattingChanged?.call(false);
         }
       }
 
@@ -832,8 +840,13 @@ class AgentOrchestrator {
       AgentStage.formatting,
       agentStageMessage(AgentStage.formatting, uiLanguage),
     );
-    final outputs = await format();
-    return outputs == null ? result : result.copyWithRichText(outputs);
+    onRichTextFormattingChanged?.call(true);
+    try {
+      final outputs = await format();
+      return outputs == null ? result : result.copyWithRichText(outputs);
+    } finally {
+      onRichTextFormattingChanged?.call(false);
+    }
   }
 
   /// Formats the independent display sections with one bounded worker pool.
@@ -905,11 +918,28 @@ class AgentOrchestrator {
     final tagCount = tagged == null
         ? 0
         : RegExp(r'\[(?:RUBY|BOLD|UNDERLINE)\b').allMatches(tagged).length;
+    final rubyCount = tagged == null
+        ? 0
+        : RegExp(r'\[RUBY=', caseSensitive: false).allMatches(tagged).length;
+    final boldCount = tagged == null
+        ? 0
+        : RegExp(r'\[BOLD\]', caseSensitive: false).allMatches(tagged).length;
+    final underlineCount = tagged == null
+        ? 0
+        : RegExp(
+            r'\[UNDERLINE\]',
+            caseSensitive: false,
+          ).allMatches(tagged).length;
+    // True when the final text is exactly what deterministic local conversion
+    // would produce. That means the formatting model added no emphasis of its
+    // own; `accepted/changed` alone would hide this.
+    final localOnly = tagged != null && tagged == localReadingsToRuby(source);
     debugPrint(
       '[AgentRichText] $label '
       'accepted=${tagged != null} '
       'changed=${tagged != null && tagged != source} '
-      'tags=$tagCount '
+      'tags=$tagCount ruby=$rubyCount bold=$boldCount '
+      'underline=$underlineCount local_only=$localOnly '
       'reason=${rich.rejectionReason} '
       'sourceChars=${source.length}',
     );
@@ -1142,6 +1172,21 @@ class AgentOrchestrator {
     List<String> richSegmentTexts = const <String>[],
     List<String> richSegmentNotes = const <String>[],
   }) {
+    // Pre-fill display fields with deterministic local RUBY. The optional
+    // formatting model only adds BOLD/UNDERLINE later; it must not be the
+    // reason a reading appears as plain `word（reading）` in the first frame.
+    final originalSource = agentOriginalSource(quotes);
+    final localOriginalText = originalSource.isEmpty
+        ? null
+        : localReadingsToRuby(originalSource);
+    final localSegmentTexts = <String>[
+      for (final segment in analysis.segments)
+        localReadingsToRuby(segment.interpretation),
+    ];
+    final localSegmentNotes = <String>[
+      for (final segment in analysis.segments)
+        localReadingsToRuby(agentSegmentNotesSource(segment)),
+    ];
     return AgentRunResult(
       input: envelope,
       evidence: evidence,
@@ -1158,9 +1203,13 @@ class AgentOrchestrator {
       coverageFallbackUsed: coverageFallbackUsed,
       ocrQuality: _ocrQuality(envelope, evidence),
       pitchAccents: evidence.pitchAccents,
-      richOriginalText: richOriginalText,
-      richSegmentTexts: List<String>.unmodifiable(richSegmentTexts),
-      richSegmentNotes: List<String>.unmodifiable(richSegmentNotes),
+      richOriginalText: richOriginalText ?? localOriginalText,
+      richSegmentTexts: List<String>.unmodifiable(
+        richSegmentTexts.isEmpty ? localSegmentTexts : richSegmentTexts,
+      ),
+      richSegmentNotes: List<String>.unmodifiable(
+        richSegmentNotes.isEmpty ? localSegmentNotes : richSegmentNotes,
+      ),
     );
   }
 

@@ -9,12 +9,14 @@ import '../../core/models/agent/agent_input.dart';
 import '../../core/models/agent/agent_profile.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/ui/rikai_toast.dart';
+import '../../core/utils/rich_text_tags.dart';
 import '../../services/agent/agent_run.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../services/storage/agent_history_store.dart';
 import '../../state/agent_history_recorder.dart';
 import '../../state/providers.dart';
 import 'agent_actions.dart';
+import 'agent_rich_text.dart';
 import 'agent_result_view.dart';
 
 class AgentHistoryDetailPage extends ConsumerStatefulWidget {
@@ -157,7 +159,9 @@ class _HistoryDetailBody extends StatelessWidget {
     final result = detail.result;
     final summary = result == null
         ? ''
-        : agentSummaryDisplayText(result.analysis);
+        : stripYomiTags(
+            localReadingsToRuby(agentSummarySource(result.analysis)),
+          );
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
@@ -233,8 +237,8 @@ class _HistoryDetailBody extends StatelessWidget {
           const SizedBox(height: AppSpacing.lg),
           _SectionLabel(text: strings.historyAssistantResult),
           const SizedBox(height: AppSpacing.xs),
-          Text(
-            summary,
+          AgentRichText(
+            text: summary,
             style: theme.textTheme.bodyLarge?.copyWith(
               fontSize: AgentTokens.body,
               height: 1.5,

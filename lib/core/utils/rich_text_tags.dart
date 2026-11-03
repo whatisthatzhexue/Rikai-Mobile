@@ -61,6 +61,41 @@ final RegExp _parentheticalReadingPattern = RegExp(
   r'([）)])',
 );
 
+/// A word immediately before one or more closing emphasis tags, followed by
+/// its parenthetical reading, e.g. `[BOLD]自分[/BOLD]（じぶん）`. The formatter
+/// sometimes closes BOLD/UNDERLINE before the reading, which leaves the
+/// reading outside the emphasis and not bold. The reading must be moved inside
+/// the still-open span as RUBY so it inherits the base's emphasis.
+final RegExp _baseThenClosingTagsThenReadingPattern = RegExp(
+  r'([぀-ヿ㐀-䶿一-鿿々〆ヶー]{1,16})'
+  r'((?:\[/(?:BOLD|UNDERLINE)\])+)'
+  r'([（(])'
+  r'([぀-ゟ゠-ヿー]{1,24})'
+  r'([）)])',
+  caseSensitive: false,
+);
+
+/// A RUBY pair (optionally wrapped by closing emphasis tags) followed by the
+/// same parenthetical reading, e.g.
+/// `[BOLD][RUBY=じぶん]自分[/RUBY][/BOLD]（じぶん）`. The parentheses are a
+/// duplicate display annotation and must be dropped rather than rendered as
+/// non-bold text.
+final RegExp _rubyThenClosingTagsThenReadingPattern = RegExp(
+  r'\[RUBY=([^\]]*)\]([\s\S]*?)\[/RUBY\]'
+  r'((?:\[/(?:BOLD|UNDERLINE)\])*)'
+  r'[（(]([^（）()\r\n]*)[）)]',
+  caseSensitive: false,
+);
+
+/// The result model's `word[YOMI]reading[/YOMI]` annotation. The visible result
+/// must carry RUBY from the first frame, so this is converted locally before
+/// the optional display-formatting model runs.
+final RegExp _yomiToRubyPattern = RegExp(
+  r'([぀-ヿ㐀-䶿一-鿿豈-﫿々〆ヶー]+)'
+  r'\[YOMI\]([\s\S]*?)\[\/YOMI\]',
+  caseSensitive: false,
+);
+
 /// Existing display spans that must not be rewritten by the parenthetical
 /// converter. RUBY bases and YOMI contents may contain text that looks like a
 /// word-plus-reading pair.
@@ -72,29 +107,79 @@ final RegExp _protectedDisplaySpanPattern = RegExp(
 String cleanReading(String reading) =>
     reading.replaceAll(_readingPunctuationPattern, '').trim();
 
+/// Converts the result model's `word[YOMI]reading[/YOMI]` annotations to
+/// RUBY. A reading identical to its base is dropped. This is a display-only
+/// helper; the base characters are never changed.
+String yomiToRuby(String text) {
+  return text.replaceAllMapped(_yomiToRubyPattern, (match) {
+    final base = match.group(1) ?? '';
+    final reading = cleanReading(match.group(2) ?? '');
+    if (base.isEmpty || reading.isEmpty || reading == base) return base;
+    return '[RUBY=$reading]$base[/RUBY]';
+  });
+}
+
+/// The local display conversion used before the optional formatting model
+/// runs: both YOMI and parenthetical readings become RUBY. The result preview
+/// therefore shows RUBY immediately instead of waiting for the network pass.
+String localReadingsToRuby(String text) =>
+    parentheticalReadingsToRuby(yomiToRuby(text));
+
 /// Converts `word（reading）` annotations to RUBY without touching existing
 /// RUBY/YOMI spans. A reading identical to its base is dropped. This is a
-/// display-only fallback: the base characters are never changed.
+/// display-only helper: the base characters are never changed.
+///
+/// The conversion is tag-aware. If the formatter closed BOLD/UNDERLINE before
+/// the reading (`[BOLD]自分[/BOLD]（じぶん）`), the reading is moved inside the
+/// emphasis span as RUBY; if a RUBY pair is followed by the same parenthetical
+/// reading, the duplicate parentheses are removed.
 String parentheticalReadingsToRuby(String text) {
+  final normalized = _dropReadingAfterClosedRuby(text);
   final buffer = StringBuffer();
   var cursor = 0;
-  for (final match in _protectedDisplaySpanPattern.allMatches(text)) {
+  for (final match in _protectedDisplaySpanPattern.allMatches(normalized)) {
     buffer.write(
-      _convertParentheticalReadings(text.substring(cursor, match.start)),
+      _convertParentheticalReadings(normalized.substring(cursor, match.start)),
     );
     buffer.write(match.group(0));
     cursor = match.end;
   }
-  buffer.write(_convertParentheticalReadings(text.substring(cursor)));
+  buffer.write(_convertParentheticalReadings(normalized.substring(cursor)));
   return buffer.toString();
 }
 
 String _convertParentheticalReadings(String text) {
-  return text.replaceAllMapped(_parentheticalReadingPattern, (match) {
+  final moved = text.replaceAllMapped(_baseThenClosingTagsThenReadingPattern, (
+    match,
+  ) {
+    final base = match.group(1) ?? '';
+    final closings = match.group(2) ?? '';
+    final reading = cleanReading(match.group(4) ?? '');
+    if (base.isEmpty || reading.isEmpty || reading == base) {
+      return '$base$closings';
+    }
+    return '[RUBY=$reading]$base[/RUBY]$closings';
+  });
+  return moved.replaceAllMapped(_parentheticalReadingPattern, (match) {
     final base = match.group(1) ?? '';
     final reading = cleanReading(match.group(3) ?? '');
     if (base.isEmpty || reading.isEmpty || reading == base) return base;
     return '[RUBY=$reading]$base[/RUBY]';
+  });
+}
+
+/// Drops a parenthetical reading that duplicates a RUBY pair, even when one or
+/// more closing emphasis tags sit between `[/RUBY]` and the parentheses.
+String _dropReadingAfterClosedRuby(String text) {
+  return text.replaceAllMapped(_rubyThenClosingTagsThenReadingPattern, (match) {
+    final reading = cleanReading(match.group(1) ?? '');
+    final base = match.group(2) ?? '';
+    final closings = match.group(3) ?? '';
+    final trailing = cleanReading(match.group(4) ?? '');
+    if (reading.isEmpty || trailing.isEmpty || reading != trailing) {
+      return match.group(0) ?? '';
+    }
+    return '[RUBY=$reading]$base[/RUBY]$closings';
   });
 }
 

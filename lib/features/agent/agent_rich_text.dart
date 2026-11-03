@@ -4,9 +4,10 @@ import 'package:flutter/rendering.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/utils/rich_text_tags.dart';
 
-/// Renders the validated rich-text summary. The caller must only pass text
-/// whose tag-stripped form equals the original summary; malformed or modified
-/// output is rejected before this widget is built.
+/// Renders display text containing RUBY/BOLD/UNDERLINE. Model-formatted text
+/// must already have passed the tag-stripped diff guard; locally converted
+/// text must preserve the base characters. Malformed model output is rejected
+/// before this widget is built.
 class AgentRichText extends StatelessWidget {
   const AgentRichText({
     super.key,

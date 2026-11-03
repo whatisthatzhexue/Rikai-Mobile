@@ -317,9 +317,9 @@ void main() {
         sharedPreferencesProvider.overrideWithValue(_preferences),
         agentLimitsProvider.overrideWithValue(
           const AgentLimits(
-              maxCoverageFallback: 0,
-              enableRichTextPostProcess: false,
-            ),
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: false,
+          ),
         ),
         agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
@@ -348,9 +348,9 @@ void main() {
         sharedPreferencesProvider.overrideWithValue(_preferences),
         agentLimitsProvider.overrideWithValue(
           const AgentLimits(
-              maxCoverageFallback: 0,
-              enableRichTextPostProcess: false,
-            ),
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: false,
+          ),
         ),
         agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
@@ -392,9 +392,9 @@ void main() {
         sharedPreferencesProvider.overrideWithValue(_preferences),
         agentLimitsProvider.overrideWithValue(
           const AgentLimits(
-              maxCoverageFallback: 0,
-              enableRichTextPostProcess: false,
-            ),
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: false,
+          ),
         ),
         agentProfileRepositoryProvider.overrideWithValue(repository),
         agentRunServicesProvider.overrideWithValue(
@@ -611,9 +611,9 @@ void main() {
         sharedPreferencesProvider.overrideWithValue(_preferences),
         agentLimitsProvider.overrideWithValue(
           const AgentLimits(
-              maxCoverageFallback: 0,
-              enableRichTextPostProcess: false,
-            ),
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: false,
+          ),
         ),
         agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
@@ -636,51 +636,64 @@ void main() {
     expect(snapshot.finishedAt, isNotNull);
   });
 
-  test('rich text arrives after done without delaying the core result', () async {
-    final provider = _BlockingRichTextProvider();
-    final container = ProviderContainer(
-      overrides: [
-        sharedPreferencesProvider.overrideWithValue(_preferences),
-        agentLimitsProvider.overrideWithValue(
-          const AgentLimits(
-            maxCoverageFallback: 0,
-            enableRichTextPostProcess: true,
+  test(
+    'rich text arrives after done without delaying the core result',
+    () async {
+      final provider = _BlockingRichTextProvider();
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(_preferences),
+          agentLimitsProvider.overrideWithValue(
+            const AgentLimits(
+              maxCoverageFallback: 0,
+              enableRichTextPostProcess: true,
+            ),
           ),
-        ),
-        agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
-        agentRunServicesProvider.overrideWithValue(
-          ({required bool needsOcr, bool Function()? isCancelled}) async =>
-              _services(provider),
-        ),
-      ],
-    );
-    addTearDown(container.dispose);
-    final controller = container.read(agentRunControllerProvider.notifier);
+          agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
+          agentRunServicesProvider.overrideWithValue(
+            ({required bool needsOcr, bool Function()? isCancelled}) async =>
+                _services(provider),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(agentRunControllerProvider.notifier);
 
-    final snapshot = await _runToCompletion(container, controller);
+      final snapshot = await _runToCompletion(container, controller);
 
-    // `done` is delivered before the formatting requests complete.
-    expect(snapshot.status, AgentRunStatus.done);
-    expect(snapshot.result, isNotNull);
-    expect(snapshot.result!.richOriginalText, isNull);
-    await provider.formattingStarted.future.timeout(const Duration(seconds: 5));
-    expect(
-      container.read(agentRunControllerProvider).result!.richOriginalText,
-      isNull,
-    );
+      // `done` is delivered before the formatting requests complete.
+      expect(snapshot.status, AgentRunStatus.done);
+      expect(snapshot.result, isNotNull);
+      expect(snapshot.richTextFormatting, isTrue);
+      // Local conversion populates the display fields immediately; the
+      // formatting model has not answered yet.
+      expect(snapshot.result!.richOriginalText, '何卒');
+      await provider.formattingStarted.future.timeout(
+        const Duration(seconds: 5),
+      );
+      expect(
+        container.read(agentRunControllerProvider).result!.richOriginalText,
+        '何卒',
+      );
+      expect(
+        container.read(agentRunControllerProvider).richTextFormatting,
+        isTrue,
+      );
 
-    provider.releaseFormatting.complete();
-    AgentRunSnapshot current = container.read(agentRunControllerProvider);
-    final deadline = DateTime.now().add(const Duration(seconds: 5));
-    while (current.result?.richOriginalText == null &&
-        DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      current = container.read(agentRunControllerProvider);
-    }
+      provider.releaseFormatting.complete();
+      AgentRunSnapshot current = container.read(agentRunControllerProvider);
+      final deadline = DateTime.now().add(const Duration(seconds: 5));
+      while (current.result?.richOriginalText != '[BOLD]何卒[/BOLD]' &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        current = container.read(agentRunControllerProvider);
+      }
 
-    expect(current.status, AgentRunStatus.done);
-    expect(current.result?.richOriginalText, '[BOLD]何卒[/BOLD]');
-    expect(current.result?.richSegmentTexts, <String>['[BOLD]正式请求[/BOLD]']);
-    expect(current.result?.richSegmentNotes, <String>['[BOLD]何卒：请务必[/BOLD]']);
-  });
+      expect(current.status, AgentRunStatus.done);
+      expect(current.richTextFormatting, isFalse);
+      expect(current.result?.richOriginalText, '[BOLD]何卒[/BOLD]');
+      expect(current.result?.richSegmentTexts, <String>['[BOLD]正式请求[/BOLD]']);
+      expect(current.result?.richSegmentNotes, <String>['[BOLD]何卒：请务必[/BOLD]']);
+    },
+  );
 }
