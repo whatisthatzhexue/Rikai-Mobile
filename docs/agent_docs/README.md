@@ -45,6 +45,8 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
   `lib/services/agent/agent_prompts.dart`**；不要在 orchestrator、parser、controller
   或 UI 中硬编码 prompt 字符串。`analysis_prompts.dart`、`coverage_prompts.dart`、
   `familiarization_prompts.dart` 仅为兼容 re-export，不是独立 prompt 源。
+- **富文本后处理只能插入显示标签**：采用前必须剥离 `[RUBY]`/`[BOLD]`/
+  `[UNDERLINE]` 后与原文逐字符严格比较；不一致就降级纯文本（R-AGENT-23、T-135）。
 - 图片/密钥/运行状态/未实现能力等具体规则见
   [`../project-rules.md`](../project-rules.md) R-SEC/R-AGENT；
   生命周期细节见 [agent-lifecycle-and-edge-cases.md](agent-lifecycle-and-edge-cases.md)。
@@ -76,6 +78,9 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
 - P6.7 之后的任务级流式规划：
   [task-level-streaming-plan.md](task-level-streaming-plan.md)（规划中，未实现；
   不要当作当前任务）。
+- P7 任务解耦/模型路由/并发流式规划：
+  [p7-task-decomposition-plan.md](p7-task-decomposition-plan.md)（整体规划中；
+  P7.0 富文本后处理已增量实现，其余未实现）。
 
 ## 回归与维护性评审
 

@@ -219,6 +219,48 @@ void main() {
     expect(copied, 1);
   });
 
+  testWidgets('provisional result is visible before post-checks finish', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentAssistantBubble(
+              theme: AppTheme.light(),
+              providerLabel: 'DeepSeek',
+              mode: AgentMode.strict,
+              running: true,
+              provisional: true,
+              cancelled: false,
+              error: null,
+              errorDetail: '',
+              stageMessage: '正在复核…',
+              startedAt: DateTime(2026, 1, 1),
+              finishedAt: null,
+              progressStep: 3,
+              evidenceCount: 1,
+              citationCount: 1,
+              uiLanguage: AgentUiLanguage.chinese,
+              strings: _strings,
+              result: _result,
+              onRetry: null,
+              onLooseRetry: null,
+              onSettings: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('结果已出，正在复核…'), findsOneWidget);
+    expect(find.text('请多关照。'), findsOneWidget);
+    expect(find.text('正在重新生成，下面显示上次结果'), findsNothing);
+    expect(find.byTooltip('重新生成结果'), findsNothing);
+    expect(find.byTooltip('复制结果为 Markdown'), findsNothing);
+  });
+
   test('copyable Markdown contains structured sections and no raw JSON', () {
     final markdown = buildAgentResultMarkdown(_result, _strings);
     expect(markdown, contains('## 原文'));

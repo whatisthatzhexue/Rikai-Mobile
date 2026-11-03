@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -17,6 +18,8 @@ void main() {
   String? streamBody;
   var streamResponse = false;
   var requestCount = 0;
+  var holdStreamOpen = false;
+  Completer<void>? streamRelease;
 
   setUp(() async {
     capturedBody = null;
@@ -24,6 +27,8 @@ void main() {
     streamBody = null;
     streamResponse = false;
     requestCount = 0;
+    holdStreamOpen = false;
+    streamRelease = null;
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     baseUrl = 'http://127.0.0.1:${server.port}';
     server.listen((request) async {
@@ -32,6 +37,9 @@ void main() {
       final raw = await utf8.decoder.bind(request).join();
       capturedBody = jsonDecode(raw) as Map<String, Object?>;
       if (streamResponse) {
+        // Send each SSE event immediately so a server that keeps the socket
+        // open cannot be mistaken for a server that has not produced output.
+        request.response.bufferOutput = false;
         request.response.headers.contentType = ContentType(
           'text',
           'event-stream',
@@ -44,7 +52,16 @@ void main() {
                   'data: [DONE]\n\n',
         );
         await request.response.flush();
-        await request.response.close();
+        if (holdStreamOpen) {
+          streamRelease ??= Completer<void>();
+          await streamRelease!.future;
+        }
+        try {
+          await request.response.close();
+        } catch (_) {
+          // The provider intentionally cancels the body once it has seen the
+          // terminal event; the client socket may already be gone.
+        }
         return;
       }
       request.response.headers.contentType = ContentType.json;
@@ -189,6 +206,65 @@ void main() {
       '你好',
     );
     expect(events.last.type, LlmEventType.done);
+  });
+
+  test('finish_reason ends the stream even if the socket stays open', () async {
+    streamResponse = true;
+    holdStreamOpen = true;
+    streamRelease = Completer<void>();
+    streamBody =
+        'data: {"choices":[{"delta":{"content":"你"}}]}\n\n'
+        'data: {"choices":[{"delta":{"content":"好"}}]}\n\n'
+        'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n'
+        'data: [DONE]\n\n';
+    addTearDown(() {
+      if (streamRelease != null && !streamRelease!.isCompleted) {
+        streamRelease!.complete();
+      }
+    });
+    final secrets = InMemorySecretStore();
+    await secrets.write(agentProviderSecretKey('p4'), 'test-key');
+    final provider = OpenAiCompatibleProvider(
+      config: AgentProviderConfig(
+        id: 'p4',
+        kind: AgentProviderKind.openAiCompatible,
+        displayName: 'Test',
+        baseUrl: baseUrl,
+        smallModel: 'small',
+        complexModel: 'large',
+        supportsStreaming: true,
+      ),
+      secrets: secrets,
+    );
+
+    final watch = Stopwatch()..start();
+    final events = await provider
+        .stream(
+          const LlmRequest(
+            model: 'large',
+            maxTokens: 12000,
+            messages: <LlmMessage>[
+              LlmMessage(
+                role: LlmRole.user,
+                parts: <LlmTextPart>[LlmTextPart('请翻译')],
+              ),
+            ],
+          ),
+        )
+        .toList()
+        .timeout(const Duration(seconds: 2));
+    watch.stop();
+
+    expect(
+      events
+          .where((event) => event.type == LlmEventType.textDelta)
+          .map((event) => event.text)
+          .join(),
+      '你好',
+    );
+    expect(events.last.type, LlmEventType.done);
+    expect(watch.elapsedMilliseconds, lessThan(1500));
+    streamRelease!.complete();
   });
 
   test('reasoning-only stream fails once instead of retrying', () async {

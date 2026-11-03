@@ -113,6 +113,8 @@ class AgentUiStrings {
     'Result generated. Expand for details.',
     '結果を生成しました。詳細を展開してください。',
   );
+  String get resultReviewing =>
+      _pick('结果已出，正在复核…', 'Result ready; rechecking…', '結果は表示済み、再確認中…');
   String get retry => _pick('重试', 'Retry', '再試行');
   String get looseRetry => _pick('宽松重试', 'Retry in loose mode', '緩和モードで再試行');
   String get goSettings => _pick('去设置', 'Settings', '設定');
@@ -603,6 +605,7 @@ class AgentUiStrings {
     AgentStage.coverage => _pick('补充资料中', 'Checking coverage', '資料を補完中'),
     AgentStage.reasoning => _pick('生成结果', 'Generating', '生成中'),
     AgentStage.validating => _pick('校验依据', 'Validating citations', '根拠を検証中'),
+    AgentStage.formatting => _pick('整理格式', 'Formatting', '整形中'),
     AgentStage.done => _pick('完成', 'Done', '完了'),
     AgentStage.cancelled => _pick('已停止', 'Stopped', '停止しました'),
     AgentStage.error => _pick('Agent 运行失败', 'Agent failed', '実行に失敗しました'),

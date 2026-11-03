@@ -197,6 +197,12 @@ abstract final class AgentTokens {
   static const double sentImageHeight = 120;
   static const double actionIcon = 20;
   static const double actionTapTarget = 40;
+
+  /// Rich-text post-processing: ruby reading uses the shared furigana ratio;
+  /// bold/underline inherit the body color with these visual accents.
+  static const double rubyReadingSize = body * AppTypography.furiganaRatio;
+  static const Color rubyReadingColor = AppColors.primary;
+  static const Color richTextUnderlineColor = AppColors.primary;
 }
 
 /// Slides a new page in from the right and leaves the previous page in place.

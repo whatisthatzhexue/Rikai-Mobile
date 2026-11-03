@@ -11,6 +11,7 @@ import '../../services/agent/agent_run.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../capture/photo_viewer_page.dart';
 import 'agent_progress_view.dart';
+import 'agent_rich_text.dart';
 import 'agent_thumbnail.dart';
 
 class AgentUserBubble extends StatelessWidget {
@@ -191,6 +192,7 @@ class AgentAssistantBubble extends StatelessWidget {
     required this.providerLabel,
     required this.mode,
     required this.running,
+    this.provisional = false,
     required this.cancelled,
     required this.error,
     required this.errorDetail,
@@ -216,6 +218,10 @@ class AgentAssistantBubble extends StatelessWidget {
   final String providerLabel;
   final AgentMode mode;
   final bool running;
+
+  /// True while [result] is a provisional answer shown before optional
+  /// format/language post-checks finish.
+  final bool provisional;
   final bool cancelled;
   final String? error;
   final String errorDetail;
@@ -241,13 +247,12 @@ class AgentAssistantBubble extends StatelessWidget {
     final modelLabel =
         '${providerLabel.isEmpty ? strings.model : providerLabel} · '
         '${mode == AgentMode.strict ? strings.strictShort : strings.looseShort}';
-    final summary = result == null
+    final summarySource = result == null
         ? ''
-        : result!.analysis.translation.isNotEmpty
-        ? result!.analysis.translation.map((item) => item.text).join('\n')
-        : result!.analysis.segments.isNotEmpty
-        ? result!.analysis.segments.first.interpretation
-        : strings.assistantFallback;
+        : result!.richSummary ?? agentSummarySource(result!.analysis);
+    final summary = summarySource.isEmpty
+        ? strings.assistantFallback
+        : summarySource;
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -305,8 +310,8 @@ class AgentAssistantBubble extends StatelessWidget {
                   ],
                   if (result != null) ...[
                     const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      summary,
+                    AgentRichText(
+                      text: summary,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         fontSize: AgentTokens.body,
                         height: 1.5,
@@ -320,6 +325,25 @@ class AgentAssistantBubble extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (provisional) ...[
+                    AgentRichText(
+                      text: summary,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontSize: AgentTokens.body,
+                        height: 1.5,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      strings.resultReviewing,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: AgentTokens.helper,
+                        color: AppColors.warning,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
                   Row(
                     children: [
                       const SizedBox(
@@ -357,7 +381,7 @@ class AgentAssistantBubble extends StatelessWidget {
                       language: uiLanguage,
                     ),
                   ],
-                  if (result != null) ...[
+                  if (!provisional && result != null) ...[
                     const SizedBox(height: AppSpacing.xs),
                     Text(
                       strings.retainedResult,

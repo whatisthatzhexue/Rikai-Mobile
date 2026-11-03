@@ -287,7 +287,10 @@ void main() {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(_preferences),
         agentLimitsProvider.overrideWithValue(
-          const AgentLimits(maxCoverageFallback: 0),
+          const AgentLimits(
+              maxCoverageFallback: 0,
+              enableRichTextPostProcess: false,
+            ),
         ),
         agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
@@ -315,7 +318,10 @@ void main() {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(_preferences),
         agentLimitsProvider.overrideWithValue(
-          const AgentLimits(maxCoverageFallback: 0),
+          const AgentLimits(
+              maxCoverageFallback: 0,
+              enableRichTextPostProcess: false,
+            ),
         ),
         agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(
@@ -356,7 +362,10 @@ void main() {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(_preferences),
         agentLimitsProvider.overrideWithValue(
-          const AgentLimits(maxCoverageFallback: 0),
+          const AgentLimits(
+              maxCoverageFallback: 0,
+              enableRichTextPostProcess: false,
+            ),
         ),
         agentProfileRepositoryProvider.overrideWithValue(repository),
         agentRunServicesProvider.overrideWithValue(
@@ -389,7 +398,10 @@ void main() {
         overrides: [
           sharedPreferencesProvider.overrideWithValue(_preferences),
           agentLimitsProvider.overrideWithValue(
-            const AgentLimits(maxCoverageFallback: 0),
+            const AgentLimits(
+              maxCoverageFallback: 0,
+              enableRichTextPostProcess: false,
+            ),
           ),
           agentProfileRepositoryProvider.overrideWithValue(repository),
           agentRunServicesProvider.overrideWithValue(
@@ -475,7 +487,10 @@ void main() {
         overrides: [
           sharedPreferencesProvider.overrideWithValue(_preferences),
           agentLimitsProvider.overrideWithValue(
-            const AgentLimits(maxCoverageFallback: 0),
+            const AgentLimits(
+              maxCoverageFallback: 0,
+              enableRichTextPostProcess: false,
+            ),
           ),
           agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
           agentProfileRepositoryProvider.overrideWithValue(repository),
@@ -532,7 +547,10 @@ void main() {
         overrides: [
           sharedPreferencesProvider.overrideWithValue(_preferences),
           agentLimitsProvider.overrideWithValue(
-            const AgentLimits(maxCoverageFallback: 0),
+            const AgentLimits(
+              maxCoverageFallback: 0,
+              enableRichTextPostProcess: false,
+            ),
           ),
           agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
           agentProfileRepositoryProvider.overrideWithValue(repository),
@@ -563,7 +581,10 @@ void main() {
       overrides: [
         sharedPreferencesProvider.overrideWithValue(_preferences),
         agentLimitsProvider.overrideWithValue(
-          const AgentLimits(maxCoverageFallback: 0),
+          const AgentLimits(
+              maxCoverageFallback: 0,
+              enableRichTextPostProcess: false,
+            ),
         ),
         agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
         agentRunServicesProvider.overrideWithValue(

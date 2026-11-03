@@ -85,6 +85,7 @@
 | R-AGENT-20 | MUST | 多 OCR 版本只由用户显式触发；不得自动合并版本或静默替换原文；采用变体/词典候选后必须重新分词、查词和分析；图片/路径/base64/Key 不得进入该流程或 provider 请求 | 变体/修复测试；请求体断言无图片/路径/Key | `phase6-agent-contracts` §3.1 |
 | R-AGENT-21 | MUST | Provider 请求发送前必须本地校验：model 非空、丢弃空白消息、至少一条非 system、Anthropic 合并连续 role、清理非法 Unicode/控制字符、`max_tokens` 为正整数；不得假设统一输出上限，400 必须按真实 error body 分类 | provider payload/HTTP body 测试 | `phase6-agent-contracts` §11 |
 | R-AGENT-22 | MUST | 覆盖审查是可选增强：使用 `AgentLimits.coverageReviewMaxTokens` 独立预算（MISSING/duplicate 上限 × 长度 + 标签开销 + 安全边际），不跟随分析请求；单项畸形只丢弃该项，标签/请求失败保留原证据；不得让整次 run 失败或伪装成功 | coverage parser/orchestrator/预算测试 | `phase6-agent-contracts` §5.1 |
+| R-AGENT-23 | MUST | 富文本后处理只能插入 `[RUBY]`/`[BOLD]`/`[UNDERLINE]` 显示标签，不得改动原文；采用前必须剥离标签后与原文逐字符严格相等，否则丢弃并降级纯文本 | `rich_text_tags`/processor/orchestrator 测试；`T-135` | `rich_text_post_processor.dart`、契约 §5.3 |
 
 ## 5. UI / UX（R-UI）
 
@@ -152,6 +153,7 @@
 | F11 多图 | implemented | Wave 2：相机/相册多选、追加、移除；上限 6 见统一预算常量 |
 | P6.6 multi-OCR | implemented (automation) | 2026-11-02 用户指示后实现：显式多版本、质量/diff、词典候选、用户确认后重新分析；UI 标题/缩略图/每图独立状态/无假名比例已修正；真机验收待 Wave 4 |
 | R-AGENT-21 provider payload | implemented | model/messages 预校验、Anthropic role 合并、非法 Unicode/控制字符清理、`max_tokens` 正整数校验；400 按真实 error body 分类，不设统一上限 |
+| R-AGENT-23 rich-text post-process | implemented（P7.0 增量） | 仅对 assistant summary 插入 RUBY/BOLD/UNDERLINE；标签剥离后逐字符 diff，失败回退纯文本 |
 | R-AGENT-22 coverage stability | implemented | 紧凑输入、单项容错、空 sufficient 规范化、独立预算公式、debug 诊断；真实请求失败仍 warning |
 | P6.7 | future | annotation DSL/Markdown/ruby/pitch/历史/发布尚未开始 |
 

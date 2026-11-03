@@ -53,6 +53,7 @@ class AnthropicProvider implements LlmPort {
         '尚未配置 API Key',
       );
     }
+    final watch = Stopwatch()..start();
     final useStream = request.stream && config.supportsStreaming;
     final payload = _payload(request, useStream);
     assertNoImagePayload(payload);
@@ -80,6 +81,10 @@ class AnthropicProvider implements LlmPort {
         for (final event in _eventsFromResponse(response.data)) {
           yield event;
         }
+        debugPrint(
+          '[AgentTiming] provider anthropic non_stream '
+          'elapsed=${watch.elapsedMilliseconds}ms',
+        );
         return;
       }
       final body = response.data;
@@ -89,6 +94,8 @@ class AnthropicProvider implements LlmPort {
           '模型服务返回格式异常',
         );
       }
+      var firstEventAt = -1;
+      var stopSeenAt = -1;
       await for (final data in sseDataEvents(body.stream)) {
         if (cancellation?.isCancelled == true) {
           throw const AgentCapabilityException(
@@ -96,6 +103,7 @@ class AnthropicProvider implements LlmPort {
             '已取消',
           );
         }
+        if (firstEventAt < 0) firstEventAt = watch.elapsedMilliseconds;
         final json = decodeJsonObject(data);
         final type = json['type'];
         if (type == 'content_block_delta') {
@@ -112,9 +120,23 @@ class AnthropicProvider implements LlmPort {
             '模型服务返回错误',
           );
         } else if (type == 'message_stop') {
+          // `message_stop` is the terminal SSE event. Return immediately so a
+          // keep-alive socket cannot delay parsing/validation/rendering.
+          stopSeenAt = watch.elapsedMilliseconds;
+          debugPrint(
+            '[AgentTiming] provider anthropic stream_closed '
+            'elapsed=${watch.elapsedMilliseconds}ms '
+            'first_event=${firstEventAt}ms stop_seen=$stopSeenAt',
+          );
           yield LlmEvent.done();
+          return;
         }
       }
+      debugPrint(
+        '[AgentTiming] provider anthropic stream_closed '
+        'elapsed=${watch.elapsedMilliseconds}ms '
+        'first_event=${firstEventAt}ms stop_seen=$stopSeenAt',
+      );
     } catch (error) {
       debugPrint(
         '[AgentProvider] Anthropic error ${error.runtimeType}: '

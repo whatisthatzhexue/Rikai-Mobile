@@ -309,5 +309,8 @@ AgentEvidenceCacheValue:
 - 本规划不实现于当前 Wave 4 / P6.7；
 - 当前先完成 P6.7 的 annotation/Markdown/历史与发布打磨；
 - 任务级流式启动前，先完成 Wave 4 的设备/真实 provider/arm64 验收；
+- P7 的任务拆分/模型路由规划见
+  [p7-task-decomposition-plan.md](p7-task-decomposition-plan.md)；P6.8 的任务产物
+  应作为 P7 artifact 的流式单元，不另起协议；
 - 若 P6.7 后发现标签协议需要变更，应先更新
   `docs/phase6-agent-contracts.md` 和解析器测试，再进入 S1。

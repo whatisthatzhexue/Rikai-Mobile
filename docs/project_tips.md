@@ -4,8 +4,8 @@
 > 其它文档只引用 `T-###`，不再复制误区正文；**今后的新误区只在本文件追加**。
 >
 > - last_migrated: 2026-11-01（从原交接文档 §5 迁移，共 129 条）
-> - last_updated: 2026-11-02（新增 T-130–T-134）
-> - 编号说明：条目使用连续的 `T-001`–`T-134`；原文档 §5.14 的 #122–#130
+> - last_updated: 2026-11-03（新增 T-135–T-136）
+> - 编号说明：条目使用连续的 `T-001`–`T-136`；原文档 §5.14 的 #122–#130
 >   顺延为 `T-121`–`T-129`。编号一经发布不再复用。
 >
 > **何时查看**：遇到报错、异常行为、构建失败或准备重复试错时；接手 OCR、
@@ -44,7 +44,7 @@
 | §5.12 Phase 4.5 OCR 收敛 | §11 | T-082–T-112 |
 | §5.13 Agent v2 设计期 | §12 | T-113–T-120 |
 | §5.14 Phase 5 语料/引导 | §13 | T-121–T-129 |
-| 新增（Agent 请求/覆盖/滚动/解释概率/推理空正文） | §14 | T-130–T-134 |
+| 新增（Agent 请求/覆盖/滚动/解释概率/推理空正文/富文本 diff/流结束后延迟） | §14 | T-130–T-136 |
 
 ## 1. 架构与 OCR（T-001–T-005）
 
@@ -1172,7 +1172,7 @@ block JSON），UI 保存用 fake `HistoryStore`。若将来必须测数据库�
 --split-per-abi --config-only` 重新生成 release 注册文件，再跑正式 release
 build；`flutter clean` 不一定能解决。不要改注册文件本身。
 
-## 14. Agent 请求、覆盖审查、结果滚动与解释概率（T-130–T-134）
+## 14. Agent 请求、覆盖审查、结果滚动与解释概率（T-130–T-136）
 
 ### T-130 模型偶尔直接返回 HTTP 400（请求格式/参数不合法）
 
@@ -1247,7 +1247,36 @@ reasoning-effort/thinking-off 参数；要真正缩短思考时间，应把复�
 模型（如 deepseek-chat/flash）。流式进度更新节流（当前 250ms），避免上万 delta
 触发大量 Riverpod 更新。
 
+### T-135 富文本后处理标签导致原文被改动
 
+**误区**：相信模型“只插标签”，直接渲染后处理输出；或只用长度/包含关系判断，
+未逐字符校验。模型可能顺手改标点、删空格、改写词形，导致结果与已校验内容不一致。
+
+**正确做法**：后处理只允许在原文之间插入 `[RUBY=読み]base[/RUBY]`、
+`[BOLD]...[/BOLD]`、`[UNDERLINE]...[/UNDERLINE]`。代码必须先用
+`stripRichTextTags` 剥离所有标签，再与原始字符串**逐字符严格比较**（不 trim、
+不做 Unicode 规范化）；只有完全相等且标签成对、不嵌套、RUBY 读音为假名时才采用。
+任何差异、未闭合/嵌套标签、空输出或 provider 失败都直接丢弃格式化结果，渲染纯
+文本；不弹用户错误、不重试、不把失败输出交给前端。相关实现：
+`rich_text_post_processor.dart`、`rich_text_tags.dart`；契约 §5.3。
+
+### T-136 SSE 已收到 finish=stop，UI 仍等数秒才显示结果
+
+**误区**：把“provider 日志出现 finish=stop/数据完整”当成“管线已经结束”。实际
+可能还有三层等待：SSE socket 未关闭时 provider 继续 `await for`；首个分析已解析，
+但 `done` 还在等格式修复、语言修复或富文本后置调用（各自是一次完整模型请求）；
+进度节流器把最后一个 delta 丢弃。
+
+**正确做法**：provider 在 `finish_reason`、`[DONE]`、`message_stop` 到达时立即
+停止读取并取消订阅；`_collect` 把 `LlmEventType.done` 当终止事件。首个
+parse/validate 完成后先通过 `onProvisionalResult` 渲染主结果（UI 显示“结果已出，
+正在复核…”），不要等后置调用；修复阶段保持 `validating`。阶段切换时强制 flush
+进度尾包。排查时看 debug 日志 `[AgentTiming]`（provider headers/first_event/
+finish/stream_closed、stream label=...、stage、parse/validate/language、provisional、
+controller、ui_result_frame）。不要在这条路径上同步等待 SQLite/文件写入；日志只
+记录耗时/数量，禁止 prompt、citation、路径或 Key。相关实现：
+`agent_orchestrator.dart`、`openai_compatible_provider.dart`、
+`anthropic_provider.dart`、`provider_http.dart`、`agent_run_controller.dart`。
 
 > 先按症状定位 `T-###`，再阅读对应条目；本表不重复完整做法。
 
@@ -1306,3 +1335,5 @@ reasoning-effort/thinking-off 参数；要真正缩短思考时间，应把复�
 | Agent 长结果下滑/展开依据词典卡顿一次 | 展开内容分块跨帧构建，限制同时播放的淡入动画；缩略图按显示尺寸解码（`T-132`） |
 | “可能的理解”多个选项都显示 70%、合计 140% | 模型不输出概率；管线把多个 OPTION 的相对权重归一化为总和 100%，不要改 prompt 要概率（`T-133`） |
 | 推理模型只有 reasoning_content、textChars=0，耗时翻倍 | OpenAI-compatible 默认不发送 max_tokens；provider 可选 `maxOutputTokens`；reasoning-only 直接报 `PROVIDER_EMPTY_OUTPUT`，不重试；建议改用非推理模型（`T-134`） |
+| 富文本后处理后结果被改字/标点 | 剥离 RUBY/BOLD/UNDERLINE 标签后与原文逐字符严格比较；不一致就丢弃并渲染纯文本（`T-135`） |
+| SSE 已 finish=stop，UI 仍等数秒 | provider 在 finish_reason/[DONE]/message_stop 立即停读；首个解析/校验后先渲染 provisional 结果（“结果已出，正在复核…”）；检查 repair/rich-text 后置请求；看 `[AgentTiming]`（`T-136`） |

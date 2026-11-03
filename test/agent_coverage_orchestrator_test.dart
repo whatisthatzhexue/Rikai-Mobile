@@ -166,7 +166,10 @@ void main() {
         await _orchestrator(
           provider: provider,
           lookup: lookup,
-          limits: const AgentLimits(maxCoverageFallback: 1),
+          limits: const AgentLimits(
+            maxCoverageFallback: 1,
+            enableRichTextPostProcess: false,
+          ),
         ).run(
           const AgentRunRequest(
             sessionId: 's1',
@@ -206,7 +209,10 @@ void main() {
         await _orchestrator(
           provider: provider,
           lookup: lookup,
-          limits: const AgentLimits(maxCoverageFallback: 1),
+          limits: const AgentLimits(
+            maxCoverageFallback: 1,
+            enableRichTextPostProcess: false,
+          ),
         ).run(
           const AgentRunRequest(
             sessionId: 's1',
@@ -248,6 +254,7 @@ void main() {
           limits: const AgentLimits(
             maxEvidenceEntries: 2,
             maxCoverageFallback: 1,
+            enableRichTextPostProcess: false,
           ),
         ).run(
           const AgentRunRequest(
@@ -287,7 +294,10 @@ void main() {
         await _orchestrator(
           provider: provider,
           lookup: lookup,
-          limits: const AgentLimits(maxCoverageFallback: 1),
+          limits: const AgentLimits(
+            maxCoverageFallback: 1,
+            enableRichTextPostProcess: false,
+          ),
         ).run(
           const AgentRunRequest(
             sessionId: 's1',

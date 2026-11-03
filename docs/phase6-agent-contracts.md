@@ -598,6 +598,30 @@ COVERAGE 根块唯一、MISSING/DUPLICATE/NOTES 必须位于 COVERAGE 内、同�
   词形、读音和 citation 摘要。仍偏离时在 `AgentRunResult.warnings` 写入本地化
   警告，结果保留。
 
+### 5.3 富文本后处理标签（2026-11-03 增量实现）
+
+结果生成后，可选一次轻量模型后处理，只允许插入显示标签：
+
+```text
+[RUBY=なにとぞ]何卒[/RUBY]
+[BOLD]短文本[/BOLD]
+[UNDERLINE]短文本[/UNDERLINE]
+```
+
+- 标签必须成对、禁止嵌套；RUBY 的 `base` 必须是原文连续文本，读音只允许假名。
+- 模型不得修改、删除或增加原文任何字符（含标点/空格/换行）；prompt 使用固定
+  严苛约束，见 `agent_prompts.dart` 的 `buildRichTextPostProcessRequest`。
+- 代码端必须先用 `stripRichTextTags` 剥离标签，再与原文逐字符严格比较；只有完全
+  相等才采用。任何差异、未闭合/嵌套标签、空输出或 provider 失败都丢弃后处理结果，
+  降级渲染纯文本，不影响核心结果。
+- 首版作用于 `AgentRunResult.richSummary`（assistant summary）；`buildAgentResultMarkdown`
+  仍使用纯文本，复制结果不带标签。失败不回退 run，也不写用户可见错误。
+- 标签只用于本地 Flutter 富文本渲染，不执行 HTML/JS/Markdown，不进入 provider
+  请求、日志、导出或持久化。
+- 该后处理是 P7 任务解耦的增量原型（见
+  `docs/agent_docs/p7-task-decomposition-plan.md`）；完整任务拆分/模型路由/
+  并发流式仍待 P7。
+
 ## 6. 词典档案 `rikai.dictionary.profile.v1`
 
 > **2026-11-01 运行时格式**：模型输出 `[PROFILE]...[/PROFILE]` 扁平标签块
@@ -698,6 +722,7 @@ idle
   → coverage（一次覆盖审查，可选补充检索）
   → reasoning
   → validating
+  → formatting（可选富文本后处理；失败回退纯文本）
   → done | error | cancelled
 ```
 
@@ -717,6 +742,13 @@ idle
 - `coverage` 是 2026-10-31 F7 的一次性覆盖审查（Wave 3 已实现）；每个请求最多
   触发一次补充检索，`coverageFallbackUsed=true` 后不得再次回退。审查失败、
   schema 无效、query 不可追溯或没有可验证重复时保留原证据并显示 warning。
+- `formatting` 是 2026-11-03 的 P7.0 增量：对已校验的 assistant summary 做一次
+  富文本后处理；标签剥离 diff 失败、provider 失败或输出为空时直接回退纯文本，
+  不改变 run 成功状态，也不产生用户可见错误。
+- `validating` 期间，首个可展示分析（parse/validate 后；必要时用本地 salvage）
+  必须立即通过 `onProvisionalResult` 交给 UI，不得等待 format/language repair 或
+  `formatting` 完成。UI 显示“结果已出，正在复核…”，`done` 时用最终结果替换。
+  修复请求仍属于 `validating` 阶段，不把状态回退为 `reasoning`。
 - 任何阶段可取消；取消后状态为 `cancelled`，保留已完成的本地结果。
 - 阶段事件带 `run_id, stage, message, progress`；UI 不从页面 State 推断。
 - 重试从失败阶段开始；OCR 可重新识别，provider 可重试，校验失败可做一次修复。

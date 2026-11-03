@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/models/agent/agent_input.dart';
@@ -123,6 +124,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     _lastProgressAt = null;
     _cancelOcr = null;
     final startedAt = DateTime.now();
+    final runWatch = Stopwatch()..start();
     state = AgentRunSnapshot(
       runId: runId,
       sessionId: sessionId,
@@ -191,13 +193,35 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         ),
         cancellation: token,
         onStage: (stage, message) {
+          if (kDebugMode) {
+            debugPrint(
+              '[AgentTiming] controller stage=${stage.name} '
+              'elapsed=${runWatch.elapsedMilliseconds}ms',
+            );
+          }
           _update(
             token,
             (snapshot) => snapshot.copyWith(
               status: _statusFor(stage),
               stageMessage: message,
               progressStep: _progressStepFor(stage, snapshot.progressStep),
+              // Force the last throttled progress value; stage changes are rare
+              // and the stream may already be done when `validating` arrives.
+              receivedChars: _receivedChars,
             ),
+          );
+          _lastProgressAt = DateTime.now();
+        },
+        onProvisionalResult: (provisional) {
+          if (kDebugMode) {
+            debugPrint(
+              '[AgentTiming] controller provisional '
+              'elapsed=${runWatch.elapsedMilliseconds}ms',
+            );
+          }
+          _update(
+            token,
+            (snapshot) => snapshot.copyWith(provisionalResult: provisional),
           );
         },
         onEvidenceProgress: (count) {
@@ -228,10 +252,17 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         },
       );
       if (!_isActive(token)) return;
+      if (kDebugMode) {
+        debugPrint(
+          '[AgentTiming] controller result_received '
+          'elapsed=${runWatch.elapsedMilliseconds}ms',
+        );
+      }
       state = state.copyWith(
         status: AgentRunStatus.done,
         stageMessage: agentStageMessage(AgentStage.done, _uiLanguage),
         result: result,
+        provisionalResult: null,
         progressStep: 4,
         evidenceCount: result.evidence.citations.length,
         citationCount: result.validation.citationsUsed.length,
@@ -244,6 +275,12 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         finishedAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
+      if (kDebugMode) {
+        debugPrint(
+          '[AgentTiming] controller done_state '
+          'elapsed=${runWatch.elapsedMilliseconds}ms',
+        );
+      }
     } on AgentRunFailure catch (error) {
       _fail(token, error.message, error.detail, error.code);
     } on MdictException catch (error) {
@@ -323,7 +360,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     state = state.copyWith(
       status: AgentRunStatus.cancelled,
       stageMessage: agentStageMessage(AgentStage.cancelled, _uiLanguage),
-      result: state.retainedResult,
+      result: state.provisionalResult ?? state.retainedResult,
+      provisionalResult: null,
       retainedResult: null,
       pendingProfileCount: 0,
       finishedAt: DateTime.now(),
@@ -348,6 +386,9 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   bool _isActive(AgentCancellation token) =>
       identical(_cancellation, token) && !token.isCancelled;
 
+  int get _receivedChars =>
+      _textChars > _reasoningChars ? _textChars : _reasoningChars;
+
   void _update(
     AgentCancellation token,
     AgentRunSnapshot Function(AgentRunSnapshot snapshot) update,
@@ -367,13 +408,12 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       return;
     }
     _lastProgressAt = now;
-    final received = _textChars > _reasoningChars
-        ? _textChars
-        : _reasoningChars;
     _update(
       token,
-      (snapshot) =>
-          snapshot.copyWith(receivedChars: received, updatedAt: DateTime.now()),
+      (snapshot) => snapshot.copyWith(
+        receivedChars: _receivedChars,
+        updatedAt: DateTime.now(),
+      ),
     );
   }
 
@@ -384,7 +424,9 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     AgentToolErrorCode? code,
   ]) {
     if (!_isActive(token)) return;
-    final retained = state.retainedResult;
+    // Prefer the current run's provisional answer over an older retained one;
+    // the user has already seen it and a failed post-check must not erase it.
+    final fallback = state.provisionalResult ?? state.retainedResult;
     state = state.copyWith(
       status: AgentRunStatus.error,
       stageMessage: message,
@@ -392,9 +434,10 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       errorCode: code,
       retryable: code == null || _isRetryable(code),
       errorDetail: detail,
-      result: retained,
+      result: fallback,
+      provisionalResult: null,
       retainedResult: null,
-      resultRetainedAfterFailure: retained != null,
+      resultRetainedAfterFailure: fallback != null,
       pendingProfileCount: 0,
       finishedAt: DateTime.now(),
       updatedAt: DateTime.now(),
@@ -452,7 +495,7 @@ int _progressStepFor(AgentStage stage, int current) => switch (stage) {
   AgentStage.evidence ||
   AgentStage.coverage => 1,
   AgentStage.reasoning => 2,
-  AgentStage.validating => 3,
+  AgentStage.validating || AgentStage.formatting => 3,
   AgentStage.done => 4,
   AgentStage.error || AgentStage.cancelled => current,
 };
@@ -466,7 +509,7 @@ AgentRunStatus _statusFor(AgentStage stage) => switch (stage) {
   AgentStage.evidence => AgentRunStatus.tokenizing,
   AgentStage.coverage => AgentRunStatus.tokenizing,
   AgentStage.reasoning => AgentRunStatus.reasoning,
-  AgentStage.validating => AgentRunStatus.validating,
+  AgentStage.validating || AgentStage.formatting => AgentRunStatus.validating,
   AgentStage.done => AgentRunStatus.done,
   AgentStage.error => AgentRunStatus.error,
   AgentStage.cancelled => AgentRunStatus.cancelled,

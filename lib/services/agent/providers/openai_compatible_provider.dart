@@ -56,6 +56,7 @@ class OpenAiCompatibleProvider implements LlmPort {
         '尚未配置 API Key',
       );
     }
+    final watch = Stopwatch()..start();
     final useStream = request.stream && config.supportsStreaming;
     final payload = _payload(request, useStream);
     assertNoImagePayload(payload);
@@ -82,8 +83,16 @@ class OpenAiCompatibleProvider implements LlmPort {
         for (final event in _eventsFromResponse(response.data)) {
           yield event;
         }
+        debugPrint(
+          '[AgentTiming] provider openai non_stream '
+          'elapsed=${watch.elapsedMilliseconds}ms',
+        );
         return;
       }
+      debugPrint(
+        '[AgentTiming] provider openai headers '
+        'elapsed=${watch.elapsedMilliseconds}ms',
+      );
       final body = response.data;
       if (body is! ResponseBody) {
         throw const AgentCapabilityException(
@@ -112,11 +121,19 @@ class OpenAiCompatibleProvider implements LlmPort {
               yield event;
             }
           }
+          debugPrint(
+            '[AgentTiming] provider openai buffered_sse '
+            'elapsed=${watch.elapsedMilliseconds}ms',
+          );
           return;
         }
         for (final event in _eventsFromResponse(decodeJsonObject(text))) {
           yield event;
         }
+        debugPrint(
+          '[AgentTiming] provider openai buffered_json '
+          'elapsed=${watch.elapsedMilliseconds}ms',
+        );
         return;
       }
 
@@ -124,6 +141,8 @@ class OpenAiCompatibleProvider implements LlmPort {
       var textChars = 0;
       var reasoningChars = 0;
       var lastFinishReason = '';
+      var firstEventAt = -1;
+      var finishSeenAt = -1;
       await for (final data in sseDataEvents(body.stream)) {
         if (cancellation?.isCancelled == true) {
           throw const AgentCapabilityException(
@@ -131,6 +150,7 @@ class OpenAiCompatibleProvider implements LlmPort {
             '已取消',
           );
         }
+        if (firstEventAt < 0) firstEventAt = watch.elapsedMilliseconds;
         sseEvents++;
         final Map<String, Object?> json;
         try {
@@ -153,8 +173,10 @@ class OpenAiCompatibleProvider implements LlmPort {
         final choice = choices.first;
         if (choice is! Map) continue;
         final finishReason = choice['finish_reason'];
-        if (finishReason is String && finishReason.isNotEmpty) {
+        final hasFinish = finishReason is String && finishReason.isNotEmpty;
+        if (hasFinish) {
           lastFinishReason = finishReason;
+          finishSeenAt = watch.elapsedMilliseconds;
         }
         final delta = choice['delta'];
         if (delta is Map) {
@@ -169,10 +191,17 @@ class OpenAiCompatibleProvider implements LlmPort {
             yield LlmEvent(type: LlmEventType.textDelta, text: content);
           }
         }
+        // A non-empty finish_reason is the protocol's terminal signal. Stop
+        // reading immediately instead of waiting for the server/proxy to close
+        // the SSE socket; the final content delta (if any) was handled above.
+        if (hasFinish) break;
       }
       debugPrint(
-        '[AgentProvider] SSE events=$sseEvents textChars=$textChars '
-        'reasoningChars=$reasoningChars finish=$lastFinishReason',
+        '[AgentTiming] provider openai stream_closed '
+        'elapsed=${watch.elapsedMilliseconds}ms first_event=${firstEventAt}ms '
+        'finish_seen=${finishSeenAt}ms events=$sseEvents '
+        'textChars=$textChars reasoningChars=$reasoningChars '
+        'finish=$lastFinishReason',
       );
       if (textChars == 0) {
         if (reasoningChars > 0) {
@@ -206,8 +235,16 @@ class OpenAiCompatibleProvider implements LlmPort {
         for (final event in _eventsFromResponse(fallback.data)) {
           yield event;
         }
+        debugPrint(
+          '[AgentTiming] provider openai empty_stream_fallback '
+          'elapsed=${watch.elapsedMilliseconds}ms',
+        );
         return;
       }
+      debugPrint(
+        '[AgentTiming] provider openai done '
+        'elapsed=${watch.elapsedMilliseconds}ms',
+      );
       yield LlmEvent.done();
     } catch (error) {
       debugPrint(

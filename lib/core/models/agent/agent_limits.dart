@@ -13,6 +13,7 @@ class AgentLimits {
     this.maxCoverageMissing = 20,
     this.maxCoverageDuplicateGroups = 10,
     this.maxCoverageFallback = 1,
+    this.enableRichTextPostProcess = true,
   });
 
   static const AgentLimits standard = AgentLimits();
@@ -26,6 +27,10 @@ class AgentLimits {
   final int maxCoverageMissing;
   final int maxCoverageDuplicateGroups;
   final int maxCoverageFallback;
+
+  /// Optional rich-text formatting pass after a successful analysis. Tests
+  /// that assert request sequences disable it explicitly.
+  final bool enableRichTextPostProcess;
 
   // Coverage output estimator inputs. These are public so contracts/tests can
   // point at one named constant instead of copying magic numbers.

@@ -228,7 +228,9 @@
 > **Phase 6 状态**：P6.5 已把主页改为五个按钮（拍照识别、查句子、查单词、
 > 历史记录、词典助手），并接入 Agent 页、严格/宽松选择、来源 chip 和 provider
 > 设置。下方“四按钮”历史规则只用于理解旧版；当前以“Phase 6 Agent UI”与自查清单
-> 为准。P6.6/P6.7（多 OCR、Markdown/ruby/声调）仍需补 token/测试。
+> 为准。P6.6/P6.7（多 OCR、Markdown/ruby/声调）仍需补 token/测试。P7.0 的
+> assistant summary 富文本（RUBY/BOLD/UNDERLINE）已按本节 ruby token 实现，
+> 仍需真机视觉验收。
 
 ### Phase 6 Agent UI（基础对话式已实现；完整 v2 验收待补）
 
@@ -269,6 +271,7 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 | 对话气泡圆角 | `agentBubbleRadius` | 16（`AppRadius.xl`）；指向发送者的一角 4（`agentBubbleTailRadius`） |
 | 消息最大宽度 | `agentMessageMaxWidth` | 80%（字号放大到 200% 时允许 90%，禁止满宽） |
 | 模型/模式标签 | `agentModelLabel` | 12sp，`textSecondary`，位于 AI 气泡顶部 |
+| 富文本振假名/强调 | `rubyReadingSize`/`rubyReadingColor`/`richTextUnderlineColor` | RUBY 读音为主字号 55%、`primary`；BOLD `w600`；UNDERLINE `primary` 下划线；只用于显示标签，不改变正文 |
 | 系统/工具消息 | `agentSystemMessage` | 居中、14sp、`textSecondary`、无气泡 |
 | 会话设置条 | `agentSessionSettingsBar` | 可见高 32、触控 ≥40，`surfaceMuted`，14sp；展开面板复用现有筛选条 |
 | 状态条 | `agentStatusBar` | 高 24–32，`surfaceMuted`，14sp，不遮挡消息 |

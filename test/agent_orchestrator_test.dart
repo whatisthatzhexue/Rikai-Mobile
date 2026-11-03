@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/agent_input.dart';
 import 'package:rikai_mobile/core/models/agent/agent_limits.dart';
@@ -12,6 +14,7 @@ import 'package:rikai_mobile/services/agent/agent_orchestrator.dart';
 import 'package:rikai_mobile/services/agent/agent_run.dart';
 import 'package:rikai_mobile/services/agent/citation_registry.dart';
 import 'package:rikai_mobile/services/agent/grammar_patterns.dart';
+import 'package:rikai_mobile/services/agent/ports/llm_port.dart';
 import 'package:rikai_mobile/services/agent/ports/lookup_port.dart';
 import 'package:rikai_mobile/services/agent/ports/ocr_port.dart';
 import 'package:rikai_mobile/services/agent/ports/tokenize_port.dart';
@@ -139,9 +142,42 @@ class _FakeLookup implements LookupPort {
   }
 }
 
+/// First response is returned immediately; the follow-up repair call blocks
+/// until the test releases it, proving the provisional result was emitted
+/// before the second model round-trip completed.
+class _BlockingRepairProvider implements LlmPort {
+  _BlockingRepairProvider({required this.firstResponse});
+
+  final String firstResponse;
+  final Completer<void> repairStarted = Completer<void>();
+  final Completer<void> releaseRepair = Completer<void>();
+  int calls = 0;
+
+  @override
+  Stream<LlmEvent> stream(
+    LlmRequest request, {
+    LlmCancelToken? cancellation,
+  }) async* {
+    calls++;
+    if (calls == 1) {
+      yield LlmEvent(type: LlmEventType.textDelta, text: firstResponse);
+      yield LlmEvent.done();
+      return;
+    }
+    if (!repairStarted.isCompleted) repairStarted.complete();
+    await releaseRepair.future;
+    yield LlmEvent(type: LlmEventType.textDelta, text: _analysisTagged);
+    yield LlmEvent.done();
+  }
+}
+
 AgentOrchestrator _orchestrator({
-  required FakeProvider provider,
+  required LlmPort provider,
   _FakeOcr? ocr,
+  AgentLimits limits = const AgentLimits(
+    maxCoverageFallback: 0,
+    enableRichTextPostProcess: false,
+  ),
 }) {
   return AgentOrchestrator(
     ocrPort: ocr ?? _FakeOcr(),
@@ -150,8 +186,8 @@ AgentOrchestrator _orchestrator({
     grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
     citations: CitationRegistry(),
     llmFactory: (_) => provider,
-    // Most tests isolate analysis; F7 coverage has dedicated tests below.
-    limits: const AgentLimits(maxCoverageFallback: 0),
+    // Most tests isolate analysis; F7 coverage/rich-text tests opt in.
+    limits: limits,
   );
 }
 
@@ -262,6 +298,67 @@ void main() {
           .join('\n');
       expect(repairPrompt.contains('Validation errors'), isTrue);
       expect(repairPrompt.contains('Previous output'), isTrue);
+    },
+  );
+
+  test(
+    'emits a displayable result before a slow validation repair finishes',
+    () async {
+      final provider = _BlockingRepairProvider(
+        firstResponse: _analysisWithoutCitation,
+      );
+      final previews = <AgentRunResult>[];
+      final runFuture = _orchestrator(provider: provider).run(
+        const AgentRunRequest(
+          sessionId: 's1',
+          mode: AgentMode.strict,
+          dictionaries: <DictionaryInfo>[_dictionary],
+          provider: _provider,
+          userText: '何卒',
+        ),
+        onProvisionalResult: previews.add,
+      );
+
+      await provider.repairStarted.future;
+      expect(previews, isNotEmpty);
+      expect(previews.first.validation.valid, isFalse);
+      expect(previews.first.analysis.translation.single.text, '请多关照。');
+
+      provider.releaseRepair.complete();
+      final result = await runFuture;
+      expect(result.validation.valid, isTrue);
+      expect(provider.calls, 2);
+    },
+  );
+
+  test(
+    'emits the valid analysis before a slow language repair finishes',
+    () async {
+      final provider = _BlockingRepairProvider(
+        firstResponse: _analysisJapanese,
+      );
+      final previews = <AgentRunResult>[];
+      final runFuture = _orchestrator(provider: provider).run(
+        const AgentRunRequest(
+          sessionId: 's1',
+          mode: AgentMode.strict,
+          dictionaries: <DictionaryInfo>[_dictionary],
+          provider: _provider,
+          userText: '何卒',
+        ),
+        onProvisionalResult: previews.add,
+      );
+
+      await provider.repairStarted.future;
+      expect(previews, isNotEmpty);
+      expect(previews.first.validation.valid, isTrue);
+      expect(previews.first.analysis.translation.single.text, 'どういたしまして。');
+
+      provider.releaseRepair.complete();
+      final result = await runFuture;
+      expect(result.validation.valid, isTrue);
+      expect(result.analysis.translation.single.text, '请多关照。');
+      expect(provider.calls, 2);
     },
   );
 
@@ -539,4 +636,60 @@ void main() {
       expect(result.input.sources.single.selectedVariantId, 'v4');
     },
   );
+
+  test('rich-text post-processing accepts only exact original text', () async {
+    const rich = '[BOLD]请多关照[/BOLD]。';
+    final provider = FakeProvider(
+      responseSequence: <String>[_analysisTagged, rich],
+    );
+    final stages = <AgentStage>[];
+
+    final result =
+        await _orchestrator(
+          provider: provider,
+          limits: const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: true,
+          ),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.strict,
+            dictionaries: <DictionaryInfo>[_dictionary],
+            provider: _provider,
+            userText: '何卒',
+          ),
+          onStage: (stage, message) => stages.add(stage),
+        );
+
+    expect(result.richSummary, rich);
+    expect(stages, contains(AgentStage.formatting));
+    expect(provider.requests, hasLength(2));
+  });
+
+  test('rich-text output that changes the text falls back to plain', () async {
+    final provider = FakeProvider(
+      responseSequence: <String>[_analysisTagged, '[BOLD]请多关照！[/BOLD]'],
+    );
+
+    final result =
+        await _orchestrator(
+          provider: provider,
+          limits: const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: true,
+          ),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.strict,
+            dictionaries: <DictionaryInfo>[_dictionary],
+            provider: _provider,
+            userText: '何卒',
+          ),
+        );
+
+    expect(result.richSummary, isNull);
+    expect(provider.requests, hasLength(2));
+  });
 }

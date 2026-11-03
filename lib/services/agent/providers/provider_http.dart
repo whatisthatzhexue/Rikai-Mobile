@@ -22,16 +22,27 @@ Stream<String> sseDataEvents(Stream<List<int>> bytes) async* {
       if (data.isEmpty) continue;
       final payload = data.join('\n');
       data.clear();
-      if (payload.trim().isEmpty || payload.trim() == '[DONE]') continue;
+      final trimmed = payload.trim();
+      if (trimmed.isEmpty) continue;
+      // `[DONE]` is the logical end of an SSE response. Return immediately so
+      // the provider does not wait for the server/proxy to close the socket;
+      // returning from this generator cancels the underlying byte stream.
+      if (trimmed == '[DONE]') return;
       yield payload;
       continue;
     }
     if (!line.startsWith('data:')) continue;
-    data.add(line.substring(5).trimLeft());
+    final value = line.substring(5).trimLeft();
+    // Also catch `[DONE]` without a trailing blank line; the socket may stay
+    // open, and waiting for the blank line would reintroduce the delay.
+    if (value.trim() == '[DONE]') return;
+    data.add(value);
   }
   if (data.isNotEmpty) {
     final payload = data.join('\n');
-    if (payload.trim().isNotEmpty && payload.trim() != '[DONE]') yield payload;
+    final trimmed = payload.trim();
+    if (trimmed.isEmpty || trimmed == '[DONE]') return;
+    yield payload;
   }
 }
 

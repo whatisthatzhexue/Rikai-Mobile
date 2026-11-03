@@ -623,6 +623,44 @@ String buildDictionaryProfileBatchUserPrompt(
       '${language.instruction}';
 }
 
+/// Rich-text formatting is a post-processing task: the model may only insert
+/// inline formatting tags between existing characters. The caller must still
+/// strip the tags and compare the result with the original text before using it.
+LlmRequest buildRichTextPostProcessRequest({
+  required String model,
+  required String text,
+  int maxTokens = 4000,
+}) {
+  return LlmRequest(
+    model: model,
+    messages: <LlmMessage>[
+      LlmMessage(
+        role: LlmRole.system,
+        parts: <LlmTextPart>[
+          LlmTextPart('''
+你的任务是给提供的文本插入格式标签。绝对禁止修改、删除或增加原文中的任何一个字符（包括标点符号、空格、换行）。你只能在原文的字符之间插入[RUBY=xxx]、[BOLD] 和[UNDERLINE] 标签。输出必须包含完整的原文。
+
+标签格式：
+[RUBY=なにとぞ]何卒[/RUBY]
+[BOLD]词条标题[/BOLD]
+[UNDERLINE]重点内容[/UNDERLINE]
+
+规则：
+- 标签必须成对，禁止嵌套标签。
+- RUBY 的方括号内只写平假名/片假名读音；方括号后的 base 必须是原文中连续的日文文本。
+- BOLD/UNDERLINE 只能包住原文中已有的短文本，不能跨行。
+- 不输出 Markdown、HTML、代码块、解释、前后缀或任何额外文字。
+- 如果无法确定，原样返回原文。
+'''),
+        ],
+      ),
+      LlmMessage(role: LlmRole.user, parts: <LlmTextPart>[LlmTextPart(text)]),
+    ],
+    maxTokens: maxTokens,
+    stream: false,
+  );
+}
+
 Future<String> collectLlmText(LlmPort port, LlmRequest request) async {
   final buffer = StringBuffer();
   await for (final event in port.stream(request)) {

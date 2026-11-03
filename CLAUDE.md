@@ -39,7 +39,7 @@ Agent 对话式 UI）；实现入口为 `lib/core/theme/app_tokens.dart`。
 何时查看：新增或修改任何 UI 前；检查页面是否硬编码颜色/字号/间距。
 
 `docs/project_tips.md`：
-内容：项目误区/踩坑与解决方案（`T-001`–`T-134`），含症状 → 处理速查附录。
+内容：项目误区/踩坑与解决方案（`T-001`–`T-136`），含症状 → 处理速查附录。
 何时查看：遇到报错、异常行为或准备重复试错前；接手 OCR/UniDic/MDict/采集/UI/
 Agent 改动前。**今后的误区只在该文件新增。**
 
@@ -117,6 +117,12 @@ Agent 改动前。**今后的误区只在该文件新增。**
 内容：P6.7 之后的任务级流式（Task-level Streaming）独立规划：标签块增量渲染、
 局部校验、证据缓存重试、进度增强；明确不做断点续生成。
 何时查看：规划 P6.7 后续工作、实现流式渲染/重试缓存前。
+
+`docs/agent_docs/p7-task-decomposition-plan.md`：
+内容：P7 任务解耦规划：核心翻译/语法解析/富文本后处理拆分、模型路由、
+`Future.wait` 并发与 P6.8 任务级流式、单向数据流与严格标签协议；P7.0 富文本
+后处理为已落地增量，其余未实现。
+何时查看：规划 P7、拆分 Agent 任务、评估模型路由/并发/成本前。
 
 `docs/agent_docs/phase6-pipeline-review.md`：
 内容：Agent 管线评审与已知问题（含 file:line 证据）。
@@ -304,7 +310,9 @@ Phase 0–5 已全部完成并发布 1.0（验收记录见 `docs/project-history
 实现（自动化测试）。同日后续修正：provider 请求预校验/非法字符清理/400 按真实
 error body 分类（不设统一 max_tokens 上限；OpenAI-compatible 默认不发送
 max_tokens，provider 可选 maxOutputTokens 覆盖；只有 reasoning、无正文时快速失败
-且不重复请求）、覆盖审查紧凑输入/单项容错/独立预算
+且不重复请求）、结果摘要富文本后处理（RUBY/BOLD/UNDERLINE，剥离标签逐字符
+diff，失败降级纯文本；P7.0 增量，完整 P7 计划见
+`docs/agent_docs/p7-task-decomposition-plan.md`）、覆盖审查紧凑输入/单项容错/独立预算
 （`AgentLimits.coverage*`，CJK 系数 1.0）/自动修正日志/规范化后修复、多 OCR
 每图独立 loading/可点缩略图、UniDic 空输入清除。多 OCR 显式对比改为
 `(engine, mode)` 组合（Paddle 横向/Manga 纵向/Paddle 纵向/auto，最多 4 个），
@@ -314,7 +322,10 @@ OCR 插件新增可选 `engine` 约束；版本 chip 左对齐/自动换行/固�
 统一为右下角蓝色大按钮，至少选中一个才启用。多个“可能的
 理解”不再显示解析器原始 0.5/0.7 权重，而是在 `normalizeAnalysis`/
 `salvageAnalysis` 中归一化为总和 100%（模型仍不输出概率）。Agent 输出质检样本
-存于 `docs/agent_output/YYYY-MM-DD-HH-mm.txt`。P6.6 真机验收与 P6.7 未完成。
+存于 `docs/agent_output/YYYY-MM-DD-HH-mm.txt`。流式结束后先渲染已解析/校验的主
+结果（“结果已出，正在复核…”），不等待格式/语言/富文本后置调用；provider 在
+`finish_reason`/`[DONE]`/`message_stop` 到达时立即停止读取。P6.6 真机验收与 P6.7
+未完成。
 当前进度、验证记录与工作队列只维护在以下文档，本文件不再复述：
 
 - 实现进度与验证记录：`docs/phase6-status.md`
@@ -334,6 +345,9 @@ OCR 插件新增可选 `engine` 约束；版本 chip 左对齐/自动换行/固�
 - P6.6 多 OCR 版本/词典辅助修复：核心已实现（显式多版本、质量/diff、词典候选、
   用户确认后重新分析）；剩余真机视觉/OCR/词典质量验收，不能把图片发给模型。
 - P6.7 annotation DSL/Markdown/ruby/pitch、Agent 会话历史 UI、发布打磨。
+- P7 任务解耦/模型路由/并发流式为规划项（
+  `docs/agent_docs/p7-task-decomposition-plan.md`）；P7.0 富文本后处理已增量
+  实现，P7.1–P7.4 未实现，不得写成已支持。
 
 设备验收项见下文「真机/网络验收」；禁止事项（图片/密钥/未实现能力）见
 `docs/project-rules.md` R-AGENT/R-SEC。
@@ -377,7 +391,7 @@ OCR 插件新增可选 `engine` 约束；版本 chip 左对齐/自动换行/固�
 ## 5. 项目误区 → 解决方案
 
 > **已迁移**：原 §5.1–§5.14 的 129 条误区/解决方案已移至
-> `docs/project_tips.md`（`T-001`–`T-134`）。**今后的误区只在该文件新增**；
+> `docs/project_tips.md`（`T-001`–`T-136`）。**今后的误区只在该文件新增**；
 > 本文件不再保留误区正文。
 >
 > 何时查看：遇到报错/异常行为/准备重复试错前；先查
@@ -484,6 +498,9 @@ lib/services/agent/citation_registry.dart                     # orchestrator 发
 lib/services/agent/agent_validator.dart                       # schema/quote/order/strict 校验
 lib/services/agent/agent_language_validator.dart              # F1b 结果人类字段语言后校验
 lib/services/agent/agent_prompts.dart                         # 所有 Agent prompt 文本/请求构造（禁止散落硬编码）
+lib/services/agent/rich_text_post_processor.dart              # P7.0 摘要富文本后处理/diff 防线
+lib/core/utils/rich_text_tags.dart                            # RUBY/BOLD/UNDERLINE 标签解析/剥离
+lib/features/agent/agent_rich_text.dart                       # Agent 富文本渲染（ruby/bold/underline）
 lib/services/agent/agent_coverage_parser.dart                 # F7 [COVERAGE] 标签解析/完整性
 lib/services/agent/coverage_support.dart                      # F7 可追溯性/重复验证/证据合并
 lib/core/models/agent/agent_limits.dart                       # F6/F7 预算单一来源

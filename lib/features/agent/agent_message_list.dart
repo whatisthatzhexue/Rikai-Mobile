@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -55,7 +56,13 @@ class AgentMessageList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final result = run.result ?? run.retainedResult;
+    final result = run.result ?? run.provisionalResult ?? run.retainedResult;
+    final provisional = run.result == null && run.provisionalResult != null;
+    if (kDebugMode && run.result != null) {
+      _logResultFrame(run, provisional: false);
+    } else if (kDebugMode && run.provisionalResult != null) {
+      _logResultFrame(run, provisional: true);
+    }
     final uiLanguage = resolveAgentUiLanguage(run.responseLanguage);
     final strings = AgentUiStrings.of(uiLanguage);
     return ScrollConfiguration(
@@ -110,6 +117,7 @@ class AgentMessageList extends ConsumerWidget {
               providerLabel: run.providerLabel,
               mode: run.mode,
               running: run.isRunning,
+              provisional: provisional,
               cancelled: run.status == AgentRunStatus.cancelled,
               error: run.errorMessage == null
                   ? null
@@ -241,4 +249,22 @@ class AgentMessageList extends ConsumerWidget {
     await Clipboard.setData(ClipboardData(text: markdown));
     if (context.mounted) RikaiToast.show(context, strings.copyDone);
   }
+}
+
+final Set<String> _loggedResultFrames = <String>{};
+
+/// Logs the first frame that contains a result/provisional result. The
+/// timestamp starts when the controller published that state, so the number
+/// isolates state→frame latency from provider/validation time.
+void _logResultFrame(AgentRunSnapshot run, {required bool provisional}) {
+  final key = '${run.runId}:${provisional ? 'provisional' : 'final'}';
+  if (!_loggedResultFrames.add(key)) return;
+  final since = provisional ? run.updatedAt : run.finishedAt;
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!kDebugMode || since == null) return;
+    debugPrint(
+      '[AgentTiming] ui_${provisional ? 'provisional' : 'result'}_frame '
+      'latency=${DateTime.now().difference(since).inMilliseconds}ms',
+    );
+  });
 }

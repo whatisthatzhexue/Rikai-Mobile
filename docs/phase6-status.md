@@ -452,6 +452,30 @@ P6.6 implementation (2026-11-02, multi-OCR core):
   [`agent_output/README.md`](agent_output/README.md). These files are not
   provider logs and contain no image paths or keys.
 
+P7.0 rich-text post-processing (2026-11-03, incremental):
+
+- After a validated analysis, one small-model pass inserts only
+  `[RUBY=読み]base[/RUBY]`, `[BOLD]...[/BOLD]` and `[UNDERLINE]...[/UNDERLINE]`
+  into the assistant summary. The prompt uses the fixed strict constraint:
+  no character may be changed/deleted/added.
+- `rich_text_tags.dart` strips every known tag and checks tag balance/nesting
+  and kana-only ruby readings. The processor accepts the result only when the
+  stripped text equals the original **character for character** (no trim or
+  Unicode normalization). Any change, malformed tag, empty output or provider
+  failure discards the formatted result and renders plain text; the run itself
+  is not failed and no user-facing error is shown.
+- `AgentRunResult.richSummary` carries the accepted text; `AgentRichText`
+  renders ruby/bold/underline with the shared `AgentTokens` ruby tokens. The
+  formatted Markdown export remains plain and the detailed structured view is
+  unchanged in P7.0.
+- `AgentLimits.enableRichTextPostProcess` (default true) is disabled in tests
+  that assert provider request sequences; a `formatting` stage is reported.
+- Tests: `rich_text_post_processor_test.dart`, `agent_rich_text_test.dart`,
+  and rich-text cases in `agent_orchestrator_test.dart`.
+- P7.1–P7.4 (task split/model routing/concurrency/streaming) are **not**
+  implemented; the plan is in
+  [`agent_docs/p7-task-decomposition-plan.md`](agent_docs/p7-task-decomposition-plan.md).
+
 Current known gaps:
 
 - Wave 4 device acceptance is not done: real provider/API key, arm64 Agent
@@ -459,6 +483,10 @@ Current known gaps:
   device I/O remain unverified. Automated Wave 3 tests do not prove those.
 - The coverage review uses the small model and tag text parsed locally; real
   provider tag reliability and latency still need device measurement.
+- P7.0 rich-text formatting is applied only to the assistant summary; the
+  detailed structured result and Markdown export remain plain. Real-provider
+  formatting acceptance, ruby layout at 200% font and small screens still need
+  device/visual verification.
 - Test coverage gaps: there is no dedicated raw-surface-target cap test (current
   cap tests use token targets), and no dedicated duplicate-`[NOTES]` integrity
   test. The implementation has both paths but the tests do not yet pin them.
@@ -498,6 +526,37 @@ Current known gaps:
 Agent output quality samples are stored under `docs/agent_output/` as
 `YYYY-MM-DD-HH-mm.txt` Markdown copies (one run per file). They are manual
 inspection fixtures, not provider logs; see that directory's README.
+
+### 2026-11-03 Post-stream result latency
+
+The provider stream ending (`finish_reason=stop`) is not the same as the UI
+having a result. Three sequential costs used to sit between them:
+
+1. The OpenAI-compatible/Anthropic adapters kept reading the SSE body until the
+   socket closed. A proxy or keep-alive connection could therefore add seconds
+   after the logical end. They now stop at `finish_reason`, `[DONE]`, or
+   `message_stop`, and `_collect` treats `LlmEventType.done` as terminal and
+   cancels the subscription.
+2. The first parsed/validated analysis was held until the optional validation
+   repair, language repair, and P7.0 rich-text post-processing calls finished.
+   `AgentOrchestrator` now emits an `onProvisionalResult` callback immediately
+   after the first parse/validation (salvage is used when that first analysis is
+   invalid); repair stages stay in `AgentStage.validating` instead of returning
+   to `reasoning`. `AgentRunSnapshot.provisionalResult` renders the summary with
+   “结果已出，正在复核…”, and the final result replaces it on completion.
+3. The progress counter's 250ms leading-edge throttle could drop the last
+   delta. Stage transitions force a tail flush, and `_collect` emits the final
+   accumulated text before returning.
+
+No run-result SQLite write sits on this path; profile decisions are the only
+persistence and happen before their futures are released. Debug builds log
+`[AgentTiming]` for provider headers/first event/finish/stream close, each
+`_collect` label, stage transitions, parse/validate/language timing, provisional
+emission, controller state changes, and the first result frame. Logs contain
+durations and counts only — never prompt text, citations, paths, or keys.
+`test/agent_orchestrator_test.dart`, `test/openai_compatible_provider_test.dart`,
+`test/provider_http_test.dart`, and `test/agent_wave2_ui_test.dart` cover the
+provisional-before-repair, held-socket, `[DONE]`, and provisional-bubble cases.
 
 ## Tests and build
 
@@ -544,6 +603,8 @@ and `agent_coverage_orchestrator_test.dart`, plus lookup-mode/cap cases in
 P6.6 adds `ocr_consensus_test.dart`, `agent_ocr_variants_test.dart` and
 `agent_ocr_variants_ui_test.dart`, plus a prepared-variant case in
 `agent_orchestrator_test.dart`.
+P7.0 adds `rich_text_post_processor_test.dart`, `agent_rich_text_test.dart`, and
+rich-text accept/fallback cases in `agent_orchestrator_test.dart`.
 
 ## Not implemented / next
 

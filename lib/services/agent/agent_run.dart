@@ -25,6 +25,7 @@ enum AgentStage {
   coverage,
   reasoning,
   validating,
+  formatting,
   done,
   error,
   cancelled,
@@ -94,6 +95,7 @@ class AgentRunResult {
     this.warnings = const <String>[],
     this.coverageFallbackUsed = false,
     this.ocrQuality = const <String, OcrQuality>{},
+    this.richSummary,
   });
 
   final AgentInputEnvelope input;
@@ -116,6 +118,10 @@ class AgentRunResult {
   /// the opaque image id. Never serialized or sent to the provider.
   final Map<String, OcrQuality> ocrQuality;
 
+  /// Optional rich-text version of [agentSummarySource]. It is accepted only
+  /// when stripping the formatting tags reproduces the plain source exactly.
+  final String? richSummary;
+
   List<AgentCitation> get citations => evidence.citations;
 
   /// Citations referenced by validated claims. When validation reports no used
@@ -127,6 +133,19 @@ class AgentRunResult {
         .where((citation) => usedIds.contains(citation.id))
         .toList(growable: false);
   }
+}
+
+/// The plain text shown as the assistant bubble's main summary. The rich-text
+/// post-processor must format exactly this string; the UI uses [richSummary]
+/// only when its stripped form equals this value.
+String agentSummarySource(AgentAnalysis analysis) {
+  if (analysis.translation.isNotEmpty) {
+    return analysis.translation.map((item) => item.text).join('\n');
+  }
+  if (analysis.segments.isNotEmpty) {
+    return analysis.segments.first.interpretation;
+  }
+  return '';
 }
 
 class AgentRunFailure implements Exception {
@@ -157,6 +176,11 @@ class AgentRunFailure implements Exception {
 class AgentCancellation extends LlmCancelToken {}
 
 typedef AgentStageCallback = void Function(AgentStage stage, String message);
+
+/// Fires once the main analysis can be displayed, before optional
+/// repair/language post-checks finish. The final [AgentRunResult] may replace
+/// this value when those checks complete.
+typedef AgentProvisionalResultCallback = void Function(AgentRunResult result);
 
 /// Resolves every generated profile as a batch. The app-level inbox holds the
 /// proposals until the user acts, so an absent page never implies a skip.
@@ -197,6 +221,7 @@ class AgentRunSnapshot {
     this.maxEvidenceEntries = 0,
     this.pendingProfileCount = 0,
     this.result,
+    this.provisionalResult,
     this.retainedResult,
     this.resultRetainedAfterFailure = false,
     this.errorMessage,
@@ -237,6 +262,11 @@ class AgentRunSnapshot {
       : AgentLimits.standard.maxEvidenceEntries;
   final AgentRunResult? result;
 
+  /// A displayable result emitted before optional post-checks (format or
+  /// language repair) finish. It is replaced by [result] when the run
+  /// completes, and never sent back to the provider.
+  final AgentRunResult? provisionalResult;
+
   /// Previous result kept visible while a regeneration runs. It is never sent
   /// to the provider again and is replaced only by a successful new run.
   final AgentRunResult? retainedResult;
@@ -276,6 +306,7 @@ class AgentRunSnapshot {
       sentImage ||
       isRunning ||
       result != null ||
+      provisionalResult != null ||
       errorMessage != null;
 
   AgentRunSnapshot copyWith({
@@ -290,6 +321,7 @@ class AgentRunSnapshot {
     int? maxEvidenceEntries,
     int? pendingProfileCount,
     Object? result = _unset,
+    Object? provisionalResult = _unset,
     Object? retainedResult = _unset,
     bool? resultRetainedAfterFailure,
     Object? errorMessage = _unset,
@@ -322,6 +354,9 @@ class AgentRunSnapshot {
       result: identical(result, _unset)
           ? this.result
           : result as AgentRunResult?,
+      provisionalResult: identical(provisionalResult, _unset)
+          ? this.provisionalResult
+          : provisionalResult as AgentRunResult?,
       retainedResult: identical(retainedResult, _unset)
           ? this.retainedResult
           : retainedResult as AgentRunResult?,

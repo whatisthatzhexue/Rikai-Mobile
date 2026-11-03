@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -38,6 +39,23 @@ void main() {
 
     expect(events, hasLength(1));
     expect(events.single, contains('"content":"你"'));
+  });
+
+  test('stops at [DONE] without waiting for the socket to close', () async {
+    final controller = StreamController<Uint8List>();
+    final eventsFuture = sseDataEvents(controller.stream).toList();
+    controller.add(
+      utf8.encode(
+        'data: {"choices":[{"delta":{"content":"好"}}]}\n\n'
+        'data: [DONE]\n\n',
+      ),
+    );
+
+    final events = await eventsFuture.timeout(const Duration(seconds: 2));
+    expect(events, hasLength(1));
+    expect(events.single, contains('"好"'));
+    expect(controller.hasListener, isFalse);
+    await controller.close();
   });
 
   test('maps Dio cancellation to the stable cancelled code', () {

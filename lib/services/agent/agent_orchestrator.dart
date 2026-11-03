@@ -31,6 +31,7 @@ import 'ports/lookup_port.dart';
 import 'ports/ocr_port.dart';
 import 'ports/tokenize_port.dart';
 import 'quote_builder.dart';
+import 'rich_text_post_processor.dart';
 
 typedef LlmFactory = LlmPort Function(AgentProviderConfig config);
 
@@ -79,6 +80,7 @@ class AgentOrchestrator {
     ProfileConfirmationCallback? onProfile,
     AgentProfileReviewCallback? onProfilesGenerated,
     AgentStageCallback? onStage,
+    AgentProvisionalResultCallback? onProvisionalResult,
     AgentCancellation? cancellation,
     void Function(String accumulated)? onTextDelta,
     void Function(String accumulated)? onReasoningDelta,
@@ -86,8 +88,10 @@ class AgentOrchestrator {
   }) async {
     var stage = AgentStage.prepare;
     var uiLanguage = resolveAgentUiLanguage(request.responseLanguage);
+    final runWatch = Stopwatch()..start();
     void notify(AgentStage next, String message) {
       stage = next;
+      _timing('stage=${next.name} elapsed=${runWatch.elapsedMilliseconds}ms');
       onStage?.call(next, message);
     }
 
@@ -357,11 +361,13 @@ class AgentOrchestrator {
         cancellation,
         onTextDelta: onTextDelta,
         onReasoningDelta: onReasoningDelta,
+        label: 'analysis',
       );
       notify(
         AgentStage.validating,
         agentStageMessage(AgentStage.validating, uiLanguage),
       );
+      final parseWatch = Stopwatch()..start();
       final parsed = _parseAndNormalize(
         raw,
         quotes,
@@ -370,6 +376,7 @@ class AgentOrchestrator {
       );
       var analysis = parsed.analysis;
       var formatErrors = parsed.integrityErrors;
+      final validateWatch = Stopwatch()..start();
       var validation = analysis == null
           ? null
           : validator.validate(
@@ -379,6 +386,32 @@ class AgentOrchestrator {
               mode: request.mode,
               expectedSourceId: primary?.id,
             );
+      _timing(
+        'parse=${parseWatch.elapsedMilliseconds}ms '
+        'validate=${validateWatch.elapsedMilliseconds}ms '
+        'analysis=${analysis != null} valid=${validation?.valid}',
+      );
+
+      // Show the main analysis before any optional repair/language call. This
+      // is what keeps a finished stream from sitting behind a silent second
+      // model request; the final result replaces this preview when checks end.
+      var provisional = _emitProvisionalResult(
+        onProvisionalResult: onProvisionalResult,
+        envelope: envelope,
+        evidence: evidence,
+        quotes: quotes,
+        analysis: analysis,
+        validation: validation,
+        formatErrors: formatErrors,
+        profiles: profiles,
+        profileWarnings: profileWarnings,
+        unavailableProfiles: unavailableProfiles,
+        warnings: warnings,
+        coverageFallbackUsed: coverageFallbackUsed,
+        mode: request.mode,
+        expectedSourceId: primary?.id,
+        elapsedMs: runWatch.elapsedMilliseconds,
+      );
       final repairErrors = <String>[
         if (formatErrors.isNotEmpty) ...formatErrors,
         if (analysis == null) '模型返回格式无效',
@@ -393,7 +426,7 @@ class AgentOrchestrator {
           validation == null ||
           !validation.valid) {
         checkCancelled();
-        notify(AgentStage.reasoning, agentRepairingMessage(uiLanguage));
+        notify(AgentStage.validating, agentRepairingMessage(uiLanguage));
         try {
           final repairRaw = await _collect(
             llm,
@@ -410,6 +443,7 @@ class AgentOrchestrator {
               errors: repairErrors,
             ),
             cancellation,
+            label: 'analysis_repair',
           );
           final repaired = _parseAndNormalize(
             repairRaw,
@@ -437,6 +471,32 @@ class AgentOrchestrator {
             debugPrint('[AgentAnalysis] repair call failed; trying salvage');
           }
         }
+      }
+
+      // The first response may have been unparseable (nothing to preview) or
+      // invalid (only a salvaged preview). If the repair now produced a valid
+      // analysis, show it before the language/rich-text post-checks run.
+      final repairedIsValid =
+          analysis != null && validation?.valid == true && formatErrors.isEmpty;
+      if (provisional == null || (provisional == false && repairedIsValid)) {
+        final repairedProvisional = _emitProvisionalResult(
+          onProvisionalResult: onProvisionalResult,
+          envelope: envelope,
+          evidence: evidence,
+          quotes: quotes,
+          analysis: analysis,
+          validation: validation,
+          formatErrors: formatErrors,
+          profiles: profiles,
+          profileWarnings: profileWarnings,
+          unavailableProfiles: unavailableProfiles,
+          warnings: warnings,
+          coverageFallbackUsed: coverageFallbackUsed,
+          mode: request.mode,
+          expectedSourceId: primary?.id,
+          elapsedMs: runWatch.elapsedMilliseconds,
+        );
+        if (repairedProvisional != null) provisional = repairedProvisional;
       }
 
       checkCancelled();
@@ -470,14 +530,20 @@ class AgentOrchestrator {
       // F1b: check only human-readable fields. A single repair may translate
       // them; a failed or still-mismatched repair keeps the result and warns.
       if (analysis != null && validation != null && validation.valid) {
+        final languageWatch = Stopwatch()..start();
         var languageCheck = languageValidator.check(
           analysis,
           request.responseLanguage,
           allowedJapaneseTerms: allowedTerms,
         );
+        _timing(
+          'language_check=${languageWatch.elapsedMilliseconds}ms '
+          'mismatch=${languageCheck.isMismatch} '
+          'fields=${languageCheck.mismatchedFields.length}',
+        );
         if (languageCheck.isMismatch) {
           checkCancelled();
-          notify(AgentStage.reasoning, agentRepairingMessage(uiLanguage));
+          notify(AgentStage.validating, agentRepairingMessage(uiLanguage));
           try {
             final languageRaw = await _collect(
               llm,
@@ -494,6 +560,7 @@ class AgentOrchestrator {
                 mismatchedFields: languageCheck.mismatchedFields,
               ),
               cancellation,
+              label: 'language_repair',
             );
             final repaired = _parseAndNormalize(
               languageRaw,
@@ -520,10 +587,15 @@ class AgentOrchestrator {
             if (cancellation?.isCancelled == true) rethrow;
             // Keep the original result; the warning below records the failure.
           }
+          final recheckWatch = Stopwatch()..start();
           languageCheck = languageValidator.check(
             analysis!,
             request.responseLanguage,
             allowedJapaneseTerms: allowedTerms,
+          );
+          _timing(
+            'language_recheck=${recheckWatch.elapsedMilliseconds}ms '
+            'mismatch=${languageCheck.isMismatch}',
           );
           if (languageCheck.isMismatch) {
             warnings.add(agentLanguageWarning(uiLanguage));
@@ -564,8 +636,8 @@ class AgentOrchestrator {
               .isMismatch) {
             warnings.add(agentLanguageWarning(uiLanguage));
           }
-          return AgentRunResult(
-            input: envelope,
+          final result = _buildResult(
+            envelope: envelope,
             evidence: evidence,
             quotes: quotes,
             analysis: salvaged.analysis,
@@ -574,14 +646,16 @@ class AgentOrchestrator {
               errors: errors,
               citationsUsed: salvageValidation.citationsUsed,
             ),
-            sources: _sourceVersions(envelope),
-            dictionaryProfiles: profiles,
+            profiles: profiles,
             profileWarnings: profileWarnings,
             unavailableProfiles: unavailableProfiles,
             warnings: warnings,
             coverageFallbackUsed: coverageFallbackUsed,
-            ocrQuality: _ocrQuality(envelope, evidence),
           );
+          _timing(
+            'result_ready salvage=true elapsed=${runWatch.elapsedMilliseconds}ms',
+          );
+          return result;
         }
         throw AgentRunFailure(
           stage: stage,
@@ -593,21 +667,45 @@ class AgentOrchestrator {
         );
       }
 
+      String? richSummary;
+      if (limits.enableRichTextPostProcess) {
+        final summarySource = agentSummarySource(analysis);
+        if (summarySource.isNotEmpty) {
+          notify(
+            AgentStage.formatting,
+            agentStageMessage(AgentStage.formatting, uiLanguage),
+          );
+          checkCancelled();
+          final rich = await RichTextPostProcessor(
+            llm: llm,
+            model: smallModel,
+          ).process(summarySource, cancellation: cancellation);
+          if (kDebugMode && rich.taggedText == null) {
+            debugPrint('[AgentRichText] rejected: ${rich.rejectionReason}');
+          }
+          richSummary = rich.taggedText;
+          checkCancelled();
+        }
+      }
+
       notify(AgentStage.done, agentStageMessage(AgentStage.done, uiLanguage));
-      return AgentRunResult(
-        input: envelope,
+      final result = _buildResult(
+        envelope: envelope,
         evidence: evidence,
         quotes: quotes,
         analysis: analysis,
         validation: validation,
-        sources: _sourceVersions(envelope),
-        dictionaryProfiles: profiles,
+        profiles: profiles,
         profileWarnings: profileWarnings,
         unavailableProfiles: unavailableProfiles,
         warnings: warnings,
         coverageFallbackUsed: coverageFallbackUsed,
-        ocrQuality: _ocrQuality(envelope, evidence),
+        richSummary: richSummary,
       );
+      _timing(
+        'result_ready salvage=false elapsed=${runWatch.elapsedMilliseconds}ms',
+      );
+      return result;
     } on AgentRunFailure {
       rethrow;
     } on AgentCapabilityException catch (error) {
@@ -658,6 +756,7 @@ class AgentOrchestrator {
           maxTokens: limits.coverageReviewMaxTokens,
         ),
         cancellation,
+        label: 'coverage',
       );
     } on AgentRunFailure catch (error) {
       if (cancellation?.isCancelled == true) rethrow;
@@ -703,6 +802,7 @@ class AgentOrchestrator {
             maxTokens: limits.coverageReviewMaxTokens,
           ),
           cancellation,
+          label: 'coverage_repair',
         );
         parsed = parseCoverageReview(
           repaired,
@@ -821,6 +921,124 @@ class AgentOrchestrator {
       fallbackUsed: fallbackUsed,
       warnings: warnings,
     );
+  }
+
+  AgentRunResult _buildResult({
+    required AgentInputEnvelope envelope,
+    required AgentEvidenceBundle evidence,
+    required List<AgentQuoteRef> quotes,
+    required AgentAnalysis analysis,
+    required AgentValidationResult validation,
+    required List<String> profiles,
+    required List<String> profileWarnings,
+    required List<DictionaryProfileIssue> unavailableProfiles,
+    required List<String> warnings,
+    required bool coverageFallbackUsed,
+    String? richSummary,
+  }) {
+    return AgentRunResult(
+      input: envelope,
+      evidence: evidence,
+      quotes: quotes,
+      analysis: analysis,
+      validation: validation,
+      sources: _sourceVersions(envelope),
+      dictionaryProfiles: List<String>.unmodifiable(profiles),
+      profileWarnings: List<String>.unmodifiable(profileWarnings),
+      unavailableProfiles: List<DictionaryProfileIssue>.unmodifiable(
+        unavailableProfiles,
+      ),
+      warnings: List<String>.unmodifiable(warnings),
+      coverageFallbackUsed: coverageFallbackUsed,
+      ocrQuality: _ocrQuality(envelope, evidence),
+      richSummary: richSummary,
+    );
+  }
+
+  /// Emits a displayable result as soon as the first analysis is parsed and
+  /// locally validated. Optional post-checks (format repair, language repair)
+  /// may take another full model round-trip; they must not hide an already
+  /// complete answer behind a silent wait.
+  /// Returns null when nothing could be displayed, true when a fully valid
+  /// preview was emitted, and false when only a salvaged/invalid preview was
+  /// emitted.
+  bool? _emitProvisionalResult({
+    required AgentProvisionalResultCallback? onProvisionalResult,
+    required AgentInputEnvelope envelope,
+    required AgentEvidenceBundle evidence,
+    required List<AgentQuoteRef> quotes,
+    required AgentAnalysis? analysis,
+    required AgentValidationResult? validation,
+    required List<String> formatErrors,
+    required List<String> profiles,
+    required List<String> profileWarnings,
+    required List<DictionaryProfileIssue> unavailableProfiles,
+    required List<String> warnings,
+    required bool coverageFallbackUsed,
+    required AgentMode mode,
+    required String? expectedSourceId,
+    required int elapsedMs,
+  }) {
+    if (onProvisionalResult == null || analysis == null) return null;
+    if (validation != null && validation.valid && formatErrors.isEmpty) {
+      onProvisionalResult(
+        _buildResult(
+          envelope: envelope,
+          evidence: evidence,
+          quotes: quotes,
+          analysis: analysis,
+          validation: validation,
+          profiles: profiles,
+          profileWarnings: profileWarnings,
+          unavailableProfiles: unavailableProfiles,
+          warnings: warnings,
+          coverageFallbackUsed: coverageFallbackUsed,
+        ),
+      );
+      _timing('provisional elapsed=${elapsedMs}ms valid=true salvage=false');
+      return true;
+    }
+    final salvaged = salvageAnalysis(
+      analysis: analysis,
+      evidence: evidence,
+      quotes: quotes,
+      mode: mode,
+      expectedSourceId: expectedSourceId,
+    );
+    if (!salvaged.hasContent) return null;
+    final salvageValidation = validator.validate(
+      analysis: salvaged.analysis,
+      evidence: evidence,
+      quotes: quotes,
+      mode: mode,
+      expectedSourceId: expectedSourceId,
+    );
+    final errors = <String>{
+      ...formatErrors,
+      ...?validation?.errors,
+      ...salvaged.notes,
+      if (!salvageValidation.valid) ...salvageValidation.errors,
+    }.toList(growable: false);
+    onProvisionalResult(
+      _buildResult(
+        envelope: envelope,
+        evidence: evidence,
+        quotes: quotes,
+        analysis: salvaged.analysis,
+        validation: AgentValidationResult(
+          valid: false,
+          errors: errors,
+          citationsUsed: salvageValidation.citationsUsed,
+        ),
+        profiles: profiles,
+        profileWarnings: profileWarnings,
+        unavailableProfiles: unavailableProfiles,
+        warnings: warnings,
+        coverageFallbackUsed: coverageFallbackUsed,
+      ),
+    );
+    _timing('provisional elapsed=${elapsedMs}ms valid=false salvage=true');
+    return false;
   }
 
   Future<AgentInputEnvelope> _buildInput(
@@ -1034,33 +1252,55 @@ class AgentOrchestrator {
     AgentCancellation? cancellation, {
     void Function(String accumulated)? onTextDelta,
     void Function(String accumulated)? onReasoningDelta,
+    String label = 'request',
   }) async {
     final buffer = StringBuffer();
     final reasoning = StringBuffer();
-    await for (final event in llm.stream(request, cancellation: cancellation)) {
-      if (cancellation?.isCancelled == true) {
-        throw const AgentRunFailure(
-          stage: AgentStage.reasoning,
-          code: AgentToolErrorCode.toolCancelled,
-          message: '已取消',
-        );
-      }
-      switch (event.type) {
-        case LlmEventType.textDelta:
-          buffer.write(event.text);
-          onTextDelta?.call(buffer.toString());
-        case LlmEventType.reasoningDelta:
-          reasoning.write(event.text);
-          onReasoningDelta?.call(reasoning.toString());
-        case LlmEventType.error:
-          throw AgentRunFailure(
+    final watch = Stopwatch()..start();
+    var firstEventAt = -1;
+    var finished = false;
+    try {
+      await for (final event in llm.stream(
+        request,
+        cancellation: cancellation,
+      )) {
+        if (cancellation?.isCancelled == true) {
+          throw const AgentRunFailure(
             stage: AgentStage.reasoning,
-            code: AgentToolErrorCode.providerUnavailable,
-            message: '模型服务返回错误',
-            detail: _debugHead(reasoning.toString()),
+            code: AgentToolErrorCode.toolCancelled,
+            message: '已取消',
           );
-        case LlmEventType.done:
-          break;
+        }
+        if (firstEventAt < 0) firstEventAt = watch.elapsedMilliseconds;
+        switch (event.type) {
+          case LlmEventType.textDelta:
+            buffer.write(event.text);
+            onTextDelta?.call(buffer.toString());
+          case LlmEventType.reasoningDelta:
+            reasoning.write(event.text);
+            onReasoningDelta?.call(reasoning.toString());
+          case LlmEventType.error:
+            throw AgentRunFailure(
+              stage: AgentStage.reasoning,
+              code: AgentToolErrorCode.providerUnavailable,
+              message: '模型服务返回错误',
+              detail: _debugHead(reasoning.toString()),
+            );
+          case LlmEventType.done:
+            // `done` is terminal. Breaking here also cancels the provider's
+            // SSE subscription, so a keep-alive socket cannot hide the result.
+            finished = true;
+        }
+        if (finished) break;
+      }
+    } finally {
+      if (kDebugMode) {
+        debugPrint(
+          '[AgentTiming] stream label=$label '
+          'first_event=${firstEventAt}ms end=${watch.elapsedMilliseconds}ms '
+          'chars=${buffer.length} reasoning=${reasoning.length} '
+          'done=$finished cancelled=${cancellation?.isCancelled == true}',
+        );
       }
     }
     if (buffer.isEmpty) {
@@ -1071,6 +1311,11 @@ class AgentOrchestrator {
         detail: _debugHead(reasoning.toString()),
       );
     }
+    // Tail flush: the controller may have throttled the last delta. Emitting
+    // the final accumulated value here guarantees the UI sees the complete
+    // text before validation starts.
+    onTextDelta?.call(buffer.toString());
+    onReasoningDelta?.call(reasoning.toString());
     return buffer.toString();
   }
 }
@@ -1089,6 +1334,12 @@ class _CoverageOutcome {
 
 void _coverageDebug(String message) {
   if (kDebugMode) debugPrint('[AgentCoverage] $message');
+}
+
+/// Bounded, content-free timing logs used to find post-stream latency.
+/// Never log prompt text, citations, image paths or API keys here.
+void _timing(String message) {
+  if (kDebugMode) debugPrint('[AgentTiming] $message');
 }
 
 String _debugHead(String raw) {
