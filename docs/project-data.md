@@ -7,8 +7,8 @@
 > - last_verified: 2026-11-03
 > - last_verified_code_commit: `d167ad0`（P6.7 历史/声调工作区基于该提交；P6.7
 >   改动当前未提交）
-> - last_doc_sync: 2026-11-03（P6.7-1/2：同步历史/声调自动化测试基线；固定文案/
->   预算未改）
+> - last_doc_sync: 2026-11-03（P6.7-1/2：同步历史/声调及音调信息徽标测试基线；
+>   固定文案/预算未改）
 > - 设备基线: `Medium_Phone_API_36.1`（x86_64 模拟器，API 36）；无 arm64 真机
 > - 维护规则：数据变化时只改本文件，并同步更新 `last_verified`/
 >   `last_verified_code_commit`；其他文档的引用链接不需要改。不要把本文件自身的
@@ -40,10 +40,10 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **432** |
+| 当前 test/testWidgets 声明数 | **433** |
 | 当前测试文件数 | **85** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | **441 passed**（声明 432；参数化/循环用例产生 441 个执行用例） |
+| 最近 `flutter test` | **442 passed**（声明 433；参数化/循环用例产生 442 个执行用例） |
 | 最近 `flutter build apk --debug` | success（2026-11-03 P6.7 验证） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
@@ -71,7 +71,8 @@
 | Provider 可选输出上限 | 336 | provider 设置 maxOutputTokens、OpenAI/Anthropic payload 覆盖与持久化测试 |
 | P6.6 收尾 / P7.0 富文本修正 | 366（声明 350） | 富文本/YOMI 标签处理、结果渲染与 P6.6 多 OCR 回归；真机验收待做 |
 | P6.7 历史/声调 | 441（声明 432） | 历史/持久化、DB v3、档案队列、UniDic 声调；真机/视觉验收待做 |
-| 当前 | **441（声明 432）** | 见 §2.1 |
+| P6.7 音调信息徽标 | 442（声明 433） | 音调词行增加红色“音调信息”徽标与布局回归 |
+| 当前 | **442（声明 433）** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 

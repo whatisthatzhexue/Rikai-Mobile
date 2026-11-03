@@ -87,8 +87,7 @@ class AgentUiStrings {
   );
   String get historyVariantsTitle => _pick('文字识别结果', 'OCR result', '文字認識結果');
   String get historyQuestion => _pick('提问', 'Question', '質問');
-  String get historyUntitled =>
-      _pick('未命名分析', 'Untitled analysis', '無題の分析');
+  String get historyUntitled => _pick('未命名分析', 'Untitled analysis', '無題の分析');
   String get historyAssistantResult => _pick('分析结果', 'Analysis', '分析結果');
   String get close => _pick('关闭', 'Close', '閉じる');
   String get historySelectedVariant => _pick('当时选中', 'selected', '選択中');
@@ -409,6 +408,7 @@ class AgentUiStrings {
   String get epistemicInference => _pick('语境推断', 'Context inference', '文脈推論');
   String get epistemicTranslation =>
       _pick('模型译文', 'Model translation', 'モデル翻訳');
+  String get pitchInfoLabel => _pick('音调信息', 'Pitch accent', 'アクセント情報');
   String confidence(int percent) =>
       _pick('置信度 $percent%', 'Confidence $percent%', '信頼度 $percent%');
   String citationLabel(int number) =>

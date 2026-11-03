@@ -760,14 +760,17 @@ plus pitch cases in `evidence_builder_test.dart` and `agent_result_view_test.dar
   fact rows. It delegates reading rendering to the existing `AgentRichText`
   Ruby layout unchanged and overlays the pitch line above it without adding
   line height. A kanji surface without a distinct reading/furigana hides the
-  pitch line (the reading may be ambiguous). `AgentRunResult.pitchAccents` is
-  local-only and omitted from `AgentEvidenceBundle.toJson`, so it never enters
-  a provider request.
+  pitch line (the reading may be ambiguous). The pitch word row starts with a
+  red localized “音调信息” badge (same metrics as the epistemic badge, light
+  red surface + `error` text) and then the existing pitch words; the badge is
+  local-only and never enters a provider request/export.
+  `AgentRunResult.pitchAccents` is local-only and omitted from
+  `AgentEvidenceBundle.toJson`, so it never enters a provider request.
 - **Tests/build**: added `agent_history_test`, `agent_history_recorder_test`,
   `agent_history_ui_test`, `agent_store_migration_test`,
   `agent_profile_inbox_persistence_test`, `unidic_accent_parser_test`, plus
   pitch cases in `evidence_builder_test`/`agent_result_view_test`. Full
-  `flutter test` passed (441 executed, 432 declarations in 85 files) and debug
+  `flutter test` passed (442 executed, 433 declarations in 85 files) and debug
   APK built; `docs/project-data.md` was synced with user consent.
 - **Still pending**: P6.6 failed-run multi-OCR entry and per-variant citation
   preview; P6.7 annotation DSL, provider test connection, accessibility/release

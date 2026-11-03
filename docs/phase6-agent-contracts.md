@@ -1136,6 +1136,9 @@ final AgentPitchAccent? pitchAccent;
   线宽按词宽均分为 mora 段，不按汉字字数逐字对齐。颜色 `textSecondary`。若该词
   有 RUBY/读音，纵向顺序固定为声调线 → RUBY 读音 → 词形，声调线在 RUBY 上方。
   声调线只作为 Ruby 上方的覆盖层，不改变现有 Ruby 布局/行高。
+- 音调词行最前显示红色“音调信息”徽标（与 epistemic 徽标同尺寸；浅红底 +
+  `error` 字），后接音调词；徽标只作本地说明，不进入 provider 请求、日志、
+  citation 或导出。
 - 200% 字号：线宽/偏移随文字缩放；空间不足时换行或省略声调线，不得覆盖文字/
   读音/下划线；不得缩小到不可读。
 - 无 `pitchAccent`、读音为空、词形与 token 不匹配时按普通文本渲染；不显示
@@ -1153,6 +1156,7 @@ final AgentPitchAccent? pitchAccent;
 - 真实样例 10 个词的 mora_pattern。
 - 非整数/越界/空读音/小写拗音/促音/长音边界。
 - 只在词注/词典事实行渲染；AI 气泡/原文/逐句不出现声调线。
+- 音调词行显示“音调信息”徽标；没有可显示音调词时不出现空徽标。
 - 请求体断言无 pitch/声调字段；复制/导出无高低线。
 
 ### 14.3 标注 DSL `rikai.annotation.rules.v1`

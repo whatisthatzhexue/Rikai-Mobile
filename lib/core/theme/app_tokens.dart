@@ -213,6 +213,8 @@ abstract final class AgentTokens {
   static const double pitchAccentLine = 1.5;
   static const double pitchAccentHeight = 8;
   static const Color pitchAccentColor = AppColors.textSecondary;
+  static const Color pitchInfoBadgeSurface = Color(0xFFFDECEA);
+  static const Color pitchInfoBadgeText = AppColors.error;
 
   /// Rich-text post-processing: ruby reading uses the shared furigana ratio
   /// and the body text color; underline is black and twice the default

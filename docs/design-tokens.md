@@ -274,6 +274,7 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 | 模型/模式标签 | `agentModelLabel` | 12sp，`textSecondary`，位于 AI 气泡顶部 |
 | 富文本读音/强调 | `rubyReadingSize`/`rubyReadingColor`/`richTextUnderlineColor`/`richTextUnderlineThickness`/`richTextUnderlineOffset` | RUBY 发音标注为主字号 55%、正文色 `textPrimary`；base 使用周围正文相同行高/metrics，以 alphabetic baseline 对齐，读音在上方，不把 base 下沉；BOLD `w600`，RUBY 在 BOLD 内时读音一起加粗；UNDERLINE 正文色 `textPrimary`、粗细 2、baseline 下方固定偏移 2 的自绘线（不用字体 decoration，保证 `；` 与汉字一致），RUBY 读音永不加下划线；只用于显示标签，不改变正文 |
 | 声调高低线 | `agentPitchAccentLine` | 1.5dp、`textSecondary`；高段上轨/低段下轨，アクセント核处垂直下降；线宽按词宽均分为 mora 段，不按汉字字数逐字对齐；有 RUBY/读音时纵向顺序为声调线→读音→词形；声调线是 Ruby 上方的覆盖层，不改变现有 Ruby 布局/行高；汉字词无独立读音/振假名时不画线；只在词注/词典事实行，200% 字号随文字缩放，空间不足时换行或省略，不覆盖文字 |
+| 音调信息徽标 | `agentPitchInfoBadge` | 与 epistemic 徽标同尺寸：12sp、水平内边距 8、上下 2、圆角 6；`pitchInfoBadgeSurface` 浅红底 + `AppColors.error` 字；位于音调词行最前，后接现有音调词，不单独成行；仅本地显示，不进入 provider/导出 |
 | 历史列表行 | `agentHistoryRow` | 最小高 72、白底、1px `divider`；标题 16sp/600，时间/模式/状态 14sp，状态 chip 12sp；触控 ≥48；不显示缩略图/原图 |
 | 历史只读提示 | `agentHistoryReadOnlyBanner` | `surfaceMuted` 底、14sp、`textSecondary`、内边距 12；“历史记录只读；原图未保存”；不遮挡内容 |
 | 历史空态 | `agentHistoryEmpty` | 图标 40、标题 16sp、说明 14sp、主按钮“返回助手”；居中，不整屏 loading |
@@ -307,6 +308,8 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 - 声调线只出现在逐句理解下方的词注/词典事实行；同一行已有 RUBY 时，声调线在
   词上方、RUBY 在词上/旁，二者不得重叠。无 UniDic 声调数据时整条线省略，不显示
   数字/“推测”占位。
+- 音调词行最前显示红色“音调信息”胶囊（与“词典事实”徽标同尺寸），后接现有音调
+  词；胶囊只作本地说明，不参与声调线布局，不进入 provider 请求或导出。
 - DSL 预览/版本/回滚沿用阅读器、照片集、语料现有 token 和主/次按钮；不新增
   Agent 专用样式。预览只渲染白名单语法，禁止图片/外链/HTML。
 - Markdown 档案预览只用于用户可编辑档案；主结果仍是结构化富文本，不套 Markdown
@@ -484,7 +487,7 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 - [ ] （P6.7）历史一条=一次分析，只读；列表/详情不显示图片/路径/缩略图；
       citation 失效只显示保存摘要；删除/清空有二次确认。
 - [ ] （P6.7）声调只用 UniDic 字段 24–26；只在词注/词典事实行；无数据/越界
-      不画线，不用 AI 猜；200% 字号不重叠。
+      不画线，不用 AI 猜；200% 字号不重叠；音调词行带“音调信息”红色徽标。
 - [ ] （P6.7）DSL 只渲染白名单；HTML/JS/图片/外链不执行；预览=正式渲染；
       版本/回滚可复现；Agent 结果不接入。
 - [ ] （P6.7）Markdown 只用于导出/受限档案预览；主结果不是 Markdown；

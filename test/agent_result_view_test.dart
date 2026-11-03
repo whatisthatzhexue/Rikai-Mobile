@@ -238,6 +238,39 @@ void main() {
     expect(find.textContaining('请务必'), findsOneWidget);
   });
 
+  testWidgets('labels the pitch row with the pitch info badge', (tester) async {
+    final result = _resultWithPitch().copyWithRichText(
+      const AgentRichTextOutputs(
+        segmentTexts: <String>['正式请求'],
+        segmentNotes: <String>['何卒（なにとぞ）：请务必'],
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentResultView(
+              result: result,
+              onCitationTap: (_) {},
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final badge = find.text('音调信息');
+    final pitchWord = find.byType(AgentPitchAccentText);
+    expect(badge, findsOneWidget);
+    expect(pitchWord, findsOneWidget);
+    expect(
+      tester.getTopLeft(badge).dx,
+      lessThan(tester.getTopLeft(pitchWord).dx),
+    );
+  });
+
   testWidgets('strips YOMI wrappers in segment interpretations', (
     tester,
   ) async {

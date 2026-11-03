@@ -545,6 +545,7 @@ class _SegmentBlock extends StatelessWidget {
             _PitchNotes(
               notes: segment.wordNotes,
               accents: pitchAccents,
+              strings: strings,
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontSize: AgentTokens.helper,
                 color: AppColors.textPrimary,
@@ -654,11 +655,13 @@ class _PitchNotes extends StatelessWidget {
   const _PitchNotes({
     required this.notes,
     required this.accents,
+    required this.strings,
     required this.style,
   });
 
   final List<AgentWordNote> notes;
   final Map<String, AgentPitchAccent> accents;
+  final AgentUiStrings strings;
   final TextStyle? style;
 
   @override
@@ -690,10 +693,57 @@ class _PitchNotes extends StatelessWidget {
     if (items.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.sm),
-      child: Wrap(
-        spacing: AppSpacing.sm,
-        runSpacing: AppSpacing.xs,
-        children: items,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _BadgeChip(
+            label: strings.pitchInfoLabel,
+            background: AgentTokens.pitchInfoBadgeSurface,
+            foreground: AgentTokens.pitchInfoBadgeText,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: items,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BadgeChip extends StatelessWidget {
+  const _BadgeChip({
+    required this.label,
+    required this.background,
+    required this.foreground,
+  });
+
+  final String label;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          fontSize: AgentTokens.badge,
+          color: foreground,
+        ),
       ),
     );
   }
@@ -738,22 +788,10 @@ class _ClaimBadge extends StatelessWidget {
       spacing: AppSpacing.xs,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.xxs,
-          ),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-          ),
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: AgentTokens.badge,
-              color: foreground,
-            ),
-          ),
+        _BadgeChip(
+          label: label,
+          background: background,
+          foreground: foreground,
         ),
         Text(
           strings.confidence((confidence.clamp(0, 1) * 100).round()),
