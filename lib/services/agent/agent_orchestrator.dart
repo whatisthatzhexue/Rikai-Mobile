@@ -265,17 +265,27 @@ class AgentOrchestrator {
       checkCancelled();
 
       final primary = _primarySource(envelope);
-      final quotes = primary == null
-          ? const <AgentQuoteRef>[]
-          : buildSourceQuotes(
-              sourceId: primary.id,
-              text: primary.isImage
-                  ? primary.selectedVariant?.text ?? ''
-                  : primary.text,
-              origin: primary.isImage
-                  ? primary.selectedVariant?.origin ?? AgentQuoteOrigin.ocr
-                  : AgentQuoteOrigin.userText,
-            );
+      // Multi-image runs must expose quotes from every source. Building quotes
+      // from the primary source only made SEGMENT/原文 cover the first image
+      // while the other images were merely context.
+      final quotes = <AgentQuoteRef>[];
+      var quoteIndex = 0;
+      for (final source in envelope.sources) {
+        final text = source.isImage
+            ? source.selectedVariant?.text ?? ''
+            : source.text;
+        if (text.trim().isEmpty) continue;
+        final sourceQuotes = buildSourceQuotes(
+          sourceId: source.id,
+          text: text,
+          origin: source.isImage
+              ? source.selectedVariant?.origin ?? AgentQuoteOrigin.ocr
+              : AgentQuoteOrigin.userText,
+          startIndex: quoteIndex,
+        );
+        quotes.addAll(sourceQuotes);
+        quoteIndex += sourceQuotes.length;
+      }
 
       final llm = _llmFactory(request.provider);
       final requestedUser = request.images.isNotEmpty && userText.isNotEmpty
@@ -401,6 +411,15 @@ class AgentOrchestrator {
         'validate=${validateWatch.elapsedMilliseconds}ms '
         'analysis=${analysis != null} valid=${validation?.valid}',
       );
+      if (kDebugMode && validation != null && !validation.valid) {
+        debugPrint('[AgentValidation] errors=${validation.errors.join(' | ')}');
+      }
+      _timing(
+        'evidence retrieved=${evidence.citations.length} '
+        'adopted=${validation?.citationsUsed.length ?? 0} '
+        'targets=${evidence.budget.uniqueTargets} '
+        'truncated=${evidence.truncated}',
+      );
 
       // Show the main analysis before any optional repair/language call. This
       // is what keeps a finished stream from sitting behind a silent second
@@ -472,6 +491,12 @@ class AgentOrchestrator {
               mode: request.mode,
               expectedSourceId: primary?.id,
             );
+            if (kDebugMode && !validation.valid) {
+              debugPrint(
+                '[AgentValidation] after_repair='
+                '${validation.errors.join(' | ')}',
+              );
+            }
           }
         } on AgentRunFailure {
           // A cancelled run must stop immediately; a provider/parse failure on
@@ -637,6 +662,9 @@ class AgentOrchestrator {
             ...salvaged.notes,
             if (!salvageValidation.valid) ...salvageValidation.errors,
           }.toList(growable: false);
+          if (kDebugMode) {
+            debugPrint('[AgentSalvage] errors=${errors.join(' | ')}');
+          }
           if (languageValidator
               .check(
                 salvaged.analysis,
@@ -646,7 +674,8 @@ class AgentOrchestrator {
               .isMismatch) {
             warnings.add(agentLanguageWarning(uiLanguage));
           }
-          final result = _buildResult(
+          checkCancelled();
+          var result = _buildResult(
             envelope: envelope,
             evidence: evidence,
             quotes: quotes,
@@ -661,6 +690,19 @@ class AgentOrchestrator {
             unavailableProfiles: unavailableProfiles,
             warnings: warnings,
             coverageFallbackUsed: coverageFallbackUsed,
+          );
+          // A validation failure must not disable display formatting. The
+          // salvaged result is still user-visible, so run the same rich-text
+          // pass here; otherwise every reading stays as plain parentheses and
+          // no BOLD/UNDERLINE is rendered.
+          result = await _formatResultRichText(
+            result: result,
+            llm: llm,
+            model: smallModel,
+            cancellation: cancellation,
+            onRichTextReady: onRichTextReady,
+            notify: notify,
+            uiLanguage: uiLanguage,
           );
           _timing(
             'result_ready salvage=true elapsed=${runWatch.elapsedMilliseconds}ms',
@@ -677,64 +719,8 @@ class AgentOrchestrator {
         );
       }
 
-      final originalSource = agentOriginalSource(quotes);
-      final segmentSources = <String>[
-        for (final segment in analysis.segments) segment.interpretation,
-      ];
-      final segmentNoteSources = <String>[
-        for (final segment in analysis.segments) agentSegmentNotesSource(segment),
-      ];
-      final hasFormattingSources =
-          originalSource.isNotEmpty ||
-          segmentSources.any((text) => text.isNotEmpty) ||
-          segmentNoteSources.any((text) => text.isNotEmpty);
-      AgentRichTextOutputs? richOutputs;
-      if (limits.enableRichTextPostProcess && hasFormattingSources) {
-        Future<AgentRichTextOutputs?> format() => _formatRichText(
-          llm: llm,
-          model: smallModel,
-          originalSource: originalSource,
-          segmentSources: segmentSources,
-          segmentNoteSources: segmentNoteSources,
-          cancellation: cancellation,
-        );
-
-        final richCallback = onRichTextReady;
-        if (richCallback != null) {
-          // Display-only formatting must not delay `done`: start the bounded
-          // pool, return the core result, and let the controller apply the
-          // tags when they arrive. A failure leaves plain text visible.
-          checkCancelled();
-          Future<void> applyLater() async {
-            try {
-              final outputs = await format();
-              if (outputs != null && cancellation?.isCancelled != true) {
-                richCallback(outputs);
-              }
-            } catch (error) {
-              if (kDebugMode) {
-                debugPrint(
-                  '[AgentRichText] async formatting failed '
-                  '(${error.runtimeType}); keeping plain text',
-                );
-              }
-            }
-          }
-
-          unawaited(applyLater());
-        } else {
-          notify(
-            AgentStage.formatting,
-            agentStageMessage(AgentStage.formatting, uiLanguage),
-          );
-          checkCancelled();
-          richOutputs = await format();
-          checkCancelled();
-        }
-      }
-
-      notify(AgentStage.done, agentStageMessage(AgentStage.done, uiLanguage));
-      final result = _buildResult(
+      checkCancelled();
+      var result = _buildResult(
         envelope: envelope,
         evidence: evidence,
         quotes: quotes,
@@ -745,10 +731,18 @@ class AgentOrchestrator {
         unavailableProfiles: unavailableProfiles,
         warnings: warnings,
         coverageFallbackUsed: coverageFallbackUsed,
-        richOriginalText: richOutputs?.originalText,
-        richSegmentTexts: richOutputs?.segmentTexts ?? const <String>[],
-        richSegmentNotes: richOutputs?.segmentNotes ?? const <String>[],
       );
+      result = await _formatResultRichText(
+        result: result,
+        llm: llm,
+        model: smallModel,
+        cancellation: cancellation,
+        onRichTextReady: onRichTextReady,
+        notify: notify,
+        uiLanguage: uiLanguage,
+      );
+      checkCancelled();
+      notify(AgentStage.done, agentStageMessage(AgentStage.done, uiLanguage));
       _timing(
         'result_ready salvage=false elapsed=${runWatch.elapsedMilliseconds}ms',
       );
@@ -772,6 +766,76 @@ class AgentOrchestrator {
     }
   }
 
+  /// Applies display-only formatting to an already-built result.
+  ///
+  /// This is shared by the normal path and the salvage path. A validation
+  /// failure must not disable formatting: salvaged results are still shown to
+  /// the user, so their detailed original/segments/notes need the same RUBY,
+  /// BOLD and UNDERLINE pass. With an async callback the result is returned
+  /// immediately and the controller applies the tags when they arrive.
+  Future<AgentRunResult> _formatResultRichText({
+    required AgentRunResult result,
+    required LlmPort llm,
+    required String model,
+    required AgentCancellation? cancellation,
+    required AgentRichTextCallback? onRichTextReady,
+    required void Function(AgentStage stage, String message) notify,
+    required AgentUiLanguage uiLanguage,
+  }) async {
+    if (!limits.enableRichTextPostProcess) return result;
+    final originalSource = agentOriginalSource(result.quotes);
+    final segmentSources = <String>[
+      for (final segment in result.analysis.segments) segment.interpretation,
+    ];
+    final segmentNoteSources = <String>[
+      for (final segment in result.analysis.segments)
+        agentSegmentNotesSource(segment),
+    ];
+    final hasFormattingSources =
+        originalSource.isNotEmpty ||
+        segmentSources.any((text) => text.isNotEmpty) ||
+        segmentNoteSources.any((text) => text.isNotEmpty);
+    if (!hasFormattingSources) return result;
+
+    Future<AgentRichTextOutputs?> format() => _formatRichText(
+      llm: llm,
+      model: model,
+      originalSource: originalSource,
+      segmentSources: segmentSources,
+      segmentNoteSources: segmentNoteSources,
+      cancellation: cancellation,
+    );
+
+    final richCallback = onRichTextReady;
+    if (richCallback != null) {
+      Future<void> applyLater() async {
+        try {
+          final outputs = await format();
+          if (outputs != null && cancellation?.isCancelled != true) {
+            richCallback(outputs);
+          }
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint(
+              '[AgentRichText] async formatting failed '
+              '(${error.runtimeType}); keeping plain text',
+            );
+          }
+        }
+      }
+
+      unawaited(applyLater());
+      return result;
+    }
+
+    notify(
+      AgentStage.formatting,
+      agentStageMessage(AgentStage.formatting, uiLanguage),
+    );
+    final outputs = await format();
+    return outputs == null ? result : result.copyWithRichText(outputs);
+  }
+
   /// Formats the independent display sections with one bounded worker pool.
   /// Empty sections are not sent, and identical text (for example repeated
   /// notes) is requested only once.
@@ -789,15 +853,13 @@ class AgentOrchestrator {
       ...segmentNoteSources,
     ];
     if (sources.isEmpty) return null;
-    final results = await RichTextPostProcessor(
-      llm: llm,
-      model: model,
-    ).processAll(
-      sources,
-      cancellation: cancellation,
-      detailed: true,
-      concurrency: limits.richTextConcurrency,
-    );
+    final results = await RichTextPostProcessor(llm: llm, model: model)
+        .processAll(
+          sources,
+          cancellation: cancellation,
+          detailed: true,
+          concurrency: limits.richTextConcurrency,
+        );
 
     var cursor = 0;
     String? richOriginalText;
@@ -833,11 +895,21 @@ class AgentOrchestrator {
     );
   }
 
-  void _logRichText(String label, String source, RichTextPostProcessResult rich) {
+  void _logRichText(
+    String label,
+    String source,
+    RichTextPostProcessResult rich,
+  ) {
     if (!kDebugMode) return;
+    final tagged = rich.taggedText;
+    final tagCount = tagged == null
+        ? 0
+        : RegExp(r'\[(?:RUBY|BOLD|UNDERLINE)\b').allMatches(tagged).length;
     debugPrint(
       '[AgentRichText] $label '
-      'accepted=${rich.taggedText != null} '
+      'accepted=${tagged != null} '
+      'changed=${tagged != null && tagged != source} '
+      'tags=$tagCount '
       'reason=${rich.rejectionReason} '
       'sourceChars=${source.length}',
     );
@@ -1085,6 +1157,7 @@ class AgentOrchestrator {
       warnings: List<String>.unmodifiable(warnings),
       coverageFallbackUsed: coverageFallbackUsed,
       ocrQuality: _ocrQuality(envelope, evidence),
+      pitchAccents: evidence.pitchAccents,
       richOriginalText: richOriginalText,
       richSegmentTexts: List<String>.unmodifiable(richSegmentTexts),
       richSegmentNotes: List<String>.unmodifiable(richSegmentNotes),

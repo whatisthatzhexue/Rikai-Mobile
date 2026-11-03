@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'core/theme/app_tokens.dart';
 import 'core/theme/unfocus_route_observer.dart';
 import 'state/providers.dart';
+import 'features/agent/agent_history_detail_page.dart';
+import 'features/agent/agent_history_page.dart';
 import 'features/agent/agent_page.dart';
 import 'features/agent/agent_profiles_page.dart';
 import 'features/capture/capture_page.dart';
@@ -101,6 +103,17 @@ GoRouter _createRouter({String initialLocation = '/'}) {
       GoRoute(
         path: '/agent',
         pageBuilder: (context, state) => _page(state, const AgentPage()),
+      ),
+      GoRoute(
+        path: '/agent-history',
+        pageBuilder: (context, state) => _page(state, const AgentHistoryPage()),
+      ),
+      GoRoute(
+        path: '/agent-history/detail/:runId',
+        pageBuilder: (context, state) => _page(
+          state,
+          AgentHistoryDetailPage(runId: state.pathParameters['runId'] ?? ''),
+        ),
       ),
       GoRoute(
         path: '/agent-profiles',

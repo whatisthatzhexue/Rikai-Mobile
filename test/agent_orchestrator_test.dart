@@ -489,6 +489,41 @@ void main() {
     expect(provider.requests, hasLength(2));
   });
 
+  test('salvaged results still receive rich-text formatting', () async {
+    const rich = '[BOLD]何卒[/BOLD]';
+    final provider = FakeProvider(
+      responseSequence: <String>[
+        _analysisWithoutCitation,
+        _analysisWithoutCitation,
+        rich,
+      ],
+    );
+    final stages = <AgentStage>[];
+
+    final result =
+        await _orchestrator(
+          provider: provider,
+          limits: const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: true,
+          ),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.strict,
+            dictionaries: <DictionaryInfo>[_dictionary],
+            provider: _provider,
+            userText: '何卒',
+          ),
+          onStage: (stage, message) => stages.add(stage),
+        );
+
+    expect(result.validation.valid, isFalse);
+    expect(result.richOriginalText, rich);
+    expect(stages, contains(AgentStage.formatting));
+    expect(provider.requests, hasLength(3));
+  });
+
   test(
     'wrong-language fields trigger one language repair and use the result',
     () async {
@@ -653,51 +688,104 @@ void main() {
     },
   );
 
-  test('analysis prompt carries the selected source once and omits internal fields',
-      () async {
-    const sourceText = '今日は良い天気ですね。';
-    const variant = AgentOcrVariant(
+  test('multi-image runs expose quotes from every source', () async {
+    const first = AgentOcrVariant(
       id: 'v1',
       engine: 'paddle_v5',
-      mode: OcrMode.auto,
-      text: sourceText,
-      confidence: 0.93,
+      mode: OcrMode.horizontal,
+      text: '一枚目の文章です。',
+      confidence: 0.9,
+    );
+    const second = AgentOcrVariant(
+      id: 'v2',
+      engine: 'paddle_v5',
+      mode: OcrMode.horizontal,
+      text: '二枚目の文章です。',
+      confidence: 0.9,
     );
     final provider = FakeProvider(responseText: _analysisTagged);
 
-    await _orchestrator(provider: provider).run(
+    final result = await _orchestrator(provider: provider).run(
       const AgentRunRequest(
         sessionId: 's1',
         mode: AgentMode.strict,
         dictionaries: <DictionaryInfo>[_dictionary],
         provider: _provider,
-        userText: '解释',
         images: <AgentImageInput>[
           AgentImageInput(
             id: 'img-1',
-            localPath: '/never-used.png',
-            variants: <AgentOcrVariant>[variant],
+            localPath: '/never-used-1.png',
+            variants: <AgentOcrVariant>[first],
             selectedVariantId: 'v1',
+          ),
+          AgentImageInput(
+            id: 'img-2',
+            localPath: '/never-used-2.png',
+            variants: <AgentOcrVariant>[second],
+            selectedVariantId: 'v2',
           ),
         ],
       ),
     );
 
-    final requestText = provider.requests.single.messages
-        .map((message) => message.text)
-        .join('\n');
-    expect(requestText, contains('"selected_variant_id":"v1"'));
-    expect(requestText, isNot(contains('"variants"')));
-    expect(requestText, isNot(contains('"lookup_candidates"')));
-    expect(requestText, isNot(contains('"tool_call_id"')));
-    expect(requestText, isNot(contains('"budget"')));
-    // One copy in the input envelope, one in the available quote. The
-    // evidence projection must not repeat the source text.
+    expect(result.quotes.map((quote) => quote.sourceId).toSet(), <String>{
+      'src-1',
+      'src-2',
+    });
     expect(
-      RegExp(RegExp.escape(sourceText)).allMatches(requestText).length,
-      2,
+      result.quotes.map((quote) => quote.text),
+      containsAll(<String>['一枚目の文章です。', '二枚目の文章です。']),
     );
+    expect(result.quotes.map((quote) => quote.id).toSet(), hasLength(2));
   });
+
+  test(
+    'analysis prompt carries the selected source once and omits internal fields',
+    () async {
+      const sourceText = '今日は良い天気ですね。';
+      const variant = AgentOcrVariant(
+        id: 'v1',
+        engine: 'paddle_v5',
+        mode: OcrMode.auto,
+        text: sourceText,
+        confidence: 0.93,
+      );
+      final provider = FakeProvider(responseText: _analysisTagged);
+
+      await _orchestrator(provider: provider).run(
+        const AgentRunRequest(
+          sessionId: 's1',
+          mode: AgentMode.strict,
+          dictionaries: <DictionaryInfo>[_dictionary],
+          provider: _provider,
+          userText: '解释',
+          images: <AgentImageInput>[
+            AgentImageInput(
+              id: 'img-1',
+              localPath: '/never-used.png',
+              variants: <AgentOcrVariant>[variant],
+              selectedVariantId: 'v1',
+            ),
+          ],
+        ),
+      );
+
+      final requestText = provider.requests.single.messages
+          .map((message) => message.text)
+          .join('\n');
+      expect(requestText, contains('"selected_variant_id":"v1"'));
+      expect(requestText, isNot(contains('"variants"')));
+      expect(requestText, isNot(contains('"lookup_candidates"')));
+      expect(requestText, isNot(contains('"tool_call_id"')));
+      expect(requestText, isNot(contains('"budget"')));
+      // One copy in the input envelope, one in the available quote. The
+      // evidence projection must not repeat the source text.
+      expect(
+        RegExp(RegExp.escape(sourceText)).allMatches(requestText).length,
+        2,
+      );
+    },
+  );
 
   test('rich-text formatting can complete after the core result', () async {
     const rich = '[BOLD]何卒[/BOLD]';
@@ -839,6 +927,39 @@ void main() {
     expect(result.richOriginalText, rich);
     expect(result.richSegmentTexts, <String>[segmentRich]);
     expect(result.richSegmentNotes, <String>[notesRich]);
+    expect(provider.requests, hasLength(4));
+  });
+
+  test('rich-text fallback converts retained YOMI locally', () async {
+    final provider = FakeProvider(
+      responseSequence: <String>[
+        _analysisDetailedRich,
+        '[BOLD]何卒[/BOLD]',
+        'not a valid tagged response',
+        '何卒：请务必',
+      ],
+    );
+
+    final result =
+        await _orchestrator(
+          provider: provider,
+          limits: const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: true,
+            richTextConcurrency: 1,
+          ),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.strict,
+            dictionaries: <DictionaryInfo>[_dictionary],
+            provider: _provider,
+            userText: '何卒',
+          ),
+        );
+
+    expect(result.richSegmentTexts.single, contains('[RUBY=いま]今[/RUBY]'));
+    expect(result.richSegmentTexts.single, isNot(contains('（いま）')));
     expect(provider.requests, hasLength(4));
   });
 

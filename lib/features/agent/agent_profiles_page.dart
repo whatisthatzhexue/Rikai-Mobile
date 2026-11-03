@@ -63,11 +63,11 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     final profilesAsync = ref.watch(agentProfilesProvider);
     final enabled = ref.watch(enabledDictionariesProvider);
     final pending = ref.watch(agentProfileInboxProvider).pending;
-    final running = ref.watch(agentRunControllerProvider).isRunning;
+    final profilesInUse =
+        ref.watch(agentRunControllerProvider).profilesInUse;
     final regeneration = ref.watch(agentProfileRegenerationProvider);
     final settings = ref.watch(appSettingsProvider);
     final canRegenerateSelection =
-        !running &&
         _selected.isNotEmpty &&
         enabled.any(
           (dictionary) =>
@@ -111,14 +111,14 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
               key: _regenerateSelectedActionKey,
               tooltip: strings.profileRegenerateSelected,
               onPressed: canRegenerateSelection
-                  ? () => _regenerateSelected(enabled, running)
+                  ? () => _regenerateSelected(enabled)
                   : null,
               icon: const Icon(Icons.refresh),
             ),
             IconButton(
               key: _deleteSelectedActionKey,
               tooltip: strings.profileDeleteSelected,
-              onPressed: running || _selected.isEmpty
+              onPressed: profilesInUse || _selected.isEmpty
                   ? null
                   : () => _deleteSelected(strings),
               icon: const Icon(Icons.delete_outline),
@@ -195,10 +195,31 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
                           statusLabel: strings.profileStatusPending,
                           statusColor: AppColors.warning,
                           subtitle: '',
-                          trailing: TextButton(
-                            onPressed: () =>
-                                _resolveProposal(proposal, strings),
-                            child: Text(strings.profileOpen),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: strings.profileRegenerate,
+                                onPressed:
+                                    regeneration.isGenerating(
+                                      proposal.dictionary.id,
+                                    )
+                                    ? null
+                                    : () => _regenerate(
+                                        proposal.dictionary,
+                                        strings,
+                                      ),
+                                icon: const Icon(
+                                  Icons.refresh,
+                                  size: AppSizes.icon,
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    _resolveProposal(proposal, strings),
+                                child: Text(strings.profileOpen),
+                              ),
+                            ],
                           ),
                         ),
                       const Divider(height: AppSpacing.xl),
@@ -240,7 +261,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
                                 profile,
                                 enabled,
                                 settings.agentProfileLanguage,
-                                running,
+                                profilesInUse,
                                 regeneration,
                                 strings,
                               ),
@@ -263,7 +284,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     StoredDictionaryProfile profile,
     List<DictionaryInfo> enabled,
     String profileLanguage,
-    bool running,
+    bool profilesInUse,
     AgentProfileRegenerationState regeneration,
     AgentUiStrings strings,
   ) {
@@ -300,16 +321,13 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
               children: [
                 IconButton(
                   tooltip: strings.profileEdit,
-                  onPressed: running
-                      ? null
-                      : () => _editProfile(profile, strings),
+                  onPressed: () => _editProfile(profile, strings),
                   icon: const Icon(Icons.edit_outlined, size: AppSizes.icon),
                 ),
                 IconButton(
                   tooltip: strings.profileRegenerate,
                   onPressed:
-                      running ||
-                          dictionary == null ||
+                      dictionary == null ||
                           regeneration.isGenerating(profile.dictionaryId)
                       ? null
                       : () => _regenerate(dictionary!, strings),
@@ -317,7 +335,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
                 ),
                 IconButton(
                   tooltip: strings.profileDelete,
-                  onPressed: running
+                  onPressed: profilesInUse
                       ? null
                       : () => _deleteProfiles(<StoredDictionaryProfile>[
                           profile,
@@ -407,10 +425,6 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     StoredDictionaryProfile profile,
     AgentUiStrings strings,
   ) async {
-    if (ref.read(agentRunControllerProvider).isRunning) {
-      RikaiToast.show(context, strings.profileActionsDisabledWhileRunning);
-      return;
-    }
     final draft = profile.profile;
     if (draft == null) {
       RikaiToast.show(context, strings.profileMarkdownMissing);
@@ -453,15 +467,8 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     await _regenerateDictionaries(<DictionaryInfo>[dictionary], strings);
   }
 
-  Future<void> _regenerateSelected(
-    List<DictionaryInfo> enabled,
-    bool running,
-  ) async {
+  Future<void> _regenerateSelected(List<DictionaryInfo> enabled) async {
     final strings = _strings();
-    if (running) {
-      RikaiToast.show(context, strings.profileActionsDisabledWhileRunning);
-      return;
-    }
     final selected = <DictionaryInfo>[
       for (final dictionary in enabled)
         if (_selected.contains(dictionary.id)) dictionary,
@@ -474,33 +481,37 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     AgentUiStrings strings,
   ) async {
     if (dictionaries.isEmpty) return;
-    final run = ref.read(agentRunControllerProvider);
-    if (run.isRunning) {
-      RikaiToast.show(context, strings.profileActionsDisabledWhileRunning);
-      return;
-    }
-    final pendingIds = ref
-        .read(agentProfileInboxProvider)
-        .pending
-        .map((proposal) => proposal.dictionaryId)
-        .toSet();
     final regeneration = ref.read(agentProfileRegenerationProvider);
     final seen = <String>{};
     final targets = <DictionaryInfo>[
       for (final dictionary in dictionaries)
-        if (!pendingIds.contains(dictionary.id) &&
-            !regeneration.isGenerating(dictionary.id) &&
-            seen.add(dictionary.id))
+        if (!regeneration.isGenerating(dictionary.id) && seen.add(dictionary.id))
           dictionary,
     ];
-    if (targets.isEmpty) {
-      if (dictionaries.any(
-        (dictionary) => pendingIds.contains(dictionary.id),
+    if (targets.isEmpty) return;
+
+    // A pending proposal for the same dictionary would otherwise block
+    // regeneration while the main agent is waiting in `awaitingProfile`.
+    // Resolve it as "skip once": the current run continues without that
+    // profile, and the new generation is queued for the user.
+    final inbox = ref.read(agentProfileInboxProvider.notifier);
+    final pending = ref.read(agentProfileInboxProvider).pending;
+    for (final proposal in pending) {
+      if (!targets.any(
+        (dictionary) => dictionary.id == proposal.dictionaryId,
       )) {
-        RikaiToast.show(context, strings.profilesAwaitingConfirmation);
+        continue;
       }
-      return;
+      await inbox.resolve(
+        proposal.id,
+        ProfileConfirmation(
+          action: ProfileConfirmationAction.skipOnce,
+          markdown: proposal.markdown,
+        ),
+      );
     }
+    if (!mounted) return;
+
     final providers =
         ref.read(agentProvidersProvider).asData?.value ??
         const <AgentProviderConfig>[];
@@ -528,7 +539,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     AgentUiStrings strings,
   ) async {
     if (profiles.isEmpty) return;
-    if (ref.read(agentRunControllerProvider).isRunning) {
+    if (ref.read(agentRunControllerProvider).profilesInUse) {
       RikaiToast.show(context, strings.profileActionsDisabledWhileRunning);
       return;
     }

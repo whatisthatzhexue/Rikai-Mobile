@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/agent/agent_analysis.dart';
 import '../../core/models/agent/agent_evidence.dart';
+import '../../core/models/agent/agent_pitch.dart';
 import '../../core/models/agent/agent_quote.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/utils/rich_text_tags.dart';
@@ -10,6 +11,7 @@ import '../../services/agent/agent_ui_strings.dart';
 import '../../services/agent/familiarization/dictionary_familiarization_service.dart'
     show DictionaryProfileIssue;
 import 'agent_fade_in.dart';
+import 'agent_pitch_accent.dart';
 import 'agent_rich_text.dart';
 
 class AgentResultView extends StatelessWidget {
@@ -210,6 +212,7 @@ class AgentResultView extends StatelessWidget {
                   ? result.richSegmentNotes[index]
                   : '',
               quote: quotes[segment.quoteId],
+              pitchAccents: result.pitchAccents,
               citations: citations,
               citationNumbers: citationNumbers,
               onCitationTap: onCitationTap,
@@ -296,9 +299,22 @@ class AgentResultView extends StatelessWidget {
 
     // A long expanded analysis is built in small chunks across frames. The
     // first screenful appears immediately; later segments/evidence groups are
-    // appended without blocking one frame on the whole result.
+    // appended without blocking one frame on the whole result. Rich-text
+    // updates keep the same revision: replacing the result object with
+    // display-only formatting must not collapse the already-built blocks or
+    // reset the user's scroll position.
     return _ProgressiveResultBody(
-      revision: Object.hash(result, strings.language),
+      revision: Object.hash(
+        result.analysis,
+        result.validation,
+        result.evidence,
+        result.quotes,
+        result.sources,
+        result.warnings,
+        result.profileWarnings,
+        result.unavailableProfiles,
+        strings.language,
+      ),
       blocks: blocks,
     );
   }
@@ -338,10 +354,12 @@ class _ProgressiveResultBodyState extends State<_ProgressiveResultBody> {
   void didUpdateWidget(covariant _ProgressiveResultBody oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.revision != oldWidget.revision) {
-      _visibleCount = _min(
-        _ProgressiveResultBody.initialCount,
-        widget.blocks.length,
-      );
+      // Keep the already-visible blocks across result revisions. Resetting to
+      // initialCount here shrinks the list, which makes the ListView clamp the
+      // scroll offset to the top and reads as a full page reload.
+      if (_visibleCount > widget.blocks.length) {
+        _visibleCount = widget.blocks.length;
+      }
       _scheduleNextChunk();
       return;
     }
@@ -458,6 +476,7 @@ class _SegmentBlock extends StatelessWidget {
     required this.richInterpretation,
     required this.richNotes,
     required this.quote,
+    required this.pitchAccents,
     required this.citations,
     required this.citationNumbers,
     required this.onCitationTap,
@@ -468,6 +487,7 @@ class _SegmentBlock extends StatelessWidget {
   final String richInterpretation;
   final String richNotes;
   final AgentQuoteRef? quote;
+  final Map<String, AgentPitchAccent> pitchAccents;
   final Map<String, AgentCitation> citations;
   final Map<String, int> citationNumbers;
   final ValueChanged<AgentCitation> onCitationTap;
@@ -521,7 +541,15 @@ class _SegmentBlock extends StatelessWidget {
             confidence: segment.confidence,
             strings: strings,
           ),
-          if (richNotes.isNotEmpty)
+          if (richNotes.isNotEmpty) ...[
+            _PitchNotes(
+              notes: segment.wordNotes,
+              accents: pitchAccents,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontSize: AgentTokens.helper,
+                color: AppColors.textPrimary,
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.sm),
               child: AgentRichText(
@@ -531,13 +559,14 @@ class _SegmentBlock extends StatelessWidget {
                   color: AppColors.textPrimary,
                 ),
               ),
-            )
-          else ...[
+            ),
+          ] else ...[
             for (final note in segment.wordNotes)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.sm),
-                child: Text(
-                  '${note.surface}${note.reading.isEmpty ? '' : '（${note.reading}）'}：${note.sense}',
+                child: _WordNoteLine(
+                  note: note,
+                  accent: pitchAccents[note.tokenId],
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontSize: AgentTokens.helper,
                     color: AppColors.textPrimary,
@@ -576,6 +605,95 @@ class _SegmentBlock extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _WordNoteLine extends StatelessWidget {
+  const _WordNoteLine({
+    required this.note,
+    required this.accent,
+    required this.style,
+  });
+
+  final AgentWordNote note;
+  final AgentPitchAccent? accent;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final validAccent = accent;
+    if (!shouldDisplayPitch(
+      surface: note.surface,
+      reading: note.reading,
+      accent: validAccent,
+    )) {
+      return Text(
+        '${note.surface}${note.reading.isEmpty ? '' : '（${note.reading}）'}：${note.sense}',
+        style: style,
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        AgentPitchAccentText(
+          surface: note.surface,
+          reading: note.reading,
+          accent: validAccent,
+          style: style ?? const TextStyle(),
+        ),
+        Flexible(child: Text('：${note.sense}', style: style)),
+      ],
+    );
+  }
+}
+
+class _PitchNotes extends StatelessWidget {
+  const _PitchNotes({
+    required this.notes,
+    required this.accents,
+    required this.style,
+  });
+
+  final List<AgentWordNote> notes;
+  final Map<String, AgentPitchAccent> accents;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <Widget>[];
+    for (final note in notes) {
+      final accent = accents[note.tokenId];
+      if (!shouldDisplayPitch(
+        surface: note.surface,
+        reading: note.reading,
+        accent: accent,
+      )) {
+        continue;
+      }
+      items.add(
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AgentPitchAccentText(
+              surface: note.surface,
+              reading: note.reading,
+              accent: accent,
+              style: style ?? const TextStyle(),
+            ),
+          ],
+        ),
+      );
+    }
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.xs,
+        children: items,
       ),
     );
   }

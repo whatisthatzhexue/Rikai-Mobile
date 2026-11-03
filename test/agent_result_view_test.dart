@@ -3,9 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/agent_analysis.dart';
 import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
 import 'package:rikai_mobile/core/models/agent/agent_input.dart';
+import 'package:rikai_mobile/core/models/agent/agent_pitch.dart';
 import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
 import 'package:rikai_mobile/features/agent/agent_evidence_panel.dart';
+import 'package:rikai_mobile/features/agent/agent_pitch_accent.dart';
 import 'package:rikai_mobile/features/agent/agent_result_view.dart';
 import 'package:rikai_mobile/services/agent/agent_run.dart';
 import 'package:rikai_mobile/services/agent/agent_ui_strings.dart';
@@ -109,6 +111,40 @@ const _unusedCitation = AgentCitation(
   toolCallId: 'call-2',
 );
 
+AgentRunResult _longResult() {
+  return AgentRunResult(
+    input: _result.input,
+    evidence: _result.evidence,
+    quotes: _result.quotes,
+    analysis: AgentAnalysis(
+      sourceId: 'src-1',
+      translation: _result.analysis.translation,
+      segments: <AgentSegment>[
+        for (var index = 0; index < 12; index++)
+          AgentSegment(
+            id: 'seg-$index',
+            quoteId: 'q1',
+            literal: '何卒',
+            interpretation: '逐句理解 $index',
+            epistemic: AgentEpistemic.dictionaryFact,
+            wordNotes: const <AgentWordNote>[
+              AgentWordNote(
+                tokenId: 't1',
+                surface: '何卒',
+                reading: 'なにとぞ',
+                sense: '请务必',
+                citationIds: <String>['source-1'],
+              ),
+            ],
+          ),
+      ],
+    ),
+    validation: _result.validation,
+    sources: _result.sources,
+    dictionaryProfiles: _result.dictionaryProfiles,
+  );
+}
+
 AgentRunResult _resultWithUnusedCitation() => AgentRunResult(
   input: _result.input,
   evidence: AgentEvidenceBundle(
@@ -124,6 +160,19 @@ AgentRunResult _resultWithUnusedCitation() => AgentRunResult(
   ),
   sources: _result.sources,
   dictionaryProfiles: _result.dictionaryProfiles,
+);
+
+AgentRunResult _resultWithPitch() => AgentRunResult(
+  input: _result.input,
+  evidence: _result.evidence,
+  quotes: _result.quotes,
+  analysis: _result.analysis,
+  validation: _result.validation,
+  sources: _result.sources,
+  dictionaryProfiles: _result.dictionaryProfiles,
+  pitchAccents: const <String, AgentPitchAccent>{
+    't1': AgentPitchAccent(accentType: 2, moraCount: 2, moraPattern: 'LH'),
+  },
 );
 
 void main() {
@@ -166,6 +215,27 @@ void main() {
 
     await tester.tap(find.text('依据1').first);
     expect(tapped?.id, 'source-1');
+  });
+
+  testWidgets('renders a UniDic pitch line only in word notes', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentResultView(
+              result: _resultWithPitch(),
+              onCitationTap: (_) {},
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AgentPitchAccentText), findsOneWidget);
+    expect(find.textContaining('请务必'), findsOneWidget);
   });
 
   testWidgets('strips YOMI wrappers in segment interpretations', (
@@ -253,6 +323,51 @@ void main() {
     expect(find.text('なにとぞ'), findsOneWidget);
     expect(find.text('せいしき'), findsOneWidget);
     expect(find.textContaining('[RUBY='), findsNothing);
+  });
+
+  testWidgets('rich-text update preserves scroll offset and visible blocks', (
+    tester,
+  ) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    final base = _longResult();
+
+    Widget build(AgentRunResult result) => MaterialApp(
+      theme: AppTheme.light(),
+      home: Scaffold(
+        body: ListView(
+          controller: controller,
+          children: <Widget>[
+            AgentResultView(
+              result: result,
+              onCitationTap: (_) {},
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(build(base));
+    await tester.pumpAndSettle();
+    controller.jumpTo(600);
+    await tester.pump();
+    final before = controller.offset;
+    expect(before, greaterThan(0));
+
+    final updated = base.copyWithRichText(
+      AgentRichTextOutputs(
+        originalText: '[BOLD]何卒[/BOLD]',
+        segmentTexts: List<String>.filled(12, ''),
+        segmentNotes: List<String>.filled(12, ''),
+      ),
+    );
+    await tester.pumpWidget(build(updated));
+    await tester.pump();
+
+    expect(controller.offset, closeTo(before, 0.5));
+    // The progressive builder must not collapse back to the first 4 blocks.
+    expect(find.textContaining('逐句理解 11'), findsOneWidget);
   });
 
   testWidgets('evidence header counts only adopted citations', (tester) async {

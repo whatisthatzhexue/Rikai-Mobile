@@ -6,6 +6,7 @@ List<AgentQuoteRef> buildSourceQuotes({
   required String text,
   required AgentQuoteOrigin origin,
   int maxQuotes = 40,
+  int startIndex = 0,
 }) {
   final quotes = <AgentQuoteRef>[];
   var start = 0;
@@ -29,6 +30,7 @@ List<AgentQuoteRef> buildSourceQuotes({
       start: start,
       end: index,
       origin: origin,
+      startIndex: startIndex,
     );
     start = index;
   }
@@ -40,6 +42,7 @@ List<AgentQuoteRef> buildSourceQuotes({
       start: start,
       end: text.length,
       origin: origin,
+      startIndex: startIndex,
     );
   }
   if (quotes.isEmpty && text.trim().isNotEmpty) {
@@ -50,6 +53,7 @@ List<AgentQuoteRef> buildSourceQuotes({
       start: 0,
       end: text.length,
       origin: origin,
+      startIndex: startIndex,
     );
   }
   return quotes;
@@ -62,6 +66,7 @@ void _appendQuote({
   required int start,
   required int end,
   required AgentQuoteOrigin origin,
+  required int startIndex,
 }) {
   var quoteStart = start;
   var quoteEnd = end;
@@ -74,7 +79,7 @@ void _appendQuote({
   if (quoteEnd <= quoteStart) return;
   quotes.add(
     AgentQuoteRef(
-      id: 'q${quotes.length + 1}',
+      id: 'q${startIndex + quotes.length + 1}',
       sourceId: sourceId,
       start: quoteStart,
       end: quoteEnd,

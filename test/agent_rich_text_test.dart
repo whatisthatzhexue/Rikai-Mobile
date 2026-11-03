@@ -32,24 +32,26 @@ void main() {
         '[UNDERLINE]重点[/UNDERLINE]',
         const TextStyle(fontSize: 16),
       );
-      final ruby = spans.whereType<WidgetSpan>().single;
+      final ruby = spans.whereType<WidgetSpan>().firstWhere(
+        (span) =>
+            span.child.runtimeType.toString() != '_UnderlineSpanWidget',
+      );
       expect(ruby.alignment, PlaceholderAlignment.baseline);
       final bold = spans.whereType<TextSpan>().firstWhere(
         (span) => span.text == '标题',
       );
       expect(bold.style?.fontWeight, FontWeight.w600);
-      final underline = spans.whereType<TextSpan>().firstWhere(
-        (span) => span.text == '重点',
+      final underline = spans.whereType<WidgetSpan>().firstWhere(
+        (span) =>
+            span.child.runtimeType.toString() == '_UnderlineSpanWidget',
       );
-      expect(underline.style?.decoration, TextDecoration.underline);
-      expect(
-        underline.style?.decorationColor,
-        AgentTokens.richTextUnderlineColor,
-      );
-      expect(
-        underline.style?.decorationThickness,
-        AgentTokens.richTextUnderlineThickness,
-      );
+      final underlineWidget = underline.child as dynamic;
+      expect(underlineWidget.color, AgentTokens.richTextUnderlineColor);
+      expect(underlineWidget.thickness, AgentTokens.richTextUnderlineThickness);
+      final underlineText = tester.widget<Text>(find.text('重点'));
+      // The underline is painted at a baseline-relative offset, not via
+      // font-specific TextDecoration metrics (which differ for `；`).
+      expect(underlineText.style?.decoration, TextDecoration.none);
     },
   );
 
@@ -170,9 +172,75 @@ void main() {
     final base = tester.widget<Text>(find.text('漢字'));
     final reading = tester.widget<Text>(find.text('かんじ'));
     expect(base.style?.fontWeight, FontWeight.w600);
-    expect(base.style?.decoration, TextDecoration.underline);
+    // The custom underline painter is outside the RUBY widget, so the base
+    // itself has no font decoration and the reading is never underlined.
+    expect(base.style?.decoration, TextDecoration.none);
     expect(reading.style?.fontWeight, FontWeight.w600);
     expect(reading.style?.decoration, TextDecoration.none);
+    final underlineFinder = find.byWidgetPredicate(
+      (widget) => widget.runtimeType.toString() == '_UnderlineSpanWidget',
+    );
+    expect(underlineFinder, findsOneWidget);
+    final render = tester.renderObject(underlineFinder) as dynamic;
+    expect(render.paintCount, greaterThan(0));
+    expect(render.lastPaintedBaseline, isNotNull);
+  });
+
+  testWidgets('uses the same custom underline for kanji and punctuation', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: AgentRichText(
+            text: '[UNDERLINE]漢字；[/UNDERLINE]',
+            style: TextStyle(fontSize: 16),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('漢字；'), findsOneWidget);
+    final underlineFinder = find.byWidgetPredicate(
+      (widget) => widget.runtimeType.toString() == '_UnderlineSpanWidget',
+    );
+    expect(underlineFinder, findsOneWidget);
+    expect(tester.widget<Text>(find.text('漢字；')).style?.decoration,
+        TextDecoration.none);
+    final render = tester.renderObject(underlineFinder) as dynamic;
+    expect(render.paintCount, greaterThan(0));
+    expect(render.lastPaintedBaseline, isNotNull);
+  });
+
+  testWidgets('aligns an inline ruby base to the paragraph baseline', (
+    tester,
+  ) async {
+    const style = TextStyle(fontSize: 16, height: 1.5);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: AgentRichText(
+            text: 'あ[RUBY=なにとぞ]何卒[/RUBY]い',
+            style: style,
+          ),
+        ),
+      ),
+    );
+
+    final paragraphFinder = find.byType(RichText).first;
+    final paragraph = tester.renderObject<RenderBox>(paragraphFinder);
+    final paragraphBaseline =
+        tester.getRect(paragraphFinder).top +
+        (paragraph.getDryBaseline(
+              paragraph.constraints,
+              TextBaseline.alphabetic,
+            ) ??
+            0);
+    final base = tester.renderObject<RenderBox>(find.text('何卒'));
+    final baseBaseline =
+        tester.getRect(find.text('何卒')).top +
+        (base.getDryBaseline(base.constraints, TextBaseline.alphabetic) ?? 0);
+    expect(baseBaseline, closeTo(paragraphBaseline, 0.01));
   });
 
   testWidgets('renders plain text unchanged', (tester) async {

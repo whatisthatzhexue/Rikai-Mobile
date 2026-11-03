@@ -91,13 +91,14 @@ void main() {
     },
   );
 
-  test('analysis prompt requires YOMI for reading annotations', () {
+  test('analysis prompt requires bare YOMI reading annotations', () {
     final prompt = analysisSystemPrompt(
       AgentMode.strict,
       AgentResponseLanguage.chinese,
     );
     expect(prompt, contains('READING ANNOTATIONS'));
-    expect(prompt, contains('base[YOMI]（reading）[/YOMI]'));
+    expect(prompt, contains('word[YOMI]reading[/YOMI]'));
+    expect(prompt, contains('Never write "word（reading）"'));
     expect(prompt, contains('Never move a YOMI block'));
   });
 

@@ -5,8 +5,8 @@
 > 本计划基于 2026-10-26 对两个克隆仓库、UniDic/MDict 实际数据、本机 Flutter/Android 环境和网络连通性的调研。已确认的产品/技术决策见 §3。
 >
 > **Phase 6（Mdict Agent）已实现 P6.1–P6.5 与 P6.6 多 OCR 核心；当前为固定
-> 流水线、模型无工具（2026-10-31 决策），P6.6 真机验收未完成；P6.7 设计/契约
-> 已于 2026-11-03 记录，实现未开始。**
+> 流水线、模型无工具（2026-10-31 决策），P6.6 真机验收未完成；P6.7 历史/持久化
+> 与 UniDic 声调已于 2026-11-03 实现，DSL/发布仍未完成。**
 > 最新进度见 `docs/phase6-status.md`；
 > 实机反馈队列见 `docs/agent_docs/device-feedback-2026-10-31.md`。MVP 的
 > OCR/UniDic/MDict 核心仍离线；Phase 6 可选在线 LLM 使用用户自备 API Key，
@@ -722,8 +722,8 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 ## 11. Phase 6 — Mdict Agent（P6.1–P6.6 核心已实现）
 
 > 状态：**P6.1–P6.5 核心、2026-10-31 实机反馈 Wave 1–3 与 P6.6 多 OCR 核心
-> 已实现；Wave 4/P6.6 真机验收未完成；P6.7 设计/契约已于 2026-11-03 记录，
-> 实现未开始**。最新进度见
+> 已实现；Wave 4/P6.6 真机验收未完成；P6.7 历史/持久化与 UniDic 声调已于
+> 2026-11-03 实现，DSL/发布仍未完成**。最新进度见
 > `docs/phase6-status.md`；设计细节、开放问题和验收标准见
 > `docs/phase6-agent-design.md`；契约/JSON Schema/状态机见
 > `docs/phase6-agent-contracts.md`。Phase 5 已完成并发布 1.0。v2 采用固定流水线、
@@ -741,8 +741,8 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 
 Phase 6 固定主页功能按钮；数量、固定文案、顺序和命名以
 [`docs/project-data.md`](project-data.md) §7 为准，本文件不重复列表。
-P6.5 已接入功能按钮并更新主页测试；P6.6 已复用既有 Agent token 实现；后续
-P6.7 UI 仍须先补设计 token。
+P6.5 已接入功能按钮并更新主页测试；P6.6 已复用既有 Agent token 实现；P6.7
+历史/声调 token 已实现，DSL/受限 Markdown 预览仍待补。
 
 ### 11.3 产品要求
 
@@ -751,8 +751,8 @@ P6.7 UI 仍须先补设计 token。
 - **模型分流**：简单任务（熟悉期摘要/格式整理）用用户选择的 small model；复杂
   任务（词义推理/语境比较/多解释）用 complex model。
 - **输入**：图片、文字、图片+文字；图片只经本机 OCR，严禁发送给 LLM 视觉接口。
-- **输出**：首版用结构化结果组件（原文引用/译文/逐句/词注/证据卡）+ 可点击词典
-  来源；安全 Markdown、ruby、日语声调横线在 P6.7 再接入。
+- **输出**：结构化结果组件（原文引用/译文/逐句/词注/证据卡）+ 可点击词典来源；
+  P6.7 已接入 UniDic 声调横线与历史；安全 Markdown 仅用于导出/受限档案预览。
 - **界面**：采用对话式 Agent 布局（首屏消息区约 80%，小屏 ≥70%；固定底部输入区、
   流式/停止、错误卡保留内容、证据默认折叠「依据 N 条」、本会话设置默认收起）；
   视觉规范以 `docs/design-tokens.md` 的“Phase 6 Agent 对话式界面 v2”为准。P6.5
@@ -795,8 +795,8 @@ P6.7 UI 仍须先补设计 token。
    首版用结构化组件 + 安全纯文本。
 6. 按需多 OCR 版本、差异/词典辅助修复、用户选择 UI（核心已实现，2026-11-02；
    真机验收待做）。
-7. annotation DSL、安全富文本/ruby/UniDic 声调、历史/持久化、Markdown
-   导出/受限预览、性能/许可/发布验收（设计已记录 2026-11-03，Wave 4 后实现）。
+7. 历史/持久化与 UniDic 声调已实现（2026-11-03）；annotation DSL、provider
+   测试连接、Markdown 受限预览、性能/许可/发布验收仍待做。
 
 ### 11.5 验收
 

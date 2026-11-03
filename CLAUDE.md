@@ -19,10 +19,10 @@
 >
 > **Agent 开发门禁**：开发/修改 Phase 6 词典助手前，按
 > `docs/agent_docs/README.md` 的必读顺序阅读；2026-10-31 的 F1–F17/Wave 4 未关闭
-> 前，不在 P6.7 上继续叠加新功能，也不把未实现能力写成已支持。P6.6 多 OCR 核心
-> 已于 2026-11-02 按用户明确指示单独实现，但真机验收仍待 Wave 4。P6.7 设计/契约/
-> token 已于 2026-11-03 记录（design §17.2、contracts §14、R-AGENT-24–27），
-> 实现仍排到 Wave 4 之后。
+> 前，原则上不在 P6.7 上继续叠加新功能，也不把未实现能力写成已支持。2026-11-03
+> 用户明确允许本工作流在另一工作流继续 Wave 4 时开始 P6.7；P6.6 多 OCR 核心已于
+> 2026-11-02 实现，P6.7 历史/持久化与 UniDic 声调已于 2026-11-03 实现，但真机/
+> 视觉验收仍未完成，不能写成已验证。
 
 `docs/project-rules.md`：
 内容：正面/反面 MUST/MUST NOT 规则的单一权威源，按 `R-<域>-<序号>` 编号；
@@ -204,8 +204,9 @@ Phase 5（语料/历史、首次引导与发布打磨）也已于 2026-10-30 完
 用户发布为 1.0 release。
 
 Phase 6（`docs/phase6-agent-design.md`，**设计 v2；P6.1–P6.5 与 P6.6 多 OCR
-核心已实现，P6.6 真机验收未完成；P6.7 设计/契约已于 2026-11-03 记录，实现
-未开始**；契约见 `docs/phase6-agent-contracts.md`）增加「词典助手」：可选地调用
+核心已实现，P6.6 真机验收未完成；P6.7-1 历史/持久化与 P6.7-2 UniDic 声调已于
+2026-11-03 实现，DSL/发布仍未完成**；契约见 `docs/phase6-agent-contracts.md`）
+增加「词典助手」：可选地调用
 用户配置的远程文本 LLM（DeepSeek/Claude 等），把本地 OCR、UniDic、MDict 作为
 schema 化证据；采用固定流水线，模型无工具调用（2026-10-31 决策）。图片仅在本机
 OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）；
@@ -333,9 +334,10 @@ OCR 插件新增可选 `engine` 约束；版本 chip 左对齐/自动换行/固�
 `salvageAnalysis` 中归一化为总和 100%（模型仍不输出概率）。Agent 输出质检样本
 存于 `docs/agent_output/YYYY-MM-DD-HH-mm.txt`。流式结束后先渲染已解析/校验的主
 结果（“结果已出，正在复核…”），不等待格式/语言/富文本后置调用；provider 在
-`finish_reason`/`[DONE]`/`message_stop` 到达时立即停止读取。P6.6 真机验收与 P6.7
-实现未完成；P6.7 的历史/声调/DSL/Markdown 设计决议已记录（design §17.2、
-contracts §14、design-tokens P6.7 行）。
+`finish_reason`/`[DONE]`/`message_stop` 到达时立即停止读取。P6.6 真机验收仍待
+另一工作流；P6.7-1 历史/持久化与 P6.7-2 UniDic 声调已实现（design §17.2、
+contracts §14、design-tokens P6.7 行），annotation DSL、provider 测试连接与发布
+打磨未完成。
 当前进度、验证记录与工作队列只维护在以下文档，本文件不再复述：
 
 - 实现进度与验证记录：`docs/phase6-status.md`
@@ -354,11 +356,11 @@ contracts §14、design-tokens P6.7 行）。
   secure storage 设备 I/O）；Wave 1–3 的自动化测试不能替代设备验收。
 - P6.6 多 OCR 版本/词典辅助修复：核心已实现（显式多版本、质量/diff、词典候选、
   用户确认后重新分析）；剩余真机视觉/OCR/词典质量验收，不能把图片发给模型。
-- P6.7：设计/契约/token 已记录（`docs/phase6-agent-design.md` §17.2、
+- P6.7：历史/持久化与 UniDic 声调已实现（`docs/phase6-agent-design.md` §17.2、
   `docs/phase6-agent-contracts.md` §14、`docs/design-tokens.md` P6.7 行、
-  `docs/project-rules.md` R-AGENT-24–27）；实现 Wave 4 后开始。范围：独立
-  Agent 历史（一条=一次分析、只读、不存图片/路径）、安全富文本/ruby/UniDic
-  声调、annotation DSL（先阅读器/照片集/语料）、provider 测试连接、发布打磨。
+  `docs/project-rules.md` R-AGENT-24–27）。剩余：P6.6 失败态多 OCR 入口/逐版本
+  依据预览、annotation DSL（先阅读器/照片集/语料）、provider 测试连接、无障碍/
+  发布验收；真机/视觉验收未完成。Wave 4 由另一工作流继续。
 - P7 任务解耦/模型路由/并发流式为规划项（
   `docs/agent_docs/p7-task-decomposition-plan.md`）；P7.0 富文本后处理已增量
   实现，P7.1–P7.4 未实现，不得写成已支持。
@@ -524,13 +526,15 @@ lib/state/agent_ocr_variants.dart                             # P6.6 应用级�
 lib/features/agent/agent_ocr_variants_panel.dart              # P6.6 版本 chip/差异/修复 UI
 lib/services/agent/annotation/                                # 注音/标注安全 DSL 与统一渲染（P6.7 planned）
 lib/services/agent/markdown_renderer.dart                     # 受限 Markdown 档案预览（P6.7 planned；不做通用渲染器）
-lib/core/models/agent/agent_history.dart                      # P6.7 历史 entry/result codec（待建）
-lib/features/agent/agent_history_page.dart                    # P6.7 历史列表（待建）
-lib/features/agent/agent_history_detail_page.dart             # P6.7 历史只读详情（待建）
-lib/services/storage/agent_history_store.dart                 # P6.7 历史仓储（待建）
-lib/core/models/agent/agent_pitch.dart                        # P6.7 UniDic 声调 DTO（待建）
-lib/services/mecab/unidic_accent_parser.dart                  # P6.7 accent 24–26 解析（待建）
-lib/features/agent/agent_pitch_accent.dart                    # P6.7 声调高低线（待建）
+lib/core/models/agent/agent_history.dart                      # P6.7 历史 entry codec（已实现）
+lib/features/agent/agent_history_page.dart                    # P6.7 历史列表（已实现）
+lib/features/agent/agent_history_detail_page.dart             # P6.7 历史只读详情（已实现）
+lib/services/storage/agent_history_store.dart                 # P6.7 历史仓储接口（已实现）
+lib/services/storage/agent_profile_inbox_store.dart           # P6.7 档案队列持久化接口（已实现）
+lib/state/agent_history_recorder.dart                         # P6.7 应用级历史记录器（已实现）
+lib/core/models/agent/agent_pitch.dart                        # P6.7 UniDic 声调 DTO（已实现）
+lib/services/mecab/unidic_accent_parser.dart                  # P6.7 accent 24–26 解析（已实现）
+lib/features/agent/agent_pitch_accent.dart                    # P6.7 声调高低线（已实现）
 lib/core/models/agent/                                        # input/evidence/analysis/profile/quote/tool DTO
 lib/services/storage/agent_store.dart                         # 会话/消息/引用/OCR 版本/档案 SQLite
 lib/services/security/secret_store.dart                       # API Key 安全存储
@@ -569,9 +573,9 @@ flutter build apk --debug
   `dart run flutter_launcher_icons`。
 - Phase 6 自动化测试只用 fake provider；不得用真实 API Key 跑测试。P6.6 多 OCR
   已有 quality/diff/ranking/repair、controller、prepared-variant orchestrator 与
-  widget 测试（全部 fake OCR/lookup）；P6.7 历史/声调/DSL 测试尚未编写（设计见
-  design §17.2、contracts §14）；真实 OCR 质量、真实词典候选、provider/secure
-  storage/arm64 仍需设备验收。
+  widget 测试（全部 fake OCR/lookup）；P6.7 历史/声调测试已编写（设计见
+  design §17.2、contracts §14），DSL 测试尚未编写；真实 OCR 质量、真实词典
+  候选、provider/secure storage/arm64 仍需设备验收。
 - 每个阶段结束运行 analyze/test/debug build；当前测试数量、设备套件结果与构建
   产物见 `docs/project-data.md` §2/§3/§5。
 

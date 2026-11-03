@@ -25,9 +25,9 @@
 > tool 契约，不重复规则正文或当前实现数值。
 
 - 状态：**P6.1–P6.5 核心、Wave 1–3 与 P6.6 多 OCR 核心已实现，P6.6 自动化收尾
-  于 2026-11-03 完成；P6.7 设计契约已于 2026-11-03 记录（仅设计，未实现）；
-  P6.6 真机验收、Wave 4 设备验收与 P6.7 实现仍未完成**；与
-  `docs/phase6-agent-design.md` v2 配套。实现状态见 `docs/phase6-status.md`。
+  于 2026-11-03 完成；P6.7-1 历史/持久化与 P6.7-2 UniDic 声调已于 2026-11-03
+  实现；P6.7 DSL/发布契约仍为设计；P6.6 真机验收与 Wave 4 设备验收仍未完成**；
+  与 `docs/phase6-agent-design.md` v2 配套。实现状态见 `docs/phase6-status.md`。
   **2026-10-31 实机反馈的 F1–F17 修正计划见
   `docs/agent_docs/device-feedback-2026-10-31.md`；Wave 1–3 已实现（应用级档案
   队列/语言默认与文案、F1b 语言后校验、F6 检索递进、F7 覆盖审查）；Wave 4
@@ -582,6 +582,10 @@ COVERAGE 根块唯一、MISSING/DUPLICATE/NOTES 必须位于 COVERAGE 内、同�
   已达全局上限（需要验证重复以释放槽位）时运行；全部目标已有 citation 且仍有
   剩余槽位时跳过，避免每个 run 固定多一次小模型调用。
   `AgentLimits.adaptiveCoverageReview=false` 可强制每次都审查。
+- 2026-11-03 去重：MISSING query 已被现有 citation 或带 citation_ids 的
+  token/pattern 覆盖时跳过；重复 query 跳过。补充查词每个 query 每本词典只取
+  1 条，只有 sense/usage/example 类 MISSING 可在已覆盖词上继续查。主证据采用
+  breadth-first（每个 target 先 1 条）再 depth，避免早期词条耗尽全局预算。
 - 运行时输出为标签文本（`stream:false`，不发 `response_format`/
   `json_schema`）；解析或标签块完整性失败只做一次“正文不变、只补标签”的格式
   修复。模型返回的 coverage 建议必须经过本地可追溯性/重复校验，不能直接删除或
@@ -615,12 +619,16 @@ COVERAGE 根块唯一、MISSING/DUPLICATE/NOTES 必须位于 COVERAGE 内、同�
 [UNDERLINE]短文本[/UNDERLINE]
 ```
 
-结果生成模型可在 `[MEANING]` 的解释文字中，把紧邻日语表面形的读音标注包成
-`[YOMI]（读音）[/YOMI]`，例如：
+结果生成模型可在 `[MEANING]` 的解释文字中，把读音直接写在日语词之后：
 
 ```text
-base[YOMI]（reading）[/YOMI]
+word[YOMI]reading[/YOMI]
 ```
+
+YOMI 内容是**不带括号**的读音；单词与读音相同（例如假名词）时只写单词，不输出
+YOMI。禁止 `word（reading）` 或 `word[YOMI]（reading）[/YOMI]`，否则后处理会
+同时出现 RUBY 与括号读音。本地生成的词典事实注释（`agentSegmentNotesSource`）
+也使用同一格式；旧数据中的括号读音仍按兼容规则处理。
 
 AI 气泡摘要（`[TRANSLATION]`）保持纯文本，不参与富文本后处理；RUBY/BOLD/
 UNDERLINE 只用于详细解析的“原文”、逐句理解和词典事实解释（词义/语法，不含
@@ -636,15 +644,22 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
   同一读音的括号注记时，显示/导出只保留一份读音：base 内的重复括号会被隐藏，
   `[/RUBY]` 后的重复括号会被跳过；`richTextToPlain` 仍输出 `base（reading）`。
   RUBY 位于 BOLD 内时读音随 base 一起加粗；任何 RUBY 读音都不加下划线（即使
-  位于 UNDERLINE 内）。RUBY 以被标注 base 的 alphabetic baseline 对齐，读音在
-  其上方，不把 base 下沉。
-- 富文本后处理模型不得修改、删除或增加原文任何字符（含标点/空格/换行）；唯一
-  例外是：当它把某个 YOMI 读音替换为等价 RUBY 时，可以删除整个 YOMI 块（标签及
-  包裹内容）。不得新增、改写、移动或嵌套 YOMI 块。prompt 使用固定严苛约束，
-  见 `agent_prompts.dart` 的 `buildDetailedRubyPostProcessRequest`。
+  位于 UNDERLINE 内）。RUBY base 使用与周围正文相同的行高/metrics，以其
+  alphabetic baseline 对齐，读音在其上方，不把 base 下沉。
+- UNDERLINE 不使用 `TextStyle.decoration`（其位置依赖字体/字形 metrics，全角
+  `；` 与汉字会落在不同高度），而由 `_UnderlineSpanWidget` 在 alphabetic
+  baseline 下方固定偏移处绘制；汉字、标点和 RUBY base 使用同一条基线相对线。
+- 富文本后处理模型不得修改、删除或增加原文任何字符（含标点/空格/换行），只允许
+  在字符之间插入 `[RUBY]`/`[BOLD]`/`[UNDERLINE]`。输入中的 YOMI 块按原文保留；
+  prompt 要求不得新增、删除、改写、移动或嵌套 YOMI。代码端仍兼容“整块删除
+  YOMI 并替换为等价 RUBY”的旧输出，但不再要求模型做此转换。prompt 见
+  `agent_prompts.dart` 的 `buildRichTextPostProcessRequest` /
+  `buildDetailedRubyPostProcessRequest`。
 - 代码端必须先用 `stripRichTextTags` 剥离显示标签，并按 YOMI 规则比较：
   删除的 YOMI 块允许消失；保留的 YOMI 块必须内容不变、位置不变。**比较前会先去除
   YOMI 内容中的全角/半角标点符号**，因此 `（いま）` 与 `いま` 视为同一读音注记。
+  括号读音 `word（reading）` 与 `[RUBY=reading]word[/RUBY]` 也视为同一显示形式：
+  比较前本地归一化，base 字符仍需逐字符一致；非假名括号（解释性文字）不转换。
   随后与原文逐字符严格比较；只有完全相等才采用。任何差异、未闭合/错误嵌套标签、
   改写/移动 YOMI、空输出或 provider 失败都丢弃后处理结果，降级渲染纯文本，不影响
   核心结果。
@@ -664,11 +679,19 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
   不回退 run，也不写用户可见错误。
 - 标签只用于本地 Flutter 富文本渲染，不执行 HTML/JS/Markdown，不进入 provider
   请求、日志、导出或持久化。
-- 2026-11-03 性能增量：各 section 的格式化请求通过有界并发执行（默认数量见
-  `AgentLimits.richTextConcurrency`），相同文本只请求一次；输出预算按输入长度
-  计算，不再固定 4000。App 控制器通过 `onRichTextReady` 在 `done` 之后回填
-  富文本，核心结果不再等待格式化；同步调用方（测试/直接调用）仍可等待最终
-  结果。
+- 2026-11-03 性能/稳定性增量：各 section 的格式化请求通过有界并发执行
+  （`AgentLimits.richTextConcurrency`，默认 3），相同文本只请求一次；输出预算
+  按输入长度计算，不再固定 4000。App 控制器通过 `onRichTextReady` 在 `done`
+  之后回填富文本，核心结果不再等待格式化；同步调用方（测试/直接调用）仍可等待
+  最终结果。2026-11-03 起不再在调用模型前预注入 RUBY：模型输入保留结果模型
+  原始文本及 `word[YOMI]reading[/YOMI]`，只做显示标签插入；prompt 也不再要求
+  “保留已有 RUBY”“不要原样返回”“把 YOMI 转成 RUBY”。本地 YOMI→RUBY 只在
+  provider/校验失败或模型保留 YOMI 时作为兜底，已知读音不会退回括号纯文本。
+  该调整的前提检查（当前 `docs/agent_output` 回归样本的读音/依据覆盖 9/9，
+  =100%）见 `docs/phase6-status.md`。salvage 路径（校验失败但仍有可显示内容）
+  也执行同一格式化，不再因为提前 return 而让用户只看到括号读音；debug 日志
+  `[AgentValidation]`/`[AgentSalvage]` 记录失败原因，`[AgentRichText]` 的
+  `changed`/`tags` 区分“原样返回”和“实际产生格式变化”。
 - 该后处理是 P7 任务解耦的增量原型（见
   `docs/agent_docs/p7-task-decomposition-plan.md`）；完整任务拆分/模型路由/
   并发流式仍待 P7。
@@ -907,11 +930,12 @@ validate(analysis, evidence, quotes, mode):
 | Citation registry | `lib/services/agent/citation_registry.dart` |
 | Store | `lib/services/storage/agent_store.dart` |
 | Secret | `lib/services/security/secret_store.dart` |
-| `history-entry.v1` / `history-result.v1` | `lib/core/models/agent/agent_history.dart`（P6.7，待建） |
-| 历史 UI | `lib/features/agent/agent_history_page.dart`、`agent_history_detail_page.dart`（P6.7，待建） |
-| 历史仓储 | `lib/services/storage/agent_history_store.dart`（P6.7，待建；可复用 `agent_store.dart` 连接） |
-| `pitch.v1` | `lib/core/models/agent/agent_pitch.dart`、`lib/services/mecab/unidic_accent_parser.dart`（P6.7，待建） |
-| 声调 UI | `lib/features/agent/agent_pitch_accent.dart`（P6.7，待建） |
+| `history-entry.v1` / `history-result.v1` | `lib/core/models/agent/agent_history.dart`（P6.7，已实现） |
+| 历史 UI | `lib/features/agent/agent_history_page.dart`、`agent_history_detail_page.dart`（P6.7，已实现） |
+| 历史仓储 | `lib/services/storage/agent_history_store.dart`、`lib/state/agent_history_recorder.dart`（P6.7，已实现） |
+| 档案队列持久化 | `lib/services/storage/agent_profile_inbox_store.dart`（P6.7，已实现） |
+| `pitch.v1` | `lib/core/models/agent/agent_pitch.dart`、`lib/services/mecab/unidic_accent_parser.dart`（P6.7，已实现） |
+| 声调 UI | `lib/features/agent/agent_pitch_accent.dart`（P6.7，已实现） |
 | `annotation.rules.v1` | `lib/services/agent/annotation/`（P6.7，待建） |
 
 ## 13. 测试夹具
@@ -924,14 +948,15 @@ validate(analysis, evidence, quotes, mode):
 - `test/fixtures/agent/tool_result_error.json`
 - Fake provider 捕获请求体；断言无图片/路径/Key。
 - 真实 MDict/UniDic 设备测试复用现有 integration_test 的 `--dart-define` 方式。
-- P6.7 待建夹具：`history_entry.json`、`history_result.json`、`pitch_unidic.json`、
-  `annotation_rules.json`；断言历史/导出无图片路径/Key，声调只用 UniDic 真实
-  样例，DSL 拒绝 HTML/JS/URL。
+- P6.7 测试：历史 codec/store/recorder/UI、DB v2→v3 迁移、profile inbox 持久化、
+  UniDic 声调真实样例与本地-only 请求体断言已实现；annotation DSL 夹具/测试仍
+  待建。
 
-## 14. P6.7 设计契约（2026-11-03，仅设计）
+## 14. P6.7 契约（2026-11-03）
 
-> 本节只定义实现前的字段/行为契约，不表示已实现。实现排期在 Wave 4 设备验收
-> 之后；与 `docs/phase6-agent-design.md` §17.2 配套。
+> §14.1 历史/持久化与 §14.2 UniDic 声调已实现并有自动化测试；§14.3 annotation
+> DSL、§14.4 的受限 Markdown 预览、§14.5 provider 测试连接、§14.6 P6.6 遗留仍
+> 待实现。与 `docs/phase6-agent-design.md` §17.2 配套；Wave 4 由另一工作流继续。
 
 ### 14.1 历史与持久化
 
@@ -1108,11 +1133,15 @@ final AgentPitchAccent? pitchAccent;
 - `AgentPitchAccentText` 只在逐句理解下方的词注/词典事实行显示；不得用于 AI
   气泡、原文引用、逐句解释正文、证据卡片、citation snippet、Markdown 导出。
 - 视觉：词上方 1.5dp 高低线；高段上轨、低段下轨，アクセント核处垂直下降；
-  线宽按词宽均分为 mora 段，不按汉字字数逐字对齐。颜色 `textSecondary`。
+  线宽按词宽均分为 mora 段，不按汉字字数逐字对齐。颜色 `textSecondary`。若该词
+  有 RUBY/读音，纵向顺序固定为声调线 → RUBY 读音 → 词形，声调线在 RUBY 上方。
+  声调线只作为 Ruby 上方的覆盖层，不改变现有 Ruby 布局/行高。
 - 200% 字号：线宽/偏移随文字缩放；空间不足时换行或省略声调线，不得覆盖文字/
   读音/下划线；不得缩小到不可读。
 - 无 `pitchAccent`、读音为空、词形与 token 不匹配时按普通文本渲染；不显示
-  “推测”“未知”占位，不用 AI 补。
+  “推测”“未知”占位，不用 AI 补。**汉字词没有独立振假名/读音时不画线**：
+  `surface` 含汉字且 `reading` 为空或等于 `surface` 时，读音可能不唯一
+  （多音词），不得显示该单词的声调线；纯假名词不受此限制。
 - 复制/导出只输出 `surface（reading）`，不输出高低线/数字。
 - 声调是本地数据，不进入 provider 请求、日志、citation、历史 JSON 的 provider
   payload（历史 result 可保留 `Token` 证据中的原始 accent 字段，但不得重发给

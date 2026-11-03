@@ -77,19 +77,22 @@ P6.8 解决“已生成结果如何更早显示”；P7 解决“不要把所有
 `agent_prompts.dart` 的 `buildDetailedRubyPostProcessRequest`）：
 
 > It is absolutely forbidden to modify, delete or add any character of the
-> original text (including punctuation, spaces and line breaks), except that
-> a complete `[YOMI]...[/YOMI]` block may be deleted when replaced by an
-> equivalent RUBY span. Only `[RUBY=xxx]`, `[BOLD]` and `[UNDERLINE]` may be
-> inserted. The output must contain the complete original text.
+> original text (including punctuation, spaces and line breaks). Only
+> `[RUBY=xxx]`, `[BOLD]` and `[UNDERLINE]` may be inserted. The output must
+> contain the complete original text. Leave every `[YOMI]...[/YOMI]` block
+> exactly as supplied.
 
-结果生成模型可在 `[MEANING]` 中把读音写成 `base[YOMI]（reading）[/YOMI]`。
-代码端必须剥离显示标签，并按 YOMI 规则（允许整块删除；保留块内容/位置不变）与
-原文逐字符比较；不完全一致就丢弃该块格式化结果、渲染纯文本。标签必须成对且
-正确嵌套：RUBY 可在 BOLD/UNDERLINE 内，BOLD/UNDERLINE 可以相互包裹，但不得
-进入 RUBY base 或嵌套自身；RUBY 读音继承 BOLD、永不加下划线，并以 base 的
-alphabetic baseline 对齐。RUBY 是语言无关的发音标注，不限定书写系统，禁止
-标签/换行；RUBY 读音等于 base 时取消该 RUBY。包住已有 `surface（reading）`
-注记时显示/导出只保留一份读音。Prompt 不使用“uncertain 就返回原文”的模糊兜底。
+结果生成模型在 `[MEANING]` 中把读音写成 `word[YOMI]reading[/YOMI]`（不带括号；
+单词=读音时只写单词；禁止 `word（reading）` 或 `word[YOMI]（reading）[/YOMI]`）。
+格式化调用**不预注入 RUBY**：模型输入就是结果模型文本与 YOMI；本地 YOMI→RUBY
+只在 provider/校验失败或模型保留 YOMI 时兜底。代码端必须剥离显示标签，并按
+YOMI 规则（允许整块删除；保留块内容/位置不变）与原文逐字符比较；不完全一致就
+丢弃该块格式化结果、渲染纯文本。标签必须成对且正确嵌套：RUBY 可在
+BOLD/UNDERLINE 内，BOLD/UNDERLINE 可以相互包裹，但不得进入 RUBY base 或嵌套
+自身；RUBY 读音继承 BOLD、永不加下划线，并以 base 的 alphabetic baseline 对齐。
+RUBY 是语言无关的发音标注，不限定书写系统，禁止标签/换行；RUBY 读音等于 base
+时取消该 RUBY。包住已有 `surface（reading）` 注记时显示/导出只保留一份读音。
+Prompt 不使用“uncertain 就返回原文”的模糊兜底，也不要求“必须产生变化”。
 该任务没有修改原文的权限，因此不能用来修错、翻译或补内容。
 
 ### 4.4 可选审查任务

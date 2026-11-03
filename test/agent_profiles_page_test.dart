@@ -5,8 +5,10 @@ import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
 import 'package:rikai_mobile/core/models/dict_info.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
 import 'package:rikai_mobile/features/agent/agent_profiles_page.dart';
+import 'package:rikai_mobile/services/agent/agent_run.dart';
 import 'package:rikai_mobile/state/agent_profile_manager.dart';
 import 'package:rikai_mobile/state/agent_providers.dart';
+import 'package:rikai_mobile/state/agent_run_controller.dart';
 import 'package:rikai_mobile/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -67,9 +69,19 @@ class _FixedRegenerationController extends AgentProfileRegenerationController {
   AgentProfileRegenerationState build() => _initial;
 }
 
+class _FixedRunController extends AgentRunController {
+  _FixedRunController(this._snapshot);
+
+  final AgentRunSnapshot _snapshot;
+
+  @override
+  AgentRunSnapshot build() => _snapshot;
+}
+
 Future<void> _pumpProfilesPage(
   WidgetTester tester, {
   required List<DictionaryInfo> active,
+  AgentRunSnapshot run = AgentRunSnapshot.idle,
 }) async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
   final preferences = await SharedPreferences.getInstance();
@@ -88,6 +100,9 @@ Future<void> _pumpProfilesPage(
           () => _FixedRegenerationController(
             AgentProfileRegenerationState(activeDictionaries: active),
           ),
+        ),
+        agentRunControllerProvider.overrideWith(
+          () => _FixedRunController(run),
         ),
       ],
       child: MaterialApp(
@@ -213,6 +228,70 @@ void main() {
       expect(deleteSelected.onPressed, isNotNull);
     },
   );
+
+  testWidgets(
+    'edit/regenerate stay available while profiles are in use; delete locks',
+    (tester) async {
+      await _pumpProfilesPage(
+        tester,
+        active: const <DictionaryInfo>[],
+        run: const AgentRunSnapshot(status: AgentRunStatus.familiarizing),
+      );
+
+      expect(
+        tester
+            .widgetList<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.edit_outlined),
+            )
+            .every((button) => button.onPressed != null),
+        isTrue,
+      );
+      expect(
+        tester
+            .widgetList<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.refresh),
+            )
+            .every((button) => button.onPressed != null),
+        isTrue,
+      );
+      expect(
+        tester
+            .widgetList<IconButton>(
+              find.widgetWithIcon(IconButton, Icons.delete_outline),
+            )
+            .every((button) => button.onPressed == null),
+        isTrue,
+      );
+
+      await tester.tap(find.byTooltip('多选'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('全选'));
+      await tester.pump();
+      final deleteSelected = tester.widget<IconButton>(
+        find.widgetWithIcon(IconButton, Icons.delete_outline),
+      );
+      expect(deleteSelected.onPressed, isNull);
+    },
+  );
+
+  testWidgets('delete unlocks after the main agent run completes', (
+    tester,
+  ) async {
+    await _pumpProfilesPage(
+      tester,
+      active: const <DictionaryInfo>[],
+      run: const AgentRunSnapshot(status: AgentRunStatus.done),
+    );
+
+    expect(
+      tester
+          .widgetList<IconButton>(
+            find.widgetWithIcon(IconButton, Icons.delete_outline),
+          )
+          .every((button) => button.onPressed != null),
+      isTrue,
+    );
+  });
 
   testWidgets(
     'multi-select regeneration is disabled when every selection is generating',

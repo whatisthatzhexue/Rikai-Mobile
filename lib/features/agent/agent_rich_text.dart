@@ -56,18 +56,40 @@ List<InlineSpan> buildAgentRichTextSpans(
 
   TextStyle effectiveStyle() => style.copyWith(
     fontWeight: bold ? FontWeight.w600 : style.fontWeight,
-    decoration: underline ? TextDecoration.underline : style.decoration,
-    decorationColor: underline
-        ? AgentTokens.richTextUnderlineColor
-        : style.decorationColor,
-    decorationThickness: underline
-        ? AgentTokens.richTextUnderlineThickness
-        : style.decorationThickness,
+    // UNDERLINE is painted by _UnderlineSpanWidget at a fixed offset from the
+    // alphabetic baseline; TextStyle decoration uses font-specific underline
+    // metrics, which differ between kanji and punctuation such as `；`.
+    decoration: TextDecoration.none,
+    decorationColor: null,
+    decorationThickness: null,
   );
 
   void addText(String value) {
     if (value.isEmpty) return;
-    spans.add(TextSpan(text: value, style: effectiveStyle()));
+    final textStyle = effectiveStyle();
+    if (underline) {
+      spans.add(
+        WidgetSpan(
+          alignment: PlaceholderAlignment.baseline,
+          baseline: TextBaseline.alphabetic,
+          child: _UnderlineSpanWidget(
+            color: AgentTokens.richTextUnderlineColor,
+            thickness: AgentTokens.richTextUnderlineThickness,
+            offset: textScaler.scale(AgentTokens.richTextUnderlineOffset),
+            child: Text(
+              value,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.visible,
+              textScaler: textScaler,
+              style: textStyle,
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    spans.add(TextSpan(text: value, style: textStyle));
   }
 
   var index = 0;
@@ -101,7 +123,13 @@ List<InlineSpan> buildAgentRichTextSpans(
         );
       } else {
         spans.add(
-          _rubySpan(base, reading, effectiveStyle(), textScaler: textScaler),
+          _rubySpan(
+            base,
+            reading,
+            effectiveStyle(),
+            textScaler: textScaler,
+            underline: underline,
+          ),
         );
       }
       // The formatter may leave the original `（reading）` after a RUBY pair
@@ -133,8 +161,12 @@ InlineSpan _rubySpan(
   String reading,
   TextStyle baseStyle, {
   required TextScaler textScaler,
+  required bool underline,
 }) {
-  final baseTextStyle = baseStyle.copyWith(height: 1.1);
+  // Keep the base's line metrics identical to the surrounding inline text.
+  // A shorter height here (for example 1.1) shifts the reported baseline and
+  // makes ruby-bearing runs sit slightly below plain runs.
+  final baseTextStyle = baseStyle;
   final readingStyle = baseStyle.copyWith(
     fontSize: AgentTokens.rubyReadingSize,
     color: baseStyle.color ?? AgentTokens.rubyReadingColor,
@@ -143,21 +175,138 @@ InlineSpan _rubySpan(
     fontWeight: baseStyle.fontWeight,
     decoration: TextDecoration.none,
   );
+  final ruby = _RubySpanWidget(
+    base: base,
+    reading: reading,
+    baseStyle: baseTextStyle,
+    readingStyle: readingStyle,
+    textScaler: textScaler,
+  );
   return WidgetSpan(
     alignment: PlaceholderAlignment.baseline,
     baseline: TextBaseline.alphabetic,
     child: Semantics(
       label: '$base（$reading）',
       excludeSemantics: true,
-      child: _RubySpanWidget(
-        base: base,
-        reading: reading,
-        baseStyle: baseTextStyle,
-        readingStyle: readingStyle,
-        textScaler: textScaler,
-      ),
+      child: underline
+          ? _UnderlineSpanWidget(
+              color: AgentTokens.richTextUnderlineColor,
+              thickness: AgentTokens.richTextUnderlineThickness,
+              offset: textScaler.scale(AgentTokens.richTextUnderlineOffset),
+              child: ruby,
+            )
+          : ruby,
     ),
   );
+}
+
+/// Paints UNDERLINE at a fixed distance below the child's alphabetic baseline.
+/// [TextStyle.decoration] uses font underline metrics, so a full-width `；`
+/// can sit at a different height than a kanji. A fixed baseline-relative line
+/// keeps every glyph consistent, including RUBY bases.
+class _UnderlineSpanWidget extends SingleChildRenderObjectWidget {
+  const _UnderlineSpanWidget({
+    required Widget child,
+    required this.color,
+    required this.thickness,
+    required this.offset,
+  }) : super(child: child);
+
+  final Color color;
+  final double thickness;
+  final double offset;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderUnderlineSpan(
+    color: color,
+    thickness: thickness,
+    offset: offset,
+  );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderUnderlineSpan renderObject,
+  ) {
+    renderObject
+      ..color = color
+      ..thickness = thickness
+      ..offset = offset;
+  }
+}
+
+class _RenderUnderlineSpan extends RenderProxyBox {
+  _RenderUnderlineSpan({
+    required Color color,
+    required double thickness,
+    required double offset,
+  }) : _color = color,
+       _thickness = thickness,
+       _offset = offset;
+
+  Color _color;
+  double _thickness;
+  double _offset;
+  double? _baseline;
+
+  /// Diagnostics used by widget tests to prove the custom line was painted at
+  /// a real baseline (rather than silently skipped).
+  int paintCount = 0;
+  double? lastPaintedBaseline;
+
+  set color(Color value) {
+    if (_color == value) return;
+    _color = value;
+    markNeedsPaint();
+  }
+
+  set thickness(double value) {
+    if (_thickness == value) return;
+    _thickness = value;
+    markNeedsPaint();
+  }
+
+  set offset(double value) {
+    if (_offset == value) return;
+    _offset = value;
+    markNeedsPaint();
+  }
+
+  @override
+  double? computeDistanceToActualBaseline(TextBaseline baseline) {
+    final value = child?.computeDistanceToActualBaseline(baseline);
+    if (value != null) _baseline = value;
+    return value;
+  }
+
+  @override
+  double? computeDryBaseline(
+    BoxConstraints constraints,
+    TextBaseline baseline,
+  ) {
+    final value = child?.computeDryBaseline(constraints, baseline);
+    if (value != null) _baseline = value;
+    return value;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    super.paint(context, offset);
+    final baseline = _baseline;
+    if (baseline == null || size.width <= 0) return;
+    final paint = Paint()
+      ..color = _color
+      ..strokeWidth = _thickness
+      ..strokeCap = StrokeCap.square;
+    final y = offset.dy + baseline + _offset;
+    context.canvas.drawLine(
+      Offset(offset.dx, y),
+      Offset(offset.dx + size.width, y),
+      paint,
+    );
+    paintCount++;
+    lastPaintedBaseline = baseline;
+  }
 }
 
 /// Lays the reading above the base while reporting the base text's baseline.

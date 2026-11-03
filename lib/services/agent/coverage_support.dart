@@ -51,6 +51,47 @@ AgentCoverageValidation validateCoverageReview({
     ],
   }..removeWhere((term) => term.trim().isEmpty);
 
+  // Queries whose word/reading is already covered by a citation or a token
+  // with citation_ids must not trigger another lookup. This was a major source
+  // of redundant coverage evidence and crowded out genuinely missing items.
+  final coveredKeys = <String>{};
+  void addCovered(String value) {
+    final normalized = stripLookupKey(value);
+    if (normalized.isNotEmpty) coveredKeys.add(normalized);
+  }
+
+  final citationIds = <String>{
+    for (final citation in evidence.citations) citation.id,
+  };
+  for (final citation in evidence.citations) {
+    addCovered(citation.entryKey);
+    addCovered(citation.headword);
+    addCovered(citation.matchedKey);
+  }
+  for (final source in evidence.sources) {
+    for (final token in source.tokens) {
+      if (!token.citationIds.any(citationIds.contains)) continue;
+      addCovered(token.surface);
+      addCovered(token.lemma);
+      addCovered(token.reading);
+      for (final candidate in token.lookupCandidates) {
+        addCovered(candidate);
+      }
+    }
+  }
+  for (final pattern in evidence.patterns) {
+    if (pattern.citationIds.any(citationIds.contains)) {
+      addCovered(pattern.surface);
+    }
+  }
+  const coveredQueryKinds = <AgentCoverageKind>{
+    AgentCoverageKind.word,
+    AgentCoverageKind.reading,
+    AgentCoverageKind.grammar,
+    AgentCoverageKind.context,
+  };
+  final seenQueries = <String>{};
+
   final missing = <AgentCoverageMissing>[];
   var dropped = 0;
   for (final item in review.missing) {
@@ -61,6 +102,10 @@ AgentCoverageValidation validateCoverageReview({
     final query = item.query.trim();
     if (query.isEmpty || query.length > 100) {
       dropped++;
+      continue;
+    }
+    final normalizedQuery = stripLookupKey(query);
+    if (normalizedQuery.isEmpty) {
       continue;
     }
     final refs = <String>[
@@ -76,6 +121,13 @@ AgentCoverageValidation validateCoverageReview({
         sourceTexts.any((text) => text.contains(query));
     if (!traceable) {
       dropped++;
+      continue;
+    }
+    // Duplicate and already-covered queries are redundant, not malformed;
+    // skip them without a user-visible "coverage unavailable" warning.
+    if (!seenQueries.add(normalizedQuery)) continue;
+    if (coveredQueryKinds.contains(item.kind) &&
+        coveredKeys.contains(normalizedQuery)) {
       continue;
     }
     missing.add(

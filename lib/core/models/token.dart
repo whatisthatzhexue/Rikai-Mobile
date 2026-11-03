@@ -19,6 +19,9 @@ import '../utils/kana.dart';
 /// | 12    | goshu (語種) |
 /// | 20    | kana (仮名形出現形) |
 /// | 21    | kanaBase (仮名形基本形) |
+/// | 24    | aType (アクセント型) |
+/// | 25    | aConType (アクセント連接型) |
+/// | 26    | aModType (アクセント修飾型) |
 /// | 27    | lid |
 /// | 28    | lemmaId |
 ///
@@ -48,6 +51,9 @@ class Token {
     required this.goshu,
     required this.lid,
     required this.lemmaId,
+    this.accentTypeRaw = '',
+    this.accentConType = '',
+    this.accentModType = '',
   });
 
   /// The number of features emitted by the supported UniDic layout.
@@ -100,6 +106,9 @@ class Token {
       goshu: at(12),
       lid: at(27),
       lemmaId: at(28),
+      accentTypeRaw: at(24),
+      accentConType: at(25),
+      accentModType: at(26),
     );
   }
 
@@ -132,6 +141,13 @@ class Token {
   final String goshu;
   final String lid;
   final String lemmaId;
+
+  /// UniDic accent fields. [accentTypeRaw] is feature 24 (`aType`); the other
+  /// two are retained for future compound-accent work but are not used by the
+  /// P6.7 single-word display.
+  final String accentTypeRaw;
+  final String accentConType;
+  final String accentModType;
 
   /// Whether the feature list matches the supported 29-field UniDic layout.
   bool get hasStandardLayout => features.length == expectedFeatureCount;

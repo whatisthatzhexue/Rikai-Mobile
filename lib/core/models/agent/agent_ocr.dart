@@ -1,4 +1,5 @@
 import 'agent_input.dart';
+import 'agent_json.dart';
 
 /// Deterministic quality signals for one on-device OCR variant.
 ///
@@ -76,6 +77,27 @@ class OcrQuality {
     return (0.60 * confidence + 0.25 * script + 0.15 * noise)
         .clamp(0.0, 1.0)
         .toDouble();
+  }
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'char_count': charCount,
+    'meaningful_chars': meaningfulChars,
+    'duplicate_noise_ratio': duplicateNoiseRatio,
+    'mean_confidence': meanConfidence,
+    if (dictionaryHitRate != null) 'dictionary_hit_rate': dictionaryHitRate,
+    'content_words': contentWords,
+  };
+
+  factory OcrQuality.fromJson(Map<String, Object?> json) {
+    final rawHitRate = json['dictionary_hit_rate'];
+    return OcrQuality(
+      charCount: agentInt(json['char_count']),
+      meaningfulChars: agentInt(json['meaningful_chars']),
+      duplicateNoiseRatio: agentDouble(json['duplicate_noise_ratio']),
+      meanConfidence: agentDouble(json['mean_confidence']),
+      dictionaryHitRate: rawHitRate is num ? rawHitRate.toDouble() : null,
+      contentWords: agentInt(json['content_words']),
+    );
   }
 }
 

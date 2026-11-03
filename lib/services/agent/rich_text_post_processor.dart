@@ -17,9 +17,10 @@ class RichTextPostProcessResult {
 /// the caller then renders the original plain text.
 ///
 /// `[YOMI]...[/YOMI]` reading annotations belong to the result-generation
-/// model, not to this pass. A whole YOMI block may be deleted only when the
-/// formatter replaces its reading with RUBY; retained blocks are returned with
-/// their tags stripped, so the UI shows the parenthetical reading.
+/// model, not to this pass. They are sent to the formatter unchanged. When the
+/// formatter fails or leaves a YOMI block in place, the local converter turns
+/// that block into an equivalent RUBY pair; if no reading is available, the
+/// block is finally stripped to a plain parenthetical.
 class RichTextPostProcessor {
   const RichTextPostProcessor({required LlmPort llm, required String model})
     : _llm = llm,
@@ -27,6 +28,72 @@ class RichTextPostProcessor {
 
   final LlmPort _llm;
   final String _model;
+
+  static final RegExp _localYomiPattern = RegExp(
+    r'([぀-ヿ㐀-䶿一-鿿豈-﫿々〆ヶー]+)'
+    r'\[YOMI\]([\s\S]*?)\[\/YOMI\]',
+    caseSensitive: false,
+  );
+
+  static final RegExp _rubyBlockPattern = RegExp(
+    r'\[RUBY=[^\]]*\][\s\S]*?\[/RUBY\]',
+    caseSensitive: false,
+  );
+
+  /// Existing RUBY pairs in the source must survive the formatter. The diff
+  /// guard only checks stripped characters, so a model could otherwise drop a
+  /// valid source RUBY pair and still be accepted.
+  static bool _preservesSourceRuby(String source, String candidate) {
+    for (final match in _rubyBlockPattern.allMatches(source)) {
+      final block = match.group(0);
+      if (block != null && block.isNotEmpty && !candidate.contains(block)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// Deterministic fallback for the result model's `word[YOMI]reading[/YOMI]`
+  /// annotations. The formatter is still asked to add tags for other words,
+  /// but a provider/rejection failure must not turn known readings into plain
+  /// parentheticals (or disappear entirely).
+  static String _localYomiRuby(String text) {
+    return text.replaceAllMapped(_localYomiPattern, (match) {
+      final base = match.group(1) ?? '';
+      final reading = cleanReading(match.group(2) ?? '');
+      if (base.isEmpty || reading.isEmpty || reading == base) return base;
+      return '[RUBY=$reading]$base[/RUBY]';
+    });
+  }
+
+  /// Local display fallback for both reading annotation forms: YOMI blocks
+  /// produced by the result model and older `word（reading）` parentheses.
+  static String _localDisplay(String text) =>
+      parentheticalReadingsToRuby(_localYomiRuby(text));
+
+  /// Local-only fallback. The formatter is no longer given pre-converted RUBY,
+  /// so the fallback converts the result model's own YOMI annotations directly
+  /// to RUBY. It never invents a reading for a word that has no YOMI block.
+  static RichTextPostProcessResult _localFallback(
+    String source,
+    String reason,
+  ) {
+    final local = _localDisplay(source);
+    if (local == source) {
+      return RichTextPostProcessResult(rejectionReason: reason);
+    }
+    final sourcePlain = stripRichTextTags(
+      parentheticalReadingsToRuby(stripYomiBlocks(source)),
+    );
+    if (!isWellFormedRichText(local) ||
+        stripRichTextTags(local) != sourcePlain) {
+      return RichTextPostProcessResult(rejectionReason: reason);
+    }
+    return RichTextPostProcessResult(
+      taggedText: local,
+      rejectionReason: 'local_yomi_fallback',
+    );
+  }
 
   /// Formats several independent sections with a bounded worker pool.
   ///
@@ -106,6 +173,9 @@ class RichTextPostProcessor {
     if (text.isEmpty) {
       return const RichTextPostProcessResult(rejectionReason: 'empty');
     }
+    // Keep the result model's text intact, including YOMI annotations. The
+    // formatter is only asked to insert display tags; local YOMI→RUBY is a
+    // post-failure/retained-tag fallback, not part of its input.
     // The formatter returns the full text plus tags; a fixed 4000-token cap
     // truncates long originals on providers that honor request.maxTokens.
     final maxTokens = (text.length + 2000).clamp(4000, 16000);
@@ -136,9 +206,7 @@ class RichTextPostProcessor {
           case LlmEventType.textDelta:
             buffer.write(event.text);
           case LlmEventType.error:
-            return const RichTextPostProcessResult(
-              rejectionReason: 'provider_error',
-            );
+            return _localFallback(text, 'provider_error');
           case LlmEventType.reasoningDelta:
           case LlmEventType.done:
             break;
@@ -146,32 +214,51 @@ class RichTextPostProcessor {
       }
     } on AgentCapabilityException catch (error) {
       if (error.code == AgentToolErrorCode.toolCancelled) rethrow;
-      return RichTextPostProcessResult(rejectionReason: error.message);
+      return _localFallback(text, error.message);
     } catch (_) {
-      return const RichTextPostProcessResult(rejectionReason: 'provider_error');
+      return _localFallback(text, 'provider_error');
     }
 
     final candidate = buffer.toString();
     if (candidate.isEmpty) {
-      return const RichTextPostProcessResult(rejectionReason: 'empty_output');
+      return _localFallback(text, 'empty_output');
     }
     if (!isWellFormedYomi(candidate)) {
-      return const RichTextPostProcessResult(rejectionReason: 'malformed_yomi');
+      return _localFallback(text, 'malformed_yomi');
     }
     if (!allowsYomiDeletion(text, candidate)) {
-      return const RichTextPostProcessResult(rejectionReason: 'yomi_changed');
+      return _localFallback(text, 'yomi_changed');
     }
     if (!isWellFormedRichText(candidate)) {
-      return const RichTextPostProcessResult(rejectionReason: 'malformed_tags');
+      return _localFallback(text, 'malformed_tags');
     }
     var normalized = cleanRubyReadings(candidate);
     normalized = stripRedundantRubyTags(normalized);
     // The analysis model may already have emitted display tags despite the
     // prompt (for example [RUBY=...]). They are formatting, not source text,
     // so both sides must be compared with their display tags removed.
-    final sourcePlain = stripRichTextTags(stripYomiBlocks(text));
-    if (stripRichTextTags(stripYomiBlocks(normalized)) != sourcePlain) {
-      return const RichTextPostProcessResult(rejectionReason: 'text_changed');
+    // Parenthetical readings are display annotations too: `word（reading）`
+    // and `[RUBY=reading]word[/RUBY]` describe the same base text.
+    final sourcePlain = stripRichTextTags(
+      parentheticalReadingsToRuby(stripYomiBlocks(text)),
+    );
+    final candidatePlain = stripRichTextTags(
+      parentheticalReadingsToRuby(stripYomiBlocks(normalized)),
+    );
+    if (candidatePlain != sourcePlain) {
+      return _localFallback(text, 'text_changed');
+    }
+    if (!_preservesSourceRuby(text, normalized)) {
+      return _localFallback(text, 'source_ruby_dropped');
+    }
+    // If the formatter left YOMI blocks or parenthetical readings in place,
+    // convert them locally. This avoids a plain `word（reading）` result when
+    // the model chose not to add RUBY.
+    final local = _localDisplay(normalized);
+    if (local != normalized &&
+        isWellFormedRichText(local) &&
+        stripRichTextTags(local) == sourcePlain) {
+      return RichTextPostProcessResult(taggedText: local);
     }
     return RichTextPostProcessResult(taggedText: stripYomiTags(normalized));
   }

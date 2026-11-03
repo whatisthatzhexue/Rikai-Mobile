@@ -306,6 +306,36 @@ void main() {
     expect(validated.droppedMissing, 2);
   });
 
+  test('skips coverage queries already covered by a citation', () {
+    final validated = validateCoverageReview(
+      review: _review(
+        missing: const <AgentCoverageMissing>[
+          AgentCoverageMissing(
+            kind: AgentCoverageKind.word,
+            query: '何卒',
+            sourceRefs: <String>['t1'],
+            reason: 'already covered',
+          ),
+          AgentCoverageMissing(
+            kind: AgentCoverageKind.sense,
+            query: '宜しく',
+            sourceRefs: <String>['t2'],
+            reason: 'a different sense is still missing',
+          ),
+        ],
+      ),
+      input: _input,
+      evidence: _evidence(<AgentCitation>[
+        _citation(id: 'source-1', entryKey: '何卒', snippet: 'なにとぞ。'),
+      ]),
+      limits: AgentLimits.standard,
+    );
+
+    expect(validated.missing, hasLength(1));
+    expect(validated.missing.single.query, '宜しく');
+    expect(validated.droppedMissing, 0);
+  });
+
   test('verifies duplicate groups with overlapping snippets locally', () {
     final keep = _citation(
       id: 'source-1',

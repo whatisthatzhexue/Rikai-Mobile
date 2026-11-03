@@ -1,6 +1,7 @@
 import '../../core/models/agent/agent_analysis.dart';
 import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
+import '../../core/models/agent/agent_json.dart';
 import '../../core/models/agent/agent_quote.dart';
 
 class AgentValidationResult {
@@ -13,6 +14,20 @@ class AgentValidationResult {
   final bool valid;
   final List<String> errors;
   final List<String> citationsUsed;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'valid': valid,
+    'errors': errors,
+    'citations_used': citationsUsed,
+  };
+
+  factory AgentValidationResult.fromJson(Map<String, Object?> json) {
+    return AgentValidationResult(
+      valid: agentBool(json['valid']),
+      errors: agentStringList(json['errors']),
+      citationsUsed: agentStringList(json['citations_used']),
+    );
+  }
 }
 
 /// Enforces schema-level, citation, quote and strict-mode rules.

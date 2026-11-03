@@ -355,6 +355,32 @@ internal class PaddleOcrEngine {
             if (isCancelled()) throw OcrFailure("CANCELLED", "已取消识别")
             var orientationCorrected = false
 
+            // Auto mode may rotate the page based on a classifier. Manga
+            // spreads and text-heavy portrait pages can look like a rotated
+            // document to that classifier. Keep the unrotated Paddle result as
+            // a fallback and only accept a rotation when it is clearly better;
+            // otherwise auto could return 90/180-degree text (near-zero
+            // dictionary hit rate) while forced horizontal/vertical stay good.
+            var fallbackBlocks: List<NativeOcrBlock>? = null
+            var fallbackScore = 0.0
+            var fallbackWidth = 0
+            var fallbackHeight = 0
+            fun captureFallback() {
+                if (fallbackBlocks != null || quads.isEmpty()) return
+                val blocks = recognizePaddleQuads(
+                    bitmap = activeBitmap,
+                    quads = quads,
+                    rec = rec,
+                    keys = keys,
+                    onProgress = onProgress,
+                    isCancelled = isCancelled,
+                )
+                fallbackBlocks = blocks
+                fallbackScore = OcrTextQuality.score(blocks)
+                fallbackWidth = activeBitmap.width
+                fallbackHeight = activeBitmap.height
+            }
+
             // A 90/270 page can look like ordinary vertical text after DBNet.
             // Run the document classifier only when the image aspect and box
             // geometry could describe a sideways page; ordinary landscape
@@ -362,6 +388,7 @@ internal class PaddleOcrEngine {
             if (mode == "auto" && shouldCheckDocumentOrientation(activeBitmap, quads)) {
                 val corrected = correctDocumentRotation(activeBitmap)
                 if (corrected != null) {
+                    captureFallback()
                     if (activeBitmap !== decoded) activeBitmap.recycle()
                     activeBitmap = corrected
                     orientationCorrected = true
@@ -412,6 +439,7 @@ internal class PaddleOcrEngine {
             ) {
                 val rotated = rotate180(activeBitmap)
                 if (rotated != null) {
+                    captureFallback()
                     if (activeBitmap !== decoded) activeBitmap.recycle()
                     activeBitmap = rotated
                     onProgress("detect", 0, 1)
@@ -551,6 +579,20 @@ internal class PaddleOcrEngine {
                     }
                 }
                 onProgress("done", 1, 1)
+                val fallback = fallbackBlocks
+                if (forcedEngine != "manga_ocr" &&
+                    fallback != null &&
+                    (best == null ||
+                        best.score <= fallbackScore + CANDIDATE_SWITCH_MARGIN)
+                ) {
+                    return NativeOcrResult(
+                        engine = "paddle_v5",
+                        elapsedMs = SystemClock.elapsedRealtime() - started,
+                        width = fallbackWidth,
+                        height = fallbackHeight,
+                        blocks = fallback,
+                    )
+                }
                 if (best != null) {
                     return NativeOcrResult(
                         engine = best.engine,
@@ -570,6 +612,17 @@ internal class PaddleOcrEngine {
             }
 
             if (quads.isEmpty()) {
+                val fallback = fallbackBlocks
+                if (forcedEngine != "manga_ocr" && fallback != null) {
+                    onProgress("done", 1, 1)
+                    return NativeOcrResult(
+                        engine = "paddle_v5",
+                        elapsedMs = SystemClock.elapsedRealtime() - started,
+                        width = fallbackWidth,
+                        height = fallbackHeight,
+                        blocks = fallback,
+                    )
+                }
                 return NativeOcrResult(
                     engine = "paddle_v5",
                     elapsedMs = SystemClock.elapsedRealtime() - started,
@@ -588,6 +641,20 @@ internal class PaddleOcrEngine {
                 isCancelled = isCancelled,
             )
             onProgress("done", 1, 1)
+            val fallback = fallbackBlocks
+            if (forcedEngine != "manga_ocr" &&
+                fallback != null &&
+                OcrTextQuality.score(orderedBlocks) <=
+                fallbackScore + CANDIDATE_SWITCH_MARGIN
+            ) {
+                return NativeOcrResult(
+                    engine = "paddle_v5",
+                    elapsedMs = SystemClock.elapsedRealtime() - started,
+                    width = fallbackWidth,
+                    height = fallbackHeight,
+                    blocks = fallback,
+                )
+            }
             return NativeOcrResult(
                 engine = "paddle_v5",
                 elapsedMs = SystemClock.elapsedRealtime() - started,

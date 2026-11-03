@@ -50,8 +50,53 @@ final RegExp _readingPunctuationPattern = RegExp(
 /// permitted.
 final RegExp _readingPattern = RegExp(r'^[^\[\]\r\n\x00-\x1F]+$');
 
+/// A Japanese word followed by a kana-only parenthetical reading, e.g.
+/// `自分（じぶん）`. This is the display form used before RUBY tags are applied;
+/// the result model is asked to emit YOMI instead, but local fallback still
+/// needs to recognize the parenthetical form.
+final RegExp _parentheticalReadingPattern = RegExp(
+  r'([぀-ヿ㐀-䶿一-鿿々〆ヶー]{1,16})'
+  r'([（(])'
+  r'([぀-ゟ゠-ヿー]{1,24})'
+  r'([）)])',
+);
+
+/// Existing display spans that must not be rewritten by the parenthetical
+/// converter. RUBY bases and YOMI contents may contain text that looks like a
+/// word-plus-reading pair.
+final RegExp _protectedDisplaySpanPattern = RegExp(
+  r'\[RUBY=[^\]]*\][\s\S]*?\[/RUBY\]|\[YOMI\][\s\S]*?\[/YOMI\]',
+  caseSensitive: false,
+);
+
 String cleanReading(String reading) =>
     reading.replaceAll(_readingPunctuationPattern, '').trim();
+
+/// Converts `word（reading）` annotations to RUBY without touching existing
+/// RUBY/YOMI spans. A reading identical to its base is dropped. This is a
+/// display-only fallback: the base characters are never changed.
+String parentheticalReadingsToRuby(String text) {
+  final buffer = StringBuffer();
+  var cursor = 0;
+  for (final match in _protectedDisplaySpanPattern.allMatches(text)) {
+    buffer.write(
+      _convertParentheticalReadings(text.substring(cursor, match.start)),
+    );
+    buffer.write(match.group(0));
+    cursor = match.end;
+  }
+  buffer.write(_convertParentheticalReadings(text.substring(cursor)));
+  return buffer.toString();
+}
+
+String _convertParentheticalReadings(String text) {
+  return text.replaceAllMapped(_parentheticalReadingPattern, (match) {
+    final base = match.group(1) ?? '';
+    final reading = cleanReading(match.group(3) ?? '');
+    if (base.isEmpty || reading.isEmpty || reading == base) return base;
+    return '[RUBY=$reading]$base[/RUBY]';
+  });
+}
 
 /// Removes a parenthetical reading at the end of [base] when it is exactly the
 /// reading already supplied by the RUBY tag. This prevents
@@ -81,8 +126,43 @@ int skipDuplicateRubyReading(String text, int offset, String reading) {
 String stripRichTextTags(String text) =>
     text.replaceAll(richTextTagPattern, '');
 
-/// Removes the YOMI tags but keeps the parenthetical reading for plain display.
-String stripYomiTags(String text) => text.replaceAll(yomiTagPattern, '');
+final RegExp _rubyThenYomiPattern = RegExp(
+  r'\[RUBY=([^\]]*)\]([\s\S]*?)\[/RUBY\]\[YOMI\]([\s\S]*?)\[/YOMI\]',
+  caseSensitive: false,
+);
+
+/// Removes a YOMI block immediately after a RUBY pair when both carry the
+/// same reading. The formatter is told to delete the YOMI itself, but a
+/// retained duplicate must never render/export as `RUBY + （reading）`.
+String _dropDuplicateYomiAfterRuby(String text) {
+  return text.replaceAllMapped(_rubyThenYomiPattern, (match) {
+    final reading = cleanReading(match.group(1) ?? '');
+    final yomi = cleanReading(match.group(3) ?? '');
+    if (reading.isNotEmpty && reading == yomi) {
+      return '[RUBY=${match.group(1)}]${match.group(2)}[/RUBY]';
+    }
+    return match.group(0) ?? '';
+  });
+}
+
+/// Converts YOMI annotations to plain parenthetical readings for fallback
+/// display. The result-generation model writes `word[YOMI]reading[/YOMI]`
+/// without parentheses; a plain renderer needs `word（reading）`. Older output
+/// that already contains parentheses is preserved. A YOMI block that
+/// duplicates the reading of an immediately preceding RUBY pair is dropped.
+String stripYomiTags(String text) {
+  return _dropDuplicateYomiAfterRuby(text)
+      .replaceAllMapped(yomiBlockPattern, (match) {
+        final content = match.group(1) ?? '';
+        final trimmed = content.trim();
+        if (trimmed.isEmpty) return '';
+        final alreadyParenthesized =
+            (trimmed.startsWith('（') && trimmed.endsWith('）')) ||
+            (trimmed.startsWith('(') && trimmed.endsWith(')'));
+        return alreadyParenthesized ? content : '（$trimmed）';
+      })
+      .replaceAll(yomiTagPattern, '');
+}
 
 /// Removes whole YOMI blocks (tags + reading). Used only by the diff guard so
 /// the formatter is allowed to replace a gloss with RUBY.
@@ -135,7 +215,8 @@ String cleanRubyReadings(String text) {
 /// RUBY becomes `base（reading）`, BOLD/UNDERLINE tags disappear, and YOMI
 /// wrappers are removed while their parenthetical reading is kept.
 String richTextToPlain(String text) {
-  var plain = text.replaceAllMapped(_rubyWithTrailingReadingPattern, (match) {
+  var plain = _dropDuplicateYomiAfterRuby(text);
+  plain = plain.replaceAllMapped(_rubyWithTrailingReadingPattern, (match) {
     final reading = cleanReading(match.group(1) ?? '');
     final base = match.group(2) ?? '';
     final trailing = match.group(3) ?? '';

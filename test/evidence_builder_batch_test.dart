@@ -31,9 +31,9 @@ class _ThreeTokenize implements TokenizePort {
   Token _token(String surface, int start, int end) {
     final features = List<String>.filled(Token.expectedFeatureCount, '*');
     features[0] = '名詞';
-    features[7] = surface;
-    features[8] = surface;
-    features[20] = surface;
+    for (final index in <int>[7, 8, 9, 10, 12, 13, 20]) {
+      features[index] = surface;
+    }
     return Token.fromFeatures(
       surface: surface,
       features: features,
@@ -44,6 +44,9 @@ class _ThreeTokenize implements TokenizePort {
 }
 
 class _BatchLookup implements LookupPort, BatchLookupPort {
+  _BatchLookup({this.entriesPerRequest = 1});
+
+  final int entriesPerRequest;
   int singleCalls = 0;
   final List<int> batchSizes = <int>[];
 
@@ -69,11 +72,12 @@ class _BatchLookup implements LookupPort, BatchLookupPort {
         DictionaryLookupGroup(
           dictionary: request.dictionaries.first,
           entries: <LookupEntry>[
-            LookupEntry(
-              matchedKey: request.query,
-              headword: request.query,
-              html: '<p>${request.query}の説明</p>',
-            ),
+            for (var index = 1; index <= entriesPerRequest; index++)
+              LookupEntry(
+                matchedKey: '${request.query}-$index',
+                headword: '${request.query}-$index',
+                html: '<p>${request.query}の説明$index</p>',
+              ),
           ],
         ),
       ],
@@ -120,5 +124,44 @@ void main() {
     expect(lookup.batchSizes.first, 3);
     expect(evidence.citations, isNotEmpty);
     expect(evidence.budget.citations, evidence.citations.length);
+  });
+
+  test('breadth pass gives each target a citation before extra senses', () async {
+    final lookup = _BatchLookup(entriesPerRequest: 3);
+    final builder = EvidenceBuilder(
+      tokenizePort: _ThreeTokenize(),
+      lookupPort: lookup,
+      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+      citations: CitationRegistry(),
+      limits: const AgentLimits(
+        maxEvidenceEntries: 2,
+        maxEntriesPerDictionary: 3,
+        maxCoverageFallback: 0,
+        enableRichTextPostProcess: false,
+      ),
+    );
+
+    final evidence = await builder.build(
+      sources: const <AgentSourceInput>[
+        AgentSourceInput(
+          id: 'src-1',
+          kind: AgentSourceKind.userText,
+          text: '何卒今日天気',
+        ),
+      ],
+      dictionaries: const <DictionaryInfo>[_dictionary],
+    );
+
+    // The old target-by-target 3-entry fetch filled both slots with 何卒.
+    // Breadth-first keeps one hit for the first two targets.
+    expect(evidence.citations, hasLength(2));
+    expect(
+      evidence.citations.map((citation) => citation.entryKey),
+      containsAll(<String>['何卒-1', '今日-1']),
+    );
+    expect(
+      evidence.citations.map((citation) => citation.entryKey),
+      isNot(contains('天気-1')),
+    );
   });
 }

@@ -36,8 +36,8 @@ class AgentLimits {
   final bool enableRichTextPostProcess;
 
   /// Maximum number of concurrent rich-text formatting requests. Formatting
-  /// sections are independent, so a small bounded pool removes the serial
-  /// N+1 wait without flooding the provider.
+  /// sections are independent and run after `done`; a small bounded pool keeps
+  /// them off the core result path without flooding the provider.
   final int richTextConcurrency;
 
   /// Maximum number of dictionary queries sent to the MDict worker in one IPC

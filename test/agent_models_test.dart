@@ -6,6 +6,7 @@ import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
 import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
 import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
 import 'package:rikai_mobile/core/models/dictionary_sample.dart';
+import 'package:rikai_mobile/services/agent/agent_run.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
 
 void main() {
@@ -102,6 +103,40 @@ void main() {
       '何卒',
       'なにとぞ',
     ]);
+  });
+
+  test('word notes use bare YOMI and skip identical readings', () {
+    const segment = AgentSegment(
+      id: 'seg-1',
+      quoteId: 'q1',
+      interpretation: '正式请求',
+      epistemic: AgentEpistemic.dictionaryFact,
+      wordNotes: <AgentWordNote>[
+        AgentWordNote(
+          tokenId: 't1',
+          surface: '何卒',
+          reading: 'なにとぞ',
+          sense: '请务必',
+        ),
+        AgentWordNote(
+          tokenId: 't2',
+          surface: 'ます',
+          reading: 'ます',
+          sense: '助动词',
+        ),
+        AgentWordNote(
+          tokenId: 't3',
+          surface: '今日',
+          reading: '',
+          sense: '今天',
+        ),
+      ],
+    );
+
+    expect(
+      agentSegmentNotesSource(segment),
+      '何卒[YOMI]なにとぞ[/YOMI]：请务必\nます：助动词\n今日：今天',
+    );
   });
 
   test('analysis round-trips structured claims and epistemic classes', () {

@@ -6,6 +6,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
 import 'core/theme/app_tokens.dart';
+import 'state/agent_profile_inbox.dart';
+import 'state/agent_providers.dart';
+import 'state/agent_history_recorder.dart';
 import 'state/providers.dart';
 
 /// Shows the branded splash while preferences, installed dictionaries and the
@@ -41,7 +44,12 @@ class _BootstrapAppState extends State<BootstrapApp> {
       if (!mounted) return;
 
       final container = ProviderContainer(
-        overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          agentProfileInboxPersistenceProvider.overrideWith(
+            (ref) => ref.watch(agentStoreProvider),
+          ),
+        ],
       );
       _container = container;
       if (!mounted) {
@@ -50,6 +58,8 @@ class _BootstrapAppState extends State<BootstrapApp> {
         return;
       }
 
+      // Start the app-scoped history recorder before any Agent run can begin.
+      container.read(agentHistoryRecorderProvider);
       await _loadDictionaries(container);
       await _loadTokenizer(container);
 

@@ -1255,9 +1255,10 @@ reasoning-effort/thinking-off 参数；要真正缩短思考时间，应把复�
 **正确做法**：后处理只作用于详细解析的“原文”、逐句理解和词典事实解释（词义/语法，
 不含 citation snippet），AI 气泡摘要保持纯文本，避免中文译文被误标注。后处理只允许在原文之间插入 `[RUBY=reading]base[/RUBY]`、
 `[BOLD]...[/BOLD]`、`[UNDERLINE]...[/UNDERLINE]`；注音由 AI 根据文本自身判断，
-不读取 UniDic 读音表。结果生成模型会把 `[MEANING]` 中表面形后的读音标注成
-`base[YOMI]（reading）[/YOMI]`；后处理可以把整个 YOMI 块（标签和括号内容）替换
-成等价 RUBY，但不得新增、改写、移动或嵌套 YOMI。代码必须先用
+不读取 UniDic 读音表。结果生成模型会把 `[MEANING]` 和词条解释开头的读音标注成
+`word[YOMI]reading[/YOMI]`（读音不带括号；单词=读音时只写单词；禁止
+`word（reading）` 或 `word[YOMI]（reading）[/YOMI]`）；后处理可以把整个 YOMI 块
+（标签和读出内容）替换成等价 RUBY，但不得新增、改写、移动或嵌套 YOMI。代码必须先用
 `stripRichTextTags` 剥离显示标签，按 YOMI 规则允许整块删除、要求保留块内容/位置
 不变，再与原始字符串**逐字符严格比较**（不 trim、不做 Unicode 规范化）；只有完全
 相等且标签成对、正确嵌套、RUBY 读音为安全发音标注（不限定书写系统）时才采用。
@@ -1268,13 +1269,25 @@ RUBY 可以位于 BOLD/UNDERLINE 内，BOLD/UNDERLINE 也可以相互包裹；BO
 或等于 base 时移除 RUBY。若后处理把已有的 `surface（reading）` 注记包进 RUBY，
 显示/导出必须折叠成一份读音：base 末尾与 RUBY 读音相同的括号会被隐藏，`[/RUBY]`
 后紧邻的相同括号会被跳过；`richTextToPlain` 仍输出 `base（reading）`。RUBY 位于
-BOLD 内时读音随 base 加粗；读音永远不加下划线（即使位于 UNDERLINE 内）；RUBY 以
-base 的 alphabetic baseline 对齐，不能把小字当作基线而让 base 下沉。保留的 YOMI
-只剥离标签，显示/导出为 `base（reading）`。任何差异、未闭合/错误嵌套标签、空输出或 provider
+BOLD 内时读音随 base 加粗；读音永远不加下划线（即使位于 UNDERLINE 内）；RUBY
+base 使用与周围正文相同的行高/metrics，以 alphabetic baseline 对齐，不能把小字当作
+基线而让 base 下沉。UNDERLINE 不要用 `TextStyle.decoration`（字体/字形 metrics
+会让 `；` 与汉字的下划线高度不同），应使用 baseline 相对偏移的自绘线。保留的
+YOMI 只剥离标签，显示/导出为 `base（reading）`。任何差异、未闭合/错误嵌套标签、空输出或 provider
 失败都直接丢弃该块格式化结果，渲染纯文本；不弹用户错误、不重试、不把失败输出交给
 前端。Prompt 不得使用“uncertain 就返回原文”的模糊兜底；只允许不确定的具体词保持
 原样。相关实现：`rich_text_post_processor.dart`、`rich_text_tags.dart`；契约
 §5.3。内部 Prompt 指令统一英文，闭合标签统一用正斜杠 `[/TAG]`。
+
+**2026-11-03 修正**：不再在调用后处理模型前把 YOMI 预转成 RUBY。模型输入保留
+结果模型原始文本和 `word[YOMI]reading[/YOMI]`，prompt 也不再包含“保留已有
+RUBY”“不要原样返回”“把 YOMI 转成 RUBY”三组规则，只保留标签格式、只插标签
+不改字、合法嵌套。本地 YOMI→RUBY 仅在 provider/校验失败或模型保留 YOMI 时兜底。
+预注入会让轻量模型把格式化任务误解为改写任务，增加原样返回/非法输出。改动前的
+回归样本读音/依据覆盖 9/9（100%），见 `docs/agent_output/` 与 `T-135` 相关记录。
+本地兜底同时识别 `word（reading）`（假名读音）并转成等价 RUBY；比较时把
+`word（reading）` 与 `[RUBY=reading]word[/RUBY]` 归一化为同一 base，非假名括号
+（解释性文字）不转换，base 字符仍须完全一致。
 
 ### T-136 SSE 已收到 finish=stop，UI 仍等数秒才显示结果
 

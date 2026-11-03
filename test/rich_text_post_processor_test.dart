@@ -68,6 +68,99 @@ void main() {
     },
   );
 
+  test('converts bare YOMI to a parenthetical fallback', () {
+    expect(stripYomiTags('何卒[YOMI]なにとぞ[/YOMI]'), '何卒（なにとぞ）');
+    expect(stripYomiTags('何卒[YOMI]（なにとぞ）[/YOMI]'), '何卒（なにとぞ）');
+    expect(stripYomiTags('ます[YOMI]ます[/YOMI]'), 'ます（ます）');
+    expect(
+      richTextToPlain('[RUBY=なにとぞ]何卒[/RUBY][YOMI]なにとぞ[/YOMI]'),
+      '何卒（なにとぞ）',
+    );
+  });
+
+  test('sends the original YOMI text to the formatter', () async {
+    const source = '今[YOMI]いま[/YOMI]は';
+    final provider = FakeProvider(responseText: source);
+    final result = await RichTextPostProcessor(
+      llm: provider,
+      model: 'small',
+    ).process(source);
+
+    expect(result.accepted, isTrue);
+    final promptText = provider.requests.single.messages.last.text;
+    expect(promptText, source);
+    expect(promptText, isNot(contains('[RUBY=')));
+  });
+
+  test('falls back to local YOMI-to-RUBY when the formatter fails', () async {
+    final provider = FakeProvider(responseText: 'not a valid tagged response');
+    final result = await RichTextPostProcessor(
+      llm: provider,
+      model: 'small',
+    ).process('今[YOMI]いま[/YOMI]は');
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, '[RUBY=いま]今[/RUBY]は');
+    expect(result.rejectionReason, 'local_yomi_fallback');
+  });
+
+  test('converts a parenthetical reading to RUBY locally', () async {
+    const source = '今（いま）は';
+    final result = await RichTextPostProcessor(
+      llm: FakeProvider(responseText: source),
+      model: 'small',
+    ).process(source);
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, '[RUBY=いま]今[/RUBY]は');
+  });
+
+  test('does not convert a non-kana parenthetical', () async {
+    const source = '今（自問）は';
+    final result = await RichTextPostProcessor(
+      llm: FakeProvider(responseText: source),
+      model: 'small',
+    ).process(source);
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, source);
+  });
+
+  test('falls back to parenthetical RUBY when the provider fails', () async {
+    final result = await RichTextPostProcessor(
+      llm: FakeProvider(responseText: 'not a valid tagged response'),
+      model: 'small',
+    ).process('今（いま）は');
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, '[RUBY=いま]今[/RUBY]は');
+  });
+
+  test('keeps model BOLD while converting retained YOMI locally', () async {
+    const source = '今[YOMI]いま[/YOMI]は大切';
+    final provider = FakeProvider(
+      responseText: '今[YOMI]いま[/YOMI]は[BOLD]大切[/BOLD]',
+    );
+    final result = await RichTextPostProcessor(
+      llm: provider,
+      model: 'small',
+    ).process(source);
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, '[RUBY=いま]今[/RUBY]は[BOLD]大切[/BOLD]');
+  });
+
+  test('converts retained YOMI to RUBY instead of parentheses', () async {
+    final provider = FakeProvider(responseText: '今[YOMI]いま[/YOMI]は');
+    final result = await RichTextPostProcessor(
+      llm: provider,
+      model: 'small',
+    ).process('今[YOMI]いま[/YOMI]は');
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, '[RUBY=いま]今[/RUBY]は');
+  });
+
   test('removes RUBY pairs whose reading equals their base', () {
     expect(stripRedundantRubyTags('[RUBY=ます]ます[/RUBY]'), 'ます');
     expect(
@@ -189,12 +282,21 @@ void main() {
       expect(prompt, isNot(contains('If you are uncertain')));
       expect(
         normalizedPrompt,
-        contains('do not return the whole text unchanged'),
+        isNot(contains('do not return the whole text unchanged')),
+      );
+      expect(normalizedPrompt, isNot(contains('entire input unchanged')));
+      expect(
+        normalizedPrompt,
+        isNot(contains('Keep each pair exactly as supplied')),
+      );
+      expect(
+        normalizedPrompt,
+        isNot(contains('Convert those YOMI blocks to RUBY')),
       );
     },
   );
 
-  test('keeps the parenthetical reading when YOMI is retained', () async {
+  test('converts a retained YOMI block to RUBY', () async {
     const source = '漢字[YOMI]（かんじ）[/YOMI]';
     final result = await RichTextPostProcessor(
       llm: FakeProvider(responseText: source),
@@ -202,18 +304,21 @@ void main() {
     ).process(source);
 
     expect(result.accepted, isTrue);
-    expect(result.taggedText, '漢字（かんじ）');
+    expect(result.taggedText, '[RUBY=かんじ]漢字[/RUBY]');
   });
 
-  test('rejects a rewritten YOMI block', () async {
+  test('falls back to the source when a YOMI block is rewritten', () async {
     const source = 'ます[YOMI]（ます）[/YOMI]';
     final result = await RichTextPostProcessor(
       llm: FakeProvider(responseText: 'ます[YOMI]（マス）[/YOMI]'),
       model: 'small',
     ).process(source);
 
-    expect(result.accepted, isFalse);
-    expect(result.rejectionReason, 'yomi_changed');
+    // The malformed model output is discarded; the source's own YOMI is
+    // converted locally. Here reading == base, so the YOMI disappears.
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, 'ます');
+    expect(result.rejectionReason, 'local_yomi_fallback');
   });
 
   test('rejects a moved YOMI block', () async {
@@ -227,14 +332,15 @@ void main() {
     expect(result.rejectionReason, 'yomi_changed');
   });
 
-  test('rejects a malformed YOMI block', () async {
+  test('falls back to the source when a YOMI block is malformed', () async {
     final result = await RichTextPostProcessor(
       llm: FakeProvider(responseText: 'ます[YOMI]（ます）'),
       model: 'small',
     ).process('ます[YOMI]（ます）[/YOMI]');
 
-    expect(result.accepted, isFalse);
-    expect(result.rejectionReason, 'malformed_yomi');
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, 'ます');
+    expect(result.rejectionReason, 'local_yomi_fallback');
   });
 
   test('accepts RUBY nested inside BOLD and UNDERLINE', () async {

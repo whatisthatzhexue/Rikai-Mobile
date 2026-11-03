@@ -42,13 +42,20 @@ Rules:
 - Do not write confidence values, percentages, "置信度", context_inference,
   dictionary_fact or any internal marker in the prose.
 - Return at least one TRANSLATION and one SEGMENT.
+- When multiple sources are present, analyze every source and use quote ids
+  from each source. Do not stop after the first image or source.
 
 READING ANNOTATIONS:
-- In MEANING prose only, when a Japanese surface form is immediately followed
-  by its reading in parentheses, wrap only the parenthetical reading in
-  [YOMI]...[/YOMI]:
-  base[YOMI]（reading）[/YOMI]
-  Replace the placeholders with the actual surface form and reading.
+- In MEANING prose only, write a Japanese word's reading immediately after
+  the word as:
+  word[YOMI]reading[/YOMI]
+  Example: 今[YOMI]いま[/YOMI]は…
+  The reading is the raw kana form with NO parentheses. If the reading equals
+  the word (for example a kana-only word), write only the word and no YOMI
+  block.
+- Never write "word（reading）" or "word[YOMI]（reading）[/YOMI]" in MEANING.
+  The post-processor converts word[YOMI]reading[/YOMI] into RUBY; a separate
+  parenthetical reading would be duplicated.
 - YOMI is only for a reading annotation. Never use it for ordinary
   parenthetical explanations, translations, citations, quoted source text,
   WORD reading fields, GRAMMAR, OPTION, UNRESOLVED or SUPPLEMENT.
@@ -754,12 +761,9 @@ LlmRequest buildRichTextPostProcessRequest({
           LlmTextPart('''
 Your task is to insert display-formatting tags into the provided text. It is
 absolutely forbidden to modify, delete or add any character of the original
-text (including punctuation, spaces and line breaks), except that you may
-delete a complete [YOMI]...[/YOMI] block only when you replace its reading
-annotation with an equivalent [RUBY] span. You may only insert [RUBY=xxx],
-[BOLD] and [UNDERLINE] tags between existing characters of the original text.
-The output must contain the complete original text except for whole YOMI
-blocks you are allowed to delete.
+text (including punctuation, spaces and line breaks). You may only insert
+[RUBY=xxx], [BOLD] and [UNDERLINE] tags between existing characters of the
+original text. The output must contain the complete original text.
 
 TAG FORMAT:
 [RUBY=reading]base[/RUBY]
@@ -779,14 +783,10 @@ Rules:
   contiguous text copied from the original, whatever its script.
 - Never output a RUBY whose reading is identical to its base, for example
   [RUBY=reading]reading[/RUBY]. If they are identical, do not add RUBY.
-- The input may contain [YOMI]...[/YOMI] pronunciation annotations, for
-  example base[YOMI]（reading）[/YOMI]. You may delete the whole block (tags and
-  enclosed content) only when converting that reading to RUBY. Otherwise keep
-  the block exactly as supplied. Never add, rewrite, move or nest a YOMI block.
+- Leave any existing [YOMI]...[/YOMI] block exactly as supplied. Do not add,
+  delete, move or rewrite one.
 - BOLD/UNDERLINE only wrap short existing text and must not cross a line break.
 - Do not output Markdown, HTML, code fences, explanations, prefixes or suffixes.
-- If a specific word's reading is unclear, leave only that word unchanged; do
-  not return the whole text unchanged merely because part is uncertain.
 '''),
         ],
       ),
@@ -818,12 +818,9 @@ You add display tags to a Japanese-learning result. The text may contain
 Japanese words and Chinese explanations.
 
 It is absolutely forbidden to modify, delete or add any character of the
-original text (including punctuation, spaces and line breaks), except that you
-may delete a complete [YOMI]...[/YOMI] block only when you replace its reading
-annotation with an equivalent [RUBY] span. You may only insert [RUBY=reading],
-[BOLD] and [UNDERLINE] tags between existing characters. The output must
-contain the complete original text except for whole YOMI blocks you are
-allowed to delete.
+original text (including punctuation, spaces and line breaks). You may only
+insert [RUBY=reading], [BOLD] and [UNDERLINE] tags between existing characters.
+The output must contain the complete original text.
 
 TAG FORMAT:
 [RUBY=reading]base[/RUBY]
@@ -839,16 +836,15 @@ Rules:
 - Never output a RUBY whose reading is identical to its base.
 - Use BOLD for a short entry title/headword/term, and UNDERLINE for a short
   important explanation or conclusion. Do not bold or underline whole lines.
-- If a specific word's reading is unclear, leave only that word unchanged; do
-  not return the whole text unchanged merely because part is uncertain.
 - Tags must be paired and properly nested. RUBY may be placed inside BOLD or
   UNDERLINE, and BOLD/UNDERLINE may wrap each other. Do not put BOLD/UNDERLINE
-  inside a RUBY base, and do not nest a tag inside the same tag. Never add,
-  rewrite, move or nest a YOMI block; a retained YOMI block must stay exactly
-  where it is.
+  inside a RUBY base, and do not nest a tag inside the same tag.
+- Leave any existing [YOMI]...[/YOMI] block exactly as supplied. Do not add,
+  delete, move or rewrite one.
 - If the source already contains a parenthetical reading
   (surface（reading）), wrap only the base word in RUBY without repeating the
-  reading, for example [RUBY=reading]surface[/RUBY]（reading）.
+  reading, for example [RUBY=reading]surface[/RUBY]（reading）. The renderer
+  hides the duplicate parenthetical when its content matches the RUBY reading.
 - Do not output Markdown, HTML, code fences, explanations, prefixes or suffixes.
 '''),
         ],

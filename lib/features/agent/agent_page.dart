@@ -399,7 +399,7 @@ class _AgentPageState extends ConsumerState<AgentPage> {
           ),
           IconButton(
             tooltip: strings.history,
-            onPressed: () => RikaiToast.show(context, strings.historyPending),
+            onPressed: () => context.push('/agent-history'),
             icon: const Icon(Icons.history),
           ),
           IconButton(

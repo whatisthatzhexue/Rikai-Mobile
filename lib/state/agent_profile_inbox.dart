@@ -4,7 +4,13 @@ import 'dart:developer' as developer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/agent/familiarization/dictionary_familiarization_service.dart';
+import '../services/storage/agent_profile_inbox_store.dart';
 import 'agent_providers.dart';
+
+/// Production bootstrap overrides this with the SQLite-backed store. Tests
+/// leave it null so the in-memory queue stays self-contained.
+final agentProfileInboxPersistenceProvider =
+    Provider<AgentProfileInboxPersistence?>((ref) => null);
 
 /// One profile-save event. Hosts show a single toast per [id], so a save
 /// produced while several Agent surfaces are mounted is never announced twice.
@@ -57,6 +63,8 @@ final agentProfileInboxProvider =
 class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
   final Map<String, Completer<ProfileConfirmation>> _decisions =
       <String, Completer<ProfileConfirmation>>{};
+  AgentProfileInboxPersistence? _persistence;
+  bool _disposed = false;
   bool _presenting = false;
   int _savedNoticeSerial = 0;
   int _claimedSavedNoticeId = 0;
@@ -92,7 +100,14 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
 
   @override
   AgentProfileInboxState build() {
+    _disposed = false;
+    _persistence = ref.watch(agentProfileInboxPersistenceProvider);
+    final persistence = _persistence;
+    if (persistence != null) {
+      unawaited(_restore(persistence));
+    }
     ref.onDispose(() {
+      _disposed = true;
       for (final completer in _decisions.values) {
         if (!completer.isCompleted) {
           completer.complete(
@@ -108,6 +123,44 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
     return const AgentProfileInboxState();
   }
 
+  Future<void> _restore(AgentProfileInboxPersistence persistence) async {
+    try {
+      final restored = await persistence.loadPendingProfiles();
+      if (_disposed || restored.isEmpty) return;
+      final known = <String>{for (final item in state.pending) item.id};
+      final merged = <AgentProfileProposal>[
+        ...state.pending,
+        for (final proposal in restored)
+          if (known.add(proposal.id)) proposal,
+      ];
+      state = state.copyWith(pending: merged);
+    } catch (error, stack) {
+      developer.log(
+        'Failed to restore pending dictionary profiles',
+        name: 'AgentProfileInbox',
+        error: error,
+        stackTrace: stack,
+      );
+    }
+  }
+
+  Future<void> _persistPending(List<AgentProfileProposal> proposals) async {
+    final persistence = _persistence;
+    if (persistence == null) return;
+    for (final proposal in proposals) {
+      try {
+        await persistence.savePendingProfile(proposal);
+      } catch (error, stack) {
+        developer.log(
+          'Failed to persist pending dictionary profile',
+          name: 'AgentProfileInbox',
+          error: error,
+          stackTrace: stack,
+        );
+      }
+    }
+  }
+
   void enqueue(List<AgentProfileProposal> proposals) {
     if (proposals.isEmpty) return;
     final known = <String>{for (final item in state.pending) item.id};
@@ -119,6 +172,7 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
     state = state.copyWith(
       pending: <AgentProfileProposal>[...state.pending, ...added],
     );
+    unawaited(_persistPending(added));
   }
 
   Future<List<ProfileConfirmation>> waitForAll(
@@ -168,6 +222,21 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
       }
       decisions.add(decision);
     }
+    final persistence = _persistence;
+    if (persistence != null) {
+      for (final proposal in proposals) {
+        try {
+          await persistence.deletePendingProfile(proposal.id);
+        } catch (error, stack) {
+          developer.log(
+            'Failed to clear auto-accepted profile',
+            name: 'AgentProfileInbox',
+            error: error,
+            stackTrace: stack,
+          );
+        }
+      }
+    }
     ref.invalidate(agentProfilesProvider);
     if (savedTitles.isNotEmpty) {
       state = state.copyWith(savedNotice: _nextSavedNotice(savedTitles));
@@ -215,6 +284,19 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
           .toList(growable: false),
       savedNotice: savedNotice,
     );
+    final persistence = _persistence;
+    if (persistence != null) {
+      try {
+        await persistence.deletePendingProfile(proposalId);
+      } catch (error, stack) {
+        developer.log(
+          'Failed to clear resolved profile',
+          name: 'AgentProfileInbox',
+          error: error,
+          stackTrace: stack,
+        );
+      }
+    }
     if (completer != null && !completer.isCompleted) {
       completer.complete(decision);
     }
@@ -241,6 +323,26 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
         );
       }
     }
+    final persistence = _persistence;
+    if (persistence != null) {
+      unawaited(_deletePendingForRun(persistence, runId));
+    }
+  }
+
+  Future<void> _deletePendingForRun(
+    AgentProfileInboxPersistence persistence,
+    String runId,
+  ) async {
+    try {
+      await persistence.deletePendingProfilesForRun(runId);
+    } catch (error, stack) {
+      developer.log(
+        'Failed to clear cancelled profile queue',
+        name: 'AgentProfileInbox',
+        error: error,
+        stackTrace: stack,
+      );
+    }
   }
 
   void clearAll() {
@@ -256,6 +358,28 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
       }
     }
     _decisions.clear();
+    final persistence = _persistence;
+    if (persistence != null) {
+      for (final proposal in state.pending) {
+        unawaited(_deletePending(persistence, proposal.id));
+      }
+    }
     state = const AgentProfileInboxState();
+  }
+
+  Future<void> _deletePending(
+    AgentProfileInboxPersistence persistence,
+    String id,
+  ) async {
+    try {
+      await persistence.deletePendingProfile(id);
+    } catch (error, stack) {
+      developer.log(
+        'Failed to clear pending profile',
+        name: 'AgentProfileInbox',
+        error: error,
+        stackTrace: stack,
+      );
+    }
   }
 }

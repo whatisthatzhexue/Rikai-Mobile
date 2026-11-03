@@ -1,6 +1,7 @@
 import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
 import '../../core/models/agent/agent_limits.dart';
+import '../../core/models/agent/agent_pitch.dart';
 import '../../core/models/agent/agent_tool.dart';
 import '../../core/models/dict_info.dart';
 import '../../core/models/lookup_match_mode.dart';
@@ -9,6 +10,7 @@ import '../../core/models/lookup_request.dart';
 import '../../core/models/token.dart';
 import '../../core/utils/html_text.dart';
 import '../../core/utils/text_normalizer.dart';
+import '../mecab/unidic_accent_parser.dart';
 import 'citation_registry.dart';
 import 'grammar_patterns.dart';
 import 'ports/agent_capability_exception.dart';
@@ -52,6 +54,7 @@ class EvidenceBuilder {
     citations.reset();
     final sourceEvidence = <AgentSourceEvidence>[];
     final patternEvidence = <AgentGrammarPatternEvidence>[];
+    final pitchAccents = <String, AgentPitchAccent>{};
     final tokenTargets = <String, _TokenTarget>{};
     final rawTargets = <_TokenTarget>[];
     final rawKeys = <String>{};
@@ -88,6 +91,11 @@ class EvidenceBuilder {
       for (final token in tokens) {
         final id = 't${++tokenCounter}';
         tokenIds.add(id);
+        final pitch = parseUnidicAccent(
+          accentType: token.accentTypeRaw,
+          reading: token.reading,
+        );
+        if (pitch != null) pitchAccents[id] = pitch;
         sourceTokens.add(
           AgentTokenEvidence(
             id: id,
@@ -203,24 +211,82 @@ class EvidenceBuilder {
       selectedTargets[index].toolCallId = 'evidence-${index + 1}';
     }
 
-    // F6: run one mode across every target before moving to the next mode.
-    // A mode that adds nothing does not stop later modes: a prefix miss can
-    // still have suffix/incremental hits. Stop only at the global cap.
+    // F6 breadth pass: give every target at most one citation before granting
+    // extra senses/dictionaries. The old target-by-target 3-entry fetch let
+    // early words consume the global citation budget, so later targets (and
+    // the model) received too little useful evidence.
     var capReached = false;
-    final batchSize = limits.lookupBatchSize <= 0
-        ? 1
-        : limits.lookupBatchSize;
-    final batchTargets = <_LookupTarget>[];
-    final batchRequests = <LookupRequest>[];
+    final batchSize = limits.lookupBatchSize <= 0 ? 1 : limits.lookupBatchSize;
+    final storedResults = <_StoredLookup>[];
 
-    bool applyResult(_LookupTarget target, LookupResult result) {
+    void recordGroupErrors(LookupResult result) {
       for (final group in result.groups) {
         if (group.error.isNotEmpty) {
           recordLookupFailure(group.dictionary, group.error);
         }
+      }
+    }
+
+    bool applyBreadth(_LookupTarget target, LookupResult result) {
+      recordGroupErrors(result);
+      if (target.citationIds.isNotEmpty) return false;
+      for (final group in result.groups) {
         var remaining =
             maxEntriesPerDictionary -
             (target.perDictionary[group.dictionary.id] ?? 0);
+        if (remaining <= 0) continue;
+        for (final entry in group.entries) {
+          final entryKey = entry.headword.isEmpty
+              ? entry.matchedKey
+              : entry.headword;
+          if (entryKey.isEmpty) continue;
+          final existing = citations.find(group.dictionary.id, entryKey);
+          if (existing != null) {
+            target.citationIds.add(existing.id);
+            target.perDictionary[group.dictionary.id] =
+                (target.perDictionary[group.dictionary.id] ?? 0) + 1;
+            return false;
+          }
+          if (citations.count >= maxCitations) {
+            truncated = true;
+            return true;
+          }
+          final citation = citations.issue(
+            toolCallId: target.toolCallId,
+            dictionary: group.dictionary,
+            entryKey: entryKey,
+            matchedKey: entry.matchedKey,
+            headword: entry.headword.isEmpty ? entryKey : entry.headword,
+            snippet: htmlToPlainText(
+              entry.html,
+              maxLength: limits.maxSnippetChars,
+            ),
+          );
+          target.citationIds.add(citation.id);
+          target.perDictionary[group.dictionary.id] =
+              (target.perDictionary[group.dictionary.id] ?? 0) + 1;
+          onProgress?.call(citations.count);
+          if (citations.count >= maxCitations) {
+            truncated = true;
+            return true;
+          }
+          // One citation per target is enough for the breadth pass.
+          return false;
+        }
+      }
+      return false;
+    }
+
+    bool applyDepth(
+      _LookupTarget target,
+      LookupResult result, {
+      required bool firstPerDictionaryOnly,
+    }) {
+      recordGroupErrors(result);
+      for (final group in result.groups) {
+        final current = target.perDictionary[group.dictionary.id] ?? 0;
+        if (firstPerDictionaryOnly && current > 0) continue;
+        var remaining = maxEntriesPerDictionary - current;
         if (remaining <= 0) continue;
         for (final entry in group.entries) {
           if (remaining <= 0) break;
@@ -235,6 +301,7 @@ class EvidenceBuilder {
                   (target.perDictionary[group.dictionary.id] ?? 0) + 1;
               remaining--;
             }
+            if (firstPerDictionaryOnly) break;
             continue;
           }
           if (citations.count >= maxCitations) {
@@ -261,29 +328,52 @@ class EvidenceBuilder {
             truncated = true;
             return true;
           }
+          if (firstPerDictionaryOnly) break;
         }
       }
       return false;
     }
 
-    Future<void> flushBatch() async {
-      if (batchRequests.isEmpty) return;
+    Future<void> flushBreadthBatch(
+      List<_LookupTarget> targets,
+      List<LookupRequest> requests,
+    ) async {
+      if (requests.isEmpty) return;
       final results = await _lookupBatch(
-        List<LookupRequest>.of(batchRequests),
+        List<LookupRequest>.of(requests),
         onDictionaryError: recordLookupFailure,
       );
       for (var index = 0; index < results.length; index++) {
-        if (applyResult(batchTargets[index], results[index])) {
+        final result = results[index];
+        if (result.hasHits) {
+          storedResults.add(
+            _StoredLookup(target: targets[index], result: result),
+          );
+        }
+        if (applyBreadth(targets[index], result)) {
           capReached = true;
           break;
         }
       }
-      batchTargets.clear();
-      batchRequests.clear();
     }
 
     for (final mode in _lookupModes) {
       if (capReached) break;
+      if (isCancelled?.call() == true) {
+        throw const AgentCapabilityException(
+          AgentToolErrorCode.toolCancelled,
+          '已取消',
+        );
+      }
+      if (citations.count >= maxCitations) {
+        truncated = true;
+        break;
+      }
+      // Query every target in every mode so the depth pass can reuse later
+      // modes (prefix/suffix/incremental and other dictionaries). The breadth
+      // pass itself still issues at most one citation per target.
+      final batchTargets = <_LookupTarget>[];
+      final batchRequests = <LookupRequest>[];
       for (final target in selectedTargets) {
         if (isCancelled?.call() == true) {
           throw const AgentCapabilityException(
@@ -302,12 +392,58 @@ class EvidenceBuilder {
         batchTargets.add(target);
         batchRequests.add(_requestFor(target.candidates, eligible, mode));
         if (batchRequests.length >= batchSize) {
-          await flushBatch();
+          await flushBreadthBatch(batchTargets, batchRequests);
+          batchTargets.clear();
+          batchRequests.clear();
           if (capReached) break;
         }
       }
-      if (!capReached) await flushBatch();
+      if (!capReached && batchRequests.isNotEmpty) {
+        await flushBreadthBatch(batchTargets, batchRequests);
+      }
       if (capReached) break;
+    }
+
+    // Depth pass, the first round: add one entry from each dictionary that is
+    // not represented yet. This keeps multi-dictionary evidence diverse before
+    // granting a second/third sense from the same dictionary.
+    if (!capReached && citations.count < maxCitations) {
+      for (final stored in storedResults) {
+        if (isCancelled?.call() == true) {
+          throw const AgentCapabilityException(
+            AgentToolErrorCode.toolCancelled,
+            '已取消',
+          );
+        }
+        if (applyDepth(
+          stored.target,
+          stored.result,
+          firstPerDictionaryOnly: true,
+        )) {
+          capReached = true;
+          break;
+        }
+      }
+    }
+    // Depth pass, the second round: use the remaining budget for extra senses
+    // up to the per-target/per-dictionary cap.
+    if (!capReached && citations.count < maxCitations) {
+      for (final stored in storedResults) {
+        if (isCancelled?.call() == true) {
+          throw const AgentCapabilityException(
+            AgentToolErrorCode.toolCancelled,
+            '已取消',
+          );
+        }
+        if (applyDepth(
+          stored.target,
+          stored.result,
+          firstPerDictionaryOnly: false,
+        )) {
+          capReached = true;
+          break;
+        }
+      }
     }
 
     final tokensWithCitations = <String, List<String>>{};
@@ -368,6 +504,7 @@ class EvidenceBuilder {
       truncated: truncated,
       structureUnavailable: structureUnavailable,
       dictionaryIssues: dictionaryIssues.values.toList(growable: false),
+      pitchAccents: Map<String, AgentPitchAccent>.unmodifiable(pitchAccents),
       budget: AgentEvidenceBudget(
         sourceChars: sourceChars,
         uniqueTargets: selectedTargets.length,
@@ -409,11 +546,13 @@ class EvidenceBuilder {
     final queryIds = <String, Set<String>>{
       for (final query in order) query: <String>{},
     };
+    // Coverage supplements are breadth work: one entry per dictionary per
+    // missing query is enough to fill a gap. Additional senses are left to
+    // the model's next MISSING query instead of consuming several slots now.
+    const perDictionaryLimit = 1;
     var newCount = 0;
     var capReached = false;
-    final batchSize = limits.lookupBatchSize <= 0
-        ? 1
-        : limits.lookupBatchSize;
+    final batchSize = limits.lookupBatchSize <= 0 ? 1 : limits.lookupBatchSize;
     final batchQueries = <String>[];
     final batchQueryIndexes = <int>[];
     final batchRequests = <LookupRequest>[];
@@ -424,8 +563,7 @@ class EvidenceBuilder {
         if (group.error.isNotEmpty) {
           onDictionaryError?.call(group.dictionary, group.error);
         }
-        var remaining =
-            maxEntriesPerDictionary - (counts[group.dictionary.id] ?? 0);
+        var remaining = perDictionaryLimit - (counts[group.dictionary.id] ?? 0);
         if (remaining <= 0) continue;
         for (final entry in group.entries) {
           if (remaining <= 0) break;
@@ -483,7 +621,11 @@ class EvidenceBuilder {
         onDictionaryError: onDictionaryError,
       );
       for (var index = 0; index < results.length; index++) {
-        applyLookup(batchQueries[index], batchQueryIndexes[index], results[index]);
+        applyLookup(
+          batchQueries[index],
+          batchQueryIndexes[index],
+          results[index],
+        );
         if (capReached) break;
       }
       batchQueries.clear();
@@ -504,13 +646,19 @@ class EvidenceBuilder {
         final counts = perQuery[query]!;
         final eligible = <DictionaryInfo>[
           for (final dictionary in dictionaries)
-            if ((counts[dictionary.id] ?? 0) < maxEntriesPerDictionary)
-              dictionary,
+            if ((counts[dictionary.id] ?? 0) < perDictionaryLimit) dictionary,
         ];
         if (eligible.isEmpty) continue;
         batchQueries.add(query);
         batchQueryIndexes.add(queryIndex);
-        batchRequests.add(_requestFor(<String>[query], eligible, mode));
+        batchRequests.add(
+          _requestFor(
+            <String>[query],
+            eligible,
+            mode,
+            maxEntriesPerDictionary: perDictionaryLimit,
+          ),
+        );
         if (batchRequests.length >= batchSize) {
           await flushBatch();
           if (capReached) break;
@@ -525,14 +673,16 @@ class EvidenceBuilder {
   LookupRequest _requestFor(
     List<String> candidates,
     List<DictionaryInfo> dictionaries,
-    LookupMatchMode mode,
-  ) {
+    LookupMatchMode mode, {
+    int? maxEntriesPerDictionary,
+  }) {
     return LookupRequest(
       query: candidates.first,
       rawCandidates: candidates,
       dictionaries: dictionaries,
       matchMode: mode,
-      maxEntriesPerDictionary: maxEntriesPerDictionary,
+      maxEntriesPerDictionary:
+          maxEntriesPerDictionary ?? this.maxEntriesPerDictionary,
       suggestionLimit: 5,
     );
   }
@@ -595,6 +745,13 @@ class EvidenceBuilder {
     if (source.isImage) return source.selectedVariant?.text ?? '';
     return source.text;
   }
+}
+
+class _StoredLookup {
+  const _StoredLookup({required this.target, required this.result});
+
+  final _LookupTarget target;
+  final LookupResult result;
 }
 
 abstract class _LookupTarget {

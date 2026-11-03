@@ -21,18 +21,24 @@ import 'familiarization_sheet.dart';
 Future<void> openAgentCitation(
   BuildContext context,
   WidgetRef ref,
-  AgentCitation citation,
-) async {
+  AgentCitation citation, {
+  String fallbackSnippet = '',
+  AgentUiLanguage? uiLanguage,
+}) async {
   final enabled = ref.read(enabledDictionariesProvider);
   final settings = ref.read(appSettingsProvider);
   final run = ref.read(agentRunControllerProvider);
-  final strings = AgentUiStrings.of(
-    resolveAgentUiLanguage(
-      run.hasConversation
-          ? run.responseLanguage
-          : AgentResponseLanguage.fromWire(settings.agentResponseLanguage),
-    ),
-  );
+  final strings = uiLanguage != null
+      ? AgentUiStrings.of(uiLanguage)
+      : AgentUiStrings.of(
+          resolveAgentUiLanguage(
+            run.hasConversation
+                ? run.responseLanguage
+                : AgentResponseLanguage.fromWire(
+                    settings.agentResponseLanguage,
+                  ),
+          ),
+        );
   DictionaryInfo? dictionary;
   for (final item in enabled) {
     if (item.id == citation.dictionaryId) {
@@ -41,7 +47,13 @@ Future<void> openAgentCitation(
     }
   }
   if (dictionary == null) {
-    RikaiToast.show(context, strings.dictionaryUnavailable);
+    await _showCitationFallback(
+      context,
+      strings,
+      citation,
+      fallbackSnippet,
+      unavailable: true,
+    );
     return;
   }
   final selectedDictionary = dictionary;
@@ -59,7 +71,13 @@ Future<void> openAgentCitation(
     final group = result.hitGroups.isEmpty ? null : result.hitGroups.first;
     if (!context.mounted) return;
     if (group == null || group.entries.isEmpty) {
-      RikaiToast.show(context, strings.entryNotFound);
+      await _showCitationFallback(
+        context,
+        strings,
+        citation,
+        fallbackSnippet,
+        unavailable: false,
+      );
       return;
     }
     Navigator.of(context).push(
@@ -77,8 +95,50 @@ Future<void> openAgentCitation(
       ),
     );
   } catch (_) {
-    if (context.mounted) RikaiToast.show(context, strings.openEntryFailed);
+    if (!context.mounted) return;
+    await _showCitationFallback(
+      context,
+      strings,
+      citation,
+      fallbackSnippet,
+      unavailable: false,
+    );
   }
+}
+
+/// Shows the saved citation snippet when the dictionary/entry cannot be
+/// reopened. Current-run callers keep the old toast; history callers pass
+/// [fallbackSnippet] so the saved evidence remains visible.
+Future<void> _showCitationFallback(
+  BuildContext context,
+  AgentUiStrings strings,
+  AgentCitation citation,
+  String fallbackSnippet, {
+  required bool unavailable,
+}) async {
+  if (fallbackSnippet.trim().isEmpty) {
+    RikaiToast.show(
+      context,
+      unavailable ? strings.dictionaryUnavailable : strings.entryNotFound,
+    );
+    return;
+  }
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(
+        citation.headword.isEmpty ? citation.entryKey : citation.headword,
+      ),
+      content: SingleChildScrollView(child: Text(fallbackSnippet)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: Text(strings.close),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Regenerates a failed/unavailable dictionary profile without starting a new

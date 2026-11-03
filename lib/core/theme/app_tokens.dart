@@ -198,6 +198,22 @@ abstract final class AgentTokens {
   static const double actionIcon = 20;
   static const double actionTapTarget = 40;
 
+  // P6.7 assistant history
+  static const double historyRowMinHeight = 72;
+  static const double historyTitle = 16;
+  static const double historyMeta = 14;
+  static const double historyStatus = 12;
+  static const double historyEmptyIcon = 40;
+  static const Color historyDone = AppColors.success;
+  static const Color historyError = AppColors.error;
+  static const Color historyCancelled = AppColors.warning;
+  static const Color historyInterrupted = AppColors.textSecondary;
+
+  // P6.7 UniDic pitch accent (local-only)
+  static const double pitchAccentLine = 1.5;
+  static const double pitchAccentHeight = 8;
+  static const Color pitchAccentColor = AppColors.textSecondary;
+
   /// Rich-text post-processing: ruby reading uses the shared furigana ratio
   /// and the body text color; underline is black and twice the default
   /// thickness.
@@ -205,6 +221,11 @@ abstract final class AgentTokens {
   static const Color rubyReadingColor = AppColors.textPrimary;
   static const Color richTextUnderlineColor = AppColors.textPrimary;
   static const double richTextUnderlineThickness = 2;
+
+  /// Distance below the alphabetic baseline for the custom underline. Drawing
+  /// it ourselves avoids per-font/per-glyph underline metrics (for example a
+  /// full-width `；` differing from a kanji).
+  static const double richTextUnderlineOffset = 2;
 }
 
 /// Slides a new page in from the right and leaves the previous page in place.

@@ -5,9 +5,10 @@
 > 复制具体数值；历史记录可以保留“当时值”，但必须标注为历史快照。
 >
 > - last_verified: 2026-11-03
-> - last_verified_code_commit: `04bf192`（`fix: 修复富文本后处理逻辑和prompt不统一`）
-> - last_doc_sync: 2026-11-03（P6.6 自动化收尾：同步测试基线、多图/多变体描述与
->   当前提交锚点）
+> - last_verified_code_commit: `d167ad0`（P6.7 历史/声调工作区基于该提交；P6.7
+>   改动当前未提交）
+> - last_doc_sync: 2026-11-03（P6.7-1/2：同步历史/声调自动化测试基线；固定文案/
+>   预算未改）
 > - 设备基线: `Medium_Phone_API_36.1`（x86_64 模拟器，API 36）；无 arm64 真机
 > - 维护规则：数据变化时只改本文件，并同步更新 `last_verified`/
 >   `last_verified_code_commit`；其他文档的引用链接不需要改。不要把本文件自身的
@@ -39,15 +40,15 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **350** |
-| 当前测试文件数 | **77** |
+| 当前 test/testWidgets 声明数 | **432** |
+| 当前测试文件数 | **85** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | **366 passed**（声明 350；参数化/循环用例产生 366 个执行用例） |
-| 最近 `flutter build apk --debug` | success（2026-11-03 P6.6 收尾验证） |
+| 最近 `flutter test` | **441 passed**（声明 432；参数化/循环用例产生 441 个执行用例） |
+| 最近 `flutter build apk --debug` | success（2026-11-03 P6.7 验证） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
-> 该数字对应 P6.6 自动化收尾工作区（含 Wave 3、P6.6 多 OCR、P7.0 富文本修正）。
-> 新增/删除测试后只更新本节。
+> 该数字对应 P6.7-1 历史/持久化与 P6.7-2 UniDic 声调工作区（含 Wave 3、P6.6、
+> P7.0 富文本修正）。新增/删除测试后只更新本节。
 
 ### 2.2 历史测试基线（不要当作当前值）
 
@@ -69,7 +70,8 @@
 | Provider 推理修正 | 333 | OpenAI-compatible 默认不发送 max_tokens、reasoning-only 快速失败不重试、流式进度节流 |
 | Provider 可选输出上限 | 336 | provider 设置 maxOutputTokens、OpenAI/Anthropic payload 覆盖与持久化测试 |
 | P6.6 收尾 / P7.0 富文本修正 | 366（声明 350） | 富文本/YOMI 标签处理、结果渲染与 P6.6 多 OCR 回归；真机验收待做 |
-| 当前 | **366（声明 350）** | 见 §2.1 |
+| P6.7 历史/声调 | 441（声明 432） | 历史/持久化、DB v3、档案队列、UniDic 声调；真机/视觉验收待做 |
+| 当前 | **441（声明 432）** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
@@ -234,7 +236,7 @@ arm64 真机性能另需复测。
 
 | 项 | 值 |
 |---|---|
-| 最近验证代码提交 | `04bf192`（P6.6 自动化收尾验证基线） |
+| 最近验证代码提交 | `d167ad0`（P6.7 历史/声调工作区基于该提交；P6.7 改动未提交） |
 | Phase 5 基线 | `2534c3a` |
 | Phase 6 P6.1–P6.5 提交起点 | `7be4b81` |
 | Phase 6 文档提交 | `b208456` |

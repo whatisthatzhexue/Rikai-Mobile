@@ -16,11 +16,11 @@
 > 见 `docs/project-data.md`。本文保留产品/流程设计细节，不重复规则正文或当前数值。
 
 - 状态：**设计 v2；P6.1–P6.5 核心、2026-10-31 反馈 Wave 1–3 与 P6.6 多 OCR
-  核心已实现，P6.6 自动化收尾于 2026-11-03 完成；P6.7 设计决议已于 2026-11-03
-  记录（仅设计/契约/token，未实现）；P6.6 真机验收、Wave 4 设备验收与 P6.7
-  实现仍未完成**
+  核心已实现，P6.6 自动化收尾于 2026-11-03 完成；P6.7-1 历史/持久化与 P6.7-2
+  UniDic 声调已于 2026-11-03 实现；P6.7 annotation DSL、provider 测试连接和发布
+  打磨仍未完成；P6.6 真机验收与 Wave 4 设备验收仍由另一工作流处理**
 - 日期：2026-10-30（P6.6 核心实现更新：2026-11-02；自动化收尾：2026-11-03；
-  P6.7 设计决议：2026-11-03）
+  P6.7 设计决议与历史/声调实现：2026-11-03）
 - 前身：v1 只描述通用工具型 Agent；v2 加入用户确认的固定流水线、词典熟悉、
   OCR JSON 信封、逐词/语法证据、原文引用、会话级词典选择与按需多 OCR。
 - 依赖：Phase 4.5 的 arm64/真实页面验收、Phase 5 的完整历史/引导/发布打磨，以及
@@ -28,9 +28,10 @@
 - 契约：工具表、完整 JSON Schema、状态机和错误码见
   `docs/phase6-agent-contracts.md`；机器可读 schema 见 `docs/schemas/agent/`。
 - 实现状态：见 `docs/phase6-status.md`。当前已接入 Agent 页、Provider 设置、
-  熟悉期、证据/引用/校验、主页第五按钮和 P6.6 多 OCR 对比/词典候选修复；多 OCR
-  真机验收、历史 UI、annotation DSL、声调渲染和发布验收仍待完成。P6.7 的设计
-  边界、历史/声调/DSL/Markdown 决议见 §17.2；实现排期在 Wave 4 之后。
+  熟悉期、证据/引用/校验、主页第五按钮、P6.6 多 OCR 对比/词典候选修复、P6.7
+  助手历史与 UniDic 声调；多 OCR 真机验收、annotation DSL、provider 测试连接、
+  无障碍/发布验收仍待完成。P6.7 的设计边界与决议见 §17.2；历史/声调已实现，
+  DSL/Markdown 受限预览仍待实现。Wave 4 设备验收由另一工作流继续。
 
 ## 0. v2 变更摘要
 
@@ -383,7 +384,8 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   逻辑上每张图就是 `{image_id, ocr_text}`；实际信封用 `sources[]`/`variants[]`
   承载多图和多版本。
 - 多图逐张 `sources[]`，每张有独立 `image_id/variant_id`；用户文本单独一项，避免
-  串行理解。
+  串行理解。原文引用（quotes）必须从**所有** source 生成并使用全局唯一的
+  `q1..qN`；不得只取第一张图，否则逐句理解/原文 section 只覆盖第一张图。
 - 文本分三层：`raw_text`（原生块拼接）、`normalized_text`（`composeOcrText` 清理）、
   `analysis_text`（用户选中/编辑后的版本）；provider 信封只带
   `variants[].text`（normalized/analysis），`raw_text` 留在本地。引用 offset 一律
@@ -423,11 +425,15 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   sourceSpan)` 发放 `source-N`；模型只看到 `source-N`，不能自造。
 - 证据包只含：token ID/文本/读音/词性/offset、语法模式、清洗后的 citation 摘要；
   **不含原始 HTML、路径、MDD 资源、音频**。
-- 2026-11-03 性能增量：`EvidenceBuilder` 通过 `BatchLookupPort` 将同一模式的多个
-  target 查询合并为一次 MDict worker 往返（worker 内部仍顺序执行，上限见
-  `AgentLimits.lookupBatchSize`）；主分析 prompt 使用紧凑投影，只发送选中的 OCR
-  variant 文本一次，evidence 不重复 source text，也不发送 `lookup_candidates`/
-  `tool_call_id`/内部 budget。
+- 2026-11-03 性能/证据质量增量：`EvidenceBuilder` 采用 **breadth-first + depth**
+  分配。第一轮每个 target 只取 1 条 citation（按 target 顺序、模式 exact→prefix→
+  suffix→incremental），避免前几个词把全局 citation 预算吃满；随后复用已取得的
+  lookup 结果，在仍有预算时再补第 2/3 条和其他词典（每词每典上限仍为 3）。词典
+  数据充足时，这能让更多 target 获得依据，而不是堆叠早期词条的冗余义项。
+  同一模式的多个 target 查询通过 `BatchLookupPort` 合并为一次 MDict worker 往返
+  （worker 内部仍顺序执行，上限见 `AgentLimits.lookupBatchSize`）。主分析 prompt
+  使用紧凑投影，只发送选中的 OCR variant 文本一次，evidence 不重复 source text，
+  也不发送 `lookup_candidates`/`tool_call_id`/内部 budget。
 - 重复 token（如「は」出现 10 次）只查一次，但保留所有 span 映射；输出 token 级
   证据表供 UI 展开。
 - UniDic 未配置/分词失败：不伪造 token；严格模式提示“无法进行结构/语法校验”，
@@ -469,6 +475,11 @@ pattern id + 清洗 citation 摘要，保留 offset 与 entry_key/matched_key，
   已达全局上限（需要验证重复以释放槽位）时运行；全部目标已有 citation 且仍有
   剩余槽位时跳过，避免每个 run 固定多一次小模型调用。
   `AgentLimits.adaptiveCoverageReview=false` 可强制每次都审查。
+- 2026-11-03 补充检索去重：MISSING query 如果已被现有 citation、或已有
+  citation_ids 的 token/pattern 覆盖（按归一化 key），不再重复查词；重复 query
+  也跳过。补充查词每个缺失 query 每本词典只取 1 条，避免 coverage 自己把
+  citation 预算重新填满。只有 sense/usage/example 等“同一词但需要更多义项”的
+  MISSING 才允许在已覆盖词上继续查。
 - 覆盖审查失败、标签无效/不完整或 query 不可追溯时只产生 warning，保留原证据
   继续；不得让整次 run 失败。
 
@@ -532,10 +543,11 @@ Stage 0 envelope + Stage 1 evidence + 已确认的 dictionary profiles。输出�
 }
 ```
 
-原文引用：编排器先把 `analysis_text` 切成句子/分句，生成 `quote_id → text/span`；
-模型只能选 `quote_id`，也可输出 `quote_text` 但必须通过 substring 校验。`literal`
-字段由编排器按 quote 填充，模型不得改写；UI 直接显示原文。这样既保证“必须引用
-原文”，又不让模型自造或篡改原文。
+原文引用：编排器先把每个 source 的 `analysis_text` 切成句子/分句，生成全局唯一的
+`quote_id → text/span`；模型只能选 `quote_id`，也可输出 `quote_text` 但必须通过
+substring 校验。`literal` 字段由编排器按 quote 填充，模型不得改写；UI 直接显示
+原文。多图时所有 source 都参与 quotes 和逐句结构，不能只分析第一张图。这样既
+保证“必须引用原文”，又不让模型自造或篡改原文。
 
 ### 6.5 Stage 3：生成与校验（Step 3）
 
@@ -836,13 +848,17 @@ P6.7 历史复用上述表，不新增图片字段：`agent_runs.result_json` �
   证据卡片与 citation chip；严格模式无依据显示“无词典依据”，宽松模式“模型补充”
   独立标签。P7.0 增量只对详细解析的“原文”、逐句理解和词典事实解释做
   RUBY/BOLD/UNDERLINE 后处理；AI 气泡摘要保持纯文本，避免中文译文被误标注。
-  后处理 AI 直接阅读文本生成注音，不使用 UniDic 读音表；结果生成模型可用
-  `[YOMI]` 标记 `[MEANING]` 中的读音，后处理允许整块删除 YOMI，但保留块必须
-  内容/位置不变；标签必须成对且正确嵌套（RUBY 可在 BOLD/UNDERLINE 内），必须
-  通过标签剥离逐字符 diff，冗余 RUBY 取消，失败时该块显示纯文本。包住已有
-  `surface（reading）` 时只显示一份读音；RUBY 以 base 基线对齐，读音继承 BOLD、
-  永不加下划线。Markdown 导出通过 `richTextToPlain` 转为不带标签的
-  `base（reading）`。声调（P6.7 设计，未实现）：只在词注/词典事实行使用 UniDic
+  后处理 AI 直接阅读文本生成注音，不使用 UniDic 读音表；结果生成模型用
+  `word[YOMI]reading[/YOMI]`（读音不带括号；单词=读音时只写单词）标记
+  `[MEANING]` 与词条解释开头，禁止 `word（reading）`。后处理允许整块删除
+  YOMI，但保留块必须内容/位置不变；标签必须成对且正确嵌套（RUBY 可在
+  BOLD/UNDERLINE 内），必须通过标签剥离逐字符 diff，冗余 RUBY 取消，失败时该块
+  显示纯文本。包住已有 `surface（reading）` 时只显示一份读音；RUBY base 使用与
+  周围正文相同的行高/metrics，以 alphabetic baseline 对齐；UNDERLINE 由
+  baseline 相对偏移的自绘线完成（不使用字体 decoration），保证汉字、标点
+  （如 `；`）和 RUBY base 的下划线高度一致；读音继承 BOLD、永不加下划线。
+  Markdown 导出通过 `richTextToPlain` 转为不带标签的 `base（reading）`。
+  声调（P6.7 已实现）：只在词注/词典事实行使用 UniDic
   声调字段 24–26 画高低线，无可靠数据不显示，不用 AI 猜；详见 §17.2.3。
 - 状态/错误：空闲/提交中/流式/完成/中断/降级/离线/错误均有视觉标识；失败保留
   已生成内容，错误卡出现在消息下方，不弹全局对话框、不整屏 loading。
@@ -858,7 +874,7 @@ P6.7 历史复用上述表，不新增图片字段：`agent_runs.result_json` �
 - 设置：provider 列表/新增/编辑、Base URL、small/complex 模型、API Key 掩码输入
   与显示切换、测试连接（显式发送最小文本请求）、三态配置标签、隐私说明、清除
   Key/会话/档案；分组按“模型/Provider → 语言 → 数据与隐私 → 关于”。
-- 历史（P6.7 设计，未实现）：助手 AppBar 历史图标打开独立 `/agent-history`；
+- 历史（P6.7 已实现）：助手 AppBar 历史图标打开独立 `/agent-history`；
   一条 = 一次分析（run），只读回看，不并入主页语料“历史记录”。列表显示标题/
   时间/模式/状态/图片张数；详情恢复用户文本、结果、证据/citation 和全部 OCR
   变体文本。**不保存图片/缩略图/路径**；详情明确“原图未保存”。citation 失效时
@@ -875,7 +891,7 @@ P6.7 历史复用上述表，不新增图片字段：`agent_runs.result_json` �
   最大行数等），复用现有蓝白色板、16/14/18/24sp 字号和 4pt 间距；先写规范，
   实施时才加到 `app_tokens.dart`。**当前 P6.5 已实现基础对话式布局（气泡/流式/
   折叠依据/固定输入区）；状态条、无障碍 200% 等完整 v2 验收项待补；历史已设计
-  （§17.2.2）但未实现。**
+  （§17.2.2）已实现。**
 
 ## 14. 隐私与安全
 
@@ -940,17 +956,17 @@ Phase 6 实施后至少覆盖：
   仍待 arm64/真实漫画页验收。
 - 主页五按钮已接入，Agent 页/Provider 设置/熟悉期/证据/引用/校验可用。
 - **对话式 Agent UI v2 基础布局已实现（气泡/流式/折叠依据/固定输入区），但
-  状态条、无障碍 200% 等完整 v2 验收项仍待补；历史已设计（§17.2.2）未实现。**
+  状态条、无障碍 200% 等完整 v2 验收项仍待补；历史与声调已实现（§17.2.2/3）。**
 - P6.6 多 OCR 核心已实现（2026-11-02，自动化测试）；P6.6 真机视觉/OCR/词典
-  质量验收未完成；P6.7 设计/契约已记录（2026-11-03），实现未开始；真实
-  provider/API Key 与真实词典 `sample` 设备验证仍待做。详见
+  质量验收未完成；P6.7-1 历史与 P6.7-2 UniDic 声调已实现（2026-11-03），DSL/
+  发布仍待做；真实 provider/API Key 与真实词典 `sample` 设备验证仍待做。详见
   `docs/phase6-status.md`。
 
 ## 16. 实施顺序（Phase 6）
 
 Phase 6 已在 Phase 5 完成后开始；P6.1–P6.5 核心已完成，P6.6 多 OCR 核心已完成
-（2026-11-02），P6.6 真机验收待做；P6.7 设计/契约已记录（2026-11-03），实现
-待 Wave 4 后开始。
+（2026-11-02），P6.6 真机验收待做；P6.7-1 历史/P6.7-2 声调已实现
+（2026-11-03），P6.7 DSL/发布仍待做。
 以下不是时间估算：
 
 1. **6.1 能力 Ports**：`lib/services/agent/ports/`、DTO 序列化、`LookupGateway`、
@@ -969,17 +985,17 @@ Phase 6 已在 Phase 5 完成后开始；P6.1–P6.5 核心已完成，P6.6 多 
    按钮、设计 token；先结构化组件 + 安全纯文本，不引入完整 Markdown/ruby。
 6. **6.6 多 OCR（核心已实现，2026-11-02）**：`ocr_consensus.dart`、变体差异/
    修复建议 UI；默认单版本；真机视觉/OCR/词典质量验收仍待完成。
-7. **6.7 安全富文本/历史/DSL/发布（设计已记录 2026-11-03，Wave 4 后实现）**：
-   历史/持久化、安全富文本/ruby/声调、annotation DSL、provider 测试连接、
-   许可证/性能/发布验收。设计决议见 §17.2。
+7. **6.7 安全富文本/历史/DSL/发布（2026-11-03 部分实现）**：历史/持久化与
+   UniDic 声调已实现；annotation DSL、provider 测试连接、许可证/性能/发布验收
+   仍待做。设计决议见 §17.2。
 
 ## 17. 已定事项、默认值与开放问题
 
 **已定：**
 
 - Phase 6 已在 Phase 5 后开始；P6.1–P6.5 核心已实现，P6.6 多 OCR 核心已实现
-  （2026-11-02），P6.6 真机验收待做；P6.7 设计/契约已记录（2026-11-03），实现
-  待 Wave 4 后开始。
+  （2026-11-02），P6.6 真机验收待做；P6.7-1 历史与 P6.7-2 UniDic 声调已实现
+  （2026-11-03），DSL/发布仍待做。
 - 固定流水线；模型无工具（2026-10-31 决策；tool loop 为未来扩展）。
 - OpenAI-compatible + Anthropic 双适配；`flutter_secure_storage`。
 - 多 OCR 按需；默认单版本。
@@ -1011,22 +1027,22 @@ P7 的整体规划（核心翻译/语法解析/富文本后处理拆分、模型
 diff + 冗余 RUBY 取消 + 重复括号读音折叠 + 失败回退纯文本；P7.1–P7.4 尚未实现，
 不得写成已支持。
 
-## 17.2 P6.7 设计决议（2026-11-03，仅设计）
+## 17.2 P6.7 设计决议与实现状态（2026-11-03）
 
-> 状态：本节只记录设计、契约和 token，不表示已实现。`CLAUDE.md` 的门禁仍有效：
-> F1–F17 / Wave 4 设备验收关闭前，不叠加用户可感知的 P6.7 新功能；实现排期在
-> Wave 4 之后。用户已明确选择“先做设计与文档”。
+> 状态：P6.7-1 历史/持久化与 P6.7-2 UniDic 声调已实现（自动化测试 + debug
+> build）；P6.7-3 annotation DSL 与 P6.7-4 provider 测试连接/发布仍为设计。
+> F1–F17 / Wave 4 设备验收由另一工作流继续，P6.7 真机/视觉验收仍待完成。
 
 ### 17.2.1 交付边界
 
 - **P6.7-0 文档/契约/token**：记录 Markdown 决议；把原“Markdown/ruby/pitch”
   改名为“安全富文本 / ruby / 声调渲染”。
-- **P6.7-1 历史/持久化**：独立助手历史；一条 = 一次分析；只读回看；不保存
-  图片/路径；手动删除/清空；进程死亡标记 `interrupted`；所有 OCR 变体文本
-  持久化；待确认档案队列跨进程恢复。
-- **P6.7-2 安全富文本 / ruby / 声调**：保留已实现的详细解析 AI 注音范围；
-  新增 UniDic 声调高低线，只在词注/词典事实行显示；无可靠数据不显示，不用 AI
-  猜。AI 气泡摘要继续保持纯文本。
+- **P6.7-1 历史/持久化（已实现）**：独立助手历史；一条 = 一次分析；只读回看；
+  不保存图片/路径；手动删除/清空；进程死亡标记 `interrupted`；所有 OCR 变体
+  文本持久化；待确认档案队列跨进程恢复。
+- **P6.7-2 安全富文本 / ruby / 声调（UniDic 声调已实现）**：保留已实现的详细
+  解析 AI 注音范围；新增 UniDic 声调高低线，只在词注/词典事实行显示；无可靠
+  数据不显示，不用 AI 猜。AI 气泡摘要继续保持纯文本。
 - **P6.7-3 标注 DSL**：安全 JSON AST + 内置规则 + 预览/版本回滚；先覆盖阅读器、
   照片集、语料；Agent 结果后续接入；P6.7 不开放自由文本规则编辑器。
 - **P6.7-4 发布打磨**：provider 测试连接、空态/错误态、无障碍/200% 字号、
@@ -1094,11 +1110,17 @@ AI 推测声调；把图片、路径、base64 或 Key 写入历史或 provider �
     词内没有下降段（尾高）。
   - `aType` 非整数、越界（`N < 0` 或 `N > moraCount`）、读音为空或与显示词形
     不匹配时，**不显示声调线**，按普通文本渲染。
+  - **汉字词没有独立振假名/读音时不显示声调线**：`surface` 含汉字且
+    `reading` 为空或与 `surface` 相同，说明读音不确定（可能是多音词），不得用
+    单一读音的音调去标注；纯假名词仍可显示。
 - **显示范围**：只在逐句理解下方的词注/词典事实行显示；不在 AI 气泡摘要、
   “原文”引用、逐句解释正文、证据卡片、citation snippet、Markdown 导出中出现。
 - **视觉**：`AgentPitchAccentText` 在词上方画一条 1.5dp 高低线；高段在上轨、低段
   在下轨，アクセント核处垂直下降；线宽按词宽均分为 mora 段，不按汉字字数逐字
-  对齐；无可靠数据时整条线省略，不显示“推测”。
+  对齐；无可靠数据时整条线省略，不显示“推测”。若该词同时有 RUBY/读音，纵向
+  顺序固定为**声调线 → RUBY 读音 → 词形**，声调线永远在 RUBY 上方。声调线是
+  Ruby 上方的覆盖层，不改变 `AgentRichText` 的 Ruby 布局/行高；Ruby 部分保持
+  现有平衡，不因声调重新排版。
 - **缩放**：200% 字号下线和偏移随文字缩放；空间不足时优先换行，不得覆盖读音、
   下划线或相邻文字；必要时省略声调线而不是压缩到不可读。
 - **隐私/协议**：声调是本地 UniDic 数据，不进入 provider 请求、日志、citation
@@ -1160,17 +1182,18 @@ AI 推测声调；把图片、路径、base64 或 Key 写入历史或 provider �
   前几条摘要，供用户在确认前比较；不调用 provider，不生成正式 citation。每次
   最多 4 个变体、每变体最多 3 条预览摘要，沿用 citation 清洗/截断规则。用户
   选中并重新分析后，才由 orchestrator 重建正式 citation。
-- 两项都只修改 P6.6 对比/选择路径，不改变照片集 OCR 行为；实现放在 Wave 4 后。
+- 两项都只修改 P6.6 对比/选择路径，不改变照片集 OCR 行为；仍待实现。
 
 ### 17.2.8 实施顺序与门禁
 
-1. 先完成 Wave 4 设备验收（真实 provider/Key、arm64、大词典、secure storage、
-   真实漫画页/200% 字号）。
-2. P6.7-1 历史/持久化（含全变体持久化、档案队列、interrupted）。
-3. P6.6 遗留（失败态入口、逐版本依据预览）。
-4. P6.7-2 安全富文本/ruby/声调。
-5. P6.7-3 annotation DSL（阅读器/照片集/语料）。
-6. P6.7-4 provider 测试连接、无障碍/空错误态、许可/签名/发布验收。
+1. Wave 4 设备验收（真实 provider/Key、arm64、大词典、secure storage、真实
+   漫画页/200% 字号）由另一工作流继续；本工作流经用户明确允许并行开始 P6.7。
+2. P6.7-1 历史/持久化（含全变体持久化、档案队列、interrupted）——
+   已实现（2026-11-03）。
+3. P6.6 遗留（失败态入口、逐版本依据预览）——待实现。
+4. P6.7-2 安全富文本/ruby/声调——UniDic 声调已实现（2026-11-03）。
+5. P6.7-3 annotation DSL（阅读器/照片集/语料）——待实现。
+6. P6.7-4 provider 测试连接、无障碍/空错误态、许可/签名/发布验收——待实现。
 
 ## 18. 需求追踪
 

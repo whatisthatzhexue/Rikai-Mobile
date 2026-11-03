@@ -1,4 +1,5 @@
 import 'agent_json.dart';
+import 'agent_pitch.dart';
 
 /// One UniDic token in the evidence bundle.
 class AgentTokenEvidence {
@@ -267,6 +268,7 @@ class AgentEvidenceBundle {
     this.structureUnavailable = false,
     this.dictionaryIssues = const <AgentEvidenceDictionaryIssue>[],
     this.budget = const AgentEvidenceBudget(),
+    this.pitchAccents = const <String, AgentPitchAccent>{},
   });
 
   static const String schema = 'rikai.agent.evidence.v1';
@@ -282,6 +284,10 @@ class AgentEvidenceBundle {
   final bool structureUnavailable;
   final List<AgentEvidenceDictionaryIssue> dictionaryIssues;
   final AgentEvidenceBudget budget;
+
+  /// Local-only UniDic pitch data keyed by token id. It is deliberately omitted
+  /// from [toJson] so it never enters a provider request.
+  final Map<String, AgentPitchAccent> pitchAccents;
 
   Map<String, Object?> toJson() => {
     'schema': schema,

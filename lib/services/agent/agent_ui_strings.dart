@@ -41,6 +41,61 @@ class AgentUiStrings {
     'History is planned for P6.7',
     '履歴は P6.7 で提供予定です',
   );
+  String get historyTitle => _pick('分析历史', 'Analysis history', '分析履歴');
+  String get historyEmptyTitle =>
+      _pick('还没有分析记录', 'No analysis history yet', '分析履歴はまだありません');
+  String get historyEmptyBody => _pick(
+    '完成一次词典助手分析后，结果显示在这里。',
+    'Completed dictionary-assistant analyses appear here.',
+    '辞書アシスタントの分析結果がここに表示されます。',
+  );
+  String get historyReadOnly => _pick(
+    '历史记录只读；原图未保存。',
+    'History is read-only; the original image was not saved.',
+    '履歴は読み取り専用です。元の画像は保存されていません。',
+  );
+  String historyImageCount(int count) => _pick(
+    '图片 $count 张（历史不保存原图）',
+    '$count image(s) (original images are not saved)',
+    '画像 $count 枚（元画像は保存されません）',
+  );
+  String get historyClearTitle =>
+      _pick('清空历史记录？', 'Clear history?', '履歴を消去しますか？');
+  String get historyClearBody => _pick(
+    '将删除全部助手历史；语料、词典档案和模型设置不受影响。',
+    'All assistant history will be deleted. Corpus, profiles and model settings are unaffected.',
+    'すべてのアシスタント履歴を削除します。コーパス・辞書プロファイル・モデル設定は残ります。',
+  );
+  String get historyClearAction => _pick('清空', 'Clear', '消去');
+  String get historyDeleteTitle =>
+      _pick('删除这条记录？', 'Delete this entry?', 'この履歴を削除しますか？');
+  String get historyDeleteBody =>
+      _pick('删除后无法恢复。', 'This cannot be undone.', '削除すると元に戻せません。');
+  String get historyDeleted => _pick('已删除', 'Deleted', '削除しました');
+  String get historyCleared => _pick('已清空', 'History cleared', '履歴を消去しました');
+  String get historyLoadFailed =>
+      _pick('无法读取历史记录', 'Unable to read history', '履歴を読み込めません');
+  String get historyUnsupportedFormat => _pick(
+    '这条记录的历史格式不兼容，无法显示结果。',
+    'This history entry uses an unsupported format.',
+    'この履歴は対応していない形式のため表示できません。',
+  );
+  String get historyNoResult => _pick(
+    '这次分析没有保存可显示的结果。',
+    'No displayable result was saved for this analysis.',
+    'この分析には表示できる結果が保存されていません。',
+  );
+  String get historyVariantsTitle => _pick('文字识别结果', 'OCR result', '文字認識結果');
+  String get historyQuestion => _pick('提问', 'Question', '質問');
+  String get historyUntitled =>
+      _pick('未命名分析', 'Untitled analysis', '無題の分析');
+  String get historyAssistantResult => _pick('分析结果', 'Analysis', '分析結果');
+  String get close => _pick('关闭', 'Close', '閉じる');
+  String get historySelectedVariant => _pick('当时选中', 'selected', '選択中');
+  String get historyStatusDone => _pick('完成', 'Done', '完了');
+  String get historyStatusError => _pick('失败', 'Failed', '失敗');
+  String get historyStatusCancelled => _pick('已停止', 'Stopped', '停止');
+  String get historyStatusInterrupted => _pick('已中断', 'Interrupted', '中断');
   String get profiles => _pick('词典档案', 'Dictionary profiles', '辞書プロファイル');
   String get settings => _pick('模型设置', 'Model settings', 'モデル設定');
 

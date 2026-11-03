@@ -76,7 +76,7 @@
 | R-AGENT-11 | MUST NOT | 模型不能改变模式/词典/provider/model，也不能执行代码 | 只用 UI 修改这些设置 | `phase6-agent-design` §8.4/§14 |
 | R-AGENT-12 | MUST | Provider 请求文本-only；不发送 tools/capabilities/视觉字段 | `LlmRequest` 无 tools | `llm_port.dart`、`provider_payload.dart` |
 | R-AGENT-13 | MUST | Agent 预算/上限只引用统一预算常量，不在业务代码散落魔法数 | 代码审查/测试 | 统一预算常量 |
-| R-AGENT-14 | MUST | 当前工作优先级：先完成 2026-10-31 F1–F17；F2 未完成前不做 F7/F13/F14 档案部分；F6 未完成前不做 F7；P6.6/P6.7 只能由用户明确指示启动（P6.6 核心已于 2026-11-02 启动；P6.7 设计/契约已于 2026-11-03 由用户指示启动，实现仍待 Wave 4） | `device-feedback` Wave 顺序 | `device-feedback-2026-10-31` |
+| R-AGENT-14 | MUST | 当前工作优先级：先完成 2026-10-31 F1–F17；F2 未完成前不做 F7/F13/F14 档案部分；F6 未完成前不做 F7；P6.6/P6.7 只能由用户明确指示启动（P6.6 核心已于 2026-11-02 启动；P6.7 已于 2026-11-03 由用户指示启动，历史/声调已实现，其余仍待做） | `device-feedback` Wave 顺序 | `device-feedback-2026-10-31` |
 | R-AGENT-15 | MUST | F1–F17/P6.6/P6.7 未完成前，不把这些能力写成已支持 | 文档/UI 审查 | `device-feedback`、`phase6-status` |
 | R-AGENT-16 | MUST | 运行状态归应用级 `AgentRunController`；离开页面不取消；返回恢复最新进度；只有显式“停止”才取消 | 生命周期测试 | `agent-lifecycle-and-edge-cases` |
 | R-AGENT-17 | MUST | 真实 provider/API Key、secure storage、真实词典 sample/suggest、arm64 Agent 未验收前不得声称已验证 | 状态文档 | `phase6-status` |
@@ -85,9 +85,9 @@
 | R-AGENT-20 | MUST | 多 OCR 版本只由用户显式触发；不得自动合并版本或静默替换原文；采用变体/词典候选后必须重新分词、查词和分析；图片/路径/base64/Key 不得进入该流程或 provider 请求 | 变体/修复测试；请求体断言无图片/路径/Key | `phase6-agent-contracts` §3.1 |
 | R-AGENT-21 | MUST | Provider 请求发送前必须本地校验：model 非空、丢弃空白消息、至少一条非 system、Anthropic 合并连续 role、清理非法 Unicode/控制字符、`max_tokens` 为正整数；不得假设统一输出上限，400 必须按真实 error body 分类 | provider payload/HTTP body 测试 | `phase6-agent-contracts` §11 |
 | R-AGENT-22 | MUST | 覆盖审查是可选增强：使用 `AgentLimits.coverageReviewMaxTokens` 独立预算（MISSING/duplicate 上限 × 长度 + 标签开销 + 安全边际），不跟随分析请求；单项畸形只丢弃该项，标签/请求失败保留原证据；不得让整次 run 失败或伪装成功 | coverage parser/orchestrator/预算测试 | `phase6-agent-contracts` §5.1 |
-| R-AGENT-23 | MUST | 富文本后处理只作用于详细解析的“原文”、逐句理解和词典事实解释（词义/语法，不含 citation snippet），AI 气泡摘要保持纯文本；只能插入 `[RUBY]`/`[BOLD]`/`[UNDERLINE]` 显示标签，不得改动原文；唯一例外是整块删除 `[YOMI]...[/YOMI]`（仅当替换为等价 RUBY）。标签必须成对且正确嵌套：RUBY 可在 BOLD/UNDERLINE 内，BOLD/UNDERLINE 可相互包裹，但不得进入 RUBY base 或嵌套自身；RUBY 读音继承 BOLD、永不加下划线，并以 base 的 alphabetic baseline 对齐。采用前必须剥离标签、按 YOMI 规则比较后与原文逐字符严格相等；YOMI 内容比较忽略全/半角标点，RUBY 读音先清洗标点，保留的 YOMI 必须内容/位置不变，冗余 RUBY（读音等于 base）必须移除；包住已有 `surface（reading）` 时显示/导出只保留一份读音；否则丢弃该块并降级纯文本 | `rich_text_tags`/processor/orchestrator/`agent_rich_text` 测试；`T-135` | `rich_text_post_processor.dart`、契约 §5.3 |
+| R-AGENT-23 | MUST | 富文本后处理只作用于详细解析的“原文”、逐句理解和词典事实解释（词义/语法，不含 citation snippet），AI 气泡摘要保持纯文本；只能插入 `[RUBY]`/`[BOLD]`/`[UNDERLINE]` 显示标签，不得改动原文；prompt 要求保留输入中的 `[YOMI]...[/YOMI]`，代码仍兼容“整块删除并替换为等价 RUBY”的旧输出；本地 YOMI→RUBY 只作失败/保留 YOMI 的兜底，不作为模型输入。标签必须成对且正确嵌套：RUBY 可在 BOLD/UNDERLINE 内，BOLD/UNDERLINE 可相互包裹，但不得进入 RUBY base 或嵌套自身；RUBY 读音继承 BOLD、永不加下划线，并以 base 的 alphabetic baseline 对齐。采用前必须剥离标签、按 YOMI 规则比较后与原文逐字符严格相等；YOMI 内容比较忽略全/半角标点，RUBY 读音先清洗标点，保留的 YOMI 必须内容/位置不变，冗余 RUBY（读音等于 base）必须移除；假名括号读音 `word（reading）` 与 `[RUBY=reading]word[/RUBY]` 视为同一显示形式并在比较前归一化（非假名括号不转换，base 字符仍须一致）；包住已有 `surface（reading）` 时显示/导出只保留一份读音；否则丢弃该块并降级纯文本 | `rich_text_tags`/processor/orchestrator/`agent_rich_text` 测试；`T-135` | `rich_text_post_processor.dart`、契约 §5.3 |
 | R-AGENT-24 | MUST | P6.7 助手历史一条=一次分析（run），只读回看，不并入主页语料历史；AgentStore/历史 JSON/日志/导出不得保存图片字节、缩略图、路径、文件名、base64、API Key 或 provider 原始 body，只存 `image_count` 和 OCR 文本/变体；citation 失效只显示保存摘要；删除/清空必须二次确认，不自动删除 | 历史 codec/迁移/删除/隐私测试；grep 无 `image_path`/`localPath`/`base64` | 设计 §17.2.2、契约 §14.1 |
-| R-AGENT-25 | MUST | 声调只允许来自 UniDic 字段 24–26（`aType` + 读音 mora 数），不得用 AI/模型推测或补全；只在词注/词典事实行显示，AI 气泡/原文/逐句/证据/citation/导出不显示；无可靠数据、越界、读音为空或词形不匹配时不画线；声调不进入 provider 请求/日志 | pitch parser/UI/请求体测试；真实 UniDic 样例夹具 | 设计 §17.2.3、契约 §14.2 |
+| R-AGENT-25 | MUST | 声调只允许来自 UniDic 字段 24–26（`aType` + 读音 mora 数），不得用 AI/模型推测或补全；只在词注/词典事实行显示，AI 气泡/原文/逐句/证据/citation/导出不显示；无可靠数据、越界、读音为空或词形不匹配时不画线；**汉字词没有独立振假名/读音时不画线**（可能是多音词）；声调不进入 provider 请求/日志 | pitch parser/UI/请求体测试；真实 UniDic 样例夹具；汉字无读音用例 | 设计 §17.2.3、契约 §14.2 |
 | R-AGENT-26 | MUST | annotation DSL 只接受安全 JSON AST 白名单（text/ruby/pitch/bold/underline/group/when），禁止任意代码、HTML、JS、URL、网络、文件访问、图片和外部链接；求值器纯本地、确定性；无效/超限规则集整体拒绝并保留上一有效版本；P6.7 只做内置规则+预览/版本回滚，先覆盖阅读器/照片集/语料，不接入 Agent 结果，不开放自由编辑器 | DSL schema/求值/注入/回滚测试 | 设计 §17.2.4、契约 §14.3 |
 | R-AGENT-27 | MUST | 模型 wire format 保持方括号标签；Markdown 只用于结果复制/导出和用户可编辑档案的受限预览，不得作为主结果渲染协议，不得引入通用 Markdown 渲染器；受限预览禁止 HTML/JS/图片/外部链接/自动 URL，未知语法按纯文本 | 导出/预览注入测试；依赖审查 | 设计 §17.2.5、契约 §14.4 |
 
@@ -159,7 +159,7 @@
 | R-AGENT-21 provider payload | implemented | model/messages 预校验、Anthropic role 合并、非法 Unicode/控制字符清理、`max_tokens` 正整数校验；400 按真实 error body 分类，不设统一上限 |
 | R-AGENT-23 rich-text post-process | implemented（P7.0 增量） | 仅对详细“原文”、逐句理解和词典事实解释插入 RUBY/BOLD/UNDERLINE；AI 气泡纯文本；标签正确嵌套、剥离后逐字符 diff，失败回退纯文本；重复括号读音折叠为一份 |
 | R-AGENT-22 coverage stability | implemented | 紧凑输入、单项容错、空 sufficient 规范化、独立预算公式、debug 诊断；真实请求失败仍 warning |
-| P6.7 | design-only（2026-11-03） | 历史/安全富文本/ruby/声调/annotation DSL/Markdown 边界/测试连接/发布已记录设计与契约；未实现，Wave 4 后实施 |
+| P6.7 | partial（2026-11-03） | 历史/持久化、UniDic 声调已实现并有自动化测试；annotation DSL、provider 测试连接、无障碍/发布验收仍待做；真机/视觉验收未完成 |
 
 ## 9. 变更流程
 

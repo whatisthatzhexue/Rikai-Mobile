@@ -3,8 +3,10 @@ import 'package:rikai_ocr/rikai_ocr.dart';
 import '../../core/models/agent/agent_analysis.dart';
 import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
+import '../../core/models/agent/agent_json.dart';
 import '../../core/models/agent/agent_limits.dart';
 import '../../core/models/agent/agent_ocr.dart';
+import '../../core/models/agent/agent_pitch.dart';
 import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/agent/agent_quote.dart';
@@ -113,6 +115,7 @@ class AgentRunResult {
     this.warnings = const <String>[],
     this.coverageFallbackUsed = false,
     this.ocrQuality = const <String, OcrQuality>{},
+    this.pitchAccents = const <String, AgentPitchAccent>{},
     this.richOriginalText,
     this.richSegmentTexts = const <String>[],
     this.richSegmentNotes = const <String>[],
@@ -137,6 +140,10 @@ class AgentRunResult {
   /// Local OCR quality for the selected variant of each image source, keyed by
   /// the opaque image id. Never serialized or sent to the provider.
   final Map<String, OcrQuality> ocrQuality;
+
+  /// Local UniDic pitch data keyed by token id. Omitted from provider input;
+  /// persisted only in the local history result codec.
+  final Map<String, AgentPitchAccent> pitchAccents;
 
   /// Optional AI-formatted version of the whole “原文” section. It is accepted
   /// only when its stripped form reproduces the combined quote source exactly.
@@ -180,9 +187,105 @@ class AgentRunResult {
       warnings: warnings,
       coverageFallbackUsed: coverageFallbackUsed,
       ocrQuality: ocrQuality,
+      pitchAccents: pitchAccents,
       richOriginalText: rich.originalText,
       richSegmentTexts: List<String>.unmodifiable(rich.segmentTexts),
       richSegmentNotes: List<String>.unmodifiable(rich.segmentNotes),
+    );
+  }
+
+  static const String resultSchema = 'rikai.agent.run-result.v1';
+
+  /// Local history codec. This is deliberately separate from the provider
+  /// wire format: it persists already-validated structured data and never
+  /// includes image paths, request bodies or API keys.
+  Map<String, Object?> toJson() => <String, Object?>{
+    'schema': resultSchema,
+    'input': input.toJson(),
+    'evidence': evidence.toJson(),
+    'quotes': quotes.map((quote) => quote.toJson()).toList(),
+    'analysis': analysis.toJson(),
+    'validation': validation.toJson(),
+    'sources': sources.map((source) => source.toJson()).toList(),
+    'dictionary_profiles': dictionaryProfiles,
+    'profile_warnings': profileWarnings,
+    'unavailable_profiles': unavailableProfiles
+        .map((issue) => issue.toJson())
+        .toList(),
+    'warnings': warnings,
+    'coverage_fallback_used': coverageFallbackUsed,
+    'ocr_quality': ocrQuality.map(
+      (imageId, quality) => MapEntry(imageId, quality.toJson()),
+    ),
+    'pitch_accents': pitchAccents.map(
+      (tokenId, accent) => MapEntry(tokenId, accent.toJson()),
+    ),
+    if (richOriginalText != null) 'rich_original_text': richOriginalText,
+    'rich_segment_texts': richSegmentTexts,
+    'rich_segment_notes': richSegmentNotes,
+  };
+
+  factory AgentRunResult.fromJson(Map<String, Object?> json) {
+    final rawQuotes = json['quotes'];
+    final rawSources = json['sources'];
+    final rawUnavailable = json['unavailable_profiles'];
+    return AgentRunResult(
+      input: AgentInputEnvelope.fromJson(agentMap(json['input'])),
+      evidence: AgentEvidenceBundle.fromJson(agentMap(json['evidence'])),
+      quotes: rawQuotes is List
+          ? rawQuotes
+                .whereType<Map>()
+                .map(
+                  (value) => AgentQuoteRef.fromJson(
+                    value.map((key, item) => MapEntry(key.toString(), item)),
+                  ),
+                )
+                .toList(growable: false)
+          : const <AgentQuoteRef>[],
+      analysis: AgentAnalysis.fromJson(agentMap(json['analysis'])),
+      validation: AgentValidationResult.fromJson(agentMap(json['validation'])),
+      sources: rawSources is List
+          ? rawSources
+                .whereType<Map>()
+                .map(
+                  (value) => AgentSourceVersion.fromJson(
+                    value.map((key, item) => MapEntry(key.toString(), item)),
+                  ),
+                )
+                .toList(growable: false)
+          : const <AgentSourceVersion>[],
+      dictionaryProfiles: agentStringList(json['dictionary_profiles']),
+      profileWarnings: agentStringList(json['profile_warnings']),
+      unavailableProfiles: rawUnavailable is List
+          ? rawUnavailable
+                .whereType<Map>()
+                .map((value) {
+                  final map = value.map(
+                    (key, item) => MapEntry(key.toString(), item),
+                  );
+                  return DictionaryProfileIssue(
+                    dictionaryId: agentString(map['dictionary_id']),
+                    title: agentString(map['title']),
+                    reason: agentString(map['reason']),
+                  );
+                })
+                .toList(growable: false)
+          : const <DictionaryProfileIssue>[],
+      warnings: agentStringList(json['warnings']),
+      coverageFallbackUsed: agentBool(json['coverage_fallback_used']),
+      ocrQuality: agentMap(json['ocr_quality']).map(
+        (imageId, quality) =>
+            MapEntry(imageId, OcrQuality.fromJson(agentMap(quality))),
+      ),
+      pitchAccents: agentMap(json['pitch_accents']).map(
+        (tokenId, accent) =>
+            MapEntry(tokenId, AgentPitchAccent.fromJson(agentMap(accent))),
+      ),
+      richOriginalText: json['rich_original_text'] is String
+          ? json['rich_original_text'] as String
+          : null,
+      richSegmentTexts: agentStringList(json['rich_segment_texts']),
+      richSegmentNotes: agentStringList(json['rich_segment_notes']),
     );
   }
 }
@@ -214,10 +317,17 @@ String agentSummarySource(AgentAnalysis analysis) {
 String agentSegmentNotesSource(AgentSegment segment) {
   return <String>[
     for (final note in segment.wordNotes)
-      '${note.surface}${note.reading.isEmpty ? '' : '（${note.reading}）'}：'
-          '${note.sense}',
+      '${note.surface}'
+          '${_noteYomi(note)}'
+          '：${note.sense}',
     for (final note in segment.grammarNotes) note.explanation,
   ].join('\n');
+}
+
+String _noteYomi(AgentWordNote note) {
+  final reading = cleanReading(note.reading);
+  if (reading.isEmpty || reading == note.surface) return '';
+  return '[YOMI]$reading[/YOMI]';
 }
 
 /// The plain summary shown in the AI bubble. Any display tags emitted by the
@@ -382,6 +492,11 @@ class AgentRunSnapshot {
   };
 
   bool get canCancel => isRunning;
+
+  /// True while the current run may still use/display dictionary profiles.
+  /// Deleting a profile stays locked for the active run; editing and explicit
+  /// regeneration are allowed because they write a new profile revision.
+  bool get profilesInUse => isRunning;
 
   bool get hasConversation =>
       sentText.isNotEmpty ||
