@@ -14,13 +14,28 @@ void main() {
     expect(stripRichTextTags('plain text'), 'plain text');
   });
 
-  test('rejects malformed or nested tags', () {
+  test('accepts proper nesting but rejects malformed tags', () {
     expect(isWellFormedRichText(_tagged), isTrue);
     expect(isWellFormedRichText('[BOLD]未闭合'), isFalse);
     expect(
       isWellFormedRichText('[BOLD][UNDERLINE]x[/UNDERLINE][/BOLD]'),
+      isTrue,
+    );
+    expect(isWellFormedRichText('[BOLD][RUBY=かんじ]漢字[/RUBY][/BOLD]'), isTrue);
+    expect(
+      isWellFormedRichText('[UNDERLINE][RUBY=かんじ]漢字[/RUBY][/UNDERLINE]'),
+      isTrue,
+    );
+    expect(
+      isWellFormedRichText('[BOLD][UNDERLINE]x[/BOLD][/UNDERLINE]'),
       isFalse,
     );
+    expect(isWellFormedRichText('[RUBY=かんじ][BOLD]漢字[/BOLD][/RUBY]'), isFalse);
+    expect(
+      isWellFormedRichText('[RUBY=かんじ]漢字[YOMI]（かんじ）[/YOMI][/RUBY]'),
+      isFalse,
+    );
+    expect(isWellFormedRichText('[BOLD][BOLD]x[/BOLD][/BOLD]'), isFalse);
     expect(isWellFormedRichText('[RUBY=漢字]何卒[/RUBY]'), isTrue);
     expect(isWellFormedRichText('[RUBY=nǐ hǎo]你好[/RUBY]'), isTrue);
     expect(isWellFormedRichText('[RUBY=に\nとぞ]何卒[/RUBY]'), isFalse);
@@ -61,6 +76,38 @@ void main() {
     );
   });
 
+  test('converts display tags to copyable plain text', () {
+    expect(
+      richTextToPlain('[RUBY=なにとぞ]何卒[/RUBY][BOLD]宜しく[/BOLD]'),
+      '何卒（なにとぞ）宜しく',
+    );
+    expect(richTextToPlain('[RUBY=ます]ます[/RUBY]'), 'ます');
+    expect(richTextToPlain('[RUBY=（いま）]今[/RUBY]'), '今（いま）');
+    expect(richTextToPlain('[RUBY=いま]今（いま）[/RUBY]'), '今（いま）');
+    expect(richTextToPlain('[RUBY=いま]今(いま)[/RUBY]'), '今（いま）');
+    expect(richTextToPlain('[RUBY=いま]今[/RUBY]（いま）'), '今（いま）');
+    expect(richTextToPlain('ます[YOMI]（ます）[/YOMI]'), 'ます（ます）');
+  });
+
+  test(
+    'keeps one parenthetical reading when RUBY wraps the annotation',
+    () async {
+      const source = '今（いま）：现在、此刻';
+      for (final candidate in <String>[
+        '[RUBY=いま]今（いま）[/RUBY]：现在、此刻',
+        '[RUBY=いま]今[/RUBY]（いま）：现在、此刻',
+      ]) {
+        final result = await RichTextPostProcessor(
+          llm: FakeProvider(responseText: candidate),
+          model: 'small',
+        ).process(source);
+
+        expect(result.accepted, isTrue);
+        expect(richTextToPlain(result.taggedText!), source);
+      }
+    },
+  );
+
   test('allows a whole YOMI block to be replaced by RUBY', () async {
     const source = 'ます[YOMI]（ます）[/YOMI]';
     final result = await RichTextPostProcessor(
@@ -94,6 +141,58 @@ void main() {
     expect(result.accepted, isTrue);
     expect(result.taggedText, '[RUBY=nǐ hǎo]你好[/RUBY]');
   });
+
+  test('accepts source that already contains display tags', () async {
+    const source = '请多关照：[RUBY=なにとぞ]何卒[/RUBY]。';
+    final result = await RichTextPostProcessor(
+      llm: FakeProvider(responseText: source),
+      model: 'small',
+    ).process(source);
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, source);
+  });
+
+  test('cleans punctuation from a RUBY reading before using it', () async {
+    final result = await RichTextPostProcessor(
+      llm: FakeProvider(responseText: '[RUBY=（いま）、]今[/RUBY]'),
+      model: 'small',
+    ).process('今');
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, '[RUBY=いま]今[/RUBY]');
+  });
+
+  test('ignores punctuation when comparing retained YOMI contents', () {
+    expect(
+      allowsYomiDeletion('A[YOMI]（a）[/YOMI]B', 'A[YOMI]a[/YOMI]B'),
+      isTrue,
+    );
+  });
+
+  test(
+    'detailed formatter permits BOLD/UNDERLINE without a vague escape',
+    () async {
+      final provider = FakeProvider(responseText: '[RUBY=いま]今[/RUBY]');
+      final result = await RichTextPostProcessor(
+        llm: provider,
+        model: 'small',
+      ).process('今', detailed: true);
+
+      expect(result.accepted, isTrue);
+      final prompt = provider.requests.single.messages
+          .map((message) => message.text)
+          .join('\n');
+      final normalizedPrompt = prompt.replaceAll(RegExp(r'\s+'), ' ');
+      expect(prompt, contains('[BOLD]'));
+      expect(prompt, contains('[UNDERLINE]'));
+      expect(prompt, isNot(contains('If you are uncertain')));
+      expect(
+        normalizedPrompt,
+        contains('do not return the whole text unchanged'),
+      );
+    },
+  );
 
   test('keeps the parenthetical reading when YOMI is retained', () async {
     const source = '漢字[YOMI]（かんじ）[/YOMI]';
@@ -136,6 +235,17 @@ void main() {
 
     expect(result.accepted, isFalse);
     expect(result.rejectionReason, 'malformed_yomi');
+  });
+
+  test('accepts RUBY nested inside BOLD and UNDERLINE', () async {
+    const candidate = '[BOLD][UNDERLINE][RUBY=かんじ]漢字[/RUBY][/UNDERLINE][/BOLD]';
+    final result = await RichTextPostProcessor(
+      llm: FakeProvider(responseText: candidate),
+      model: 'small',
+    ).process('漢字');
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, candidate);
   });
 
   test('rejects output that changes the original text', () async {

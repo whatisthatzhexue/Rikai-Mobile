@@ -20,7 +20,9 @@
 > **Agent 开发门禁**：开发/修改 Phase 6 词典助手前，按
 > `docs/agent_docs/README.md` 的必读顺序阅读；2026-10-31 的 F1–F17/Wave 4 未关闭
 > 前，不在 P6.7 上继续叠加新功能，也不把未实现能力写成已支持。P6.6 多 OCR 核心
-> 已于 2026-11-02 按用户明确指示单独实现，但真机验收仍待 Wave 4。
+> 已于 2026-11-02 按用户明确指示单独实现，但真机验收仍待 Wave 4。P6.7 设计/契约/
+> token 已于 2026-11-03 记录（design §17.2、contracts §14、R-AGENT-24–27），
+> 实现仍排到 Wave 4 之后。
 
 `docs/project-rules.md`：
 内容：正面/反面 MUST/MUST NOT 规则的单一权威源，按 `R-<域>-<序号>` 编号；
@@ -142,8 +144,9 @@ Agent 改动前。**今后的误区只在该文件新增。**
 
 `docs/schemas/agent/`：
 内容：Agent 内部 DTO/输入/证据 schema（input/evidence/analysis/quote/profile/
-coverage/tool-result）；模型响应用方括号标签协议，不是 JSON 响应 schema。
-何时查看：改 DTO/请求/证据结构或校验器前。
+coverage/tool-result，以及 P6.7 的 history-entry/history-result/pitch/
+annotation-rules）；模型响应用方括号标签协议，不是 JSON 响应 schema。
+何时查看：改 DTO/请求/证据/历史/声调/DSL 结构或校验器前。
 
 `docs/adr/`：
 内容：四个架构决策（ONNX OCR、UniDic 原地读取、MDict `dict_reader`、Agent
@@ -201,8 +204,8 @@ Phase 5（语料/历史、首次引导与发布打磨）也已于 2026-10-30 完
 用户发布为 1.0 release。
 
 Phase 6（`docs/phase6-agent-design.md`，**设计 v2；P6.1–P6.5 与 P6.6 多 OCR
-核心已实现，P6.6 真机验收与 P6.7 未完成**；契约见
-`docs/phase6-agent-contracts.md`）增加「词典助手」：可选地调用
+核心已实现，P6.6 真机验收未完成；P6.7 设计/契约已于 2026-11-03 记录，实现
+未开始**；契约见 `docs/phase6-agent-contracts.md`）增加「词典助手」：可选地调用
 用户配置的远程文本 LLM（DeepSeek/Claude 等），把本地 OCR、UniDic、MDict 作为
 schema 化证据；采用固定流水线，模型无工具调用（2026-10-31 决策）。图片仅在本机
 OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）；
@@ -310,9 +313,14 @@ Phase 0–5 已全部完成并发布 1.0（验收记录见 `docs/project-history
 实现（自动化测试）。同日后续修正：provider 请求预校验/非法字符清理/400 按真实
 error body 分类（不设统一 max_tokens 上限；OpenAI-compatible 默认不发送
 max_tokens，provider 可选 maxOutputTokens 覆盖；只有 reasoning、无正文时快速失败
-且不重复请求）、结果摘要富文本后处理（RUBY/BOLD/UNDERLINE；结果生成模型用
-`[YOMI]` 标记读音，后处理允许整块删除 YOMI，保留块必须内容/位置不变；剥离标签
-逐字符 diff，冗余 RUBY 取消，失败降级纯文本；P7.0 增量，完整 P7 计划见
+且不重复请求）、结果富文本后处理（仅详细“原文”/逐句理解/词典事实解释；AI 气泡
+保持纯文本；RUBY/BOLD/UNDERLINE；标签正确嵌套，BOLD/UNDERLINE 可包 RUBY，读音
+继承 BOLD 但永不加下划线；RUBY 正文色、以 base 基线对齐；UNDERLINE 正文色、2x
+粗细；重复 `surface（reading）` 读音折叠为一份；AI 直接判断读音，不走 UniDic；
+结果生成模型用 `[YOMI]` 标记 `[MEANING]`
+读音，后处理允许整块删除 YOMI，保留块必须内容/位置不变；YOMI 内容/RUBY 读音
+清洗全半角标点；剥离标签逐字符 diff，冗余 RUBY 取消，失败降级纯文本；Markdown
+导出转 `base（reading）`；P7.0 增量，完整 P7 计划见
 `docs/agent_docs/p7-task-decomposition-plan.md`）、覆盖审查紧凑输入/单项容错/独立预算
 （`AgentLimits.coverage*`，CJK 系数 1.0）/自动修正日志/规范化后修复、多 OCR
 每图独立 loading/可点缩略图、UniDic 空输入清除。多 OCR 显式对比改为
@@ -326,7 +334,8 @@ OCR 插件新增可选 `engine` 约束；版本 chip 左对齐/自动换行/固�
 存于 `docs/agent_output/YYYY-MM-DD-HH-mm.txt`。流式结束后先渲染已解析/校验的主
 结果（“结果已出，正在复核…”），不等待格式/语言/富文本后置调用；provider 在
 `finish_reason`/`[DONE]`/`message_stop` 到达时立即停止读取。P6.6 真机验收与 P6.7
-未完成。
+实现未完成；P6.7 的历史/声调/DSL/Markdown 设计决议已记录（design §17.2、
+contracts §14、design-tokens P6.7 行）。
 当前进度、验证记录与工作队列只维护在以下文档，本文件不再复述：
 
 - 实现进度与验证记录：`docs/phase6-status.md`
@@ -345,7 +354,11 @@ OCR 插件新增可选 `engine` 约束；版本 chip 左对齐/自动换行/固�
   secure storage 设备 I/O）；Wave 1–3 的自动化测试不能替代设备验收。
 - P6.6 多 OCR 版本/词典辅助修复：核心已实现（显式多版本、质量/diff、词典候选、
   用户确认后重新分析）；剩余真机视觉/OCR/词典质量验收，不能把图片发给模型。
-- P6.7 annotation DSL/Markdown/ruby/pitch、Agent 会话历史 UI、发布打磨。
+- P6.7：设计/契约/token 已记录（`docs/phase6-agent-design.md` §17.2、
+  `docs/phase6-agent-contracts.md` §14、`docs/design-tokens.md` P6.7 行、
+  `docs/project-rules.md` R-AGENT-24–27）；实现 Wave 4 后开始。范围：独立
+  Agent 历史（一条=一次分析、只读、不存图片/路径）、安全富文本/ruby/UniDic
+  声调、annotation DSL（先阅读器/照片集/语料）、provider 测试连接、发布打磨。
 - P7 任务解耦/模型路由/并发流式为规划项（
   `docs/agent_docs/p7-task-decomposition-plan.md`）；P7.0 富文本后处理已增量
   实现，P7.1–P7.4 未实现，不得写成已支持。
@@ -485,8 +498,8 @@ third_party/overlay-translator/                               # Apache 许可/�
 third_party/paddleocr4android/                                # MIT 许可/可选后端说明
 ```
 
-Phase 6 新增（P6.1–P6.5、Wave 3 与 P6.6 多 OCR 核心已创建；annotation、
-markdown_renderer 等 P6.7 文件待建）：
+Phase 6 新增（P6.1–P6.5、Wave 3 与 P6.6 多 OCR 核心已创建；P6.7 历史/声调/
+DSL/受限 Markdown 预览文件待建）：
 
 ```text
 lib/features/agent/                                           # Agent 页/输入/模式/证据卡/OCR 版本/档案 sheet
@@ -499,7 +512,7 @@ lib/services/agent/citation_registry.dart                     # orchestrator 发
 lib/services/agent/agent_validator.dart                       # schema/quote/order/strict 校验
 lib/services/agent/agent_language_validator.dart              # F1b 结果人类字段语言后校验
 lib/services/agent/agent_prompts.dart                         # 所有 Agent prompt 文本/请求构造（禁止散落硬编码）
-lib/services/agent/rich_text_post_processor.dart              # P7.0 摘要富文本后处理/diff 防线
+lib/services/agent/rich_text_post_processor.dart              # P7.0 详细解析富文本后处理/diff 防线
 lib/core/utils/rich_text_tags.dart                            # RUBY/BOLD/UNDERLINE/YOMI 标签解析/剥离
 lib/features/agent/agent_rich_text.dart                       # Agent 富文本渲染（ruby/bold/underline）
 lib/services/agent/agent_coverage_parser.dart                 # F7 [COVERAGE] 标签解析/完整性
@@ -509,8 +522,15 @@ lib/core/models/agent/agent_ocr.dart                          # P6.6 质量/diff
 lib/services/agent/ocr_consensus.dart                         # P6.6 质量评分/diff/排序/词典候选
 lib/state/agent_ocr_variants.dart                             # P6.6 应用级多版本识别控制器
 lib/features/agent/agent_ocr_variants_panel.dart              # P6.6 版本 chip/差异/修复 UI
-lib/services/agent/annotation/                                # 注音/标注安全 DSL 与统一渲染（P6.7）
-lib/services/agent/markdown_renderer.dart                     # Markdown/ruby/声调安全渲染（P6.7）
+lib/services/agent/annotation/                                # 注音/标注安全 DSL 与统一渲染（P6.7 planned）
+lib/services/agent/markdown_renderer.dart                     # 受限 Markdown 档案预览（P6.7 planned；不做通用渲染器）
+lib/core/models/agent/agent_history.dart                      # P6.7 历史 entry/result codec（待建）
+lib/features/agent/agent_history_page.dart                    # P6.7 历史列表（待建）
+lib/features/agent/agent_history_detail_page.dart             # P6.7 历史只读详情（待建）
+lib/services/storage/agent_history_store.dart                 # P6.7 历史仓储（待建）
+lib/core/models/agent/agent_pitch.dart                        # P6.7 UniDic 声调 DTO（待建）
+lib/services/mecab/unidic_accent_parser.dart                  # P6.7 accent 24–26 解析（待建）
+lib/features/agent/agent_pitch_accent.dart                    # P6.7 声调高低线（待建）
 lib/core/models/agent/                                        # input/evidence/analysis/profile/quote/tool DTO
 lib/services/storage/agent_store.dart                         # 会话/消息/引用/OCR 版本/档案 SQLite
 lib/services/security/secret_store.dart                       # API Key 安全存储
@@ -549,8 +569,9 @@ flutter build apk --debug
   `dart run flutter_launcher_icons`。
 - Phase 6 自动化测试只用 fake provider；不得用真实 API Key 跑测试。P6.6 多 OCR
   已有 quality/diff/ranking/repair、controller、prepared-variant orchestrator 与
-  widget 测试（全部 fake OCR/lookup）；P6.7 annotation DSL 测试尚未编写；真实
-  OCR 质量、真实词典候选、provider/secure storage/arm64 仍需设备验收。
+  widget 测试（全部 fake OCR/lookup）；P6.7 历史/声调/DSL 测试尚未编写（设计见
+  design §17.2、contracts §14）；真实 OCR 质量、真实词典候选、provider/secure
+  storage/arm64 仍需设备验收。
 - 每个阶段结束运行 analyze/test/debug build；当前测试数量、设备套件结果与构建
   产物见 `docs/project-data.md` §2/§3/§5。
 

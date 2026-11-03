@@ -211,6 +211,50 @@ void main() {
     expect(find.textContaining('[YOMI]'), findsNothing);
   });
 
+  testWidgets('renders RUBY in the original and segment text', (tester) async {
+    final result = AgentRunResult(
+      input: _result.input,
+      evidence: _result.evidence,
+      quotes: _result.quotes,
+      analysis: const AgentAnalysis(
+        sourceId: 'src-1',
+        segments: <AgentSegment>[
+          AgentSegment(
+            id: 'seg-1',
+            quoteId: 'q1',
+            interpretation: '正式请求',
+            epistemic: AgentEpistemic.dictionaryFact,
+          ),
+        ],
+      ),
+      validation: _result.validation,
+      sources: _result.sources,
+      dictionaryProfiles: _result.dictionaryProfiles,
+      richOriginalText: '[RUBY=なにとぞ]何卒[/RUBY]',
+      richSegmentTexts: const <String>['[RUBY=せいしき]正式请求[/RUBY]'],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentResultView(
+              result: result,
+              onCitationTap: (_) {},
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('なにとぞ'), findsOneWidget);
+    expect(find.text('せいしき'), findsOneWidget);
+    expect(find.textContaining('[RUBY='), findsNothing);
+  });
+
   testWidgets('evidence header counts only adopted citations', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

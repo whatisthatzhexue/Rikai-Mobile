@@ -6,7 +6,7 @@
 >
 > 本规划不改变固定流水线、模型无工具、citation 由 orchestrator 发放、图片只在本机
 > OCR 的既有边界。相关文档：
-> - P6.7：annotation DSL、Markdown/ruby/pitch、会话历史；
+> - P6.7：annotation DSL、安全富文本/ruby/UniDic 声调、会话历史；
 > - P6.8：[任务级流式规划](task-level-streaming-plan.md)；
 > - 契约：[phase6-agent-contracts.md](../phase6-agent-contracts.md)；
 > - 安全规则：[project-rules.md](../project-rules.md) R-SEC/R-AGENT。
@@ -67,12 +67,14 @@ P6.8 解决“已生成结果如何更早显示”；P7 解决“不要把所有
 
 ### 4.3 富文本后处理任务
 
-输入：已完成、已校验的**纯文本结果**（首版为 assistant summary）。
+输入：已完成、已校验的**纯文本详细结果**：整个“原文”section、每条逐句理解，以及
+词典事实中的词义/语法解释（不含 citation snippet）。AI 气泡摘要不进入该任务，
+保持纯文本。
 输出：只在原文字符之间插入 `[RUBY=读音]base[/RUBY]`、`[BOLD]...[/BOLD]`、
 `[UNDERLINE]...[/UNDERLINE]` 的文本。
-模型：轻量模型或本地模型。
+模型：轻量模型或本地模型；直接阅读文本判断读音，不读取 UniDic 读音表。
 硬约束（内部 Prompt 统一英文，实际文本见
-`agent_prompts.dart` 的 `buildRichTextPostProcessRequest`）：
+`agent_prompts.dart` 的 `buildDetailedRubyPostProcessRequest`）：
 
 > It is absolutely forbidden to modify, delete or add any character of the
 > original text (including punctuation, spaces and line breaks), except that
@@ -80,12 +82,15 @@ P6.8 解决“已生成结果如何更早显示”；P7 解决“不要把所有
 > equivalent RUBY span. Only `[RUBY=xxx]`, `[BOLD]` and `[UNDERLINE]` may be
 > inserted. The output must contain the complete original text.
 
-结果生成模型可在 `[TRANSLATION]`/`[MEANING]` 中把读音写成
-`base[YOMI]（reading）[/YOMI]`。代码端必须剥离显示标签，并按 YOMI 规则（允许整块
-删除；保留块内容/位置不变）与原文逐字符比较；不完全一致就丢弃格式化结果、渲染
-纯文本。标签必须成对、不嵌套；RUBY 是语言无关的发音标注，不限定书写系统，禁止
-标签/换行；RUBY 读音等于 base 时取消该 RUBY。该任务没有修改原文的权限，因此不能
-用来修错、翻译或补内容。
+结果生成模型可在 `[MEANING]` 中把读音写成 `base[YOMI]（reading）[/YOMI]`。
+代码端必须剥离显示标签，并按 YOMI 规则（允许整块删除；保留块内容/位置不变）与
+原文逐字符比较；不完全一致就丢弃该块格式化结果、渲染纯文本。标签必须成对且
+正确嵌套：RUBY 可在 BOLD/UNDERLINE 内，BOLD/UNDERLINE 可以相互包裹，但不得
+进入 RUBY base 或嵌套自身；RUBY 读音继承 BOLD、永不加下划线，并以 base 的
+alphabetic baseline 对齐。RUBY 是语言无关的发音标注，不限定书写系统，禁止
+标签/换行；RUBY 读音等于 base 时取消该 RUBY。包住已有 `surface（reading）`
+注记时显示/导出只保留一份读音。Prompt 不使用“uncertain 就返回原文”的模糊兜底。
+该任务没有修改原文的权限，因此不能用来修错、翻译或补内容。
 
 ### 4.4 可选审查任务
 
@@ -186,7 +191,7 @@ P7 启动前必须先完成 P6.7 与 Wave 4 设备验收；不得在未关闭的
 
 - 任务 artifact 的协议往返、未知字段/标签拒绝、版本/指纹失效。
 - 翻译/语法任务并发时，citation 顺序、词典顺序和严格模式不被破坏。
-- 富文本 diff：完全相同才采用；任何字符变化/未闭合标签/嵌套标签均回退纯文本。
+- 富文本 diff：完全相同才采用；任何字符变化/未闭合标签/错误嵌套标签均回退纯文本。
 - 模型路由：复杂任务只用配置的复杂模型；格式化/审查失败不回滚核心产物。
 - 并发：一个有界调度器；单任务取消不遗留悬挂 future；超时/限流独立重试。
 - P6.8 流式：译文先于完整结果；最终对账无重复/闪烁；失败保留已验证内容。

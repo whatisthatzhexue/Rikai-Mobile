@@ -16,9 +16,11 @@
 > 见 `docs/project-data.md`。本文保留产品/流程设计细节，不重复规则正文或当前数值。
 
 - 状态：**设计 v2；P6.1–P6.5 核心、2026-10-31 反馈 Wave 1–3 与 P6.6 多 OCR
-  核心已实现，P6.6 自动化收尾于 2026-11-03 完成；P6.6 真机验收、Wave 4 设备
-  验收与 P6.7（安全富文本/DSL/历史/发布）未完成**
-- 日期：2026-10-30（P6.6 核心实现更新：2026-11-02；自动化收尾：2026-11-03）
+  核心已实现，P6.6 自动化收尾于 2026-11-03 完成；P6.7 设计决议已于 2026-11-03
+  记录（仅设计/契约/token，未实现）；P6.6 真机验收、Wave 4 设备验收与 P6.7
+  实现仍未完成**
+- 日期：2026-10-30（P6.6 核心实现更新：2026-11-02；自动化收尾：2026-11-03；
+  P6.7 设计决议：2026-11-03）
 - 前身：v1 只描述通用工具型 Agent；v2 加入用户确认的固定流水线、词典熟悉、
   OCR JSON 信封、逐词/语法证据、原文引用、会话级词典选择与按需多 OCR。
 - 依赖：Phase 4.5 的 arm64/真实页面验收、Phase 5 的完整历史/引导/发布打磨，以及
@@ -27,7 +29,8 @@
   `docs/phase6-agent-contracts.md`；机器可读 schema 见 `docs/schemas/agent/`。
 - 实现状态：见 `docs/phase6-status.md`。当前已接入 Agent 页、Provider 设置、
   熟悉期、证据/引用/校验、主页第五按钮和 P6.6 多 OCR 对比/词典候选修复；多 OCR
-  真机验收、历史 UI、annotation DSL 和发布验收仍待完成。
+  真机验收、历史 UI、annotation DSL、声调渲染和发布验收仍待完成。P6.7 的设计
+  边界、历史/声调/DSL/Markdown 决议见 §17.2；实现排期在 Wave 4 之后。
 
 ## 0. v2 变更摘要
 
@@ -420,6 +423,11 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   sourceSpan)` 发放 `source-N`；模型只看到 `source-N`，不能自造。
 - 证据包只含：token ID/文本/读音/词性/offset、语法模式、清洗后的 citation 摘要；
   **不含原始 HTML、路径、MDD 资源、音频**。
+- 2026-11-03 性能增量：`EvidenceBuilder` 通过 `BatchLookupPort` 将同一模式的多个
+  target 查询合并为一次 MDict worker 往返（worker 内部仍顺序执行，上限见
+  `AgentLimits.lookupBatchSize`）；主分析 prompt 使用紧凑投影，只发送选中的 OCR
+  variant 文本一次，evidence 不重复 source text，也不发送 `lookup_candidates`/
+  `tool_call_id`/内部 budget。
 - 重复 token（如「は」出现 10 次）只查一次，但保留所有 span 映射；输出 token 级
   证据表供 UI 展开。
 - UniDic 未配置/分词失败：不伪造 token；严格模式提示“无法进行结构/语法校验”，
@@ -457,6 +465,10 @@ pattern id + 清洗 citation 摘要，保留 offset 与 entry_key/matched_key，
   再走流程 A；模型不能单独决定删除，跨词典或多个组共享的 keep 不会被删。
 - 每个用户请求最多一次覆盖审查 + 一次回退查词（`coverageFallbackUsed`）；没有
   可验证缺口/重复时直接进入 reasoning，不循环。
+- 2026-11-03 自适应触发：默认仅当存在尚未获得 citation 的检索目标，或 citation
+  已达全局上限（需要验证重复以释放槽位）时运行；全部目标已有 citation 且仍有
+  剩余槽位时跳过，避免每个 run 固定多一次小模型调用。
+  `AgentLimits.adaptiveCoverageReview=false` 可强制每次都审查。
 - 覆盖审查失败、标签无效/不完整或 query 不可追溯时只产生 warning，保留原证据
   继续；不得让整次 run 失败。
 
@@ -694,6 +706,9 @@ recommended_query_forms, confidence, schema_version`。UI 展示的 Markdown 由
   “不再询问”同时开启 `agent_profiles_auto_accept`，之后新生成的档案自动保存。
 - 生成后的档案先进入应用级待确认队列；离开页面不自动 skip，全部处理完才进入
   查词（见 §6.1）。队列/确认状态属于应用生命周期，不依赖 `AgentPage`。
+- P6.7 设计：待确认提案持久化到 `agent_profile_inbox`；进程重启后重新加载
+  `pending`，dismiss 只保留 pending，不自动 skip；确认后才写
+  `dictionary_profiles`（见 §17.2.2、契约 §14.1.3）。
 - 档案只存应用私有 SQLite；不写用户 UniDic/MDict 目录；不导出；不包含大段原文。
 - 指纹与失效规则见 §6.1；词典变化/用户重置/档案删除/schema/prompt 升级时失效。
 
@@ -785,18 +800,25 @@ LlmProvider
 |---|---|
 | `agent_providers` | id, kind, display_name, base_url, small_model, complex_model, timeout_seconds, capabilities_json（streaming/max_output_tokens，不含 Key） |
 | `agent_sessions` | id, title, created_at, updated_at, mode, provider_id, small_model, complex_model, dictionary_ids_json, dictionary_mode, status |
-| `agent_runs` | id, session_id, status, started_at, finished_at, error_code, input_summary, truncated |
+| `agent_runs` | id, session_id, status, started_at, finished_at, error_code, input_summary, truncated；P6.7 增加 user_text, image_count, result_json, result_schema_version, updated_at |
 | `agent_messages` | id, run_id, role, content_markdown, created_at, model_id, stage |
 | `agent_tool_calls` | id, run_id, tool_name, tool_version, input_json_redacted, result_json, status, elapsed_ms, error_code |
-| `agent_source_versions` | id, run_id, source_id, image_id, variant_id, origin, text, blocks_json, engine, mode, confidence |
+| `agent_source_versions` | id, run_id, source_id, image_id, variant_id, origin, text, blocks_json, engine, mode, confidence；P6.7 增加 selected, variant_order |
 | `agent_citations` | id, run_id, message_id, kind, dictionary_id, dictionary_order, entry_key, matched_key, headword, snippet, source_id, tool_call_id |
 | `dictionary_profiles` | dictionary_id, fingerprint, profile_json, markdown, status, confirmed_at, model_id, prompt_version, schema_version |
 | `unidic_profiles` | unidic_path_hash, fingerprint, profile_json, markdown, status, confirmed_at, schema_version |
-| `annotation_rule_sets` | P6.7 再建，不进入首版 |
+| `annotation_rule_sets` | id, name, version, rules_json, enabled, builtin, schema_version, updated_at；P6.7 只存内置规则和版本，不开放自由编辑器 |
+| `agent_profile_inbox` | id, run_id, dictionary_id, title, fingerprint, draft_json, markdown, status, created_at, updated_at；P6.7 待确认档案跨进程恢复 |
 
 `AgentProviderConfig`（不含 Key）存 `agent_providers` 表；Key 只在 `SecretStore`，
 按 `provider_id` 索引。非密钥的 Agent 偏好（默认模式/provider）可存
 SharedPreferences，但不得混入 Key。
+
+P6.7 历史复用上述表，不新增图片字段：`agent_runs.result_json` 存带 schema 版本的
+`rikai.agent.history-result.v1` 文档；`AgentRunSnapshot` 不整对象持久化，
+`sentImagePaths` 永不入库。`agent_source_versions` 保存每个变体的文本和选中标记，
+`image_id` 只是不透明句柄；历史详情用 `image_count` 显示“图片 N 张（未保存原图）”。
+历史 codec/迁移细节见 `docs/phase6-agent-contracts.md` §14.1。
 
 ## 13. UI 与设计 token
 
@@ -812,10 +834,16 @@ SharedPreferences，但不得混入 Key。
 - 结果：译文/结论在 AI 气泡正文；原文引用、逐句理解、词/语法注释、多解释作为
   消息内可折叠“详细解析”；证据默认折叠为「依据 N 条 ▾」，展开按词典顺序显示
   证据卡片与 citation chip；严格模式无依据显示“无词典依据”，宽松模式“模型补充”
-  独立标签。P7.0 增量允许对 AI 气泡摘要做 RUBY/BOLD/UNDERLINE 后处理；结果生成
-  模型可用 `[YOMI]` 标记 `[TRANSLATION]`/`[MEANING]` 中的读音，后处理允许整块删除
-  YOMI，但保留块必须内容/位置不变；必须通过标签剥离逐字符 diff，冗余 RUBY 取消，
-  失败时显示纯文本，详细解析区暂保持结构化纯文本。
+  独立标签。P7.0 增量只对详细解析的“原文”、逐句理解和词典事实解释做
+  RUBY/BOLD/UNDERLINE 后处理；AI 气泡摘要保持纯文本，避免中文译文被误标注。
+  后处理 AI 直接阅读文本生成注音，不使用 UniDic 读音表；结果生成模型可用
+  `[YOMI]` 标记 `[MEANING]` 中的读音，后处理允许整块删除 YOMI，但保留块必须
+  内容/位置不变；标签必须成对且正确嵌套（RUBY 可在 BOLD/UNDERLINE 内），必须
+  通过标签剥离逐字符 diff，冗余 RUBY 取消，失败时该块显示纯文本。包住已有
+  `surface（reading）` 时只显示一份读音；RUBY 以 base 基线对齐，读音继承 BOLD、
+  永不加下划线。Markdown 导出通过 `richTextToPlain` 转为不带标签的
+  `base（reading）`。声调（P6.7 设计，未实现）：只在词注/词典事实行使用 UniDic
+  声调字段 24–26 画高低线，无可靠数据不显示，不用 AI 猜；详见 §17.2.3。
 - 状态/错误：空闲/提交中/流式/完成/中断/降级/离线/错误均有视觉标识；失败保留
   已生成内容，错误卡出现在消息下方，不弹全局对话框、不整屏 loading。
 - OCR 版本区（P6.6 核心已实现，2026-11-02）：标题“文字识别结果”；每张图显示
@@ -830,7 +858,14 @@ SharedPreferences，但不得混入 Key。
 - 设置：provider 列表/新增/编辑、Base URL、small/complex 模型、API Key 掩码输入
   与显示切换、测试连接（显式发送最小文本请求）、三态配置标签、隐私说明、清除
   Key/会话/档案；分组按“模型/Provider → 语言 → 数据与隐私 → 关于”。
-- 历史：助手会话列表，打开/删除/清空；不云同步。
+- 历史（P6.7 设计，未实现）：助手 AppBar 历史图标打开独立 `/agent-history`；
+  一条 = 一次分析（run），只读回看，不并入主页语料“历史记录”。列表显示标题/
+  时间/模式/状态/图片张数；详情恢复用户文本、结果、证据/citation 和全部 OCR
+  变体文本。**不保存图片/缩略图/路径**；详情明确“原图未保存”。citation 失效时
+  只显示保存摘要。删除单条/清空全部；不自动删除。详见 §17.2.2。
+- 标注 DSL（P6.7 设计，未实现）：安全 JSON AST + 内置规则 + 预览/版本回滚；
+  先阅读器/照片集/语料，Agent 结果后续接入。P6.7 不开放自由文本规则编辑器；
+  详见 §17.2.4。
 - 空态/错误态：未配置 provider、网络/限流/超时/模型拒绝/工具失败；错误不含 Key/
   完整请求体；严格模式无依据 + 切换宽松；可重试/取消。
 - 无障碍：正文 16sp、辅助 14sp、12sp 仅短标签；icon/chip/操作行有 `Semantics`；
@@ -839,7 +874,8 @@ SharedPreferences，但不得混入 Key。
   系统消息、状态条、错误卡、流式光标、操作行、证据折叠条、无依据标注、composer
   最大行数等），复用现有蓝白色板、16/14/18/24sp 字号和 4pt 间距；先写规范，
   实施时才加到 `app_tokens.dart`。**当前 P6.5 已实现基础对话式布局（气泡/流式/
-  折叠依据/固定输入区）；状态条、历史、无障碍 200% 等完整 v2 验收项待补。**
+  折叠依据/固定输入区）；状态条、无障碍 200% 等完整 v2 验收项待补；历史已设计
+  （§17.2.2）但未实现。**
 
 ## 14. 隐私与安全
 
@@ -852,6 +888,8 @@ SharedPreferences，但不得混入 Key。
   伪造 citation 只显示为文本。
 - 日志/错误/崩溃报告不含 Key、完整请求体、图片路径；提供清除 Key、会话、档案、
   规则的入口。
+- P6.7 历史只存 OCR 文本/变体/结果/citation 和 `image_count`；不存图片字节、
+  缩略图、路径/文件名/base64、Key、provider 原始 body。历史详情不还原原图。
 - 未配置 provider 时核心离线功能不回归；所有既有页面照常工作。
 
 ## 15. 测试与验收
@@ -883,6 +921,15 @@ Phase 6 实施后至少覆盖：
     证据默认折叠「依据 N 条」、严格无依据显示但可切换宽松、输入区 1–5 行、
     设置三态 Key/测试连接、Semantics/40dp/200% 字体缩放。当前 P6.5 基础对话式
     页面仍需逐项验收；未满足项不算通过。
+18. P6.7 历史：一条=一次分析、只读；列表/详情不出现图片/路径/缩略图；全变体
+    文本持久化；启动 running→interrupted；citation 精确回查/摘要回退；删除/
+    清空级联；profile inbox 跨进程恢复且 dismiss 不 skip。
+19. P6.7 声调：UniDic 24–26 映射；真实样例 mora_pattern；非标准/越界/空读音
+    不显示；只在词注/词典事实行；请求体无 pitch；复制/导出无高低线。
+20. P6.7 DSL：白名单/边界/注入/版本回滚；预览=正式渲染；无效规则不覆盖上一
+    有效版本；Agent 结果不经过 DSL。
+21. P6.7 Markdown：只用于导出/受限档案预览；主结果非 Markdown；未知语法/HTML/
+    JS/图片/外链不执行、不加载、不自动链接。
 
 当前实现验收（P6.1–P6.5）：
 
@@ -893,15 +940,17 @@ Phase 6 实施后至少覆盖：
   仍待 arm64/真实漫画页验收。
 - 主页五按钮已接入，Agent 页/Provider 设置/熟悉期/证据/引用/校验可用。
 - **对话式 Agent UI v2 基础布局已实现（气泡/流式/折叠依据/固定输入区），但
-  状态条、历史、无障碍 200% 等完整 v2 验收项仍待补。**
+  状态条、无障碍 200% 等完整 v2 验收项仍待补；历史已设计（§17.2.2）未实现。**
 - P6.6 多 OCR 核心已实现（2026-11-02，自动化测试）；P6.6 真机视觉/OCR/词典
-  质量验收与 P6.7 DSL/发布未完成；真实 provider/API Key 与真实词典 `sample`
-  设备验证仍待做。详见 `docs/phase6-status.md`。
+  质量验收未完成；P6.7 设计/契约已记录（2026-11-03），实现未开始；真实
+  provider/API Key 与真实词典 `sample` 设备验证仍待做。详见
+  `docs/phase6-status.md`。
 
 ## 16. 实施顺序（Phase 6）
 
 Phase 6 已在 Phase 5 完成后开始；P6.1–P6.5 核心已完成，P6.6 多 OCR 核心已完成
-（2026-11-02），P6.6 真机验收与 P6.7 待做。
+（2026-11-02），P6.6 真机验收待做；P6.7 设计/契约已记录（2026-11-03），实现
+待 Wave 4 后开始。
 以下不是时间估算：
 
 1. **6.1 能力 Ports**：`lib/services/agent/ports/`、DTO 序列化、`LookupGateway`、
@@ -920,14 +969,17 @@ Phase 6 已在 Phase 5 完成后开始；P6.1–P6.5 核心已完成，P6.6 多 
    按钮、设计 token；先结构化组件 + 安全纯文本，不引入完整 Markdown/ruby。
 6. **6.6 多 OCR（核心已实现，2026-11-02）**：`ocr_consensus.dart`、变体差异/
    修复建议 UI；默认单版本；真机视觉/OCR/词典质量验收仍待完成。
-7. **6.7 DSL/发布**：annotation DSL、Markdown/ruby/pitch、许可证/性能/发布验收。
+7. **6.7 安全富文本/历史/DSL/发布（设计已记录 2026-11-03，Wave 4 后实现）**：
+   历史/持久化、安全富文本/ruby/声调、annotation DSL、provider 测试连接、
+   许可证/性能/发布验收。设计决议见 §17.2。
 
 ## 17. 已定事项、默认值与开放问题
 
 **已定：**
 
 - Phase 6 已在 Phase 5 后开始；P6.1–P6.5 核心已实现，P6.6 多 OCR 核心已实现
-  （2026-11-02），P6.6 真机验收与 P6.7 待做。
+  （2026-11-02），P6.6 真机验收待做；P6.7 设计/契约已记录（2026-11-03），实现
+  待 Wave 4 后开始。
 - 固定流水线；模型无工具（2026-10-31 决策；tool loop 为未来扩展）。
 - OpenAI-compatible + Anthropic 双适配；`flutter_secure_storage`。
 - 多 OCR 按需；默认单版本。
@@ -941,8 +993,12 @@ Phase 6 已在 Phase 5 完成后开始；P6.1–P6.5 核心已完成，P6.6 多 
   `claude-haiku-5-5` 简单；DeepSeek/自定义由用户填）。
 - 熟悉期每词典样本数（当前 10–12）、UniDic 样本数（当前 4 句）。
 - 预算：6,000 字符/120 目标/60 citation/每词每典 3 条/摘要 400 字符。
-- annotation DSL、ruby/声调语法、Agent 会话是否并入“历史记录”。
+- P6.7 已定事项见 §17.2：历史独立、一条=一次分析、只读、不存图片、手动清理；
+  声调只用 UniDic + 词注/词典事实行；DSL 先做引擎+内置规则+预览/回滚，先覆盖
+  阅读器/照片集/语料；Markdown 只用于导出和受限档案预览。
 - 多 OCR 的质量阈值与是否默认提示。
+- 声调高低线的精确 mora 分段、线宽/偏移在 200% 字号下的最终数值（实现时用
+  真机视觉验收确定；方向已定为 §17.2.3）。
 - 每会话词典默认值：全部启用/继承查词偏好/仅用户勾选（当前设计为继承后快照）。
 
 ## 17.1 P7 任务解耦规划
@@ -950,9 +1006,171 @@ Phase 6 已在 Phase 5 完成后开始；P6.1–P6.5 核心已完成，P6.6 多 
 P7 的整体规划（核心翻译/语法解析/富文本后处理拆分、模型路由、`Future.wait`
 并发、P6.8 任务级流式、单向数据流与严格标签协议）单独维护在
 `docs/agent_docs/p7-task-decomposition-plan.md`。2026-11-03 已增量实现 P7.0：
-assistant summary 的 RUBY/BOLD/UNDERLINE 后处理 + `[YOMI]` 读音标记（允许整块
-删除，保留块内容/位置不变）+ 标签剥离逐字符 diff + 冗余 RUBY 取消 + 失败回退
-纯文本；P7.1–P7.4 尚未实现，不得写成已支持。
+详细解析（原文/逐句理解/词典事实解释）的 RUBY/BOLD/UNDERLINE 后处理 + `[YOMI]`
+读音标记（允许整块删除，保留块内容/位置不变）+ 正确嵌套标签 + 标签剥离逐字符
+diff + 冗余 RUBY 取消 + 重复括号读音折叠 + 失败回退纯文本；P7.1–P7.4 尚未实现，
+不得写成已支持。
+
+## 17.2 P6.7 设计决议（2026-11-03，仅设计）
+
+> 状态：本节只记录设计、契约和 token，不表示已实现。`CLAUDE.md` 的门禁仍有效：
+> F1–F17 / Wave 4 设备验收关闭前，不叠加用户可感知的 P6.7 新功能；实现排期在
+> Wave 4 之后。用户已明确选择“先做设计与文档”。
+
+### 17.2.1 交付边界
+
+- **P6.7-0 文档/契约/token**：记录 Markdown 决议；把原“Markdown/ruby/pitch”
+  改名为“安全富文本 / ruby / 声调渲染”。
+- **P6.7-1 历史/持久化**：独立助手历史；一条 = 一次分析；只读回看；不保存
+  图片/路径；手动删除/清空；进程死亡标记 `interrupted`；所有 OCR 变体文本
+  持久化；待确认档案队列跨进程恢复。
+- **P6.7-2 安全富文本 / ruby / 声调**：保留已实现的详细解析 AI 注音范围；
+  新增 UniDic 声调高低线，只在词注/词典事实行显示；无可靠数据不显示，不用 AI
+  猜。AI 气泡摘要继续保持纯文本。
+- **P6.7-3 标注 DSL**：安全 JSON AST + 内置规则 + 预览/版本回滚；先覆盖阅读器、
+  照片集、语料；Agent 结果后续接入；P6.7 不开放自由文本规则编辑器。
+- **P6.7-4 发布打磨**：provider 测试连接、空态/错误态、无障碍/200% 字号、
+  许可/签名/发布验收；真实设备验收按 Wave 4 执行。
+- **P6.6 遗留**：失败态多 OCR 入口、选版本前依据预览，纳入 P6.7 设计，Wave 4
+  后实现。
+
+**P6.7 不做**：通用 Markdown 渲染器；把 Markdown 重新作为模型 wire format；
+用户自由编写 DSL/代码/HTML/JS；把 Agent 会话改成多轮消息栈；云同步；会话导出；
+AI 推测声调；把图片、路径、base64 或 Key 写入历史或 provider 请求。
+
+### 17.2.2 历史与持久化
+
+- **入口与粒度**：Agent AppBar 的历史图标打开独立 `/agent-history`；**一条 = 一次
+  run（一次分析）**，不并入主页现有的语料“历史记录”。主页按钮和语料历史不变。
+- **列表字段**：标题（用户文本首行；图片会话用“图片分析”）、时间、严格/宽松、
+  状态（`done`/`error`/`cancelled`/`interrupted`）、provider 标签、图片张数。
+  不显示缩略图、原图、图片路径或文件名。
+- **详情**：`/agent-history/:runId` 只读；恢复用户文本、AI 气泡纯文本、详细解析
+  （原文/逐句理解/词注/多解释）、证据/citation、全部 OCR 变体文本和选中变体。
+  不提供“继续提问”或多轮上下文；可复制 Markdown、打开 citation。
+- **只读与重试**：历史详情默认只读。只有 `interrupted` 的纯文本 run 可显示
+  “重试”，用保存的文本和当前设置新建 run，不覆盖历史记录；图片 run 因原图未
+  保存不可重试，显示“原图未保存，无法重试”。不得自动续跑。
+- **图片政策**：`AgentStore` 不存图片字节、缩略图、路径、文件名或 base64；只存
+  `image_count`、OCR 文本、变体文本、engine/mode/confidence。详情固定显示
+  “图片 N 张（历史不保存原图）”。这是 `R-SEC` 与生命周期规范的延续，不因为历史
+  功能放宽。
+- **Citation**：点击按 `dictionary_id + entry_key` 精确查；失败再试 `matched_key`；
+  词典已删除/查询失败时只显示保存的 snippet，不打开任意词条、不回退到其他词典。
+- **中断**：启动时扫描仍处于 running 状态的 run，统一改为 `interrupted` 并写
+  `finished_at`；有完整 result 仍可回看，无 result 显示中断/失败卡；不自动重跑。
+- **保留**：不自动删除、不按条数/时间清理；用户删除单条或清空全部，均有二次
+  确认；清空只影响 Agent 历史，不清语料/词典档案。不做云同步/会话导出。
+- **档案队列**：待确认词典档案持久化到 `AgentStore`；进程重启后仍显示“待处理
+  档案 N 个”，dismiss 不自动 skip，全部处理完才进入查词。
+- **OCR 变体**：所有变体文本都写入 `agent_source_versions`，并标记选中项；不写
+  图片。历史详情可查看各版本文本，但不能重新识别（原图不存在）。
+- **实现契约**：DB v3 迁移、`AgentRunResult`/历史快照 codec、启动扫描和删除级联
+  见 `docs/phase6-agent-contracts.md` §14.1。
+
+### 17.2.3 安全富文本 / ruby / 声调
+
+**保留当前 P7.0 行为**：AI 气泡摘要为纯文本；详细解析的“原文”、逐句理解、词典
+事实解释（词义/语法，不含 citation snippet）使用 `AgentRichText` 渲染
+`[RUBY]`/`[BOLD]`/`[UNDERLINE]`；注音由后处理 AI 根据文本判断，不读取 UniDic
+读音表；失败降级纯文本。
+
+**P6.7 新增声调（pitch accent）**：
+
+- 数据来源只允许 UniDic。真实 2025.12 输出已验证：
+  - `features[24]` = `aType`，即单词アクセント型（0=平板，1=頭高，N=尾高/中高）；
+  - `features[25]` = `aConType`（如 `C1`/`C3`，复合词连接用）；
+  - `features[26]` = `aModType`（多为 `*`）。
+  - 样例：橋=2、箸=1、端=0、東京=0、日本=3、食べる=2、花=2、雨=1、飴=0、
+    今日=1。
+- P6.7 只用 `aType` + 该 token 的读音 mora 数画单词高低线；`aConType`/
+  `aModType` 暂不参与，不做句子/复合词连接计算，避免把连接规则误当成单词声调。
+- mora 数取 `Token.reading`（优先 `kana` 20）；拆分规则：小写ゃゅょ/ぁぃぅぇぉ
+  并到前一 mora，`っ`/`ん`/`ー` 各算一 mora。无法可靠拆分时不显示。
+- 高低规则（东京式）：
+  - `N = 0`：L H H … H（平板）；
+  - `N = 1`：H L L … L（頭高）；
+  - `N >= 2`：L，然后第 2..N mora 为 H，第 N+1 起为 L；`N == moraCount` 时
+    词内没有下降段（尾高）。
+  - `aType` 非整数、越界（`N < 0` 或 `N > moraCount`）、读音为空或与显示词形
+    不匹配时，**不显示声调线**，按普通文本渲染。
+- **显示范围**：只在逐句理解下方的词注/词典事实行显示；不在 AI 气泡摘要、
+  “原文”引用、逐句解释正文、证据卡片、citation snippet、Markdown 导出中出现。
+- **视觉**：`AgentPitchAccentText` 在词上方画一条 1.5dp 高低线；高段在上轨、低段
+  在下轨，アクセント核处垂直下降；线宽按词宽均分为 mora 段，不按汉字字数逐字
+  对齐；无可靠数据时整条线省略，不显示“推测”。
+- **缩放**：200% 字号下线和偏移随文字缩放；空间不足时优先换行，不得覆盖读音、
+  下划线或相邻文字；必要时省略声调线而不是压缩到不可读。
+- **隐私/协议**：声调是本地 UniDic 数据，不进入 provider 请求、日志、citation
+  或历史导出的 Markdown；复制/导出只保留 `surface（reading）`，不输出声调线。
+- 实现契约见 `docs/phase6-agent-contracts.md` §14.2。
+
+### 17.2.4 标注 DSL
+
+- **P6.7 交付**：安全 JSON AST + 纯 Dart 求值器 + 内置规则集 + 预览 + 版本/
+  回滚；先覆盖阅读器、照片集、语料。普通用户只能选择/启用内置规则和预览效果，
+  **不开放自由文本 DSL 编辑器**；不执行任意代码、HTML、JavaScript、网络请求、
+  文件访问或外部链接。
+- **Schema**：`rikai.annotation.rules.v1`；规则集包含 `id/name/version/targets/
+  rules`，`targets` 只允许 `reader`、`photo`、`corpus`。节点白名单：
+  `text`、`ruby`、`pitch`、`bold`、`underline`、`group`、`when`；禁止函数调用、
+  循环、递归、变量赋值、URL、HTML、脚本和任意表达式。
+- **边界**：最多 64 条规则、嵌套 8 层、单目标 10,000 输出字符、每 token 最多
+  2 个标注；超限整份规则集拒绝，不做部分应用。
+- **求值**：只使用本地分词/UniDic 数据和纯函数；确定性、可缓存、无模型调用；
+  规则集按顺序匹配，命中即停止；同一规则集版本可复现。预览和正式渲染使用同一
+  求值器，避免“预览好看、实际不同”。
+- **存储与版本**：`annotation_rule_sets` 保存内置规则集及版本；同一 target 只有
+  一个启用版本；切换/回滚写新版本记录，不覆盖历史。规则集无效或求值异常时保留
+  上一个有效版本，并显示可读错误；不得让阅读器/照片集/语料空白或崩溃。
+- **Agent 结果**：P6.7 不接入 Agent 结果；后续接入必须复用同一安全求值器，不得
+  为 Agent 另写 HTML/Markdown 渲染路径。Markdown 不进入 DSL。
+- 实现契约见 `docs/phase6-agent-contracts.md` §14.3。
+
+### 17.2.5 Markdown 决议
+
+- 模型 wire format 保持**方括号标签**；主结果由结构化 DTO + Flutter 组件/
+  `AgentRichText` 渲染，不把 Markdown 重新变成模型输出协议。
+- Markdown 只用于两个场景：
+  1. `buildAgentResultMarkdown` 的复制/导出（RUBY 转 `base（reading）`，剥离
+     BOLD/UNDERLINE/YOMI，不带标签）；
+  2. 用户可编辑词典档案的受限 Markdown 预览。
+- 档案预览只允许白名单：段落、标题、列表、粗体/斜体、行内代码；禁止 HTML、JS、
+  图片、外部链接、自动 URL、iframe、style、事件属性和原始 Markdown 链接；
+  未知语法按纯文本显示；长度有界。不得为通用 Markdown 引入渲染依赖。
+- 若未来某个字段确实需要 Markdown，必须显式标记并在契约中单独定义白名单；
+  不能默认把自由文本当 Markdown 渲染。
+
+### 17.2.6 Provider 测试连接
+
+- 仅在用户显式点击“测试连接”时发送一条最小纯文本请求；使用与正式分析相同的
+  provider 适配器/预校验/错误映射，不发送图片、工具、schema 或会话历史。
+- 成功显示延迟和使用的模型；失败按 401/403、429、5xx、超时、模型不存在、
+  网络错误分类显示，不显示 Key/请求体。
+- 不写历史、不改 provider 配置、不自动重试；Key 只从 SecretStore 或当前表单
+  读取，不落日志。
+
+### 17.2.7 P6.6 遗留（纳入 P6.7 设计）
+
+- **失败态多 OCR 入口**：当前变体面板只在 `result != null` 时挂载。P6.7 设计为
+  只要本次 run 有 `sentImagePaths` 且存在 result 或错误，就显示 OCR 变体区；
+  生成按钮使用当前本地图片路径。路径已失效时禁用并提示“原图不可用，无法重新
+  识别”，不伪造结果。
+- **选版本前依据预览**：对每个候选变体在本地执行分词 + 词典查询，显示命中数/
+  前几条摘要，供用户在确认前比较；不调用 provider，不生成正式 citation。每次
+  最多 4 个变体、每变体最多 3 条预览摘要，沿用 citation 清洗/截断规则。用户
+  选中并重新分析后，才由 orchestrator 重建正式 citation。
+- 两项都只修改 P6.6 对比/选择路径，不改变照片集 OCR 行为；实现放在 Wave 4 后。
+
+### 17.2.8 实施顺序与门禁
+
+1. 先完成 Wave 4 设备验收（真实 provider/Key、arm64、大词典、secure storage、
+   真实漫画页/200% 字号）。
+2. P6.7-1 历史/持久化（含全变体持久化、档案队列、interrupted）。
+3. P6.6 遗留（失败态入口、逐版本依据预览）。
+4. P6.7-2 安全富文本/ruby/声调。
+5. P6.7-3 annotation DSL（阅读器/照片集/语料）。
+6. P6.7-4 provider 测试连接、无障碍/空错误态、许可/签名/发布验收。
 
 ## 18. 需求追踪
 
@@ -963,7 +1181,9 @@ assistant summary 的 RUBY/BOLD/UNDERLINE 后处理 + `[YOMI]` 读音标记（�
 | 严格/宽松模式 | §10 |
 | 简单/复杂模型分流 | §10.2、§11 |
 | 图片/文字/混合输入，禁止模型视觉 | §1、§6.2、§11、§14 |
-| Markdown + ruby + 声调横线 | §13、§16（P6.7） |
+| Markdown 导出/受限预览 + ruby + 声调横线 | §17.2.3、§17.2.5 |
+| Agent 历史/持久化/interrupted | §17.2.2；契约 §14.1 |
+| 标注 DSL/预览/版本回滚 | §17.2.4；契约 §14.3 |
 | 本地工具集 | §5 |
 | 词典熟悉期、用户确认、复用 | §6.1、§9 |
 | schema、严格模式引用、点击来源 | §5、§6.5、§8 |

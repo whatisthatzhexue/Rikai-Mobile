@@ -168,6 +168,7 @@ void main() {
           lookup: lookup,
           limits: const AgentLimits(
             maxCoverageFallback: 1,
+            adaptiveCoverageReview: false,
             enableRichTextPostProcess: false,
           ),
         ).run(
@@ -211,6 +212,7 @@ void main() {
           lookup: lookup,
           limits: const AgentLimits(
             maxCoverageFallback: 1,
+            adaptiveCoverageReview: false,
             enableRichTextPostProcess: false,
           ),
         ).run(
@@ -254,6 +256,7 @@ void main() {
           limits: const AgentLimits(
             maxEvidenceEntries: 2,
             maxCoverageFallback: 1,
+            adaptiveCoverageReview: false,
             enableRichTextPostProcess: false,
           ),
         ).run(
@@ -296,6 +299,7 @@ void main() {
           lookup: lookup,
           limits: const AgentLimits(
             maxCoverageFallback: 1,
+            adaptiveCoverageReview: false,
             enableRichTextPostProcess: false,
           ),
         ).run(
@@ -312,5 +316,37 @@ void main() {
     expect(result.evidence.citations, hasLength(1));
     expect(result.warnings, contains('覆盖审查不可用，已保留现有资料'));
     expect(provider.requests, hasLength(3));
+  });
+
+  test('adaptive coverage skips when every target already has a citation', () async {
+    final lookup = _LookupScript(<List<LookupEntry>>[
+      <LookupEntry>[_entry('何卒', 'なにとぞ。どうか。')],
+    ]);
+    final provider = FakeProvider(responseSequence: <String>[_analysisTagged]);
+    final stages = <AgentStage>[];
+
+    final result =
+        await _orchestrator(
+          provider: provider,
+          lookup: lookup,
+          limits: const AgentLimits(
+            maxCoverageFallback: 1,
+            enableRichTextPostProcess: false,
+          ),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.strict,
+            dictionaries: <DictionaryInfo>[_dictionary],
+            provider: _provider,
+            userText: '何卒',
+          ),
+          onStage: (stage, message) => stages.add(stage),
+        );
+
+    expect(stages, isNot(contains(AgentStage.coverage)));
+    expect(result.coverageFallbackUsed, isFalse);
+    expect(result.evidence.citations, hasLength(1));
+    expect(provider.requests, hasLength(1));
   });
 }

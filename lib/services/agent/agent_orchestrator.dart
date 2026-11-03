@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../../core/models/agent/agent_analysis.dart';
@@ -82,8 +84,9 @@ class AgentOrchestrator {
     AgentStageCallback? onStage,
     AgentProvisionalResultCallback? onProvisionalResult,
     AgentCancellation? cancellation,
-    void Function(String accumulated)? onTextDelta,
-    void Function(String accumulated)? onReasoningDelta,
+    AgentRichTextCallback? onRichTextReady,
+    void Function(int accumulatedChars)? onTextDelta,
+    void Function(int accumulatedChars)? onReasoningDelta,
     void Function(int citations)? onEvidenceProgress,
   }) async {
     var stage = AgentStage.prepare;
@@ -316,7 +319,7 @@ class AgentOrchestrator {
 
       final warnings = <String>[];
       var coverageFallbackUsed = false;
-      if (limits.maxCoverageFallback > 0) {
+      if (_shouldRunCoverageReview(evidence)) {
         notify(
           AgentStage.coverage,
           agentStageMessage(AgentStage.coverage, uiLanguage),
@@ -339,6 +342,13 @@ class AgentOrchestrator {
         coverageFallbackUsed = coverage.fallbackUsed;
         warnings.addAll(coverage.warnings);
         checkCancelled();
+      } else if (limits.maxCoverageFallback > 0 && kDebugMode) {
+        debugPrint(
+          '[AgentCoverage] skipped '
+          'citations=${evidence.citations.length} '
+          'targets=${evidence.budget.uniqueTargets} '
+          'cap=${limits.maxEvidenceEntries}',
+        );
       }
 
       notify(
@@ -667,23 +677,58 @@ class AgentOrchestrator {
         );
       }
 
-      String? richSummary;
-      if (limits.enableRichTextPostProcess) {
-        final summarySource = agentSummarySource(analysis);
-        if (summarySource.isNotEmpty) {
+      final originalSource = agentOriginalSource(quotes);
+      final segmentSources = <String>[
+        for (final segment in analysis.segments) segment.interpretation,
+      ];
+      final segmentNoteSources = <String>[
+        for (final segment in analysis.segments) agentSegmentNotesSource(segment),
+      ];
+      final hasFormattingSources =
+          originalSource.isNotEmpty ||
+          segmentSources.any((text) => text.isNotEmpty) ||
+          segmentNoteSources.any((text) => text.isNotEmpty);
+      AgentRichTextOutputs? richOutputs;
+      if (limits.enableRichTextPostProcess && hasFormattingSources) {
+        Future<AgentRichTextOutputs?> format() => _formatRichText(
+          llm: llm,
+          model: smallModel,
+          originalSource: originalSource,
+          segmentSources: segmentSources,
+          segmentNoteSources: segmentNoteSources,
+          cancellation: cancellation,
+        );
+
+        final richCallback = onRichTextReady;
+        if (richCallback != null) {
+          // Display-only formatting must not delay `done`: start the bounded
+          // pool, return the core result, and let the controller apply the
+          // tags when they arrive. A failure leaves plain text visible.
+          checkCancelled();
+          Future<void> applyLater() async {
+            try {
+              final outputs = await format();
+              if (outputs != null && cancellation?.isCancelled != true) {
+                richCallback(outputs);
+              }
+            } catch (error) {
+              if (kDebugMode) {
+                debugPrint(
+                  '[AgentRichText] async formatting failed '
+                  '(${error.runtimeType}); keeping plain text',
+                );
+              }
+            }
+          }
+
+          unawaited(applyLater());
+        } else {
           notify(
             AgentStage.formatting,
             agentStageMessage(AgentStage.formatting, uiLanguage),
           );
           checkCancelled();
-          final rich = await RichTextPostProcessor(
-            llm: llm,
-            model: smallModel,
-          ).process(summarySource, cancellation: cancellation);
-          if (kDebugMode && rich.taggedText == null) {
-            debugPrint('[AgentRichText] rejected: ${rich.rejectionReason}');
-          }
-          richSummary = rich.taggedText;
+          richOutputs = await format();
           checkCancelled();
         }
       }
@@ -700,7 +745,9 @@ class AgentOrchestrator {
         unavailableProfiles: unavailableProfiles,
         warnings: warnings,
         coverageFallbackUsed: coverageFallbackUsed,
-        richSummary: richSummary,
+        richOriginalText: richOutputs?.originalText,
+        richSegmentTexts: richOutputs?.segmentTexts ?? const <String>[],
+        richSegmentNotes: richOutputs?.segmentNotes ?? const <String>[],
       );
       _timing(
         'result_ready salvage=false elapsed=${runWatch.elapsedMilliseconds}ms',
@@ -723,6 +770,91 @@ class AgentOrchestrator {
         cause: error,
       );
     }
+  }
+
+  /// Formats the independent display sections with one bounded worker pool.
+  /// Empty sections are not sent, and identical text (for example repeated
+  /// notes) is requested only once.
+  Future<AgentRichTextOutputs?> _formatRichText({
+    required LlmPort llm,
+    required String model,
+    required String originalSource,
+    required List<String> segmentSources,
+    required List<String> segmentNoteSources,
+    required AgentCancellation? cancellation,
+  }) async {
+    final sources = <String>[
+      if (originalSource.isNotEmpty) originalSource,
+      ...segmentSources,
+      ...segmentNoteSources,
+    ];
+    if (sources.isEmpty) return null;
+    final results = await RichTextPostProcessor(
+      llm: llm,
+      model: model,
+    ).processAll(
+      sources,
+      cancellation: cancellation,
+      detailed: true,
+      concurrency: limits.richTextConcurrency,
+    );
+
+    var cursor = 0;
+    String? richOriginalText;
+    if (originalSource.isNotEmpty) {
+      final rich = results[cursor++];
+      richOriginalText = rich.taggedText;
+      _logRichText('original', originalSource, rich);
+    }
+    final outputs = <String>[];
+    final noteOutputs = <String>[];
+    for (var index = 0; index < segmentSources.length; index++) {
+      final source = segmentSources[index];
+      if (source.isEmpty) {
+        outputs.add('');
+      } else {
+        final rich = results[cursor++];
+        outputs.add(rich.taggedText ?? '');
+        _logRichText('segment', source, rich);
+      }
+      final noteSource = segmentNoteSources[index];
+      if (noteSource.isEmpty) {
+        noteOutputs.add('');
+      } else {
+        final rich = results[cursor++];
+        noteOutputs.add(rich.taggedText ?? '');
+        _logRichText('notes', noteSource, rich);
+      }
+    }
+    return AgentRichTextOutputs(
+      originalText: richOriginalText,
+      segmentTexts: outputs,
+      segmentNotes: noteOutputs,
+    );
+  }
+
+  void _logRichText(String label, String source, RichTextPostProcessResult rich) {
+    if (!kDebugMode) return;
+    debugPrint(
+      '[AgentRichText] $label '
+      'accepted=${rich.taggedText != null} '
+      'reason=${rich.rejectionReason} '
+      'sourceChars=${source.length}',
+    );
+  }
+
+  /// Coverage review is useful when at least one lookup target has no hit, or
+  /// when the evidence is already at the global cap and verified duplicates
+  /// may free slots. If every target already produced a citation and there is
+  /// headroom, the extra model round trip rarely changes the answer.
+  bool _shouldRunCoverageReview(AgentEvidenceBundle evidence) {
+    if (limits.maxCoverageFallback <= 0) return false;
+    if (!limits.adaptiveCoverageReview) return true;
+    final citations = evidence.citations.length;
+    if (citations >= limits.maxEvidenceEntries) return true;
+    final targets = evidence.budget.uniqueTargets;
+    if (targets <= 0) return false;
+    return citations < targets;
   }
 
   /// F7: one bounded coverage review after the initial evidence. It may run one
@@ -934,7 +1066,9 @@ class AgentOrchestrator {
     required List<DictionaryProfileIssue> unavailableProfiles,
     required List<String> warnings,
     required bool coverageFallbackUsed,
-    String? richSummary,
+    String? richOriginalText,
+    List<String> richSegmentTexts = const <String>[],
+    List<String> richSegmentNotes = const <String>[],
   }) {
     return AgentRunResult(
       input: envelope,
@@ -951,7 +1085,9 @@ class AgentOrchestrator {
       warnings: List<String>.unmodifiable(warnings),
       coverageFallbackUsed: coverageFallbackUsed,
       ocrQuality: _ocrQuality(envelope, evidence),
-      richSummary: richSummary,
+      richOriginalText: richOriginalText,
+      richSegmentTexts: List<String>.unmodifiable(richSegmentTexts),
+      richSegmentNotes: List<String>.unmodifiable(richSegmentNotes),
     );
   }
 
@@ -1250,8 +1386,8 @@ class AgentOrchestrator {
     LlmPort llm,
     LlmRequest request,
     AgentCancellation? cancellation, {
-    void Function(String accumulated)? onTextDelta,
-    void Function(String accumulated)? onReasoningDelta,
+    void Function(int accumulatedChars)? onTextDelta,
+    void Function(int accumulatedChars)? onReasoningDelta,
     String label = 'request',
   }) async {
     final buffer = StringBuffer();
@@ -1275,10 +1411,14 @@ class AgentOrchestrator {
         switch (event.type) {
           case LlmEventType.textDelta:
             buffer.write(event.text);
-            onTextDelta?.call(buffer.toString());
+            // Only the accumulated length is published. Converting the whole
+            // buffer to a String on every delta is O(n²) for reasoning models
+            // that emit thousands of tiny events, and the UI never renders
+            // the raw tagged stream.
+            onTextDelta?.call(buffer.length);
           case LlmEventType.reasoningDelta:
             reasoning.write(event.text);
-            onReasoningDelta?.call(reasoning.toString());
+            onReasoningDelta?.call(reasoning.length);
           case LlmEventType.error:
             throw AgentRunFailure(
               stage: AgentStage.reasoning,
@@ -1312,10 +1452,10 @@ class AgentOrchestrator {
       );
     }
     // Tail flush: the controller may have throttled the last delta. Emitting
-    // the final accumulated value here guarantees the UI sees the complete
-    // text before validation starts.
-    onTextDelta?.call(buffer.toString());
-    onReasoningDelta?.call(reasoning.toString());
+    // the final accumulated length here guarantees the progress counter is
+    // complete before validation starts.
+    onTextDelta?.call(buffer.length);
+    onReasoningDelta?.call(reasoning.length);
     return buffer.toString();
   }
 }

@@ -8,8 +8,10 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > **Status: P6.1–P6.5 core and 2026-10-31 feedback Waves 1–3 are implemented;
 > Wave 4 device acceptance is still pending. P6.6 multi-OCR core is implemented
 > (2026-11-02) and its automated closeout completed on 2026-11-03; P6.6 device
-> acceptance remains pending. P6.7 (safe rich text/ruby/pitch, annotation DSL,
-> history/release) is not implemented.**
+> acceptance remains pending. P6.7 design/contracts were recorded on 2026-11-03
+> (safe rich text/ruby/UniDic pitch, annotation DSL, one-run history/release);
+> P6.7 implementation is not started and is gated by Wave 4.**
+
 > Follow `docs/agent_docs/device-feedback-2026-10-31.md` for the remaining
 > Wave 4 device checks. **Current test/device/build/environment numbers are
 > centralized in `docs/project-data.md`; do not copy them here.** Normative
@@ -471,30 +473,49 @@ P6.6 automated closeout (2026-11-03):
 
 P7.0 rich-text post-processing (2026-11-03, incremental):
 
-- After a validated analysis, one small-model pass inserts only
+- After a validated analysis, small-model formatting passes insert
   `[RUBY=reading]base[/RUBY]`, `[BOLD]...[/BOLD]` and
-  `[UNDERLINE]...[/UNDERLINE]` into the assistant summary. The prompt uses the
-  fixed strict constraint: no character may be changed/deleted/added, except a
-  whole YOMI block may be deleted when replaced by equivalent RUBY.
-- The analysis prompt now asks the result-generation model to wrap reading
-  annotations in `[YOMI]...[/YOMI]` inside `[TRANSLATION]` and `[MEANING]`,
-  e.g. `base[YOMI]（reading）[/YOMI]`. Repair/language-repair prompts preserve
-  YOMI blocks exactly.
-- `rich_text_tags.dart` strips every known tag and checks tag balance/nesting
-  and safe pronunciation annotations without assuming a script. It also
-  verifies retained YOMI blocks are unchanged and in the same base position;
-  whole-block deletion is allowed. Redundant RUBY pairs whose reading equals
-  the base (e.g. `[RUBY=reading]reading[/RUBY]`) are removed. The processor
-  accepts the result only when the tag-stripped, YOMI-normalized text equals
-  the original **character for character** (no trim or Unicode normalization).
-  Any change, malformed tag, empty output or provider failure discards the
-  formatted result and renders plain text; the run itself is not failed and no
-  user-facing error is shown.
-- `AgentRunResult.richSummary` carries the accepted text; retained YOMI
+  `[UNDERLINE]...[/UNDERLINE]` into the **detailed** result: the whole “原文”
+  section and each segment interpretation. The AI bubble summary remains plain
+  text and is not formatted. The prompt uses the fixed strict constraint: no
+  character may be changed/deleted/added, except a whole YOMI block may be
+  deleted when replaced by equivalent RUBY. It has no vague “return the whole
+  original text if uncertain” escape; only a specific uncertain word may be
+  left unchanged. AI reads the text itself; UniDic readings are not supplied.
+- The analysis prompt asks the result-generation model to wrap reading
+  annotations in `[YOMI]...[/YOMI]` inside `[MEANING]` only, e.g.
+  `base[YOMI]（reading）[/YOMI]`. Repair/language-repair prompts preserve
+  YOMI blocks exactly. `[TRANSLATION]` stays plain.
+- `rich_text_tags.dart` strips every known tag and checks balanced, correctly
+  nested tags and safe pronunciation annotations without assuming a script.
+  RUBY may be nested inside BOLD/UNDERLINE (and BOLD/UNDERLINE may wrap each
+  other); style tags may not appear inside a RUBY base. YOMI contents are
+  compared after removing full-/half-width punctuation. It also verifies
+  retained YOMI blocks are unchanged and in the same base position;
+  whole-block deletion is allowed. Model RUBY readings are cleaned of full-/
+  half-width punctuation before being stored; an empty or base-equal reading
+  removes the RUBY pair. When the formatter wraps an existing
+  `surface（reading）`, the duplicate parentheses are collapsed for display and
+  Markdown export (`richTextToPlain` still emits one `base（reading）`). The
+  processor accepts the result only when the tag-stripped, YOMI-normalized text
+  equals the original **character for character** (no trim or Unicode
+  normalization). Any change, malformed tag, empty output or provider failure
+  discards the formatted block and renders it plain; the run itself is not
+  failed and no user-facing error is shown.
+- `AgentRunResult.richOriginalText` carries the whole original section;
+  `AgentRunResult.richSegmentTexts` is aligned with `analysis.segments`;
+  `AgentRunResult.richSegmentNotes` carries the AI-formatted dictionary-fact
+  word senses/grammar explanations (not citation snippets). Retained YOMI
   wrappers are stripped and show as `base（reading）`. `AgentRichText` renders
-  ruby/bold/underline with the shared `AgentTokens` ruby tokens. The formatted
-  Markdown export remains plain and strips YOMI wrappers too; the detailed
-  structured view shows the parenthetical reading.
+  ruby/bold/underline in the detailed original, segment interpretation and
+  dictionary-fact notes only. Ruby uses the body text color and aligns the
+  annotated base to the line's alphabetic baseline (the reading sits above and
+  never pushes the base down). A reading inside BOLD inherits the bold weight;
+  a reading is never underlined, even inside UNDERLINE. Duplicate
+  `surface（reading）` annotations produced by wrapping an existing note are
+  collapsed to one reading. UNDERLINE is body-colored with 2x thickness. The
+  Markdown export uses `richTextToPlain` (RUBY becomes `base（reading）`;
+  BOLD/UNDERLINE/YOMI tags are removed) so copied text contains no tags.
 - `AgentLimits.enableRichTextPostProcess` (default true) is disabled in tests
   that assert provider request sequences; a `formatting` stage is reported.
 - Internal system Prompt instructions are English-only; validation error text
@@ -573,15 +594,18 @@ having a result. Three sequential costs used to sit between them:
    `message_stop`, and `_collect` treats `LlmEventType.done` as terminal and
    cancels the subscription.
 2. The first parsed/validated analysis was held until the optional validation
-   repair, language repair, and P7.0 rich-text post-processing calls finished.
-   `AgentOrchestrator` now emits an `onProvisionalResult` callback immediately
-   after the first parse/validation (salvage is used when that first analysis is
-   invalid); repair stages stay in `AgentStage.validating` instead of returning
-   to `reasoning`. `AgentRunSnapshot.provisionalResult` renders the summary with
-   “结果已出，正在复核…”, and the final result replaces it on completion.
-3. The progress counter's 250ms leading-edge throttle could drop the last
-   delta. Stage transitions force a tail flush, and `_collect` emits the final
-   accumulated text before returning.
+   repair, language repair, and (previously) P7.0 rich-text post-processing calls
+   finished. `AgentOrchestrator` now emits an `onProvisionalResult` callback
+   immediately after the first parse/validation (salvage is used when that first
+   analysis is invalid); repair stages stay in `AgentStage.validating` instead of
+   returning to `reasoning`. `AgentRunSnapshot.provisionalResult` renders the
+   summary with “结果已出，正在复核…”, and the final result replaces it on
+   completion. The app controller now passes `onRichTextReady`, so display-only
+   formatting starts after the core result and is applied when it arrives.
+3. The progress counter now receives only the accumulated character count.
+   `_collect` no longer converts the growing buffer to a String on every delta,
+   and stage transitions publish the final count; the UI's elapsed label uses a
+   local timer, so no 4 Hz whole-page state updates are needed.
 
 No run-result SQLite write sits on this path; profile decisions are the only
 persistence and happen before their futures are released. Debug builds log
@@ -592,6 +616,19 @@ durations and counts only — never prompt text, citations, paths, or keys.
 `test/agent_orchestrator_test.dart`, `test/openai_compatible_provider_test.dart`,
 `test/provider_http_test.dart`, and `test/agent_wave2_ui_test.dart` cover the
 provisional-before-repair, held-socket, `[DONE]`, and provisional-bubble cases.
+
+**2026-11-03 performance pass 2**: rich-text sections use a bounded worker pool
+(`AgentLimits.richTextConcurrency`) and per-run text dedupe with a length-derived
+output budget; the app controller applies formatting after `done`. The analysis
+prompt uses a compact projection (selected OCR variant once, no
+`lookup_candidates`/`tool_call_id`/internal budget, evidence does not repeat the
+source text). `_collect` publishes accumulated lengths instead of full strings.
+Evidence lookups are batched per mode through `BatchLookupPort`/`lookupMany`
+(`AgentLimits.lookupBatchSize`), and coverage review is adaptive
+(`AgentLimits.adaptiveCoverageReview`). New tests:
+`test/evidence_builder_batch_test.dart`, compact-prompt/async-rich-text cases in
+`test/agent_orchestrator_test.dart`, and the post-done rich-text controller case
+in `test/agent_lifecycle_test.dart`.
 
 ## Tests and build
 
@@ -641,6 +678,35 @@ P6.6 adds `ocr_consensus_test.dart`, `agent_ocr_variants_test.dart` and
 P7.0 adds `rich_text_post_processor_test.dart`, `agent_rich_text_test.dart`, and
 rich-text accept/fallback cases in `agent_orchestrator_test.dart`.
 
+## P6.7 design decisions (2026-11-03, design-only)
+
+- **Gate**: per `CLAUDE.md`, F1–F17 / Wave 4 device acceptance is still open, so
+  no user-visible P6.7 feature was implemented. This step only updates design,
+  contracts, schemas and tokens; it adds no P6.7 `lib/`, `test/` or build
+  changes.
+- **History**: independent `/agent-history` (not the home corpus history); one
+  entry = one run/analysis, read-only; no images/thumbnails/paths in AgentStore;
+  manual delete/clear only; startup marks unfinished runs `interrupted`; every
+  OCR variant is persisted as text; pending profile inbox survives restart;
+  citations re-open by exact key and fall back to the saved snippet.
+- **Pitch**: only UniDic accent fields 24–26. Real 2025.12 output was probed on
+  the x86_64 emulator and verified (`aType`: 橋=2, 箸=1, 端=0, 東京=0, 日本=3,
+  食べる=2, 花=2, 雨=1, 飴=0, 今日=1). The temporary probe test was removed after
+  use. The high/low line appears only in word notes/dictionary-fact rows;
+  missing/invalid data renders plain text; no AI-inferred pitch.
+- **DSL**: safe JSON AST + built-in rule sets + preview/version/rollback; reader,
+  photo and corpus first; Agent results later; no free-form editor in P6.7.
+- **Markdown**: bracket-tag wire format remains; Markdown only for copy/export
+  and restricted profile preview; no general Markdown renderer.
+- **P6.6 carryovers**: failed-run multi-OCR entry and per-variant citation
+  preview are now part of the P6.7 design; implementation follows Wave 4.
+- **Docs/schemas**: `docs/phase6-agent-design.md` §17.2,
+  `docs/phase6-agent-contracts.md` §14, `docs/design-tokens.md` P6.7 rows,
+  `docs/project-rules.md` R-AGENT-24–27, and new schemas under
+  `docs/schemas/agent/` (`history-entry.v1`, `history-result.v1`, `pitch.v1`,
+  `annotation-rules.v1`). JSON syntax was validated; current test/build numbers
+  are unchanged and no new tests were run in this design-only step.
+
 ## Not implemented / next
 
 1. **2026-10-31 device feedback (F1–F17)**: Waves 1–3 are implemented and
@@ -650,18 +716,22 @@ rich-text accept/fallback cases in `agent_orchestrator_test.dart`.
    this does not turn the pending Wave 4 device checks into verified results.
 2. **P6.6 multi-OCR**: core implemented 2026-11-02 (quality/diff/ranking,
    dictionary-assisted candidates, user-confirmed variant re-analysis and UI).
-   Remaining: real-device visual/OCR/dictionary acceptance and per-variant
-   citation preview; persistence of every variant remains tied to P6.7 history
-   work.
-3. **P6.7**: annotation DSL, Markdown/ruby/pitch rendering, history/session UI
-   (tables exist; no write/read UI yet), provider test-connection, release
-   packaging/licence review.
+   Remaining: real-device visual/OCR/dictionary acceptance. The failed-run
+   multi-OCR entry and per-variant citation preview are now included in the P6.7
+   design (§17.2.7); persistence of every variant is part of P6.7 history work.
+3. **P6.7**: design recorded 2026-11-03 (history one run/read-only/text-only,
+   safe rich text/ruby/UniDic pitch, annotation DSL with built-in rules and
+   preview/rollback, Markdown export/restricted preview, provider
+   test-connection, release packaging/licence review). Implementation has not
+   started and is gated by Wave 4.
 4. Real device verification: provider network calls with a real key, MDict
    `sample`/`suggest` against the 463k-entry dictionary, Agent end-to-end on
    arm64, and secure-storage read/write/clear on device.
 5. Agent conversation persistence: `AgentStore` schema is ready, but the
    controller keeps the current run only in memory; history/UI persistence and
-   process-death recovery are pending.
+   process-death recovery are pending. The P6.7 design (one run per history
+   entry, read-only detail, no image paths, startup `interrupted`) is recorded
+   in §17.2.2 and contract §14.1; no implementation yet.
 6. Tool calling: removed by decision (2026-10-31). The pipeline is fixed and the
    model has no tools; the contracts keep the tool table only as a future
    reference. Reintroducing tool calls requires a new ADR plus tool_use/

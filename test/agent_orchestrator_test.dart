@@ -46,6 +46,14 @@ const _analysisTagged = '''
 [/SEGMENT]
 ''';
 
+const _analysisDetailedRich = '''
+[TRANSLATION quote="q1"]请多关照。[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]今[YOMI]（いま）[/YOMI]表示现在[/MEANING]
+[WORD id="t1"]何卒||请务必|source-1[/WORD]
+[/SEGMENT]
+''';
+
 const _analysisWithYomi = '''
 [TRANSLATION quote="q1"]请多关照：何卒[YOMI]（なにとぞ）[/YOMI]。[/TRANSLATION]
 [SEGMENT type="fact" quote="q1"]
@@ -645,10 +653,95 @@ void main() {
     },
   );
 
-  test('rich-text post-processing accepts only exact original text', () async {
-    const rich = '[BOLD]请多关照[/BOLD]。';
+  test('analysis prompt carries the selected source once and omits internal fields',
+      () async {
+    const sourceText = '今日は良い天気ですね。';
+    const variant = AgentOcrVariant(
+      id: 'v1',
+      engine: 'paddle_v5',
+      mode: OcrMode.auto,
+      text: sourceText,
+      confidence: 0.93,
+    );
+    final provider = FakeProvider(responseText: _analysisTagged);
+
+    await _orchestrator(provider: provider).run(
+      const AgentRunRequest(
+        sessionId: 's1',
+        mode: AgentMode.strict,
+        dictionaries: <DictionaryInfo>[_dictionary],
+        provider: _provider,
+        userText: '解释',
+        images: <AgentImageInput>[
+          AgentImageInput(
+            id: 'img-1',
+            localPath: '/never-used.png',
+            variants: <AgentOcrVariant>[variant],
+            selectedVariantId: 'v1',
+          ),
+        ],
+      ),
+    );
+
+    final requestText = provider.requests.single.messages
+        .map((message) => message.text)
+        .join('\n');
+    expect(requestText, contains('"selected_variant_id":"v1"'));
+    expect(requestText, isNot(contains('"variants"')));
+    expect(requestText, isNot(contains('"lookup_candidates"')));
+    expect(requestText, isNot(contains('"tool_call_id"')));
+    expect(requestText, isNot(contains('"budget"')));
+    // One copy in the input envelope, one in the available quote. The
+    // evidence projection must not repeat the source text.
+    expect(
+      RegExp(RegExp.escape(sourceText)).allMatches(requestText).length,
+      2,
+    );
+  });
+
+  test('rich-text formatting can complete after the core result', () async {
+    const rich = '[BOLD]何卒[/BOLD]';
+    const segmentRich = '[BOLD]正式请求[/BOLD]';
+    const notesRich = '[BOLD]何卒：请务必[/BOLD]';
     final provider = FakeProvider(
-      responseSequence: <String>[_analysisTagged, rich],
+      responseSequence: <String>[_analysisTagged, rich, segmentRich, notesRich],
+    );
+    final ready = Completer<AgentRichTextOutputs>();
+
+    final result =
+        await _orchestrator(
+          provider: provider,
+          limits: const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: true,
+          ),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.strict,
+            dictionaries: <DictionaryInfo>[_dictionary],
+            provider: _provider,
+            userText: '何卒',
+          ),
+          onRichTextReady: (outputs) => ready.complete(outputs),
+        );
+
+    // The core result is delivered before display-only formatting finishes.
+    expect(result.richOriginalText, isNull);
+    expect(result.richSegmentTexts, isEmpty);
+    final outputs = await ready.future.timeout(const Duration(seconds: 5));
+    expect(outputs.originalText, rich);
+    expect(outputs.segmentTexts, <String>[segmentRich]);
+    expect(outputs.segmentNotes, <String>[notesRich]);
+    expect(provider.requests, hasLength(4));
+  });
+
+  test('rich-text post-processing accepts only exact original text', () async {
+    const rich = '[BOLD]何卒[/BOLD]';
+    const segmentRich = '[BOLD]正式请求[/BOLD]';
+    const notesRich = '[BOLD]何卒：请务必[/BOLD]';
+    final provider = FakeProvider(
+      responseSequence: <String>[_analysisTagged, rich, segmentRich, notesRich],
     );
     final stages = <AgentStage>[];
 
@@ -670,44 +763,24 @@ void main() {
           onStage: (stage, message) => stages.add(stage),
         );
 
-    expect(result.richSummary, rich);
+    expect(result.richOriginalText, rich);
+    expect(result.richSegmentTexts, <String>[segmentRich]);
+    expect(result.richSegmentNotes, <String>[notesRich]);
     expect(stages, contains(AgentStage.formatting));
-    expect(provider.requests, hasLength(2));
+    expect(provider.requests, hasLength(4));
   });
 
-  test(
-    'rich-text post-processing may replace a YOMI reading with RUBY',
-    () async {
-      const rich = '请多关照：[RUBY=なにとぞ]何卒[/RUBY]。';
-      final provider = FakeProvider(
-        responseSequence: <String>[_analysisWithYomi, rich],
-      );
-
-      final result =
-          await _orchestrator(
-            provider: provider,
-            limits: const AgentLimits(
-              maxCoverageFallback: 0,
-              enableRichTextPostProcess: true,
-            ),
-          ).run(
-            const AgentRunRequest(
-              sessionId: 's1',
-              mode: AgentMode.strict,
-              dictionaries: <DictionaryInfo>[_dictionary],
-              provider: _provider,
-              userText: '何卒',
-            ),
-          );
-
-      expect(result.richSummary, rich);
-      expect(provider.requests, hasLength(2));
-    },
-  );
-
-  test('rich-text output that changes the text falls back to plain', () async {
+  test('formats the original section and each segment separately', () async {
+    const originalRich = '[BOLD]何卒[/BOLD]';
+    const segmentRich = '[RUBY=いま]今[/RUBY][BOLD]表示现在[/BOLD]';
+    const notesRich = '[BOLD]何卒：请务必[/BOLD]';
     final provider = FakeProvider(
-      responseSequence: <String>[_analysisTagged, '[BOLD]请多关照！[/BOLD]'],
+      responseSequence: <String>[
+        _analysisDetailedRich,
+        originalRich,
+        segmentRich,
+        notesRich,
+      ],
     );
 
     final result =
@@ -727,7 +800,78 @@ void main() {
           ),
         );
 
-    expect(result.richSummary, isNull);
-    expect(provider.requests, hasLength(2));
+    expect(result.richOriginalText, originalRich);
+    expect(result.richSegmentTexts, <String>[segmentRich]);
+    expect(result.richSegmentNotes, <String>[notesRich]);
+    expect(provider.requests, hasLength(4));
+  });
+
+  test('rich-text post-processing annotates the original quote', () async {
+    const rich = '[RUBY=なにとぞ]何卒[/RUBY]';
+    const segmentRich = '[BOLD]正式请求[/BOLD]';
+    const notesRich = '[BOLD]何卒：请务必[/BOLD]';
+    final provider = FakeProvider(
+      responseSequence: <String>[
+        _analysisWithYomi,
+        rich,
+        segmentRich,
+        notesRich,
+      ],
+    );
+
+    final result =
+        await _orchestrator(
+          provider: provider,
+          limits: const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: true,
+          ),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.strict,
+            dictionaries: <DictionaryInfo>[_dictionary],
+            provider: _provider,
+            userText: '何卒',
+          ),
+        );
+
+    expect(result.richOriginalText, rich);
+    expect(result.richSegmentTexts, <String>[segmentRich]);
+    expect(result.richSegmentNotes, <String>[notesRich]);
+    expect(provider.requests, hasLength(4));
+  });
+
+  test('rich-text output that changes the text falls back to plain', () async {
+    final provider = FakeProvider(
+      responseSequence: <String>[
+        _analysisTagged,
+        '[BOLD]何卒！[/BOLD]',
+        '正式请求',
+        '何卒：请务必',
+      ],
+    );
+
+    final result =
+        await _orchestrator(
+          provider: provider,
+          limits: const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: true,
+          ),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.strict,
+            dictionaries: <DictionaryInfo>[_dictionary],
+            provider: _provider,
+            userText: '何卒',
+          ),
+        );
+
+    expect(result.richOriginalText, isNull);
+    expect(result.richSegmentTexts, <String>['正式请求']);
+    expect(result.richSegmentNotes, <String>['何卒：请务必']);
+    expect(provider.requests, hasLength(4));
   });
 }

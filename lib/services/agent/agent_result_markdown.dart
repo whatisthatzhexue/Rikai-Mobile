@@ -23,10 +23,17 @@ String buildAgentResultMarkdown(AgentRunResult result, AgentUiStrings strings) {
     buffer
       ..writeln('## ${strings.originalText}')
       ..writeln();
-    for (final quote in result.quotes) {
+    final richOriginal = result.richOriginalText;
+    if (richOriginal != null && richOriginal.isNotEmpty) {
       buffer
-        ..writeln('> ${quote.text}')
+        ..writeln('> ${richTextToPlain(richOriginal)}')
         ..writeln();
+    } else {
+      for (final quote in result.quotes) {
+        buffer
+          ..writeln('> ${richTextToPlain(quote.text)}')
+          ..writeln();
+      }
     }
   }
 
@@ -35,7 +42,7 @@ String buildAgentResultMarkdown(AgentRunResult result, AgentUiStrings strings) {
       ..writeln('## ${strings.translationTitle}')
       ..writeln();
     for (final item in result.analysis.translation) {
-      buffer.writeln('- ${stripYomiTags(item.text)}');
+      buffer.writeln('- ${richTextToPlain(item.text)}');
     }
     buffer.writeln();
   }
@@ -44,15 +51,18 @@ String buildAgentResultMarkdown(AgentRunResult result, AgentUiStrings strings) {
     buffer
       ..writeln('## ${strings.segmentUnderstanding}')
       ..writeln();
-    for (final segment in result.analysis.segments) {
+    for (final (index, segment) in result.analysis.segments.indexed) {
       final quote = quotes[segment.quoteId];
       if (quote != null && quote.isNotEmpty) {
         buffer
           ..writeln('> $quote')
           ..writeln();
       }
+      final rich = index < result.richSegmentTexts.length
+          ? result.richSegmentTexts[index]
+          : '';
       buffer
-        ..writeln(stripYomiTags(segment.interpretation))
+        ..writeln(richTextToPlain(rich.isEmpty ? segment.interpretation : rich))
         ..writeln();
       final epistemic = switch (segment.epistemic) {
         AgentEpistemic.dictionaryFact => strings.epistemicDictionaryFact,
@@ -63,12 +73,21 @@ String buildAgentResultMarkdown(AgentRunResult result, AgentUiStrings strings) {
       buffer.writeln(
         '- $epistemic · ${strings.confidence((segment.confidence.clamp(0, 1) * 100).round())}',
       );
-      for (final note in segment.wordNotes) {
-        final reading = note.reading.isEmpty ? '' : '（${note.reading}）';
-        buffer.writeln('- ${note.surface}$reading：${note.sense}');
-      }
-      for (final note in segment.grammarNotes) {
-        buffer.writeln('- ${note.explanation}');
+      final richNotes = index < result.richSegmentNotes.length
+          ? result.richSegmentNotes[index]
+          : '';
+      if (richNotes.isNotEmpty) {
+        for (final line in richTextToPlain(richNotes).split('\n')) {
+          if (line.trim().isNotEmpty) buffer.writeln('- ${line.trim()}');
+        }
+      } else {
+        for (final note in segment.wordNotes) {
+          final reading = note.reading.isEmpty ? '' : '（${note.reading}）';
+          buffer.writeln('- ${note.surface}$reading：${note.sense}');
+        }
+        for (final note in segment.grammarNotes) {
+          buffer.writeln('- ${note.explanation}');
+        }
       }
       final ids =
           <String>{

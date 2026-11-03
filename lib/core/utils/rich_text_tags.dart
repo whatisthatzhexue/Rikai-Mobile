@@ -27,10 +27,56 @@ final RegExp _rubyBlockPattern = RegExp(
   caseSensitive: false,
 );
 
+/// RUBY pair plus an optional parenthetical reading immediately after it.
+/// The post-processor often wraps an existing `surface（reading）` annotation
+/// and leaves the original parentheses outside the pair.
+final RegExp _rubyWithTrailingReadingPattern = RegExp(
+  r'\[RUBY=([^\]]*)\]([\s\S]*?)\[/RUBY\]([（(][^（）()\r\n]*[）)])?',
+  caseSensitive: false,
+);
+
+final RegExp _trailingReadingPattern = RegExp(r'[（(]([^（）()\r\n]*)[）)]$');
+final RegExp _leadingReadingPattern = RegExp(r'^[（(]([^（）()\r\n]*)[）)]');
+
+/// Full-width and half-width punctuation that may wrap or trail a reading
+/// annotation. It is removed before comparing YOMI contents and before a
+/// RUBY reading is shown/copied.
+final RegExp _readingPunctuationPattern = RegExp(
+  r'''[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~、。，．・：；！？「」『』（）［］｛｝【】〈〉《》〔〕〜～…—–―／＼]''',
+);
+
 /// Reading annotations are intentionally language-agnostic and do not
 /// enumerate scripts. Brackets, control characters and line breaks are not
 /// permitted.
 final RegExp _readingPattern = RegExp(r'^[^\[\]\r\n\x00-\x1F]+$');
+
+String cleanReading(String reading) =>
+    reading.replaceAll(_readingPunctuationPattern, '').trim();
+
+/// Removes a parenthetical reading at the end of [base] when it is exactly the
+/// reading already supplied by the RUBY tag. This prevents
+/// `[RUBY=いま]今（いま）[/RUBY]` from rendering as `今（いま）（いま）`.
+String rubyDisplayBase(String base, String reading) {
+  final cleanedReading = cleanReading(reading);
+  if (cleanedReading.isEmpty) return base;
+  final match = _trailingReadingPattern.firstMatch(base);
+  if (match == null) return base;
+  if (cleanReading(match.group(1) ?? '') != cleanedReading) return base;
+  return base.substring(0, match.start);
+}
+
+/// Returns the offset after a parenthetical reading that immediately follows
+/// a RUBY span and duplicates its reading, for example
+/// `[RUBY=いま]今[/RUBY]（いま）`. The duplicate parentheses are display-only
+/// noise and must not be shown or copied twice.
+int skipDuplicateRubyReading(String text, int offset, String reading) {
+  final cleanedReading = cleanReading(reading);
+  if (cleanedReading.isEmpty || offset >= text.length) return offset;
+  final match = _leadingReadingPattern.firstMatch(text.substring(offset));
+  if (match == null) return offset;
+  if (cleanReading(match.group(1) ?? '') != cleanedReading) return offset;
+  return offset + match.end;
+}
 
 String stripRichTextTags(String text) =>
     text.replaceAll(richTextTagPattern, '');
@@ -66,11 +112,47 @@ bool isWellFormedYomi(String text) {
 /// `[RUBY=reading]reading[/RUBY]`.
 String stripRedundantRubyTags(String text) {
   return text.replaceAllMapped(_rubyBlockPattern, (match) {
-    final reading = (match.group(1) ?? '').trim();
+    final reading = cleanReading(match.group(1) ?? '');
     final base = match.group(2) ?? '';
     if (reading.isNotEmpty && reading == base) return base;
     return match.group(0) ?? '';
   });
+}
+
+/// Rewrites every RUBY opening tag with a punctuation-cleaned reading. If
+/// cleaning leaves no reading, or the reading equals the base, the pair is
+/// removed and only the base remains.
+String cleanRubyReadings(String text) {
+  return text.replaceAllMapped(_rubyBlockPattern, (match) {
+    final reading = cleanReading(match.group(1) ?? '');
+    final base = match.group(2) ?? '';
+    if (reading.isEmpty || reading == base) return base;
+    return '[RUBY=$reading]$base[/RUBY]';
+  });
+}
+
+/// Converts rich-text markup to a copyable plain string:
+/// RUBY becomes `base（reading）`, BOLD/UNDERLINE tags disappear, and YOMI
+/// wrappers are removed while their parenthetical reading is kept.
+String richTextToPlain(String text) {
+  var plain = text.replaceAllMapped(_rubyWithTrailingReadingPattern, (match) {
+    final reading = cleanReading(match.group(1) ?? '');
+    final base = match.group(2) ?? '';
+    final trailing = match.group(3) ?? '';
+    if (reading.isEmpty) return '$base$trailing';
+    final displayBase = rubyDisplayBase(base, reading);
+    if (displayBase.isEmpty) return '$base$trailing';
+    // A parenthetical immediately after [/RUBY] is the same annotation when
+    // its cleaned content equals the RUBY reading; keep at most one copy.
+    final keepTrailing =
+        trailing.isNotEmpty && cleanReading(trailing) != reading
+        ? trailing
+        : '';
+    if (reading == displayBase) return '$displayBase$keepTrailing';
+    return '$displayBase（$reading）$keepTrailing';
+  });
+  plain = plain.replaceAll(richTextTagPattern, '');
+  return stripYomiTags(plain);
 }
 
 /// True when every YOMI block kept in [candidate] also exists, unchanged and
@@ -99,7 +181,9 @@ List<({String content, String before})> _yomiBlocks(String text) {
   return <({String content, String before})>[
     for (final match in yomiBlockPattern.allMatches(text))
       (
-        content: match.group(1) ?? '',
+        // Full-/half-width punctuation in the reading is ignored for the
+        // YOMI comparison; it is not part of the annotated source text.
+        content: cleanReading(match.group(1) ?? ''),
         // Compare the base text before the annotation, ignoring formatting
         // tags. This prevents a kept annotation from being moved onto a
         // different surface while still allowing whole-block deletion.
@@ -110,15 +194,17 @@ List<({String content, String before})> _yomiBlocks(String text) {
   ];
 }
 
-/// True when every tag is paired, not nested, and every RUBY reading is a safe
-/// pronunciation annotation.
+/// True when every tag is paired and properly nested, and every RUBY reading
+/// is a safe pronunciation annotation. RUBY may be wrapped by BOLD/UNDERLINE;
+/// style tags may not appear inside a RUBY base, and a tag may not nest inside
+/// an identical tag.
 bool isWellFormedRichText(String text) {
   final stack = <String>[];
   for (final match in richTextTagPattern.allMatches(text)) {
     final raw = match.group(1) ?? '';
     final lower = raw.toLowerCase();
     if (lower.startsWith('ruby=')) {
-      if (stack.isNotEmpty) return false;
+      if (stack.contains('ruby')) return false;
       final reading = raw.substring('ruby='.length).trim();
       if (reading.isEmpty || !_readingPattern.hasMatch(reading)) {
         return false;
@@ -127,6 +213,10 @@ bool isWellFormedRichText(String text) {
       if (close < 0) return false;
       final base = text.substring(match.end, close);
       if (base.isEmpty || base.contains('\n') || base.contains('\r')) {
+        return false;
+      }
+      // The base is plain copied text; style/YOMI tags belong outside the pair.
+      if (richTextTagPattern.hasMatch(base) || yomiTagPattern.hasMatch(base)) {
         return false;
       }
       stack.add('ruby');
@@ -138,7 +228,8 @@ bool isWellFormedRichText(String text) {
       continue;
     }
     if (lower == 'bold' || lower == 'underline') {
-      if (stack.isNotEmpty) return false;
+      if (stack.contains('ruby')) return false;
+      if (stack.contains(lower)) return false;
       stack.add(lower);
       continue;
     }

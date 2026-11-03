@@ -189,6 +189,9 @@ arm64 真机性能另需复测。
 | 输入 variants / sources | 4 / 8 | Schema 契约上限；当前 UI 支持多图（最多 6），每图最多 4 个 `(engine, mode)` 变体（P6.6） |
 | 每次 run 图片数 | 6 | `AgentLimits.maxImagesPerRun`（F11 已实现） |
 | 覆盖审查 missing / duplicate / fallback | 20 / 10 / 1 | `AgentLimits`（F7 已实现，单次回退） |
+| 覆盖审查自适应触发 | 默认开启 | `AgentLimits.adaptiveCoverageReview`；全部 target 已有 citation 且未达上限时跳过 |
+| 富文本格式化并发 | 3 | `AgentLimits.richTextConcurrency`；同文本只请求一次 |
+| MDict 批量查询 | 12 | `AgentLimits.lookupBatchSize`；单次 worker 往返内的查询数 |
 | 历史 tool loop | 6 次 / 60s / 90s | **未来参考，不是当前实现** |
 
 ### 8.2 当前 Provider/LLM 限制

@@ -25,7 +25,8 @@
 > tool 契约，不重复规则正文或当前实现数值。
 
 - 状态：**P6.1–P6.5 核心、Wave 1–3 与 P6.6 多 OCR 核心已实现，P6.6 自动化收尾
-  于 2026-11-03 完成；P6.6 真机验收与 P6.7 未完成**；与
+  于 2026-11-03 完成；P6.7 设计契约已于 2026-11-03 记录（仅设计，未实现）；
+  P6.6 真机验收、Wave 4 设备验收与 P6.7 实现仍未完成**；与
   `docs/phase6-agent-design.md` v2 配套。实现状态见 `docs/phase6-status.md`。
   **2026-10-31 实机反馈的 F1–F17 修正计划见
   `docs/agent_docs/device-feedback-2026-10-31.md`；Wave 1–3 已实现（应用级档案
@@ -577,6 +578,10 @@ COVERAGE 根块唯一、MISSING/DUPLICATE/NOTES 必须位于 COVERAGE 内、同�
 - 每个用户请求最多一次覆盖审查 + 一次回退；失败/无重复/无可追溯 query 时保留
   原证据并显示 warning，不让整次 run 失败。`AgentRunResult.warnings` 承载
   本地化 warning，`coverageFallbackUsed` 标记是否执行过补充检索。
+- 2026-11-03 自适应触发：默认仅当存在尚未获得 citation 的检索目标，或 citation
+  已达全局上限（需要验证重复以释放槽位）时运行；全部目标已有 citation 且仍有
+  剩余槽位时跳过，避免每个 run 固定多一次小模型调用。
+  `AgentLimits.adaptiveCoverageReview=false` 可强制每次都审查。
 - 运行时输出为标签文本（`stream:false`，不发 `response_format`/
   `json_schema`）；解析或标签块完整性失败只做一次“正文不变、只补标签”的格式
   修复。模型返回的 coverage 建议必须经过本地可追溯性/重复校验，不能直接删除或
@@ -610,34 +615,65 @@ COVERAGE 根块唯一、MISSING/DUPLICATE/NOTES 必须位于 COVERAGE 内、同�
 [UNDERLINE]短文本[/UNDERLINE]
 ```
 
-结果生成模型可在 `[TRANSLATION]` 与 `[MEANING]` 的解释文字中，把紧邻表面形的
-读音标注包成 `[YOMI]（读音）[/YOMI]`，例如：
+结果生成模型可在 `[MEANING]` 的解释文字中，把紧邻日语表面形的读音标注包成
+`[YOMI]（读音）[/YOMI]`，例如：
 
 ```text
 base[YOMI]（reading）[/YOMI]
 ```
 
-- 标签必须成对、禁止嵌套；RUBY 的 `base` 必须是原文连续文本。RUBY 是语言无关的
-  发音标注，不限定书写系统，但不能包含标签或换行。
+AI 气泡摘要（`[TRANSLATION]`）保持纯文本，不参与富文本后处理；RUBY/BOLD/
+UNDERLINE 只用于详细解析的“原文”、逐句理解和词典事实解释（词义/语法，不含
+citation snippet）。原文注音由后处理 AI 生成，不读取
+UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标注能从词形和上下文
+确定的读音。
+
+- 标签必须成对且正确嵌套：RUBY 可以位于 BOLD/UNDERLINE 内，BOLD/UNDERLINE
+  也可以相互包裹；BOLD/UNDERLINE 不得进入 RUBY 的 `base`，同一标签不得嵌套
+  自身。RUBY 的 `base` 必须是原文连续文本。RUBY 是语言无关的发音标注，不限定
+  书写系统，但不能包含标签或换行。
+- 当 base 末尾已经带有与 RUBY 读音相同的 `（reading）`，或 `[/RUBY]` 后紧邻
+  同一读音的括号注记时，显示/导出只保留一份读音：base 内的重复括号会被隐藏，
+  `[/RUBY]` 后的重复括号会被跳过；`richTextToPlain` 仍输出 `base（reading）`。
+  RUBY 位于 BOLD 内时读音随 base 一起加粗；任何 RUBY 读音都不加下划线（即使
+  位于 UNDERLINE 内）。RUBY 以被标注 base 的 alphabetic baseline 对齐，读音在
+  其上方，不把 base 下沉。
 - 富文本后处理模型不得修改、删除或增加原文任何字符（含标点/空格/换行）；唯一
   例外是：当它把某个 YOMI 读音替换为等价 RUBY 时，可以删除整个 YOMI 块（标签及
   包裹内容）。不得新增、改写、移动或嵌套 YOMI 块。prompt 使用固定严苛约束，
-  见 `agent_prompts.dart` 的 `buildRichTextPostProcessRequest`。
+  见 `agent_prompts.dart` 的 `buildDetailedRubyPostProcessRequest`。
 - 代码端必须先用 `stripRichTextTags` 剥离显示标签，并按 YOMI 规则比较：
-  删除的 YOMI 块允许消失；保留的 YOMI 块必须内容不变、位置不变。随后与原文逐字符
-  严格比较；只有完全相等才采用。任何差异、未闭合/嵌套标签、改写/移动 YOMI、空
-  输出或 provider 失败都丢弃后处理结果，降级渲染纯文本，不影响核心结果。
+  删除的 YOMI 块允许消失；保留的 YOMI 块必须内容不变、位置不变。**比较前会先去除
+  YOMI 内容中的全角/半角标点符号**，因此 `（いま）` 与 `いま` 视为同一读音注记。
+  随后与原文逐字符严格比较；只有完全相等才采用。任何差异、未闭合/错误嵌套标签、
+  改写/移动 YOMI、空输出或 provider 失败都丢弃后处理结果，降级渲染纯文本，不影响
+  核心结果。
+- 模型输出的 `[RUBY=内容]` 也会先清洗内容中的全角/半角标点符号，再作为最终
+  RUBY 读音；清洗后为空或等于 base 时移除该 RUBY，只保留 base 文本。
 - 每个 RUBY 的读音不得与被标注 base 完全相同（如 `[RUBY=reading]reading[/RUBY]`）；
   这类冗余 RUBY 会被移除，保留 base 文本。
 - 保留的 YOMI 块在显示/导出前只剥离标签，保留括号读音（`base（reading）`）；不会
   把标签原文泄漏到 UI 或 Markdown。
-- 首版作用于 `AgentRunResult.richSummary`（assistant summary）；`buildAgentResultMarkdown`
-  仍使用纯文本，复制结果不带标签。失败不回退 run，也不写用户可见错误。
+- 当前渲染范围：AI 气泡摘要保持纯 `Text`；详细解析的“原文”使用
+  `AgentRunResult.richOriginalText`（整个 section 一个结果，不是每个 quote 一个
+  字段），逐句理解使用 `AgentRunResult.richSegmentTexts`（与 segments 对齐），
+  词典事实中的词义/语法解释使用 `AgentRunResult.richSegmentNotes`（与 segments
+  对齐，不包含 citation snippet）。三者都由 `AgentRichText` 渲染。
+  `buildAgentResultMarkdown` 使用 `richTextToPlain` 把 RUBY 转为
+  `base（reading）` 并移除 BOLD/UNDERLINE/YOMI 标签，复制结果不带标签。失败
+  不回退 run，也不写用户可见错误。
 - 标签只用于本地 Flutter 富文本渲染，不执行 HTML/JS/Markdown，不进入 provider
   请求、日志、导出或持久化。
+- 2026-11-03 性能增量：各 section 的格式化请求通过有界并发执行（默认数量见
+  `AgentLimits.richTextConcurrency`），相同文本只请求一次；输出预算按输入长度
+  计算，不再固定 4000。App 控制器通过 `onRichTextReady` 在 `done` 之后回填
+  富文本，核心结果不再等待格式化；同步调用方（测试/直接调用）仍可等待最终
+  结果。
 - 该后处理是 P7 任务解耦的增量原型（见
   `docs/agent_docs/p7-task-decomposition-plan.md`）；完整任务拆分/模型路由/
   并发流式仍待 P7。
+- P6.7 声调不使用富文本标签，也不由 AI 生成；只在词注/词典事实行由本地
+  `PitchAccentText` 渲染 UniDic 数据，详见 §14.2。
 
 ## 6. 词典档案 `rikai.dictionary.profile.v1`
 
@@ -759,9 +795,11 @@ idle
 - `coverage` 是 2026-10-31 F7 的一次性覆盖审查（Wave 3 已实现）；每个请求最多
   触发一次补充检索，`coverageFallbackUsed=true` 后不得再次回退。审查失败、
   schema 无效、query 不可追溯或没有可验证重复时保留原证据并显示 warning。
-- `formatting` 是 2026-11-03 的 P7.0 增量：对已校验的 assistant summary 做一次
-  富文本后处理；标签剥离 diff 失败、provider 失败或输出为空时直接回退纯文本，
-  不改变 run 成功状态，也不产生用户可见错误。
+- `formatting` 是 2026-11-03 的 P7.0 增量：对已校验的详细结果做富文本后处理；
+  标签剥离 diff 失败、provider 失败或输出为空时直接回退纯文本，不改变 run
+  成功状态，也不产生用户可见错误。App 控制器通过 `onRichTextReady` 接收
+  结果，因此 `done` 可先于格式化完成；同步调用方仍会在 `formatting` 阶段
+  等待最终结果。
 - `validating` 期间，首个可展示分析（parse/validate 后；必要时用本地 salvage）
   必须立即通过 `onProvisionalResult` 交给 UI，不得等待 format/language repair 或
   `formatting` 完成。UI 显示“结果已出，正在复核…”，`done` 时用最终结果替换。
@@ -869,6 +907,12 @@ validate(analysis, evidence, quotes, mode):
 | Citation registry | `lib/services/agent/citation_registry.dart` |
 | Store | `lib/services/storage/agent_store.dart` |
 | Secret | `lib/services/security/secret_store.dart` |
+| `history-entry.v1` / `history-result.v1` | `lib/core/models/agent/agent_history.dart`（P6.7，待建） |
+| 历史 UI | `lib/features/agent/agent_history_page.dart`、`agent_history_detail_page.dart`（P6.7，待建） |
+| 历史仓储 | `lib/services/storage/agent_history_store.dart`（P6.7，待建；可复用 `agent_store.dart` 连接） |
+| `pitch.v1` | `lib/core/models/agent/agent_pitch.dart`、`lib/services/mecab/unidic_accent_parser.dart`（P6.7，待建） |
+| 声调 UI | `lib/features/agent/agent_pitch_accent.dart`（P6.7，待建） |
+| `annotation.rules.v1` | `lib/services/agent/annotation/`（P6.7，待建） |
 
 ## 13. 测试夹具
 
@@ -880,3 +924,302 @@ validate(analysis, evidence, quotes, mode):
 - `test/fixtures/agent/tool_result_error.json`
 - Fake provider 捕获请求体；断言无图片/路径/Key。
 - 真实 MDict/UniDic 设备测试复用现有 integration_test 的 `--dart-define` 方式。
+- P6.7 待建夹具：`history_entry.json`、`history_result.json`、`pitch_unidic.json`、
+  `annotation_rules.json`；断言历史/导出无图片路径/Key，声调只用 UniDic 真实
+  样例，DSL 拒绝 HTML/JS/URL。
+
+## 14. P6.7 设计契约（2026-11-03，仅设计）
+
+> 本节只定义实现前的字段/行为契约，不表示已实现。实现排期在 Wave 4 设备验收
+> 之后；与 `docs/phase6-agent-design.md` §17.2 配套。
+
+### 14.1 历史与持久化
+
+#### 14.1.1 历史条目 `rikai.agent.history-entry.v1`
+
+```json
+{
+  "schema": "rikai.agent.history-entry.v1",
+  "run_id": "run-1760000000000000-1",
+  "session_id": "session-1760000000000000",
+  "title": "何卒宜しくお願い致します。",
+  "status": "done",
+  "mode": "strict",
+  "provider_label": "DeepSeek",
+  "small_model": "deepseek-chat",
+  "complex_model": "deepseek-reasoner",
+  "started_at": 1760000000000,
+  "finished_at": 1760000005000,
+  "image_count": 1,
+  "has_result": true,
+  "error_code": ""
+}
+```
+
+- 一条 = 一次 run（一次分析），不是多轮会话。列表按 `finished_at`/`started_at`
+  倒序。
+- `status` 只允许 `done`、`error`、`cancelled`、`interrupted`。运行中的 run 不
+  出现在历史列表，直到完成、失败、取消或启动扫描标记中断。
+- `title` 取用户文本首行（截断）；只有图片时用“图片分析”。不把 provider/
+  citation 文本当标题。
+- **不存在** `image_path`、`thumbnail`、`local_path`、`file_name`、`base64`
+  字段。`image_count` 只是整数。
+
+#### 14.1.2 历史详情 `rikai.agent.history-result.v1`
+
+```json
+{
+  "schema": "rikai.agent.history-result.v1",
+  "run_id": "run-...",
+  "user_text": "何卒宜しくお願い致します。",
+  "result": { "...": "AgentRunResult.toJson()" },
+  "source_versions": [ "...": "AgentSourceVersion JSON" ],
+  "citations": [ "...": "AgentCitation JSON" ],
+  "ocr_quality": { "img-1": { "...": "OcrQuality JSON" } },
+  "warnings": []
+}
+```
+
+- `result` 必须包含 `AgentRunResult` 的全部字段：input/evidence/quotes/analysis/
+  validation/sources/dictionaryProfiles/profileWarnings/unavailableProfiles/
+  warnings/coverageFallbackUsed/ocrQuality/richOriginalText/richSegmentTexts/
+  richSegmentNotes。
+- `AgentRunSnapshot` **不整对象入库**；只持久化安全的 run 元数据（status/mode/
+  provider label/models/timestamps/error_code）。`sentImagePaths`、页面状态、
+  取消 token、profile 回调、provider 原始 body 一律不存。
+- `AgentSourceVersion` 的 `image_id` 是不透明 id；历史详情按它分组显示变体，
+  但不得还原为文件路径。`source_versions` 保存所有变体文本和 `selected` 标记。
+- `error_detail` 不入库；只存 sanitized `error_message`/`error_code`，避免 provider
+  原始响应或 Key 进入历史。
+- 未知 `schema` 版本：显示“历史格式不兼容，无法渲染”的只读空态，保留原始行，
+  不崩溃、不尝试猜测解析。
+
+#### 14.1.3 DB v3 迁移
+
+`rikai_agent.db` 从 v2 升到 v3；`onCreate` 直接建新列，`onUpgrade` 对 v2 逐列
+`ALTER TABLE`：
+
+| 表 | 新增列 | 说明 |
+|---|---|---|
+| `agent_runs` | `user_text TEXT NOT NULL DEFAULT ''` | 历史详情/纯文本重试 |
+| `agent_runs` | `image_count INTEGER NOT NULL DEFAULT 0` | 只计数，不存路径 |
+| `agent_runs` | `result_json TEXT NOT NULL DEFAULT ''` | `history-result` JSON |
+| `agent_runs` | `result_schema_version INTEGER NOT NULL DEFAULT 0` | 版本化解析 |
+| `agent_runs` | `updated_at INTEGER` | 列表/中断扫描 |
+| `agent_source_versions` | `selected INTEGER NOT NULL DEFAULT 0` | 当时选中的变体 |
+| `agent_source_versions` | `variant_order INTEGER NOT NULL DEFAULT 0` | 稳定显示顺序 |
+| `annotation_rule_sets` | `builtin INTEGER NOT NULL DEFAULT 1` | 内置/用户来源 |
+| `annotation_rule_sets` | `schema_version INTEGER NOT NULL DEFAULT 1` | DSL schema |
+
+新增档案队列表（待确认提案，确认前不写 `dictionary_profiles`）：
+
+```text
+agent_profile_inbox(
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  dictionary_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  draft_json TEXT NOT NULL,
+  markdown TEXT NOT NULL,
+  status TEXT NOT NULL,          -- pending | save | skip_once | decline
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+)
+```
+
+- 启动时加载 `pending` 提案；用户保存/跳过/拒绝后才删除或写入对应 profile。
+- 进程重启后仍显示“待处理档案 N 个”；dismiss 只保留 pending，不自动 skip。
+
+#### 14.1.4 启动中断、删除与 citation
+
+- 启动扫描 `status IN ('preparing','ocr','familiarizing','awaiting_profile',
+  'tokenizing','reasoning','validating')` 的 run，统一更新为 `interrupted`，
+  写 `finished_at=now`、`updated_at=now`；不自动续跑、不重复请求 provider。
+- 删除单条：按 run_id 删除 `agent_runs`、`agent_messages`、`agent_tool_calls`、
+  `agent_source_versions`、`agent_citations`；若 session 无其他 run，删除
+  `agent_sessions`。清空全部只清 Agent 历史，不删语料/词典档案/provider/Key。
+- 历史 citation 点击：按 `dictionary_id + entry_key` 精确查；失败再试
+  `matched_key`；仍失败只显示保存的 `snippet`，不打开任意词条。查询必须使用
+  当前词典注册表，但不得改变历史中保存的词典顺序。
+- 图片 run 的 `interrupted` 详情只显示 OCR 文本/变体，不显示原图；重试只允许
+  纯文本 run。
+
+#### 14.1.5 测试
+
+- `history-entry`/`history-result` codec round-trip；未知 schema 降级。
+- DB v2→v3 迁移；`onCreate` 与迁移后的列一致。
+- 启动扫描 running→interrupted；不自动调用 provider。
+- 删除单条/清空级联；session 清理。
+- 历史 JSON、日志、导出断言不含图片路径/字节/base64/Key/provider body。
+- citation 精确回查、matched_key 回退、词典缺失只显示 snippet。
+- profile inbox 持久化、dismiss 不 skip、全部处理后才进入查词。
+
+### 14.2 声调 `rikai.agent.pitch.v1`
+
+#### 14.2.1 Token 字段
+
+UniDic 2025.12 真实输出已验证：
+
+| 索引 | 名称 | 用途 |
+|---|---|---|
+| 24 | `aType` | 单词アクセント型；整数 0..moraCount |
+| 25 | `aConType` | アクセント連接型（如 `C1`/`C3`）；P6.7 不使用 |
+| 26 | `aModType` | アクセント修飾型（多为 `*`）；P6.7 不使用 |
+
+`Token` 增加：
+
+```dart
+final String accentTypeRaw;   // features[24] ?? ''
+final String accentConType;   // features[25] ?? ''
+final String accentModType;   // features[26] ?? ''
+final AgentPitchAccent? pitchAccent;
+```
+
+- 只有 `hasStandardLayout`（29 字段）时才解析；否则 `pitchAccent = null`。
+- `aType` 必须是十进制整数；`*`、空、负值、非数字、`N > moraCount` 均为无效。
+- `aConType`/`aModType` 保留原始值供调试/未来复合词使用，不进入 provider。
+
+#### 14.2.2 `AgentPitchAccent`
+
+```json
+{
+  "schema": "rikai.agent.pitch.v1",
+  "source": "unidic",
+  "accent_type": 2,
+  "mora_count": 2,
+  "mora_pattern": "LH"
+}
+```
+
+- `source` 只能是 `unidic`；禁止 `ai`/`guess`/`inferred`。
+- `mora_count` 由 `Token.reading` 拆分：小写ゃゅょ/ぁぃぅぇぉ并入前一 mora；
+  `っ`、`ん`、`ー` 各算一个 mora；无法拆分则为 0 -> `null`。
+- `mora_pattern` 使用 `L`/`H`，长度等于 `mora_count`：
+  - `N=0`：`L` + `H` × (moraCount-1)；
+  - `N=1`：`H` + `L` × (moraCount-1)；
+  - `N>=2`：`L` + `H` × (N-1) + `L` × (moraCount-N)；
+  - `N==moraCount` 时最后一段没有 `L`。
+- 真实样例（用于测试夹具）：橋=2(LH)、箸=1(HL)、端=0(LH)、東京=0(LHHH)、
+  日本=3(LHHL)、食べる=2(LHL)、花=2(LH)、雨=1(HL)、飴=0(LH)、今日=1(HL)。
+
+#### 14.2.3 渲染契约
+
+- `AgentPitchAccentText` 只在逐句理解下方的词注/词典事实行显示；不得用于 AI
+  气泡、原文引用、逐句解释正文、证据卡片、citation snippet、Markdown 导出。
+- 视觉：词上方 1.5dp 高低线；高段上轨、低段下轨，アクセント核处垂直下降；
+  线宽按词宽均分为 mora 段，不按汉字字数逐字对齐。颜色 `textSecondary`。
+- 200% 字号：线宽/偏移随文字缩放；空间不足时换行或省略声调线，不得覆盖文字/
+  读音/下划线；不得缩小到不可读。
+- 无 `pitchAccent`、读音为空、词形与 token 不匹配时按普通文本渲染；不显示
+  “推测”“未知”占位，不用 AI 补。
+- 复制/导出只输出 `surface（reading）`，不输出高低线/数字。
+- 声调是本地数据，不进入 provider 请求、日志、citation、历史 JSON 的 provider
+  payload（历史 result 可保留 `Token` 证据中的原始 accent 字段，但不得重发给
+  模型）。
+
+#### 14.2.4 测试
+
+- `Token.fromFeatures` 对 24–26 字段的映射；29 字段缺失/非标准布局 -> null。
+- 真实样例 10 个词的 mora_pattern。
+- 非整数/越界/空读音/小写拗音/促音/长音边界。
+- 只在词注/词典事实行渲染；AI 气泡/原文/逐句不出现声调线。
+- 请求体断言无 pitch/声调字段；复制/导出无高低线。
+
+### 14.3 标注 DSL `rikai.annotation.rules.v1`
+
+#### 14.3.1 规则集
+
+```json
+{
+  "schema": "rikai.annotation.rules.v1",
+  "id": "builtin-reader-basic",
+  "name": "基础注音",
+  "version": 1,
+  "targets": ["reader", "photo", "corpus"],
+  "rules": [
+    {"type": "ruby", "when": {"pos1": ["名詞", "動詞", "形容詞"]}},
+    {"type": "pitch", "when": {"hasPitch": true}},
+    {"type": "bold", "when": {"pos1": ["動詞"]}}
+  ]
+}
+```
+
+- `targets` 只允许 `reader`、`photo`、`corpus`；P6.7 不允许 `agent`。
+- `version` 为单调递增整数；同一 target 只有一个启用版本。
+- 规则节点白名单：`text`、`ruby`、`pitch`、`bold`、`underline`、`group`、
+  `when`。`when` 只允许对 token 字段做相等/包含判断（`pos1`–`pos4`、`lemma`、
+  `surface`、`hasReading`、`hasPitch`、`target`）。
+- 禁止：函数调用、循环、递归、变量赋值、任意表达式、HTML、JavaScript、URL、
+  `http(s)://`、`file://`、`data:`、图片、iframe、style、事件属性、外部链接。
+- 边界：最多 64 条规则、嵌套 8 层、单目标 10,000 输出字符、每 token 最多 2 个
+  标注；超限整份拒绝，不部分应用。
+
+#### 14.3.2 求值与存储
+
+- 求值器为纯 Dart、确定性、无网络/文件/模型调用；只使用本地 token/UniDic 数据。
+- 同一 target 的预览和正式渲染必须调用同一求值器；预览不得使用另一套模板。
+- `annotation_rule_sets` 保存 `id/name/version/rules_json/enabled/builtin/
+  schema_version/updated_at`；切换/回滚写新版本，不覆盖历史。
+- 规则集无效、求值异常或超限：保留上一个有效版本，显示可读错误；阅读器/照片集/
+  语料不得空白或崩溃。
+- P6.7 只提供内置规则集的选择/启用/预览/回滚，不开放自由文本或 JSON 编辑器；
+  后续用户编辑器必须复用同一 AST/求值器。
+- Agent 结果 P6.7 不接入；未来接入时不得新增 HTML/Markdown 渲染路径。
+
+#### 14.3.3 测试
+
+- schema/节点白名单/边界拒绝；HTML/JS/URL/图片/链接注入不生效。
+- 同一规则集预览与正式渲染逐字一致；版本切换/回滚可复现。
+- 无效规则集不覆盖上一个有效版本；不崩溃。
+- Agent 结果路径不经过 DSL（P6.7）。
+
+### 14.4 Markdown 使用边界
+
+- 模型 wire format 为方括号标签；主结果由结构化 DTO/Flutter 组件渲染，**不是**
+  Markdown。
+- Markdown 只允许：
+  1. `buildAgentResultMarkdown` 复制/导出；RUBY 转 `base（reading）`，剥离
+     BOLD/UNDERLINE/YOMI，不输出标签；
+  2. 用户可编辑词典档案的受限预览。
+- 受限预览白名单：段落、标题、列表、粗体/斜体、行内代码；禁止 HTML、JS、图片、
+  外部链接、自动 URL、iframe、style、事件属性；未知语法按纯文本；长度有界。
+- 不引入通用 Markdown 渲染依赖；不把自由文本字段默认当 Markdown。
+- 测试：导出无标签；预览注入 `<script>`/`<img>`/`http://`/`javascript:` 不执行、
+  不加载、不自动链接；未知语法原样显示。
+
+### 14.5 Provider 测试连接
+
+```json
+{
+  "schema": "rikai.agent.provider-test.v1",
+  "ok": true,
+  "latency_ms": 128,
+  "model": "deepseek-chat",
+  "error_code": ""
+}
+```
+
+- 只在用户显式点击时运行；发送一条最小纯文本请求；不发送图片、tools、
+  schema、历史、citation 或 Key 以外的凭据。
+- 复用正式 provider 的预校验/HTTP/错误映射；单次尝试，不自动重试。
+- 成功显示延迟/模型；失败按 401/403、429、5xx、超时、模型不存在、网络错误
+  分类；不显示 Key/请求体。
+- 不写历史、不改 provider 配置、不落日志；Key 只从 SecretStore 或当前表单读取。
+
+### 14.6 P6.6 遗留契约
+
+- **失败态多 OCR 入口**：
+  - 当 `sentImagePaths.isNotEmpty && (result != null || errorMessage != null)` 时，
+    消息列表显示 OCR 变体区；失败态同时保留错误卡。
+  - 生成使用本次 run 的本地图片路径；路径不存在时按钮禁用并显示“原图不可用，
+    无法重新识别”，不得伪造变体或调用 provider。
+- **逐版本依据预览**：
+  - 对每个候选变体本地执行分词 + 词典查询，显示命中数/前 3 条摘要；不调用
+    provider，不生成正式 citation。
+  - 最多 4 个变体；摘要沿用 citation 清洗/截断（最多 240 字符）；预览不写入
+    `agent_citations`。
+  - 用户选中并“使用此版本重新分析”后，才由 orchestrator 重建正式 citation；
+    预览不得替代正式校验。
+- 测试：失败态面板出现/按钮禁用；路径失效；预览无 provider 请求；预览不写
+  citation；确认后才重建。

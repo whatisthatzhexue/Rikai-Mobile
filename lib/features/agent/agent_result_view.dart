@@ -10,6 +10,7 @@ import '../../services/agent/agent_ui_strings.dart';
 import '../../services/agent/familiarization/dictionary_familiarization_service.dart'
     show DictionaryProfileIssue;
 import 'agent_fade_in.dart';
+import 'agent_rich_text.dart';
 
 class AgentResultView extends StatelessWidget {
   const AgentResultView({
@@ -151,7 +152,8 @@ class AgentResultView extends StatelessWidget {
     if (result.quotes.isNotEmpty) {
       blocks.add(const SizedBox(height: AppSpacing.md));
       blocks.add(_SectionTitle(strings.originalText));
-      for (final quote in result.quotes) {
+      final richOriginal = result.richOriginalText;
+      if (richOriginal != null && richOriginal.isNotEmpty) {
         blocks.add(
           Container(
             margin: const EdgeInsets.only(top: AppSpacing.xs),
@@ -160,8 +162,8 @@ class AgentResultView extends StatelessWidget {
               color: AppColors.surfaceMuted,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            child: Text(
-              quote.text,
+            child: AgentRichText(
+              text: stripYomiTags(richOriginal),
               style: theme.textTheme.bodyLarge?.copyWith(
                 fontSize: AgentTokens.body,
                 color: AppColors.textPrimary,
@@ -169,6 +171,26 @@ class AgentResultView extends StatelessWidget {
             ),
           ),
         );
+      } else {
+        for (final quote in result.quotes) {
+          blocks.add(
+            Container(
+              margin: const EdgeInsets.only(top: AppSpacing.xs),
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceMuted,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: AgentRichText(
+                text: stripYomiTags(quote.text),
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontSize: AgentTokens.body,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+          );
+        }
       }
     }
     if (result.analysis.segments.isNotEmpty) {
@@ -181,6 +203,12 @@ class AgentResultView extends StatelessWidget {
             enabled: index < AgentFadeIn.maxAnimatedItems,
             child: _SegmentBlock(
               segment: segment,
+              richInterpretation: index < result.richSegmentTexts.length
+                  ? result.richSegmentTexts[index]
+                  : '',
+              richNotes: index < result.richSegmentNotes.length
+                  ? result.richSegmentNotes[index]
+                  : '',
               quote: quotes[segment.quoteId],
               citations: citations,
               citationNumbers: citationNumbers,
@@ -427,6 +455,8 @@ class _SectionTitle extends StatelessWidget {
 class _SegmentBlock extends StatelessWidget {
   const _SegmentBlock({
     required this.segment,
+    required this.richInterpretation,
+    required this.richNotes,
     required this.quote,
     required this.citations,
     required this.citationNumbers,
@@ -435,6 +465,8 @@ class _SegmentBlock extends StatelessWidget {
   });
 
   final AgentSegment segment;
+  final String richInterpretation;
+  final String richNotes;
   final AgentQuoteRef? quote;
   final Map<String, AgentCitation> citations;
   final Map<String, int> citationNumbers;
@@ -464,16 +496,20 @@ class _SegmentBlock extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (quote != null)
-            Text(
-              quote!.text,
+            AgentRichText(
+              text: stripYomiTags(quote!.text),
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontSize: AgentTokens.helper,
                 color: AppColors.textSecondary,
               ),
             ),
           const SizedBox(height: AppSpacing.xs),
-          Text(
-            stripYomiTags(segment.interpretation),
+          AgentRichText(
+            text: stripYomiTags(
+              richInterpretation.isEmpty
+                  ? segment.interpretation
+                  : richInterpretation,
+            ),
             style: theme.textTheme.bodyLarge?.copyWith(
               fontSize: AgentTokens.body,
               color: AppColors.textPrimary,
@@ -485,28 +521,41 @@ class _SegmentBlock extends StatelessWidget {
             confidence: segment.confidence,
             strings: strings,
           ),
-          for (final note in segment.wordNotes)
+          if (richNotes.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: Text(
-                '${note.surface}${note.reading.isEmpty ? '' : '（${note.reading}）'}：${note.sense}',
+              child: AgentRichText(
+                text: stripYomiTags(richNotes),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontSize: AgentTokens.helper,
                   color: AppColors.textPrimary,
                 ),
               ),
-            ),
-          for (final note in segment.grammarNotes)
-            Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.sm),
-              child: Text(
-                note.explanation,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontSize: AgentTokens.helper,
-                  color: AppColors.textPrimary,
+            )
+          else ...[
+            for (final note in segment.wordNotes)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Text(
+                  '${note.surface}${note.reading.isEmpty ? '' : '（${note.reading}）'}：${note.sense}',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: AgentTokens.helper,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
-            ),
+            for (final note in segment.grammarNotes)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Text(
+                  note.explanation,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: AgentTokens.helper,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+          ],
           if (segmentCitationIds.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: AppSpacing.sm),

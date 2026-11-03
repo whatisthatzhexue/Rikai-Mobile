@@ -30,7 +30,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   int _runSerial = 0;
   int _textChars = 0;
   int _reasoningChars = 0;
-  DateTime? _lastProgressAt;
+  AgentRichTextOutputs? _pendingRichText;
   AgentUiLanguage _uiLanguage = AgentUiLanguage.chinese;
   Future<void> Function()? _cancelOcr;
 
@@ -112,6 +112,9 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       return;
     }
 
+    // A previous run may still have a display-only formatting task in flight.
+    // Its result can no longer be shown, so stop it before starting a new run.
+    _cancellation?.cancel();
     final token = AgentCancellation();
     final limits = ref.read(agentLimitsProvider);
     final runId = _nextRunId();
@@ -121,7 +124,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     _cancellation = token;
     _textChars = 0;
     _reasoningChars = 0;
-    _lastProgressAt = null;
+    _pendingRichText = null;
     _cancelOcr = null;
     final startedAt = DateTime.now();
     final runWatch = Stopwatch()..start();
@@ -210,7 +213,6 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
               receivedChars: _receivedChars,
             ),
           );
-          _lastProgressAt = DateTime.now();
         },
         onProvisionalResult: (provisional) {
           if (kDebugMode) {
@@ -233,14 +235,29 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
             ),
           );
         },
-        onTextDelta: (value) {
-          _textChars = value.length;
-          _publishProgress(token);
+        onRichTextReady: (rich) {
+          if (!_isActive(token)) return;
+          final result = state.result;
+          if (result == null) {
+            // The run may still be finishing its `done` state transition.
+            // Apply the tags together with the core result below.
+            _pendingRichText = rich;
+            return;
+          }
+          _update(
+            token,
+            (snapshot) {
+              final current = snapshot.result;
+              if (current == null) return snapshot;
+              return snapshot.copyWith(result: current.copyWithRichText(rich));
+            },
+          );
         },
-        onReasoningDelta: (value) {
-          _reasoningChars = value.length;
-          _publishProgress(token);
-        },
+        // Only the accumulated character count is needed; the raw tagged
+        // stream is never rendered. This avoids per-delta String copies and
+        // 4 Hz whole-page rebuilds for an unused counter.
+        onTextDelta: (chars) => _textChars = chars,
+        onReasoningDelta: (chars) => _reasoningChars = chars,
         // The app-level inbox owns the decision futures. If the page is not
         // mounted, the run stays in `awaitingProfile`; it never auto-skips.
         onProfilesGenerated: (runId, proposals) async {
@@ -258,10 +275,15 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
           'elapsed=${runWatch.elapsedMilliseconds}ms',
         );
       }
+      final pendingRichText = _pendingRichText;
+      _pendingRichText = null;
+      final finalResult = pendingRichText == null
+          ? result
+          : result.copyWithRichText(pendingRichText);
       state = state.copyWith(
         status: AgentRunStatus.done,
         stageMessage: agentStageMessage(AgentStage.done, _uiLanguage),
-        result: result,
+        result: finalResult,
         provisionalResult: null,
         progressStep: 4,
         evidenceCount: result.evidence.citations.length,
@@ -357,6 +379,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     }
     final cancelOcr = _cancelOcr;
     if (cancelOcr != null) unawaited(cancelOcr());
+    _pendingRichText = null;
     state = state.copyWith(
       status: AgentRunStatus.cancelled,
       stageMessage: agentStageMessage(AgentStage.cancelled, _uiLanguage),
@@ -378,7 +401,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     _cancelOcr = null;
     _textChars = 0;
     _reasoningChars = 0;
-    _lastProgressAt = null;
+    _pendingRichText = null;
     ref.read(agentProfileInboxProvider.notifier).clearAll();
     state = AgentRunSnapshot.idle;
   }
@@ -397,26 +420,6 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     state = update(state).copyWith(updatedAt: DateTime.now());
   }
 
-  void _publishProgress(AgentCancellation token) {
-    // Reasoning models can emit >10k tiny deltas. The UI shows elapsed time,
-    // not the character counter, so publishing every delta only causes
-    // thousands of Riverpod state updates/rebuilds.
-    final now = DateTime.now();
-    final last = _lastProgressAt;
-    if (last != null &&
-        now.difference(last) < const Duration(milliseconds: 250)) {
-      return;
-    }
-    _lastProgressAt = now;
-    _update(
-      token,
-      (snapshot) => snapshot.copyWith(
-        receivedChars: _receivedChars,
-        updatedAt: DateTime.now(),
-      ),
-    );
-  }
-
   void _fail(
     AgentCancellation token,
     String message,
@@ -424,6 +427,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     AgentToolErrorCode? code,
   ]) {
     if (!_isActive(token)) return;
+    _pendingRichText = null;
     // Prefer the current run's provisional answer over an older retained one;
     // the user has already seen it and a failed post-check must not erase it.
     final fallback = state.provisionalResult ?? state.retainedResult;

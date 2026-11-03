@@ -10,6 +10,7 @@ import '../../core/models/dict_info.dart';
 import '../../core/models/dictionary_sample.dart';
 import '../../core/models/lookup_match_mode.dart';
 import '../../core/models/lookup_models.dart';
+import '../../core/models/lookup_request.dart';
 import '../../core/utils/html_text.dart';
 import '../../core/utils/text_normalizer.dart';
 import '../lookup/lookup_gateway.dart';
@@ -47,6 +48,7 @@ class MdictService implements LookupBackend {
 
   static const Duration initTimeout = Duration(seconds: 30);
   static const Duration requestTimeout = Duration(seconds: 90);
+  static const Duration batchRequestTimeout = Duration(minutes: 3);
   static const Duration disposeTimeout = Duration(seconds: 2);
 
   final Isolate _isolate;
@@ -132,45 +134,108 @@ class MdictService implements LookupBackend {
       'suggestionLimit': suggestionLimit,
     });
 
-    final rawGroups = result['groups'];
-    if (rawGroups is! List) {
-      throw const MdictException(MdictErrorCode.lookupFailed, '词典返回格式异常');
-    }
+    return LookupResult(
+      query: query,
+      candidates: candidates,
+      groups: _parseLookupGroups(result['groups'], enabled),
+    );
+  }
 
-    final byId = {for (final dict in enabled) dict.id: dict};
-    final groups = <DictionaryLookupGroup>[];
-    for (final rawGroup in rawGroups) {
-      if (rawGroup is! Map) continue;
-      final dictionary = byId[rawGroup['id']];
-      if (dictionary == null) continue;
+  /// Executes several independent lookups in one worker round trip.
+  ///
+  /// The worker still processes them sequentially, but open dictionaries are
+  /// reused and the main isolate pays one message round trip instead of one
+  /// per query. Results are returned in request order.
+  Future<List<LookupResult>> lookupMany(List<LookupRequest> requests) async {
+    if (requests.isEmpty) return const <LookupResult>[];
 
-      final rawEntries = rawGroup['entries'];
-      final entries = <LookupEntry>[];
-      if (rawEntries is List) {
-        for (final rawEntry in rawEntries) {
-          if (rawEntry is Map) entries.add(LookupEntry.fromMap(rawEntry));
-        }
-      }
-      final rawSuggestions = rawGroup['suggestions'];
-      final suggestions = rawSuggestions is List
-          ? rawSuggestions.whereType<String>().toList(growable: false)
-          : const <String>[];
-      final rawError = rawGroup['error'];
-      final error = rawError is Map
-          ? rawError['message']?.toString() ?? '词典查询失败'
-          : '';
-
-      groups.add(
-        DictionaryLookupGroup(
-          dictionary: dictionary,
-          entries: entries,
-          suggestions: suggestions,
-          error: error,
+    final prepared = <_PreparedLookup>[];
+    for (final request in requests) {
+      final enabled = request.dictionaries
+          .where((dict) => dict.enabled)
+          .toList(growable: false);
+      final raw = request.rawCandidates.where(
+        (value) => value.trim().isNotEmpty,
+      );
+      final candidates = lookupCandidatesFor(
+        raw.isEmpty ? <String>[request.query] : raw,
+      );
+      prepared.add(
+        _PreparedLookup(
+          request: request,
+          enabled: enabled,
+          candidates: candidates,
+          payload: enabled.isEmpty
+              ? null
+              : <String, Object?>{
+                  'dictionaries': enabled
+                      .map(_dictionaryDescriptor)
+                      .toList(growable: false),
+                  'candidates': candidates,
+                  'matchMode': request.matchMode.name,
+                  'maxEntries': request.maxEntriesPerDictionary,
+                  'suggestionLimit': request.suggestionLimit,
+                },
         ),
       );
     }
 
-    return LookupResult(query: query, candidates: candidates, groups: groups);
+    final payloads = <Map<String, Object?>>[
+      for (final item in prepared)
+        if (item.payload != null) item.payload!,
+    ];
+    if (payloads.isEmpty) {
+      return <LookupResult>[
+        for (final item in prepared)
+          LookupResult(
+            query: item.request.query,
+            candidates: item.candidates,
+            groups: const <DictionaryLookupGroup>[],
+          ),
+      ];
+    }
+
+    final result = await _request(
+      <String, Object?>{'cmd': 'lookupMany', 'queries': payloads},
+      timeout: batchRequestTimeout,
+    );
+    final rawResults = result['results'];
+    if (rawResults is! List) {
+      throw const MdictException(MdictErrorCode.lookupFailed, '词典返回格式异常');
+    }
+
+    var payloadIndex = 0;
+    final results = <LookupResult>[];
+    for (final item in prepared) {
+      if (item.payload == null) {
+        results.add(
+          LookupResult(
+            query: item.request.query,
+            candidates: item.candidates,
+            groups: const <DictionaryLookupGroup>[],
+          ),
+        );
+        continue;
+      }
+      if (payloadIndex >= rawResults.length) {
+        throw const MdictException(
+          MdictErrorCode.lookupFailed,
+          '词典返回结果数量不足',
+        );
+      }
+      final raw = rawResults[payloadIndex++];
+      results.add(
+        LookupResult(
+          query: item.request.query,
+          candidates: item.candidates,
+          groups: _parseLookupGroups(
+            raw is Map ? raw['groups'] : null,
+            item.enabled,
+          ),
+        ),
+      );
+    }
+    return results;
   }
 
   /// Returns a bounded, deterministic sample for dictionary familiarization.
@@ -287,7 +352,10 @@ class MdictService implements LookupBackend {
     _isolate.kill(priority: Isolate.immediate);
   }
 
-  Future<Map<Object?, Object?>> _request(Map<String, Object?> message) async {
+  Future<Map<Object?, Object?>> _request(
+    Map<String, Object?> message, {
+    Duration? timeout,
+  }) async {
     if (_disposed) {
       throw const MdictException(MdictErrorCode.disposed, '词典服务已释放');
     }
@@ -302,7 +370,7 @@ class MdictService implements LookupBackend {
     commandPort.send(<String, Object?>{...message, 'id': id});
 
     try {
-      return await completer.future.timeout(requestTimeout);
+      return await completer.future.timeout(timeout ?? requestTimeout);
     } on TimeoutException {
       _pending.remove(id);
       throw const MdictException(MdictErrorCode.lookupFailed, '词典操作超时');
@@ -376,6 +444,23 @@ MdictErrorCode _errorCodeFromName(String? name) {
     if (code.name == name) return code;
   }
   return MdictErrorCode.lookupFailed;
+}
+
+class _PreparedLookup {
+  const _PreparedLookup({
+    required this.request,
+    required this.enabled,
+    required this.candidates,
+    required this.payload,
+  });
+
+  final LookupRequest request;
+  final List<DictionaryInfo> enabled;
+  final List<String> candidates;
+
+  /// Null when no enabled dictionary remains; the client returns an empty
+  /// result locally without asking the worker.
+  final Map<String, Object?>? payload;
 }
 
 class _OpenDictionary {
@@ -465,6 +550,9 @@ Future<Map<String, Object?>> _handleCommand(
   }
   if (command == 'lookup') {
     return _lookup(message, openDictionaries);
+  }
+  if (command == 'lookupMany') {
+    return _lookupMany(message, openDictionaries);
   }
   if (command == 'sample') {
     return _sample(message, openDictionaries);
@@ -612,6 +700,67 @@ List<String> _discoverMddPaths(String mdxPath) {
 }
 
 const int _fuzzyLookupLimit = 50;
+
+List<DictionaryLookupGroup> _parseLookupGroups(
+  Object? rawGroups,
+  List<DictionaryInfo> enabled,
+) {
+  if (rawGroups is! List) {
+    throw const MdictException(MdictErrorCode.lookupFailed, '词典返回格式异常');
+  }
+  final byId = {for (final dictionary in enabled) dictionary.id: dictionary};
+  final groups = <DictionaryLookupGroup>[];
+  for (final rawGroup in rawGroups) {
+    if (rawGroup is! Map) continue;
+    final dictionary = byId[rawGroup['id']];
+    if (dictionary == null) continue;
+
+    final rawEntries = rawGroup['entries'];
+    final entries = <LookupEntry>[];
+    if (rawEntries is List) {
+      for (final rawEntry in rawEntries) {
+        if (rawEntry is Map) entries.add(LookupEntry.fromMap(rawEntry));
+      }
+    }
+    final rawSuggestions = rawGroup['suggestions'];
+    final suggestions = rawSuggestions is List
+        ? rawSuggestions.whereType<String>().toList(growable: false)
+        : const <String>[];
+    final rawError = rawGroup['error'];
+    final error = rawError is Map
+        ? rawError['message']?.toString() ?? '词典查询失败'
+        : '';
+
+    groups.add(
+      DictionaryLookupGroup(
+        dictionary: dictionary,
+        entries: entries,
+        suggestions: suggestions,
+        error: error,
+      ),
+    );
+  }
+  return groups;
+}
+
+Future<Map<String, Object?>> _lookupMany(
+  Map<dynamic, dynamic> message,
+  Map<String, _OpenDictionary> openDictionaries,
+) async {
+  final rawQueries = message['queries'];
+  if (rawQueries is! List) {
+    throw const MdictException(MdictErrorCode.lookupFailed, '词典查询参数无效');
+  }
+  final results = <Map<String, Object?>>[];
+  for (final raw in rawQueries) {
+    if (raw is! Map) {
+      results.add(const <String, Object?>{'groups': <Object?>[]});
+      continue;
+    }
+    results.add(await _lookup(raw, openDictionaries));
+  }
+  return <String, Object?>{'results': results};
+}
 
 Future<Map<String, Object?>> _lookup(
   Map<dynamic, dynamic> message,

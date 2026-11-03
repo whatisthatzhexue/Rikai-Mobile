@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rikai.mobile/schemas/agent/pitch.v1.schema.json",
+  "title": "Rikai Agent Pitch Accent v1",
+  "type": "object",
+  "required": ["schema", "source", "accent_type", "mora_count", "mora_pattern"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "rikai.agent.pitch.v1"},
+    "source": {"const": "unidic"},
+    "accent_type": {"type": "integer", "minimum": 0, "maximum": 64},
+    "mora_count": {"type": "integer", "minimum": 1, "maximum": 64},
+    "mora_pattern": {"type": "string", "pattern": "^[LH]+$"}
+  }
+}

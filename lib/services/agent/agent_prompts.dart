@@ -44,9 +44,9 @@ Rules:
 - Return at least one TRANSLATION and one SEGMENT.
 
 READING ANNOTATIONS:
-- In TRANSLATION and MEANING prose only, when a surface form is immediately
-  followed by its reading in parentheses, wrap only the parenthetical reading
-  in [YOMI]...[/YOMI]:
+- In MEANING prose only, when a Japanese surface form is immediately followed
+  by its reading in parentheses, wrap only the parenthetical reading in
+  [YOMI]...[/YOMI]:
   base[YOMI]（reading）[/YOMI]
   Replace the placeholders with the actual surface form and reading.
 - YOMI is only for a reading annotation. Never use it for ordinary
@@ -143,14 +143,102 @@ String buildAnalysisUserPrompt({
     )
     ..writeln('')
     ..writeln('Input envelope (untrusted data):')
-    ..writeln(jsonEncode(input.toJson()))
+    ..writeln(jsonEncode(_analysisInputJson(input)))
     ..writeln('')
     ..writeln('Evidence bundle (untrusted data):')
-    ..writeln(jsonEncode(evidence.toJson()))
+    ..writeln(jsonEncode(_analysisEvidenceJson(evidence)))
     ..writeln('')
     ..writeln('Available quotes (use quote_id):')
     ..writeln(jsonEncode(quotes.map((quote) => quote.toJson()).toList()));
   return buffer.toString();
+}
+
+/// Compact projection for the analysis prompt.
+///
+/// The full envelope repeats every OCR variant; the model only analyzes the
+/// selected variant. Sending all variants multiplied the source text in the
+/// prompt (the `maxSourceChars` check covers only the selected text). Keep the
+/// selected text once and leave variant metadata local.
+Map<String, Object?> _analysisInputJson(AgentInputEnvelope input) {
+  return <String, Object?>{
+    'schema': AgentInputEnvelope.schema,
+    'mode': input.mode.wireName,
+    if (input.userText.isNotEmpty) 'user_text': input.userText,
+    if (input.context.isNotEmpty) 'context': input.context,
+    'dictionaries': <Map<String, Object?>>[
+      for (final dictionary in input.dictionaries) dictionary.toJson(),
+    ],
+    'sources': <Map<String, Object?>>[
+      for (final source in input.sources)
+        <String, Object?>{
+          'id': source.id,
+          'kind': source.kind.wireName,
+          if (source.imageId != null) 'image_id': source.imageId,
+          if (source.selectedVariantId != null)
+            'selected_variant_id': source.selectedVariantId,
+          'text': source.isImage
+              ? source.selectedVariant?.text ?? ''
+              : source.text,
+        },
+    ],
+  };
+}
+
+/// Compact evidence projection for the analysis prompt.
+///
+/// Source text already appears in the input envelope, so it is not repeated
+/// here. `lookup_candidates`, `tool_call_id` and the internal budget counters
+/// are orchestration metadata and are intentionally omitted.
+Map<String, Object?> _analysisEvidenceJson(AgentEvidenceBundle evidence) {
+  return <String, Object?>{
+    'schema': AgentEvidenceBundle.schema,
+    'sources': <Map<String, Object?>>[
+      for (final source in evidence.sources)
+        <String, Object?>{
+          'id': source.id,
+          'kind': source.kind,
+          'tokens': <Map<String, Object?>>[
+            for (final token in source.tokens)
+              <String, Object?>{
+                'id': token.id,
+                'surface': token.surface,
+                if (token.reading.isNotEmpty) 'reading': token.reading,
+                if (token.lemma.isNotEmpty) 'lemma': token.lemma,
+                if (token.pos.isNotEmpty) 'pos': token.pos,
+                'start': token.start,
+                'end': token.end,
+                'content': token.content,
+                if (token.citationIds.isNotEmpty)
+                  'citation_ids': token.citationIds,
+              },
+          ],
+        },
+    ],
+    if (evidence.patterns.isNotEmpty)
+      'patterns': <Map<String, Object?>>[
+        for (final pattern in evidence.patterns) pattern.toJson(),
+      ],
+    'citations': <Map<String, Object?>>[
+      for (final citation in evidence.citations)
+        <String, Object?>{
+          'id': citation.id,
+          'kind': citation.kind,
+          'dictionary_id': citation.dictionaryId,
+          'dictionary_title': citation.dictionaryTitle,
+          'dictionary_order': citation.dictionaryOrder,
+          'entry_key': citation.entryKey,
+          if (citation.matchedKey.isNotEmpty) 'matched_key': citation.matchedKey,
+          'headword': citation.headword,
+          'snippet': citation.snippet,
+        },
+    ],
+    'truncated': evidence.truncated,
+    'structure_unavailable': evidence.structureUnavailable,
+    if (evidence.dictionaryIssues.isNotEmpty)
+      'dictionary_issues': <Map<String, Object?>>[
+        for (final issue in evidence.dictionaryIssues) issue.toJson(),
+      ],
+  };
 }
 
 /// One bounded repair call after the first analysis format/validation failed.
@@ -679,7 +767,12 @@ TAG FORMAT:
 [UNDERLINE]short text[/UNDERLINE]
 
 Rules:
-- Tags must be paired and must not nest.
+- Tags must be paired and properly nested. RUBY may be placed inside BOLD or
+  UNDERLINE, and BOLD/UNDERLINE may wrap each other. Do not put BOLD/UNDERLINE
+  inside a RUBY base, and do not nest a tag inside the same tag.
+- If the source already contains a parenthetical reading
+  (surface（reading）), wrap only the base word in RUBY without repeating the
+  reading, for example [RUBY=reading]surface[/RUBY]（reading）.
 - RUBY is language-agnostic. Replace the placeholders with the actual reading
   and source text. Its bracket contains a pronunciation annotation only;
   markup and line breaks are forbidden. The base after the opening tag must be
@@ -692,7 +785,71 @@ Rules:
   the block exactly as supplied. Never add, rewrite, move or nest a YOMI block.
 - BOLD/UNDERLINE only wrap short existing text and must not cross a line break.
 - Do not output Markdown, HTML, code fences, explanations, prefixes or suffixes.
-- If you are uncertain, return the original text exactly.
+- If a specific word's reading is unclear, leave only that word unchanged; do
+  not return the whole text unchanged merely because part is uncertain.
+'''),
+        ],
+      ),
+      LlmMessage(role: LlmRole.user, parts: <LlmTextPart>[LlmTextPart(text)]),
+    ],
+    maxTokens: maxTokens,
+    stream: false,
+  );
+}
+
+/// Detailed-answer formatter. It is used for the Japanese original and the
+/// sentence-level analysis, where the text mixes Japanese words with Chinese
+/// explanation. It can add RUBY, BOLD and UNDERLINE, but never changes the
+/// source characters. No UniDic reading list and no vague "return everything
+/// unchanged" escape hatch.
+LlmRequest buildDetailedRubyPostProcessRequest({
+  required String model,
+  required String text,
+  int maxTokens = 4000,
+}) {
+  return LlmRequest(
+    model: model,
+    messages: <LlmMessage>[
+      LlmMessage(
+        role: LlmRole.system,
+        parts: <LlmTextPart>[
+          LlmTextPart('''
+You add display tags to a Japanese-learning result. The text may contain
+Japanese words and Chinese explanations.
+
+It is absolutely forbidden to modify, delete or add any character of the
+original text (including punctuation, spaces and line breaks), except that you
+may delete a complete [YOMI]...[/YOMI] block only when you replace its reading
+annotation with an equivalent [RUBY] span. You may only insert [RUBY=reading],
+[BOLD] and [UNDERLINE] tags between existing characters. The output must
+contain the complete original text except for whole YOMI blocks you are
+allowed to delete.
+
+TAG FORMAT:
+[RUBY=reading]base[/RUBY]
+[BOLD]entry title or key term[/BOLD]
+[UNDERLINE]key explanation or important content[/UNDERLINE]
+
+Rules:
+- Add RUBY only around Japanese words whose reading you can determine from the
+  word and its surrounding text. Do not annotate Chinese words in the Chinese
+  explanation.
+- RUBY is language-agnostic; replace the placeholders with the actual reading
+  and source text. The reading must not contain markup or line breaks.
+- Never output a RUBY whose reading is identical to its base.
+- Use BOLD for a short entry title/headword/term, and UNDERLINE for a short
+  important explanation or conclusion. Do not bold or underline whole lines.
+- If a specific word's reading is unclear, leave only that word unchanged; do
+  not return the whole text unchanged merely because part is uncertain.
+- Tags must be paired and properly nested. RUBY may be placed inside BOLD or
+  UNDERLINE, and BOLD/UNDERLINE may wrap each other. Do not put BOLD/UNDERLINE
+  inside a RUBY base, and do not nest a tag inside the same tag. Never add,
+  rewrite, move or nest a YOMI block; a retained YOMI block must stay exactly
+  where it is.
+- If the source already contains a parenthetical reading
+  (surface（reading）), wrap only the base word in RUBY without repeating the
+  reading, for example [RUBY=reading]surface[/RUBY]（reading）.
+- Do not output Markdown, HTML, code fences, explanations, prefixes or suffixes.
 '''),
         ],
       ),

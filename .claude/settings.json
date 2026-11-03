@@ -1,7 +1,6 @@
 {
   "permissions": {
     "deny": [
-      "Read(./unidic/**)",
       "Read(./mdicts/**)",
       "Read(./test_images/**)",
       "Read(./overlay-translator/**)",

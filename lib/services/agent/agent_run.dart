@@ -82,6 +82,23 @@ class AgentRunRequest {
   final AgentResponseLanguage responseLanguage;
 }
 
+/// Display-only rich-text output for one completed analysis.
+///
+/// This is separate from [AgentRunResult] so the core result can be returned
+/// before optional formatting finishes; the controller applies these fields
+/// when they arrive.
+class AgentRichTextOutputs {
+  const AgentRichTextOutputs({
+    this.originalText,
+    this.segmentTexts = const <String>[],
+    this.segmentNotes = const <String>[],
+  });
+
+  final String? originalText;
+  final List<String> segmentTexts;
+  final List<String> segmentNotes;
+}
+
 class AgentRunResult {
   const AgentRunResult({
     required this.input,
@@ -96,7 +113,9 @@ class AgentRunResult {
     this.warnings = const <String>[],
     this.coverageFallbackUsed = false,
     this.ocrQuality = const <String, OcrQuality>{},
-    this.richSummary,
+    this.richOriginalText,
+    this.richSegmentTexts = const <String>[],
+    this.richSegmentNotes = const <String>[],
   });
 
   final AgentInputEnvelope input;
@@ -119,11 +138,19 @@ class AgentRunResult {
   /// the opaque image id. Never serialized or sent to the provider.
   final Map<String, OcrQuality> ocrQuality;
 
-  /// Optional rich-text version of [agentSummarySource]. It is accepted only
-  /// when stripping formatting tags and deleted YOMI blocks reproduces the
-  /// plain source exactly. Any retained YOMI wrappers are removed before this
-  /// value is stored; their parenthetical reading remains.
-  final String? richSummary;
+  /// Optional AI-formatted version of the whole “原文” section. It is accepted
+  /// only when its stripped form reproduces the combined quote source exactly.
+  /// This is intentionally section-level, not a field on each quote.
+  final String? richOriginalText;
+
+  /// AI-formatted versions of segment interpretations, aligned with
+  /// [analysis.segments]. Empty entries mean “use the plain interpretation”.
+  final List<String> richSegmentTexts;
+
+  /// AI-formatted dictionary-fact explanations (word senses and grammar
+  /// explanations), aligned with [analysis.segments]. Empty entries mean
+  /// “render the plain note lines”.
+  final List<String> richSegmentNotes;
 
   List<AgentCitation> get citations => evidence.citations;
 
@@ -136,11 +163,42 @@ class AgentRunResult {
         .where((citation) => usedIds.contains(citation.id))
         .toList(growable: false);
   }
+
+  /// Returns a copy with display-only formatting applied. Core analysis,
+  /// validation, citations and warnings are unchanged.
+  AgentRunResult copyWithRichText(AgentRichTextOutputs rich) {
+    return AgentRunResult(
+      input: input,
+      evidence: evidence,
+      quotes: quotes,
+      analysis: analysis,
+      validation: validation,
+      sources: sources,
+      dictionaryProfiles: dictionaryProfiles,
+      profileWarnings: profileWarnings,
+      unavailableProfiles: unavailableProfiles,
+      warnings: warnings,
+      coverageFallbackUsed: coverageFallbackUsed,
+      ocrQuality: ocrQuality,
+      richOriginalText: rich.originalText,
+      richSegmentTexts: List<String>.unmodifiable(rich.segmentTexts),
+      richSegmentNotes: List<String>.unmodifiable(rich.segmentNotes),
+    );
+  }
 }
 
-/// The raw assistant summary passed to the rich-text post-processor. It keeps
-/// [YOMI] wrappers so the formatter is allowed to replace a reading annotation
-/// with RUBY while the diff guard verifies every other character.
+/// The combined source text for the detailed “原文” section. The formatter
+/// works on this section as a whole rather than producing a field per quote.
+String agentOriginalSource(List<AgentQuoteRef> quotes) {
+  return quotes
+      .map((quote) => quote.text)
+      .where((text) => text.trim().isNotEmpty)
+      .join('\n\n');
+}
+
+/// The raw assistant summary. The AI bubble is deliberately plain text; rich
+/// formatting is only for the detailed original/segment surfaces. This raw
+/// value still keeps YOMI wrappers for [agentSummaryDisplayText].
 String agentSummarySource(AgentAnalysis analysis) {
   if (analysis.translation.isNotEmpty) {
     return analysis.translation.map((item) => item.text).join('\n');
@@ -151,10 +209,22 @@ String agentSummarySource(AgentAnalysis analysis) {
   return '';
 }
 
-/// The plain summary shown when no accepted rich-text form exists. YOMI tags
-/// are removed but their parenthetical reading is kept.
+/// The dictionary-fact explanation lines shown under a segment. These are the
+/// word senses and grammar explanations, not the citation snippets.
+String agentSegmentNotesSource(AgentSegment segment) {
+  return <String>[
+    for (final note in segment.wordNotes)
+      '${note.surface}${note.reading.isEmpty ? '' : '（${note.reading}）'}：'
+          '${note.sense}',
+    for (final note in segment.grammarNotes) note.explanation,
+  ].join('\n');
+}
+
+/// The plain summary shown in the AI bubble. Any display tags emitted by the
+/// analysis model are converted to plain text; the bubble never uses rich
+/// rendering.
 String agentSummaryDisplayText(AgentAnalysis analysis) =>
-    stripYomiTags(agentSummarySource(analysis));
+    richTextToPlain(agentSummarySource(analysis));
 
 class AgentRunFailure implements Exception {
   const AgentRunFailure({
@@ -184,6 +254,10 @@ class AgentRunFailure implements Exception {
 class AgentCancellation extends LlmCancelToken {}
 
 typedef AgentStageCallback = void Function(AgentStage stage, String message);
+
+/// Receives display-only rich text after the core result has been delivered.
+/// The controller applies it to the visible result without blocking `done`.
+typedef AgentRichTextCallback = void Function(AgentRichTextOutputs outputs);
 
 /// Fires once the main analysis can be displayed, before optional
 /// repair/language post-checks finish. The final [AgentRunResult] may replace

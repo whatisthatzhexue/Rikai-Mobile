@@ -14,6 +14,9 @@ class AgentLimits {
     this.maxCoverageDuplicateGroups = 10,
     this.maxCoverageFallback = 1,
     this.enableRichTextPostProcess = true,
+    this.richTextConcurrency = 3,
+    this.lookupBatchSize = 12,
+    this.adaptiveCoverageReview = true,
   });
 
   static const AgentLimits standard = AgentLimits();
@@ -31,6 +34,22 @@ class AgentLimits {
   /// Optional rich-text formatting pass after a successful analysis. Tests
   /// that assert request sequences disable it explicitly.
   final bool enableRichTextPostProcess;
+
+  /// Maximum number of concurrent rich-text formatting requests. Formatting
+  /// sections are independent, so a small bounded pool removes the serial
+  /// N+1 wait without flooding the provider.
+  final int richTextConcurrency;
+
+  /// Maximum number of dictionary queries sent to the MDict worker in one IPC
+  /// round trip. The worker still executes them sequentially; this only
+  /// removes per-query isolate round trips.
+  final int lookupBatchSize;
+
+  /// When true, the coverage review is skipped if every lookup target already
+  /// produced at least one citation and the evidence size is below the global
+  /// cap. At the cap it still runs so verified duplicates can free slots.
+  /// Set false in tests or integrations that need an unconditional review.
+  final bool adaptiveCoverageReview;
 
   // Coverage output estimator inputs. These are public so contracts/tests can
   // point at one named constant instead of copying magic numbers.

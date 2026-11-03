@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rikai.mobile/schemas/agent/history-result.v1.schema.json",
+  "title": "Rikai Agent History Result v1",
+  "type": "object",
+  "required": ["schema", "run_id", "user_text", "result"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "rikai.agent.history-result.v1"},
+    "run_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "user_text": {"type": "string", "maxLength": 20000},
+    "result": {"type": "object"},
+    "source_versions": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {"type": "object"}
+    },
+    "citations": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {"type": "object"}
+    },
+    "ocr_quality": {"type": "object"},
+    "warnings": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {"type": "string", "maxLength": 1000}
+    }
+  }
+}

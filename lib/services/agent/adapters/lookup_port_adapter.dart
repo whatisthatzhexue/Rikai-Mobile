@@ -6,7 +6,7 @@ import '../../mdict/mdict_worker.dart';
 import '../ports/lookup_port.dart';
 import 'agent_error_mapper.dart';
 
-class LookupPortAdapter implements LookupPort {
+class LookupPortAdapter implements LookupPort, BatchLookupPort {
   LookupPortAdapter(this._service) : _gateway = LookupGateway(_service);
 
   final MdictService _service;
@@ -16,6 +16,18 @@ class LookupPortAdapter implements LookupPort {
   Future<LookupResult> lookup(LookupRequest request) async {
     try {
       return await _gateway.lookup(request);
+    } catch (error) {
+      throw mapAgentError(error, fallbackMessage: '词典查询失败');
+    }
+  }
+
+  @override
+  Future<List<LookupResult>> lookupMany(List<LookupRequest> requests) async {
+    if (requests.isEmpty) return const <LookupResult>[];
+    try {
+      return await _service.lookupMany(<LookupRequest>[
+        for (final request in requests) _gateway.prepare(request),
+      ]);
     } catch (error) {
       throw mapAgentError(error, fallbackMessage: '词典查询失败');
     }

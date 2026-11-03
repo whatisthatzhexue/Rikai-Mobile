@@ -28,17 +28,102 @@ class RichTextPostProcessor {
   final LlmPort _llm;
   final String _model;
 
+  /// Formats several independent sections with a bounded worker pool.
+  ///
+  /// Identical non-empty texts share one request (for example repeated notes),
+  /// and results are returned in the same order as [texts]. Empty entries are
+  /// not sent to the provider.
+  Future<List<RichTextPostProcessResult>> processAll(
+    List<String> texts, {
+    LlmCancelToken? cancellation,
+    bool detailed = true,
+    int concurrency = 2,
+  }) async {
+    if (texts.isEmpty) return const <RichTextPostProcessResult>[];
+
+    final uniqueTexts = <String>[];
+    final uniqueIndexByText = <String, int>{};
+    final inputIndexes = <int>[];
+    for (final text in texts) {
+      if (text.isEmpty) {
+        inputIndexes.add(-1);
+        continue;
+      }
+      final index = uniqueIndexByText.putIfAbsent(text, () {
+        uniqueTexts.add(text);
+        return uniqueTexts.length - 1;
+      });
+      inputIndexes.add(index);
+    }
+    if (uniqueTexts.isEmpty) {
+      return <RichTextPostProcessResult>[
+        for (final _ in texts)
+          const RichTextPostProcessResult(rejectionReason: 'empty'),
+      ];
+    }
+
+    final results = List<RichTextPostProcessResult?>.filled(
+      uniqueTexts.length,
+      null,
+    );
+    var nextIndex = 0;
+    Future<void> worker() async {
+      while (true) {
+        final index = nextIndex++;
+        if (index >= uniqueTexts.length) return;
+        if (cancellation?.isCancelled == true) {
+          throw const AgentCapabilityException(
+            AgentToolErrorCode.toolCancelled,
+            '已取消',
+          );
+        }
+        results[index] = await process(
+          uniqueTexts[index],
+          cancellation: cancellation,
+          detailed: detailed,
+        );
+      }
+    }
+
+    final workerCount = concurrency.clamp(1, uniqueTexts.length);
+    await Future.wait(<Future<void>>[
+      for (var index = 0; index < workerCount; index++) worker(),
+    ]);
+
+    return <RichTextPostProcessResult>[
+      for (final index in inputIndexes)
+        index < 0
+            ? const RichTextPostProcessResult(rejectionReason: 'empty')
+            : results[index]!,
+    ];
+  }
+
   Future<RichTextPostProcessResult> process(
     String text, {
     LlmCancelToken? cancellation,
+    bool detailed = false,
   }) async {
     if (text.isEmpty) {
       return const RichTextPostProcessResult(rejectionReason: 'empty');
     }
+    // The formatter returns the full text plus tags; a fixed 4000-token cap
+    // truncates long originals on providers that honor request.maxTokens.
+    final maxTokens = (text.length + 2000).clamp(4000, 16000);
+    final request = detailed
+        ? buildDetailedRubyPostProcessRequest(
+            model: _model,
+            text: text,
+            maxTokens: maxTokens,
+          )
+        : buildRichTextPostProcessRequest(
+            model: _model,
+            text: text,
+            maxTokens: maxTokens,
+          );
     final buffer = StringBuffer();
     try {
       await for (final event in _llm.stream(
-        buildRichTextPostProcessRequest(model: _model, text: text),
+        request,
         cancellation: cancellation,
       )) {
         if (cancellation?.isCancelled == true) {
@@ -79,9 +164,13 @@ class RichTextPostProcessor {
     if (!isWellFormedRichText(candidate)) {
       return const RichTextPostProcessResult(rejectionReason: 'malformed_tags');
     }
-    final normalized = stripRedundantRubyTags(candidate);
-    if (stripRichTextTags(stripYomiBlocks(normalized)) !=
-        stripYomiBlocks(text)) {
+    var normalized = cleanRubyReadings(candidate);
+    normalized = stripRedundantRubyTags(normalized);
+    // The analysis model may already have emitted display tags despite the
+    // prompt (for example [RUBY=...]). They are formatting, not source text,
+    // so both sides must be compared with their display tags removed.
+    final sourcePlain = stripRichTextTags(stripYomiBlocks(text));
+    if (stripRichTextTags(stripYomiBlocks(normalized)) != sourcePlain) {
       return const RichTextPostProcessResult(rejectionReason: 'text_changed');
     }
     return RichTextPostProcessResult(taggedText: stripYomiTags(normalized));

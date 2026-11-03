@@ -11,3 +11,10 @@ abstract interface class LookupPort {
     int limit = 10,
   });
 }
+
+/// Optional extension for ports that can execute several independent lookups
+/// in one worker round trip. Evidence builder batches queries and falls back
+/// to [LookupPort.lookup] for fakes/integrations that do not implement this.
+abstract interface class BatchLookupPort {
+  Future<List<LookupResult>> lookupMany(List<LookupRequest> requests);
+}

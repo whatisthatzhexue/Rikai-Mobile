@@ -13,6 +13,9 @@ class CitationRegistry {
   List<AgentCitation> get citations =>
       List<AgentCitation>.unmodifiable(_citations.values);
 
+  /// Number of issued citations without allocating an unmodifiable list.
+  int get count => _citations.length;
+
   AgentCitation? get(String id) => _citations[id];
 
   AgentCitation? find(String dictionaryId, String entryKey) {

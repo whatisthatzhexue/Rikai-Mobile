@@ -33,14 +33,16 @@ class LookupGateway {
 
   final LookupBackend _backend;
 
-  Future<LookupResult> lookup(LookupRequest request) {
+  /// Validates and normalizes one request without performing I/O. Batch
+  /// callers use the same filtering and candidate fallback as [lookup].
+  LookupRequest prepare(LookupRequest request) {
     final dictionaries = request.dictionaries
         .where((dictionary) => dictionary.enabled && dictionary.isAvailable)
         .toList(growable: false);
     if (dictionaries.isEmpty) {
       throw const LookupGatewayException('请先选择至少一本可用的 MDict 词典');
     }
-    return _backend.lookup(
+    return LookupRequest(
       query: request.query,
       rawCandidates: request.rawCandidates.isEmpty
           ? <String>[request.query]
@@ -49,6 +51,18 @@ class LookupGateway {
       matchMode: request.matchMode,
       maxEntriesPerDictionary: request.maxEntriesPerDictionary,
       suggestionLimit: request.suggestionLimit,
+    );
+  }
+
+  Future<LookupResult> lookup(LookupRequest request) {
+    final prepared = prepare(request);
+    return _backend.lookup(
+      query: prepared.query,
+      rawCandidates: prepared.rawCandidates,
+      dictionaries: prepared.dictionaries,
+      matchMode: prepared.matchMode,
+      maxEntriesPerDictionary: prepared.maxEntriesPerDictionary,
+      suggestionLimit: prepared.suggestionLimit,
     );
   }
 }

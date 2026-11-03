@@ -185,6 +185,35 @@ class _FailingSecondAnalysisProvider implements LlmPort {
   }
 }
 
+class _BlockingRichTextProvider implements LlmPort {
+  int calls = 0;
+  final Completer<void> formattingStarted = Completer<void>();
+  final Completer<void> releaseFormatting = Completer<void>();
+
+  @override
+  Stream<LlmEvent> stream(
+    LlmRequest request, {
+    LlmCancelToken? cancellation,
+  }) async* {
+    calls++;
+    if (calls == 1) {
+      yield LlmEvent(type: LlmEventType.textDelta, text: _profileTagged);
+      yield LlmEvent.done();
+      return;
+    }
+    if (calls == 2) {
+      yield LlmEvent(type: LlmEventType.textDelta, text: _analysisTagged);
+      yield LlmEvent.done();
+      return;
+    }
+    if (!formattingStarted.isCompleted) formattingStarted.complete();
+    await releaseFormatting.future;
+    final text = request.messages.last.text;
+    yield LlmEvent(type: LlmEventType.textDelta, text: '[BOLD]$text[/BOLD]');
+    yield LlmEvent.done();
+  }
+}
+
 class _CancelAwareProvider implements LlmPort {
   int calls = 0;
   final Completer<void> _cancelled = Completer<void>();
@@ -605,5 +634,53 @@ void main() {
     expect(snapshot.status, AgentRunStatus.error);
     expect(snapshot.sentText, '何卒');
     expect(snapshot.finishedAt, isNotNull);
+  });
+
+  test('rich text arrives after done without delaying the core result', () async {
+    final provider = _BlockingRichTextProvider();
+    final container = ProviderContainer(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(_preferences),
+        agentLimitsProvider.overrideWithValue(
+          const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: true,
+          ),
+        ),
+        agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
+        agentRunServicesProvider.overrideWithValue(
+          ({required bool needsOcr, bool Function()? isCancelled}) async =>
+              _services(provider),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(agentRunControllerProvider.notifier);
+
+    final snapshot = await _runToCompletion(container, controller);
+
+    // `done` is delivered before the formatting requests complete.
+    expect(snapshot.status, AgentRunStatus.done);
+    expect(snapshot.result, isNotNull);
+    expect(snapshot.result!.richOriginalText, isNull);
+    await provider.formattingStarted.future.timeout(const Duration(seconds: 5));
+    expect(
+      container.read(agentRunControllerProvider).result!.richOriginalText,
+      isNull,
+    );
+
+    provider.releaseFormatting.complete();
+    AgentRunSnapshot current = container.read(agentRunControllerProvider);
+    final deadline = DateTime.now().add(const Duration(seconds: 5));
+    while (current.result?.richOriginalText == null &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      current = container.read(agentRunControllerProvider);
+    }
+
+    expect(current.status, AgentRunStatus.done);
+    expect(current.result?.richOriginalText, '[BOLD]何卒[/BOLD]');
+    expect(current.result?.richSegmentTexts, <String>['[BOLD]正式请求[/BOLD]']);
+    expect(current.result?.richSegmentNotes, <String>['[BOLD]何卒：请务必[/BOLD]']);
   });
 }

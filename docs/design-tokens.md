@@ -228,9 +228,10 @@
 > **Phase 6 状态**：P6.5 已把主页改为五个按钮（拍照识别、查句子、查单词、
 > 历史记录、词典助手），并接入 Agent 页、严格/宽松选择、来源 chip 和 provider
 > 设置。下方“四按钮”历史规则只用于理解旧版；当前以“Phase 6 Agent UI”与自查清单
-> 为准。P6.6/P6.7（多 OCR、Markdown/ruby/声调）仍需补 token/测试。P7.0 的
-> assistant summary 富文本（RUBY/BOLD/UNDERLINE）已按本节 ruby token 实现，
-> 仍需真机视觉验收。
+> 为准。P6.6 多 OCR token 已实现；P6.7 历史/声调/DSL/Markdown 边界的 token
+> 已在下方记录（仅设计，未实现）。P7.0 的详细解析富文本（原文/逐句理解/词典
+> 事实解释的 RUBY/BOLD/UNDERLINE）已按本节 ruby token 实现；AI 气泡保持
+> 纯文本，仍需真机视觉验收。
 
 ### Phase 6 Agent UI（基础对话式已实现；完整 v2 验收待补）
 
@@ -271,7 +272,12 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 | 对话气泡圆角 | `agentBubbleRadius` | 16（`AppRadius.xl`）；指向发送者的一角 4（`agentBubbleTailRadius`） |
 | 消息最大宽度 | `agentMessageMaxWidth` | 80%（字号放大到 200% 时允许 90%，禁止满宽） |
 | 模型/模式标签 | `agentModelLabel` | 12sp，`textSecondary`，位于 AI 气泡顶部 |
-| 富文本读音/强调 | `rubyReadingSize`/`rubyReadingColor`/`richTextUnderlineColor` | RUBY 发音标注为主字号 55%、`primary`；BOLD `w600`；UNDERLINE `primary` 下划线；只用于显示标签，不改变正文 |
+| 富文本读音/强调 | `rubyReadingSize`/`rubyReadingColor`/`richTextUnderlineColor`/`richTextUnderlineThickness` | RUBY 发音标注为主字号 55%、正文色 `textPrimary`；以 base 的 alphabetic baseline 对齐，读音在上方，不把 base 下沉；BOLD `w600`，RUBY 在 BOLD 内时读音一起加粗；UNDERLINE 正文色 `textPrimary`、粗细 2，RUBY 读音永不加下划线；只用于显示标签，不改变正文 |
+| 声调高低线 | `agentPitchAccentLine` | 1.5dp、`textSecondary`；高段上轨/低段下轨，アクセント核处垂直下降；线宽按词宽均分为 mora 段，不按汉字字数逐字对齐；只在词注/词典事实行，200% 字号随文字缩放，空间不足时换行或省略，不覆盖文字 |
+| 历史列表行 | `agentHistoryRow` | 最小高 72、白底、1px `divider`；标题 16sp/600，时间/模式/状态 14sp，状态 chip 12sp；触控 ≥48；不显示缩略图/原图 |
+| 历史只读提示 | `agentHistoryReadOnlyBanner` | `surfaceMuted` 底、14sp、`textSecondary`、内边距 12；“历史记录只读；原图未保存”；不遮挡内容 |
+| 历史空态 | `agentHistoryEmpty` | 图标 40、标题 16sp、说明 14sp、主按钮“返回助手”；居中，不整屏 loading |
+| 档案 Markdown 预览 | `agentProfileMarkdownPreview` | 正文 16sp、行内代码 14sp；只渲染白名单语法；链接按纯文本，不加载图片/外链；未知语法原样显示 |
 | 系统/工具消息 | `agentSystemMessage` | 居中、14sp、`textSecondary`、无气泡 |
 | 会话设置条 | `agentSessionSettingsBar` | 可见高 32、触控 ≥40，`surfaceMuted`，14sp；展开面板复用现有筛选条 |
 | 状态条 | `agentStatusBar` | 高 24–32，`surfaceMuted`，14sp，不遮挡消息 |
@@ -292,6 +298,19 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
   `follow` 映射为 `zh`，禁止输入启发式）；详见
   `docs/agent_docs/device-feedback-2026-10-31.md` 的 F1/F17。结果字段语言后校验
   仍待 F1b（Wave 3）。
+
+**P6.7 历史/声调/DSL 的补充规则（仅设计，未实现）**
+
+- 历史列表/详情使用现有 Agent 语义 token；不新增缩略图、卡片或时间线样式。
+  列表行只显示文字元数据；详情顶部固定只读提示，图片会话显示“图片 N 张（历史
+  不保存原图）”，不出现损坏图片占位。
+- 声调线只出现在逐句理解下方的词注/词典事实行；同一行已有 RUBY 时，声调线在
+  词上方、RUBY 在词上/旁，二者不得重叠。无 UniDic 声调数据时整条线省略，不显示
+  数字/“推测”占位。
+- DSL 预览/版本/回滚沿用阅读器、照片集、语料现有 token 和主/次按钮；不新增
+  Agent 专用样式。预览只渲染白名单语法，禁止图片/外链/HTML。
+- Markdown 档案预览只用于用户可编辑档案；主结果仍是结构化富文本，不套 Markdown
+  页面样式。
 
 **布局与交互**
 
@@ -462,6 +481,14 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
       用户可见文本无 `（q1）` 等内部 ID。
 - [ ] provider/模型/语言/隐私/关于分组；API Key 有显示切换/测试连接/三态标签。
 - [ ] Semantics、40dp 触控、200% 字体缩放、对比度；仅浅色主题。
+- [ ] （P6.7）历史一条=一次分析，只读；列表/详情不显示图片/路径/缩略图；
+      citation 失效只显示保存摘要；删除/清空有二次确认。
+- [ ] （P6.7）声调只用 UniDic 字段 24–26；只在词注/词典事实行；无数据/越界
+      不画线，不用 AI 猜；200% 字号不重叠。
+- [ ] （P6.7）DSL 只渲染白名单；HTML/JS/图片/外链不执行；预览=正式渲染；
+      版本/回滚可复现；Agent 结果不接入。
+- [ ] （P6.7）Markdown 只用于导出/受限档案预览；主结果不是 Markdown；
+      未知语法按纯文本。
 
 ### 按钮
 - 常规主按钮：品牌蓝底、白字、16sp、高 40、圆角 8、水平内边距 16；
@@ -763,9 +790,10 @@ Phase 1 及之前的页面（首页、文本阅读、设置、TokenChip、底部
 > Phase 6 P6.1–P6.5 已实现五按钮、基础对话式 Agent 页和 provider 设置；对话式
 > Agent UI v2 的基础 token/布局已落地，状态条、历史、无障碍 200% 等验收项
 > 待补。P6.6 多 OCR 核心已按既有 Agent token 实现（版本 chip 28/12sp、差异
-> 高亮、修复候选），真机视觉/200% 字号验收待做；P6.7 annotation DSL/Markdown/
-> ruby/pitch 仍需按本节新增清单补齐。实现状态见 `docs/phase6-status.md`；未
-> 通过验收前不要把 v2 剩余项写成已支持。
+> 高亮、修复候选），真机视觉/200% 字号验收待做；P6.7 历史/声调/DSL/Markdown
+> 的 token 已在 §Agent 页语义 token 与补充规则中记录（仅设计，未实现），实现
+> 时按新增清单验收。实现状态见 `docs/phase6-status.md`；未通过验收前不要把 v2
+> 剩余项写成已支持。
 
 - [ ] 没有硬编码 `Color(0x...)` 或 `Colors.xxx`（除透明/白色数据占位）。
 - [ ] 所有页面顶栏为深蓝 `header` + 白色文字/图标，没有页面私自改回白底。

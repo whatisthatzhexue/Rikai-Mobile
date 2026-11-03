@@ -45,10 +45,20 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
   `lib/services/agent/agent_prompts.dart`**；不要在 orchestrator、parser、controller
   或 UI 中硬编码 prompt 字符串。`analysis_prompts.dart`、`coverage_prompts.dart`、
   `familiarization_prompts.dart` 仅为兼容 re-export，不是独立 prompt 源。
-- **富文本后处理只能插入显示标签**：采用前必须剥离 `[RUBY]`/`[BOLD]`/
-  `[UNDERLINE]`，并按 YOMI 规则（允许整块删除、保留块必须内容/位置不变）与原文
-  逐字符严格比较；不一致就降级纯文本。RUBY 读音等于 base 时必须移除该 RUBY。
-  （R-AGENT-23、T-135）
+- **富文本后处理只用于详细解析**：仅“原文”section、逐句理解与词典事实解释
+  （词义/语法，不含 citation snippet）使用 `[RUBY]`/`[BOLD]`/`[UNDERLINE]`；
+  AI 气泡摘要保持纯文本。采用前必须剥离标签，并按 YOMI 规则（允许整块删除、保留
+  块必须内容/位置不变）与原文逐字符严格比较；不一致就降级纯文本。标签必须正确
+  嵌套：RUBY 可在 BOLD/UNDERLINE 内，BOLD/UNDERLINE 可相互包裹，但不得进入
+  RUBY base 或嵌套自身。YOMI 内容比较忽略全/半角标点，RUBY 读音先清洗标点；
+  RUBY 读音等于 base 时必须移除该 RUBY。包住已有 `surface（reading）` 时只保留
+  一份读音；RUBY 以 base 的基线对齐，读音继承 BOLD 但永不加下划线。注音由 AI
+  判断，不读取 UniDic 读音表。（R-AGENT-23、T-135）
+- **P6.7 设计已记录，未实现**：历史一条=一次 run、只读、不存图片/路径；声调只用
+  UniDic 字段 24–26，只在词注/词典事实行；annotation DSL 只接受安全 JSON AST，
+  P6.7 先覆盖阅读器/照片集/语料；Markdown 只用于导出/受限档案预览。详见
+  `../phase6-agent-design.md` §17.2、`../phase6-agent-contracts.md` §14、
+  R-AGENT-24–27。Wave 4 关闭前不实现用户可感知的 P6.7 新功能。
 - **内部系统 Prompt 指令统一英文**：用户/回答语言由 `AgentResponseLanguage` 控制；
   不要新增中文系统指令（校验错误文本可本地化）。闭合标签统一使用正斜杠 `[/TAG]`。
 - 图片/密钥/运行状态/未实现能力等具体规则见

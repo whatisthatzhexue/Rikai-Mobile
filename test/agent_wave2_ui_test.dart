@@ -261,6 +261,46 @@ void main() {
     expect(find.byTooltip('复制结果为 Markdown'), findsNothing);
   });
 
+  testWidgets('completed assistant bubble stays plain text', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentAssistantBubble(
+              theme: AppTheme.light(),
+              providerLabel: 'DeepSeek',
+              mode: AgentMode.strict,
+              running: false,
+              provisional: false,
+              cancelled: false,
+              error: null,
+              errorDetail: '',
+              stageMessage: '',
+              startedAt: DateTime(2026, 1, 1),
+              finishedAt: DateTime(2026, 1, 1, 0, 0, 1),
+              progressStep: 4,
+              evidenceCount: 1,
+              citationCount: 1,
+              uiLanguage: AgentUiLanguage.chinese,
+              strings: _strings,
+              result: _result,
+              onRetry: null,
+              onLooseRetry: null,
+              onSettings: () {},
+              onRegenerate: () {},
+              onCopy: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('请多关照。'), findsOneWidget);
+    expect(find.textContaining('[RUBY='), findsNothing);
+  });
+
   test('copyable Markdown contains structured sections and no raw JSON', () {
     final markdown = buildAgentResultMarkdown(_result, _strings);
     expect(markdown, contains('## 原文'));
@@ -274,17 +314,24 @@ void main() {
     expect(markdown, isNot(contains('/tmp/')));
   });
 
-  test('copyable Markdown strips YOMI wrappers but keeps the reading', () {
+  test('copyable Markdown strips display tags but keeps readings', () {
     const yomiAnalysis = AgentAnalysis(
       sourceId: 'src-1',
       translation: <AgentTranslation>[
-        AgentTranslation(quoteId: 'q1', text: '请多关照[YOMI]（ます）[/YOMI]。'),
+        AgentTranslation(
+          quoteId: 'q1',
+          text:
+              '请多关照[YOMI]（ます）[/YOMI]'
+              '[RUBY=shabai]シャバイ[/RUBY]。',
+        ),
       ],
       segments: <AgentSegment>[
         AgentSegment(
           id: 'seg-1',
           quoteId: 'q1',
-          interpretation: '请务必[YOMI]（ます）[/YOMI]。',
+          interpretation:
+              '请务必[YOMI]（ます）[/YOMI]'
+              '[RUBY=せいしき]正式请求[/RUBY]。',
           epistemic: AgentEpistemic.dictionaryFact,
         ),
       ],
@@ -300,9 +347,10 @@ void main() {
     );
     final markdown = buildAgentResultMarkdown(result, _strings);
 
-    expect(markdown, contains('请多关照（ます）。'));
-    expect(markdown, contains('请务必（ます）。'));
+    expect(markdown, contains('请多关照（ます）シャバイ（shabai）。'));
+    expect(markdown, contains('请务必（ます）正式请求（せいしき）。'));
     expect(markdown, isNot(contains('[YOMI]')));
+    expect(markdown, isNot(contains('[RUBY')));
   });
 
   testWidgets('retry dictionary shows a spinner while the request is running', (

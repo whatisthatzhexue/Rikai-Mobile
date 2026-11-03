@@ -5,7 +5,8 @@
 > 本计划基于 2026-10-26 对两个克隆仓库、UniDic/MDict 实际数据、本机 Flutter/Android 环境和网络连通性的调研。已确认的产品/技术决策见 §3。
 >
 > **Phase 6（Mdict Agent）已实现 P6.1–P6.5 与 P6.6 多 OCR 核心；当前为固定
-> 流水线、模型无工具（2026-10-31 决策），P6.6 真机验收与 P6.7 未完成。**
+> 流水线、模型无工具（2026-10-31 决策），P6.6 真机验收未完成；P6.7 设计/契约
+> 已于 2026-11-03 记录，实现未开始。**
 > 最新进度见 `docs/phase6-status.md`；
 > 实机反馈队列见 `docs/agent_docs/device-feedback-2026-10-31.md`。MVP 的
 > OCR/UniDic/MDict 核心仍离线；Phase 6 可选在线 LLM 使用用户自备 API Key，
@@ -721,7 +722,8 @@ flutter build apk --release --target-platform android-arm64 --split-per-abi
 ## 11. Phase 6 — Mdict Agent（P6.1–P6.6 核心已实现）
 
 > 状态：**P6.1–P6.5 核心、2026-10-31 实机反馈 Wave 1–3 与 P6.6 多 OCR 核心
-> 已实现；Wave 4/P6.6 真机验收与 P6.7 未完成**。最新进度见
+> 已实现；Wave 4/P6.6 真机验收未完成；P6.7 设计/契约已于 2026-11-03 记录，
+> 实现未开始**。最新进度见
 > `docs/phase6-status.md`；设计细节、开放问题和验收标准见
 > `docs/phase6-agent-design.md`；契约/JSON Schema/状态机见
 > `docs/phase6-agent-contracts.md`。Phase 5 已完成并发布 1.0。v2 采用固定流水线、
@@ -793,7 +795,8 @@ P6.7 UI 仍须先补设计 token。
    首版用结构化组件 + 安全纯文本。
 6. 按需多 OCR 版本、差异/词典辅助修复、用户选择 UI（核心已实现，2026-11-02；
    真机验收待做）。
-7. annotation DSL、Markdown/ruby/声调渲染、性能/许可/发布验收。
+7. annotation DSL、安全富文本/ruby/UniDic 声调、历史/持久化、Markdown
+   导出/受限预览、性能/许可/发布验收（设计已记录 2026-11-03，Wave 4 后实现）。
 
 ### 11.5 验收
 

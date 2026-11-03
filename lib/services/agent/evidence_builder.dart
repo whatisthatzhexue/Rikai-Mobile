@@ -207,6 +207,81 @@ class EvidenceBuilder {
     // A mode that adds nothing does not stop later modes: a prefix miss can
     // still have suffix/incremental hits. Stop only at the global cap.
     var capReached = false;
+    final batchSize = limits.lookupBatchSize <= 0
+        ? 1
+        : limits.lookupBatchSize;
+    final batchTargets = <_LookupTarget>[];
+    final batchRequests = <LookupRequest>[];
+
+    bool applyResult(_LookupTarget target, LookupResult result) {
+      for (final group in result.groups) {
+        if (group.error.isNotEmpty) {
+          recordLookupFailure(group.dictionary, group.error);
+        }
+        var remaining =
+            maxEntriesPerDictionary -
+            (target.perDictionary[group.dictionary.id] ?? 0);
+        if (remaining <= 0) continue;
+        for (final entry in group.entries) {
+          if (remaining <= 0) break;
+          final entryKey = entry.headword.isEmpty
+              ? entry.matchedKey
+              : entry.headword;
+          if (entryKey.isEmpty) continue;
+          final existing = citations.find(group.dictionary.id, entryKey);
+          if (existing != null) {
+            if (target.citationIds.add(existing.id)) {
+              target.perDictionary[group.dictionary.id] =
+                  (target.perDictionary[group.dictionary.id] ?? 0) + 1;
+              remaining--;
+            }
+            continue;
+          }
+          if (citations.count >= maxCitations) {
+            truncated = true;
+            return true;
+          }
+          final citation = citations.issue(
+            toolCallId: target.toolCallId,
+            dictionary: group.dictionary,
+            entryKey: entryKey,
+            matchedKey: entry.matchedKey,
+            headword: entry.headword.isEmpty ? entryKey : entry.headword,
+            snippet: htmlToPlainText(
+              entry.html,
+              maxLength: limits.maxSnippetChars,
+            ),
+          );
+          target.citationIds.add(citation.id);
+          target.perDictionary[group.dictionary.id] =
+              (target.perDictionary[group.dictionary.id] ?? 0) + 1;
+          remaining--;
+          onProgress?.call(citations.count);
+          if (citations.count >= maxCitations) {
+            truncated = true;
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    Future<void> flushBatch() async {
+      if (batchRequests.isEmpty) return;
+      final results = await _lookupBatch(
+        List<LookupRequest>.of(batchRequests),
+        onDictionaryError: recordLookupFailure,
+      );
+      for (var index = 0; index < results.length; index++) {
+        if (applyResult(batchTargets[index], results[index])) {
+          capReached = true;
+          break;
+        }
+      }
+      batchTargets.clear();
+      batchRequests.clear();
+    }
+
     for (final mode in _lookupModes) {
       if (capReached) break;
       for (final target in selectedTargets) {
@@ -224,66 +299,14 @@ class EvidenceBuilder {
         ];
         if (eligible.isEmpty) continue;
 
-        final result = await _lookup(
-          target.candidates,
-          eligible,
-          mode,
-          onDictionaryError: recordLookupFailure,
-        );
-        for (final group in result.groups) {
-          if (group.error.isNotEmpty) {
-            recordLookupFailure(group.dictionary, group.error);
-          }
-          var remaining =
-              maxEntriesPerDictionary -
-              (target.perDictionary[group.dictionary.id] ?? 0);
-          if (remaining <= 0) continue;
-          for (final entry in group.entries) {
-            if (remaining <= 0) break;
-            final entryKey = entry.headword.isEmpty
-                ? entry.matchedKey
-                : entry.headword;
-            if (entryKey.isEmpty) continue;
-            final existing = citations.find(group.dictionary.id, entryKey);
-            if (existing != null) {
-              if (target.citationIds.add(existing.id)) {
-                target.perDictionary[group.dictionary.id] =
-                    (target.perDictionary[group.dictionary.id] ?? 0) + 1;
-                remaining--;
-              }
-              continue;
-            }
-            if (citations.citations.length >= maxCitations) {
-              truncated = true;
-              capReached = true;
-              break;
-            }
-            final citation = citations.issue(
-              toolCallId: target.toolCallId,
-              dictionary: group.dictionary,
-              entryKey: entryKey,
-              matchedKey: entry.matchedKey,
-              headword: entry.headword.isEmpty ? entryKey : entry.headword,
-              snippet: htmlToPlainText(
-                entry.html,
-                maxLength: limits.maxSnippetChars,
-              ),
-            );
-            target.citationIds.add(citation.id);
-            target.perDictionary[group.dictionary.id] =
-                (target.perDictionary[group.dictionary.id] ?? 0) + 1;
-            remaining--;
-            onProgress?.call(citations.citations.length);
-            if (citations.citations.length >= maxCitations) {
-              truncated = true;
-              capReached = true;
-              break;
-            }
-          }
+        batchTargets.add(target);
+        batchRequests.add(_requestFor(target.candidates, eligible, mode));
+        if (batchRequests.length >= batchSize) {
+          await flushBatch();
           if (capReached) break;
         }
-        if (capReached) break;
       }
+      if (!capReached) await flushBatch();
       if (capReached) break;
     }
 
@@ -388,6 +411,85 @@ class EvidenceBuilder {
     };
     var newCount = 0;
     var capReached = false;
+    final batchSize = limits.lookupBatchSize <= 0
+        ? 1
+        : limits.lookupBatchSize;
+    final batchQueries = <String>[];
+    final batchQueryIndexes = <int>[];
+    final batchRequests = <LookupRequest>[];
+
+    void applyLookup(String query, int queryIndex, LookupResult lookup) {
+      final counts = perQuery[query]!;
+      for (final group in lookup.groups) {
+        if (group.error.isNotEmpty) {
+          onDictionaryError?.call(group.dictionary, group.error);
+        }
+        var remaining =
+            maxEntriesPerDictionary - (counts[group.dictionary.id] ?? 0);
+        if (remaining <= 0) continue;
+        for (final entry in group.entries) {
+          if (remaining <= 0) break;
+          final entryKey = entry.headword.isEmpty
+              ? entry.matchedKey
+              : entry.headword;
+          if (entryKey.isEmpty) continue;
+          if (excludedKeys.contains('${group.dictionary.id}\u0000$entryKey')) {
+            continue;
+          }
+          final existing = citations.find(group.dictionary.id, entryKey);
+          if (existing != null) {
+            if (queryIds[query]!.add(existing.id)) {
+              result[query]!.add(existing);
+              counts[group.dictionary.id] =
+                  (counts[group.dictionary.id] ?? 0) + 1;
+              remaining--;
+            }
+            continue;
+          }
+          if (newCount >= maxNewCitations) {
+            capReached = true;
+            return;
+          }
+          final citation = citations.issue(
+            toolCallId: 'coverage-${queryIndex + 1}',
+            dictionary: group.dictionary,
+            entryKey: entryKey,
+            matchedKey: entry.matchedKey,
+            headword: entry.headword.isEmpty ? entryKey : entry.headword,
+            snippet: htmlToPlainText(
+              entry.html,
+              maxLength: limits.maxSnippetChars,
+            ),
+          );
+          if (queryIds[query]!.add(citation.id)) {
+            result[query]!.add(citation);
+          }
+          counts[group.dictionary.id] = (counts[group.dictionary.id] ?? 0) + 1;
+          remaining--;
+          newCount++;
+          onProgress?.call(citations.count);
+          if (newCount >= maxNewCitations) {
+            capReached = true;
+            return;
+          }
+        }
+      }
+    }
+
+    Future<void> flushBatch() async {
+      if (batchRequests.isEmpty) return;
+      final results = await _lookupBatch(
+        List<LookupRequest>.of(batchRequests),
+        onDictionaryError: onDictionaryError,
+      );
+      for (var index = 0; index < results.length; index++) {
+        applyLookup(batchQueries[index], batchQueryIndexes[index], results[index]);
+        if (capReached) break;
+      }
+      batchQueries.clear();
+      batchQueryIndexes.clear();
+      batchRequests.clear();
+    }
 
     for (final mode in _lookupModes) {
       if (capReached) break;
@@ -406,104 +508,87 @@ class EvidenceBuilder {
               dictionary,
         ];
         if (eligible.isEmpty) continue;
-        final lookup = await _lookup(
-          <String>[query],
-          eligible,
-          mode,
-          onDictionaryError: onDictionaryError,
-        );
-        for (final group in lookup.groups) {
-          if (group.error.isNotEmpty) {
-            onDictionaryError?.call(group.dictionary, group.error);
-          }
-          var remaining =
-              maxEntriesPerDictionary - (counts[group.dictionary.id] ?? 0);
-          if (remaining <= 0) continue;
-          for (final entry in group.entries) {
-            if (remaining <= 0) break;
-            final entryKey = entry.headword.isEmpty
-                ? entry.matchedKey
-                : entry.headword;
-            if (entryKey.isEmpty) continue;
-            if (excludedKeys.contains(
-              '${group.dictionary.id}\u0000$entryKey',
-            )) {
-              continue;
-            }
-            final existing = citations.find(group.dictionary.id, entryKey);
-            if (existing != null) {
-              if (queryIds[query]!.add(existing.id)) {
-                result[query]!.add(existing);
-                counts[group.dictionary.id] =
-                    (counts[group.dictionary.id] ?? 0) + 1;
-                remaining--;
-              }
-              continue;
-            }
-            if (newCount >= maxNewCitations) {
-              capReached = true;
-              break;
-            }
-            final citation = citations.issue(
-              toolCallId: 'coverage-${queryIndex + 1}',
-              dictionary: group.dictionary,
-              entryKey: entryKey,
-              matchedKey: entry.matchedKey,
-              headword: entry.headword.isEmpty ? entryKey : entry.headword,
-              snippet: htmlToPlainText(
-                entry.html,
-                maxLength: limits.maxSnippetChars,
-              ),
-            );
-            if (queryIds[query]!.add(citation.id)) {
-              result[query]!.add(citation);
-            }
-            counts[group.dictionary.id] =
-                (counts[group.dictionary.id] ?? 0) + 1;
-            remaining--;
-            newCount++;
-            onProgress?.call(citations.citations.length);
-            if (newCount >= maxNewCitations) {
-              capReached = true;
-              break;
-            }
-          }
+        batchQueries.add(query);
+        batchQueryIndexes.add(queryIndex);
+        batchRequests.add(_requestFor(<String>[query], eligible, mode));
+        if (batchRequests.length >= batchSize) {
+          await flushBatch();
           if (capReached) break;
         }
-        if (capReached) break;
       }
+      if (!capReached) await flushBatch();
       if (capReached) break;
     }
     return result;
   }
 
-  Future<LookupResult> _lookup(
+  LookupRequest _requestFor(
     List<String> candidates,
     List<DictionaryInfo> dictionaries,
-    LookupMatchMode mode, {
+    LookupMatchMode mode,
+  ) {
+    return LookupRequest(
+      query: candidates.first,
+      rawCandidates: candidates,
+      dictionaries: dictionaries,
+      matchMode: mode,
+      maxEntriesPerDictionary: maxEntriesPerDictionary,
+      suggestionLimit: 5,
+    );
+  }
+
+  Future<LookupResult> _lookupRequest(
+    LookupRequest request, {
     void Function(DictionaryInfo dictionary, String message)? onDictionaryError,
   }) async {
     try {
-      return await lookupPort.lookup(
-        LookupRequest(
-          query: candidates.first,
-          rawCandidates: candidates,
-          dictionaries: dictionaries,
-          matchMode: mode,
-          maxEntriesPerDictionary: maxEntriesPerDictionary,
-          suggestionLimit: 5,
-        ),
-      );
+      return await lookupPort.lookup(request);
     } catch (_) {
-      for (final dictionary in dictionaries) {
+      for (final dictionary in request.dictionaries) {
         onDictionaryError?.call(dictionary, '词典查询失败');
       }
       return LookupResult(
-        query: candidates.first,
-        candidates: candidates,
+        query: request.query,
+        candidates: request.rawCandidates,
         groups: const <DictionaryLookupGroup>[],
       );
     }
+  }
+
+  Future<List<LookupResult>> _lookupBatch(
+    List<LookupRequest> requests, {
+    void Function(DictionaryInfo dictionary, String message)? onDictionaryError,
+  }) async {
+    if (requests.isEmpty) return const <LookupResult>[];
+    final port = lookupPort;
+    if (port is BatchLookupPort) {
+      try {
+        return await (port as BatchLookupPort).lookupMany(requests);
+      } catch (_) {
+        for (final request in requests) {
+          for (final dictionary in request.dictionaries) {
+            onDictionaryError?.call(dictionary, '词典查询失败');
+          }
+        }
+        return <LookupResult>[
+          for (final request in requests)
+            LookupResult(
+              query: request.query,
+              candidates: request.rawCandidates,
+              groups: const <DictionaryLookupGroup>[],
+            ),
+        ];
+      }
+    }
+    // Fakes and integrations that only implement LookupPort keep the old
+    // one-request-at-a-time behavior.
+    final results = <LookupResult>[];
+    for (final request in requests) {
+      results.add(
+        await _lookupRequest(request, onDictionaryError: onDictionaryError),
+      );
+    }
+    return results;
   }
 
   static String _sourceText(AgentSourceInput source) {
