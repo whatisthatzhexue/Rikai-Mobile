@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/agent_analysis.dart';
+import 'package:rikai_mobile/core/models/agent/agent_limits.dart';
 import 'package:rikai_mobile/services/agent/analysis_tag_parser.dart';
 
 void main() {
@@ -86,6 +87,73 @@ Some prose context_inference（90%） that should be ignored.
       );
     },
   );
+
+  test('parses a standalone NO_ANALYSIS result', () {
+    final analysis = parseTaggedAnalysis(
+      '[NO_ANALYSIS reason="OCR 文本无法辨认"]',
+      sourceId: 'src-1',
+    );
+    expect(analysis, isNotNull);
+    expect(analysis!.noAnalysisReason, 'OCR 文本无法辨认');
+    expect(analysis.translation, isEmpty);
+    expect(analysis.segments, isEmpty);
+    expect(analysis.truncated, isFalse);
+  });
+
+  test('rejects NO_ANALYSIS combined with analysis blocks', () {
+    const raw = '''
+[NO_ANALYSIS reason="无法辨认"]
+[TRANSLATION quote="q1"]译文[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"][MEANING]解释[/MEANING][/SEGMENT]
+''';
+    expect(parseTaggedAnalysis(raw, sourceId: 'src-1'), isNull);
+    expect(analysisTagIntegrityErrors(raw), isNotEmpty);
+  });
+
+  test('caps segments, duplicate quote/type, options and notes', () {
+    final buffer = StringBuffer('[TRANSLATION quote="q1"]译文[/TRANSLATION]\n');
+    // The note-heavy segment is first so it is parsed before the segment cap.
+    buffer.writeln(
+      '[SEGMENT type="structure" quote="q0"][MEANING]词注[/MEANING]'
+      '${[for (var index = 1; index <= 25; index++) '[WORD id="t$index"]词$index||义|source-1[/WORD]'].join()}'
+      '[/SEGMENT]',
+    );
+    for (var index = 1; index <= 45; index++) {
+      buffer.writeln(
+        '[SEGMENT type="fact" quote="q$index"]'
+        '[MEANING]解释$index[/MEANING][/SEGMENT]',
+      );
+    }
+    // A second segment with the same quote and type must be dropped.
+    buffer.writeln(
+      '[SEGMENT type="fact" quote="q1"]'
+      '[MEANING]重复[/MEANING][/SEGMENT]',
+    );
+    for (var index = 1; index <= 10; index++) {
+      buffer.writeln('[OPTION id="i$index" label="$index"]选项$index[/OPTION]');
+    }
+
+    final analysis = parseTaggedAnalysis(
+      buffer.toString(),
+      sourceId: 'src-1',
+      limits: AgentLimits.standard,
+    );
+    expect(analysis, isNotNull);
+    expect(analysis!.segments.length, AgentLimits.standard.maxSegments);
+    expect(
+      analysis.segments.first.epistemic,
+      AgentEpistemic.structuralAnalysis,
+    );
+    expect(
+      analysis.segments.first.wordNotes.length,
+      AgentLimits.standard.maxNotesPerSegment,
+    );
+    expect(
+      analysis.interpretations.length,
+      AgentLimits.standard.maxOptionsPerRun,
+    );
+    expect(analysis.truncated, isTrue);
+  });
 
   test(
     'preserves YOMI annotations and rejects malformed ones structurally',

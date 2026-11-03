@@ -421,10 +421,62 @@ void main() {
     );
     final markdown = buildAgentResultMarkdown(result, _strings);
 
-    expect(markdown, contains('请多关照（ます）シャバイ（shabai）。'));
-    expect(markdown, contains('请务必（ます）正式请求（せいしき）。'));
+    expect(markdown, contains('ます【请多关照】shabai【シャバイ】。'));
+    expect(markdown, contains('ます【请务必】せいしき【正式请求】。'));
     expect(markdown, isNot(contains('[YOMI]')));
     expect(markdown, isNot(contains('[RUBY')));
+  });
+
+  test('markdown groups repeated quotes and warns about truncation', () {
+    final analysis = AgentAnalysis(
+      sourceId: 'src-1',
+      translation: const <AgentTranslation>[
+        AgentTranslation(quoteId: 'q1', text: '请多关照。'),
+      ],
+      segments: const <AgentSegment>[
+        AgentSegment(
+          id: 'seg-1',
+          quoteId: 'q1',
+          interpretation: '词典事实',
+          epistemic: AgentEpistemic.dictionaryFact,
+          wordNotes: <AgentWordNote>[
+            AgentWordNote(
+              tokenId: 't1',
+              surface: '何卒',
+              reading: 'なにとぞ',
+              sense: '请务必',
+              citationIds: <String>['source-1'],
+            ),
+          ],
+        ),
+        AgentSegment(
+          id: 'seg-2',
+          quoteId: 'q1',
+          interpretation: '结构分析',
+          epistemic: AgentEpistemic.structuralAnalysis,
+        ),
+      ],
+      truncated: true,
+    );
+    final result = AgentRunResult(
+      input: _result.input,
+      evidence: _result.evidence,
+      quotes: _result.quotes,
+      analysis: analysis,
+      validation: _result.validation,
+      sources: _result.sources,
+      dictionaryProfiles: _result.dictionaryProfiles,
+    );
+    final markdown = buildAgentResultMarkdown(result, _strings);
+    final quoteLines = RegExp(
+      r'^> 何卒$',
+      multiLine: true,
+    ).allMatches(markdown).length;
+    // Original section + one segment group. The two segments must not repeat
+    // the same quote.
+    expect(quoteLines, 2);
+    expect(markdown, contains('なにとぞ【何卒】：请务必'));
+    expect(markdown, contains('已按上限缩减输出'));
   });
 
   testWidgets('retry dictionary shows a spinner while the request is running', (

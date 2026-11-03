@@ -11,7 +11,9 @@ class AnalysisSalvageResult {
   final List<String> notes;
 
   bool get hasContent =>
-      analysis.translation.isNotEmpty || analysis.segments.isNotEmpty;
+      analysis.translation.isNotEmpty ||
+      analysis.segments.isNotEmpty ||
+      analysis.noAnalysisReason.isNotEmpty;
 }
 
 /// Keeps every claim that can be safely displayed after validation failed.
@@ -28,6 +30,19 @@ AnalysisSalvageResult salvageAnalysis({
   required AgentMode mode,
   String? expectedSourceId,
 }) {
+  if (analysis.noAnalysisReason.trim().isNotEmpty) {
+    // A no-analysis result has no claims to salvage. Keep the model's reason
+    // (the language validator will still check it) and drop any accidental
+    // content that a malformed response may have attached.
+    return AnalysisSalvageResult(
+      analysis: AgentAnalysis(
+        sourceId: analysis.sourceId,
+        noAnalysisReason: analysis.noAnalysisReason,
+        truncated: analysis.truncated,
+      ),
+      notes: const <String>[],
+    );
+  }
   final quoteIds = quotes.map((quote) => quote.id).toSet();
   final citationIds = evidence.citations.map((item) => item.id).toSet();
   final tokenReadings = <String, String>{
@@ -207,6 +222,8 @@ AnalysisSalvageResult salvageAnalysis({
     unresolved: unresolved,
     citationsUsed: used.toList(growable: false),
     modelSupplements: supplements,
+    noAnalysisReason: analysis.noAnalysisReason,
+    truncated: analysis.truncated,
   );
   return AnalysisSalvageResult(
     analysis: result,

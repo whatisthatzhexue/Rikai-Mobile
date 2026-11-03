@@ -260,6 +260,10 @@
           "type": "integer",
           "minimum": 0
         },
+        "targets_with_citations": {
+          "type": "integer",
+          "minimum": 0
+        },
         "citations": {
           "type": "integer",
           "minimum": 0

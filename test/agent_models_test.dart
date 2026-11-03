@@ -124,12 +124,7 @@ void main() {
           reading: 'ます',
           sense: '助动词',
         ),
-        AgentWordNote(
-          tokenId: 't3',
-          surface: '今日',
-          reading: '',
-          sense: '今天',
-        ),
+        AgentWordNote(tokenId: 't3', surface: '今日', reading: '', sense: '今天'),
       ],
     );
 
@@ -185,6 +180,21 @@ void main() {
     expect(restored.segments.single.epistemic, AgentEpistemic.dictionaryFact);
     expect(restored.segments.single.wordNotes.single.sense, '请务必');
     expect(restored.translation.single.quoteId, 'q1');
+    expect(restored.noAnalysisReason, isEmpty);
+    expect(restored.truncated, isFalse);
+  });
+
+  test('NO_ANALYSIS and truncated flags round-trip', () {
+    const analysis = AgentAnalysis(
+      sourceId: 'src-1',
+      noAnalysisReason: 'OCR 文本无法辨认',
+      truncated: true,
+    );
+    final restored = AgentAnalysis.fromJson(analysis.toJson());
+    expect(restored.noAnalysisReason, 'OCR 文本无法辨认');
+    expect(restored.truncated, isTrue);
+    expect(restored.translation, isEmpty);
+    expect(restored.segments, isEmpty);
   });
 
   test('dictionary profile and quote round-trip', () {

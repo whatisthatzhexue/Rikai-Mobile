@@ -228,6 +228,7 @@ class AgentEvidenceBudget {
   const AgentEvidenceBudget({
     this.sourceChars = 0,
     this.uniqueTargets = 0,
+    this.targetsWithCitations = 0,
     this.citations = 0,
     this.maxTargets = 120,
     this.maxCitations = 60,
@@ -235,6 +236,10 @@ class AgentEvidenceBudget {
 
   final int sourceChars;
   final int uniqueTargets;
+
+  /// Number of lookup targets that received at least one citation. The
+  /// coverage review is skipped only when every target has a citation.
+  final int targetsWithCitations;
   final int citations;
   final int maxTargets;
   final int maxCitations;
@@ -242,6 +247,7 @@ class AgentEvidenceBudget {
   Map<String, Object?> toJson() => {
     'source_chars': sourceChars,
     'unique_targets': uniqueTargets,
+    'targets_with_citations': targetsWithCitations,
     'citations': citations,
     'max_targets': maxTargets,
     'max_citations': maxCitations,
@@ -251,6 +257,7 @@ class AgentEvidenceBudget {
     return AgentEvidenceBudget(
       sourceChars: agentInt(json['source_chars']),
       uniqueTargets: agentInt(json['unique_targets']),
+      targetsWithCitations: agentInt(json['targets_with_citations']),
       citations: agentInt(json['citations']),
       maxTargets: agentInt(json['max_targets'], 120),
       maxCitations: agentInt(json['max_citations'], 60),

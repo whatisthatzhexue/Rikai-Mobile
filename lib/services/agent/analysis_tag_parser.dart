@@ -1,4 +1,5 @@
 import '../../core/models/agent/agent_analysis.dart';
+import '../../core/models/agent/agent_limits.dart';
 import '../../core/utils/rich_text_tags.dart';
 import 'tag_block_integrity.dart';
 
@@ -18,6 +19,17 @@ const _analysisBlockTags = <String>{
   'UNRESOLVED',
   'SUPPLEMENT',
 };
+
+final _noAnalysisTagPattern = RegExp(
+  r'\[NO_ANALYSIS\b([^\]]*)\]',
+  caseSensitive: false,
+);
+
+final _otherAnalysisTagPattern = RegExp(
+  r'\[(?:TRANSLATION|SEGMENT|MEANING|WORD|GRAMMAR|OPTION|UNRESOLVED|'
+  r'SUPPLEMENT)\b',
+  caseSensitive: false,
+);
 
 /// Reports unbalanced or mis-nested analysis blocks. Parsing may still succeed
 /// on a truncated response; callers use these errors to request repair.
@@ -42,6 +54,10 @@ List<String> analysisTagIntegrityErrors(String raw) {
   if (!isWellFormedYomi(raw)) {
     errors.add('YOMI 标签必须成对且不能嵌套');
   }
+  if (_noAnalysisTagPattern.hasMatch(raw) &&
+      _otherAnalysisTagPattern.hasMatch(raw)) {
+    errors.add('NO_ANALYSIS 不能与其他分析标签共存');
+  }
   return List<String>.unmodifiable(errors);
 }
 
@@ -52,7 +68,20 @@ List<String> analysisTagIntegrityErrors(String raw) {
 /// intentionally more forgiving than JSON under long inputs: a single missing
 /// closing tag cannot invalidate the whole response, and unknown prose outside
 /// tags is ignored.
-AgentAnalysis? parseTaggedAnalysis(String raw, {required String sourceId}) {
+AgentAnalysis? parseTaggedAnalysis(
+  String raw, {
+  required String sourceId,
+  AgentLimits limits = AgentLimits.standard,
+}) {
+  final noAnalysisReason = _parseNoAnalysisReason(raw);
+  if (noAnalysisReason != null) {
+    if (_otherAnalysisTagPattern.hasMatch(raw)) return null;
+    return AgentAnalysis(
+      sourceId: sourceId,
+      noAnalysisReason: noAnalysisReason,
+    );
+  }
+
   final translations = <AgentTranslation>[];
   final translationPattern = RegExp(
     r'\[TRANSLATION\b([^\]]*)\]([\s\S]*?)\[/TRANSLATION\]',
@@ -79,11 +108,30 @@ AgentAnalysis? parseTaggedAnalysis(String raw, {required String sourceId}) {
     caseSensitive: false,
   );
   var segmentIndex = 0;
+  var truncated = false;
+  final segmentCounts = <String, int>{};
   for (final match in segmentPattern.allMatches(raw)) {
     segmentIndex++;
     final attrs = match.group(1) ?? '';
     final body = match.group(2) ?? '';
     final quoteId = _attrAny(attrs, const <String>['quote', 'quote_id']);
+    final declaredType = _attr(attrs, 'type');
+    final effectiveType = declaredType.isEmpty
+        ? _leakedType(body)
+        : declaredType;
+    if (segments.length >= limits.maxSegments) {
+      truncated = true;
+      break;
+    }
+    if (quoteId.isNotEmpty) {
+      final segmentKey = '$quoteId\u0000${effectiveType.trim().toLowerCase()}';
+      final count = segmentCounts[segmentKey] ?? 0;
+      if (count >= limits.maxSegmentsPerQuotePerType) {
+        truncated = true;
+        continue;
+      }
+      segmentCounts[segmentKey] = count + 1;
+    }
     final meaningMatch = RegExp(
       r'\[MEANING\]([\s\S]*?)\[/MEANING\]',
       caseSensitive: false,
@@ -185,18 +233,24 @@ AgentAnalysis? parseTaggedAnalysis(String raw, {required String sourceId}) {
       );
     }
 
-    final declaredType = _attr(attrs, 'type');
-    final effectiveType = declaredType.isEmpty
-        ? _leakedType(body)
-        : declaredType;
+    final boundedWordNotes = wordNotes.length > limits.maxNotesPerSegment
+        ? wordNotes.take(limits.maxNotesPerSegment).toList(growable: false)
+        : wordNotes;
+    final boundedGrammarNotes = grammarNotes.length > limits.maxNotesPerSegment
+        ? grammarNotes.take(limits.maxNotesPerSegment).toList(growable: false)
+        : grammarNotes;
+    if (boundedWordNotes.length != wordNotes.length ||
+        boundedGrammarNotes.length != grammarNotes.length) {
+      truncated = true;
+    }
     segments.add(
       AgentSegment(
         id: 'seg-$segmentIndex',
         quoteId: quoteId,
         interpretation: interpretation,
         epistemic: _epistemic(effectiveType),
-        wordNotes: wordNotes,
-        grammarNotes: grammarNotes,
+        wordNotes: boundedWordNotes,
+        grammarNotes: boundedGrammarNotes,
         confidence: _confidenceFor(effectiveType),
       ),
     );
@@ -210,6 +264,10 @@ AgentAnalysis? parseTaggedAnalysis(String raw, {required String sourceId}) {
   var optionIndex = 0;
   for (final match in optionPattern.allMatches(raw)) {
     optionIndex++;
+    if (interpretations.length >= limits.maxOptionsPerRun) {
+      truncated = true;
+      break;
+    }
     final meaning = _cleanBody(match.group(2) ?? '');
     if (meaning.isEmpty) continue;
     final attrs = match.group(1) ?? '';
@@ -275,7 +333,32 @@ AgentAnalysis? parseTaggedAnalysis(String raw, {required String sourceId}) {
     unresolved: unresolved,
     citationsUsed: usedCitations.toList(growable: false),
     modelSupplements: supplements,
+    truncated: truncated,
   );
+}
+
+/// Parses `[NO_ANALYSIS reason="..."]` or the block form
+/// `[NO_ANALYSIS]reason[/NO_ANALYSIS]`. Returns null when the tag is absent.
+String? _parseNoAnalysisReason(String raw) {
+  final block = RegExp(
+    r'\[NO_ANALYSIS\b([^\]]*)\]([\s\S]*?)\[/NO_ANALYSIS\]',
+    caseSensitive: false,
+  ).firstMatch(raw);
+  if (block != null) {
+    final attrReason = _attr(block.group(1) ?? '', 'reason').trim();
+    final bodyReason = _cleanBody(block.group(2) ?? '').trim();
+    final reason = attrReason.isNotEmpty ? attrReason : bodyReason;
+    return _boundedNoAnalysisReason(reason);
+  }
+  final tag = _noAnalysisTagPattern.firstMatch(raw);
+  if (tag == null) return null;
+  return _boundedNoAnalysisReason(_attr(tag.group(1) ?? '', 'reason'));
+}
+
+String _boundedNoAnalysisReason(String raw) {
+  final reason = raw.trim();
+  if (reason.isEmpty) return '模型无法可靠分析这段文本';
+  return reason.length <= 500 ? reason : reason.substring(0, 500);
 }
 
 String _attrAny(String attrs, List<String> names) {

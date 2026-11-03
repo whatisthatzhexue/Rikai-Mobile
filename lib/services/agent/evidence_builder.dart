@@ -508,6 +508,9 @@ class EvidenceBuilder {
       budget: AgentEvidenceBudget(
         sourceChars: sourceChars,
         uniqueTargets: selectedTargets.length,
+        targetsWithCitations: selectedTargets
+            .where((target) => target.citationIds.isNotEmpty)
+            .length,
         citations: sortedCitations.length,
         maxTargets: maxTargets,
         maxCitations: maxCitations,

@@ -3,6 +3,10 @@
 /// The same instance is read by the orchestrator, evidence builder, profile
 /// inbox and UI counters so no surface hard-codes a limit such as `60`.
 class AgentLimits {
+  /// Default for [maxRichTextChars]. A static const (not the mutable
+  /// `standard` instance field) is required for use as a default parameter.
+  static const int defaultMaxRichTextChars = 20000;
+
   const AgentLimits({
     this.maxSourceChars = 6000,
     this.maxTargets = 120,
@@ -17,6 +21,11 @@ class AgentLimits {
     this.richTextConcurrency = 3,
     this.lookupBatchSize = 12,
     this.adaptiveCoverageReview = true,
+    this.maxSegments = 40,
+    this.maxSegmentsPerQuotePerType = 1,
+    this.maxOptionsPerRun = 8,
+    this.maxNotesPerSegment = 20,
+    this.maxRichTextChars = defaultMaxRichTextChars,
   });
 
   static const AgentLimits standard = AgentLimits();
@@ -30,6 +39,24 @@ class AgentLimits {
   final int maxCoverageMissing;
   final int maxCoverageDuplicateGroups;
   final int maxCoverageFallback;
+
+  /// Hard caps for the tagged analysis output. The parser applies them after
+  /// parsing and marks the analysis truncated; the prompt states the same
+  /// limits so a compliant model does not hit them.
+  final int maxSegments;
+  final int maxSegmentsPerQuotePerType;
+  final int maxOptionsPerRun;
+  final int maxNotesPerSegment;
+
+  /// Maximum combined characters sent to one batched rich-text request.
+  /// Above this the display formatter is skipped and the local RUBY baseline
+  /// is used, so a long result cannot overflow the provider context.
+  final int maxRichTextChars;
+
+  /// Output budget for the main analysis request. Anthropic must send a value;
+  /// an OpenAI-compatible provider only sends it when the user configured
+  /// `maxOutputTokens`.
+  static const int analysisMaxTokens = 12000;
 
   /// Optional rich-text formatting pass after a successful analysis. Tests
   /// that assert request sequences disable it explicitly.

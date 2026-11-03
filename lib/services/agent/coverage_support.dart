@@ -246,6 +246,7 @@ AgentEvidenceBundle pruneCoverageCitations({
     budget: AgentEvidenceBudget(
       sourceChars: evidence.budget.sourceChars,
       uniqueTargets: evidence.budget.uniqueTargets,
+      targetsWithCitations: evidence.budget.targetsWithCitations,
       citations: citations.length,
       maxTargets: limits.maxTargets,
       maxCitations: limits.maxEvidenceEntries,
@@ -317,6 +318,7 @@ AgentEvidenceBundle mergeCoverageEvidence({
     budget: AgentEvidenceBudget(
       sourceChars: evidence.budget.sourceChars,
       uniqueTargets: evidence.budget.uniqueTargets,
+      targetsWithCitations: evidence.budget.targetsWithCitations,
       citations: mergedCitations.length,
       maxTargets: limits.maxTargets,
       maxCitations: limits.maxEvidenceEntries,

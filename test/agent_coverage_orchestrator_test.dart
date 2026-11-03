@@ -92,6 +92,27 @@ class _FakeTokenize implements TokenizePort {
   }
 }
 
+class _TwoTokenize implements TokenizePort {
+  @override
+  Future<List<Token>> analyze(String text) async {
+    Token make(String surface, String reading, int start, int end) {
+      final features = List<String>.filled(Token.expectedFeatureCount, '*');
+      features[0] = '副詞';
+      features[7] = surface;
+      features[8] = surface;
+      features[20] = reading;
+      return Token.fromFeatures(
+        surface: surface,
+        features: features,
+        start: start,
+        end: end,
+      );
+    }
+
+    return <Token>[make('何卒', 'ナニトゾ', 0, 2), make('宜しく', 'ヨロシク', 2, 5)];
+  }
+}
+
 class _LookupScript implements LookupPort {
   _LookupScript(this.exactResponses);
 
@@ -139,10 +160,11 @@ AgentOrchestrator _orchestrator({
   required FakeProvider provider,
   required LookupPort lookup,
   required AgentLimits limits,
+  TokenizePort? tokenize,
 }) {
   return AgentOrchestrator(
     ocrPort: _FakeOcr(),
-    tokenizePort: _FakeTokenize(),
+    tokenizePort: tokenize ?? _FakeTokenize(),
     lookupPort: lookup,
     grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
     citations: CitationRegistry(),
@@ -318,35 +340,86 @@ void main() {
     expect(provider.requests, hasLength(3));
   });
 
-  test('adaptive coverage skips when every target already has a citation', () async {
-    final lookup = _LookupScript(<List<LookupEntry>>[
-      <LookupEntry>[_entry('何卒', 'なにとぞ。どうか。')],
-    ]);
-    final provider = FakeProvider(responseSequence: <String>[_analysisTagged]);
-    final stages = <AgentStage>[];
+  test(
+    'adaptive coverage skips when every target already has a citation',
+    () async {
+      final lookup = _LookupScript(<List<LookupEntry>>[
+        <LookupEntry>[_entry('何卒', 'なにとぞ。どうか。')],
+      ]);
+      final provider = FakeProvider(
+        responseSequence: <String>[_analysisTagged],
+      );
+      final stages = <AgentStage>[];
 
-    final result =
-        await _orchestrator(
-          provider: provider,
-          lookup: lookup,
-          limits: const AgentLimits(
-            maxCoverageFallback: 1,
-            enableRichTextPostProcess: false,
-          ),
-        ).run(
-          const AgentRunRequest(
-            sessionId: 's1',
-            mode: AgentMode.strict,
-            dictionaries: <DictionaryInfo>[_dictionary],
-            provider: _provider,
-            userText: '何卒',
-          ),
-          onStage: (stage, message) => stages.add(stage),
-        );
+      final result =
+          await _orchestrator(
+            provider: provider,
+            lookup: lookup,
+            limits: const AgentLimits(
+              maxCoverageFallback: 1,
+              enableRichTextPostProcess: false,
+            ),
+          ).run(
+            const AgentRunRequest(
+              sessionId: 's1',
+              mode: AgentMode.strict,
+              dictionaries: <DictionaryInfo>[_dictionary],
+              provider: _provider,
+              userText: '何卒',
+            ),
+            onStage: (stage, message) => stages.add(stage),
+          );
 
-    expect(stages, isNot(contains(AgentStage.coverage)));
-    expect(result.coverageFallbackUsed, isFalse);
-    expect(result.evidence.citations, hasLength(1));
-    expect(provider.requests, hasLength(1));
-  });
+      expect(stages, isNot(contains(AgentStage.coverage)));
+      expect(result.coverageFallbackUsed, isFalse);
+      expect(result.evidence.citations, hasLength(1));
+      expect(provider.requests, hasLength(1));
+    },
+  );
+
+  test(
+    'adaptive coverage runs when a target lacks citation despite total count',
+    () async {
+      final lookup = _LookupScript(<List<LookupEntry>>[
+        <LookupEntry>[
+          _entry('何卒', 'なにとぞ。どうか。'),
+          _entry('何卒（副）', '副詞的な用法。'),
+          _entry('何卒（感）', '感叹用法。'),
+        ],
+        const <LookupEntry>[],
+      ]);
+      final provider = FakeProvider(
+        responseSequence: <String>[_coverageMissing, _analysisTagged],
+      );
+      final stages = <AgentStage>[];
+
+      final result =
+          await _orchestrator(
+            provider: provider,
+            lookup: lookup,
+            tokenize: _TwoTokenize(),
+            limits: const AgentLimits(
+              maxCoverageFallback: 1,
+              enableRichTextPostProcess: false,
+            ),
+          ).run(
+            const AgentRunRequest(
+              sessionId: 's1',
+              mode: AgentMode.strict,
+              dictionaries: <DictionaryInfo>[_dictionary],
+              provider: _provider,
+              userText: '何卒宜しく',
+            ),
+            onStage: (stage, message) => stages.add(stage),
+          );
+
+      expect(stages, contains(AgentStage.coverage));
+      expect(result.coverageFallbackUsed, isTrue);
+      expect(
+        result.evidence.budget.targetsWithCitations,
+        lessThan(result.evidence.budget.uniqueTargets),
+      );
+      expect(provider.requests.first.messages.first.text, contains('COVERAGE'));
+    },
+  );
 }

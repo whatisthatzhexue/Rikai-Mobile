@@ -33,8 +33,7 @@ void main() {
         const TextStyle(fontSize: 16),
       );
       final ruby = spans.whereType<WidgetSpan>().firstWhere(
-        (span) =>
-            span.child.runtimeType.toString() != '_UnderlineSpanWidget',
+        (span) => span.child.runtimeType.toString() != '_UnderlineSpanWidget',
       );
       expect(ruby.alignment, PlaceholderAlignment.baseline);
       final bold = spans.whereType<TextSpan>().firstWhere(
@@ -42,8 +41,7 @@ void main() {
       );
       expect(bold.style?.fontWeight, FontWeight.w600);
       final underline = spans.whereType<WidgetSpan>().firstWhere(
-        (span) =>
-            span.child.runtimeType.toString() == '_UnderlineSpanWidget',
+        (span) => span.child.runtimeType.toString() == '_UnderlineSpanWidget',
       );
       final underlineWidget = underline.child as dynamic;
       expect(underlineWidget.color, AgentTokens.richTextUnderlineColor);
@@ -131,10 +129,10 @@ void main() {
     expect(baseBaseline, closeTo(referenceBaseline, 0.01));
   });
 
-  testWidgets('renders only one copy of a parenthetical reading', (
-    tester,
-  ) async {
+  testWidgets('renders only one copy of a reading annotation', (tester) async {
     for (final text in <String>[
+      '[RUBY=いま]今【いま】[/RUBY]：现在、此刻',
+      '[RUBY=いま]今[/RUBY]【いま】：现在、此刻',
       '[RUBY=いま]今（いま）[/RUBY]：现在、此刻',
       '[RUBY=いま]今[/RUBY]（いま）：现在、此刻',
     ]) {
@@ -151,6 +149,7 @@ void main() {
 
       expect(find.text('今'), findsOneWidget);
       expect(find.text('いま'), findsOneWidget);
+      expect(find.textContaining('【いま】'), findsNothing);
       expect(find.textContaining('（いま）'), findsNothing);
     }
   });
@@ -205,8 +204,10 @@ void main() {
       (widget) => widget.runtimeType.toString() == '_UnderlineSpanWidget',
     );
     expect(underlineFinder, findsOneWidget);
-    expect(tester.widget<Text>(find.text('漢字；')).style?.decoration,
-        TextDecoration.none);
+    expect(
+      tester.widget<Text>(find.text('漢字；')).style?.decoration,
+      TextDecoration.none,
+    );
     final render = tester.renderObject(underlineFinder) as dynamic;
     expect(render.paintCount, greaterThan(0));
     expect(render.lastPaintedBaseline, isNotNull);
@@ -219,10 +220,7 @@ void main() {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: AgentRichText(
-            text: 'あ[RUBY=なにとぞ]何卒[/RUBY]い',
-            style: style,
-          ),
+          body: AgentRichText(text: 'あ[RUBY=なにとぞ]何卒[/RUBY]い', style: style),
         ),
       ),
     );

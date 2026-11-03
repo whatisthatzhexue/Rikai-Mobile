@@ -39,6 +39,8 @@ AgentAnalysis normalizeAnalysis({
     unresolved: analysis.unresolved,
     citationsUsed: analysis.citationsUsed,
     modelSupplements: analysis.modelSupplements,
+    noAnalysisReason: analysis.noAnalysisReason,
+    truncated: analysis.truncated,
   );
 }
 

@@ -133,7 +133,7 @@ List<InlineSpan> buildAgentRichTextSpans(
           ),
         );
       }
-      // The formatter may leave the original `（reading）` after a RUBY pair
+      // The formatter may leave the original bracket reading after a RUBY pair
       // when it wraps only the base word. Hide that duplicate annotation.
       cursor = skipDuplicateRubyReading(text, close.end, reading);
       index = closeIndex + 1;

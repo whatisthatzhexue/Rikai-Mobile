@@ -45,6 +45,7 @@
 | `AppColors.error` | `#D54941` | 错误、删除 |
 | `AppColors.warning` | `#E37318` | 警告 |
 | `AppColors.success` | `#2BA471` | 成功、已授权 |
+| `AppColors.successSurface` | `#E8F7F0` | 绿色胶囊/成功态浅底 |
 | `AppColors.cameraScrim` | `#99000000` | 相机预览上的半透明控制遮罩 |
 | `AppColors.cameraControl` | `#FFFFFF` | 相机快门/底部控件 |
 | `AppColors.cameraBackground` | `#000000` | 相机预览底色 |
@@ -263,6 +264,7 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 | citation chip | `agentCitationChip` | 短胶囊：视觉高 24–28、12sp、`blue50` 底 + `blue700` 字，水平内边距 8，`Wrap` 间距/行距 4，触控 ≥40；自动换行，不使用长条/整行 |
 | OCR 版本 chip | `agentOcrVariantChip` | 视觉高 28、12sp；左对齐 `Wrap` 自动换行；选中/未选中同尺寸并预留推荐图标槽位 |
 | OCR 差异高亮 | `agentDiffHighlight` | `diffHighlightSurface` 暖色底 + `diffHighlightText` 深色字；不复用 citation 蓝 |
+| OCR 逐版本预览 | `agentOcrVariantPreview` | 选中版本下方 `surfaceMuted` 底、圆角 6、内边距 8；“词典预览”14sp/600，命中数 14sp `textSecondary`，最多 3 条 `词典 · 词条：摘要`（14sp，最多 2 行省略）；只读本地查询，不生成 citation、不写历史 |
 | 严格徽标 | `agentStrictBadge` | `header` 底 + 白字，12sp |
 | 宽松徽标 | `agentLooseBadge` | `surfaceMuted` 底 + `textPrimary`，12sp |
 | 阶段文字 | `agentStageText` | 14sp，`primary`；spinner 16dp |
@@ -328,6 +330,11 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
   → 证据卡片（按用户词典顺序）→ citation chip”排列；不把证据塞进 Markdown 链接。
   **对话式布局下**：译文/结论在 AI 气泡正文，原文引用/逐句/词注/多解释作为消息内
   可折叠“详细解析”，证据默认折叠在底部；展开后仍按上述顺序。
+- 可能的理解正文只显示含义；下方用 `successSurface` 浅绿底 + `success` 字的
+  “情况A”胶囊（`AgentTokens.badge`），后接“可能性70%”辅助文本，再接 citation
+  chip；不把 `A：...（70%）` 拼进正文。若所有情况的 citation 集合相同，chip
+  只在最后一个情况下方渲染一次（与逐句理解的依据行一致）；集合不同则逐情况
+  保留，避免依据错配。
 - 严格/宽松使用紧凑 `SegmentedButton`，放在“本会话设置”面板或输入区上方的紧凑
   行；首屏默认收起，当前模型路由用 14sp 辅助文字。
 - 会话词典筛选复用 `DictionaryFilterBar` + `DictionarySelectionModeToggle`：放在
@@ -797,8 +804,9 @@ Phase 1 及之前的页面（首页、文本阅读、设置、TokenChip、底部
 
 > Phase 6 P6.1–P6.5 已实现五按钮、基础对话式 Agent 页和 provider 设置；对话式
 > Agent UI v2 的基础 token/布局已落地，状态条、历史、无障碍 200% 等验收项
-> 待补。P6.6 多 OCR 核心已按既有 Agent token 实现（版本 chip 28/12sp、差异
-> 高亮、修复候选），真机视觉/200% 字号验收待做；P6.7 历史/声调 token 已实现，
+> 待补。P6.6 多 OCR 核心及失败态入口/逐版本预览已按既有 Agent token 实现
+> （版本 chip 28/12sp、差异高亮、修复候选、选中版本词典预览），真机视觉/200%
+> 字号验收待做；P6.7 历史/声调 token 已实现，
 > DSL/Markdown 受限预览规则仍待实现。实现状态见 `docs/phase6-status.md`；
 > 未通过验收前不要把真机/视觉项写成已支持。
 

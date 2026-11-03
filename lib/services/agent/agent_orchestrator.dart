@@ -330,6 +330,12 @@ class AgentOrchestrator {
       }
 
       final warnings = <String>[];
+      void noteTruncation(AgentAnalysis? analysis) {
+        if (analysis?.truncated != true) return;
+        final warning = agentAnalysisTruncatedWarning(uiLanguage);
+        if (!warnings.contains(warning)) warnings.add(warning);
+      }
+
       var coverageFallbackUsed = false;
       if (_shouldRunCoverageReview(evidence)) {
         notify(
@@ -423,6 +429,7 @@ class AgentOrchestrator {
         'truncated=${evidence.truncated}',
       );
 
+      noteTruncation(analysis);
       // Show the main analysis before any optional repair/language call. This
       // is what keeps a finished stream from sitting behind a silent second
       // model request; the final result replaces this preview when checks end.
@@ -462,16 +469,12 @@ class AgentOrchestrator {
           final repairRaw = await _collect(
             llm,
             buildAnalysisRepairRequest(
-              model: analysisModel,
+              model: smallModel,
               mode: request.mode,
               responseLanguage: request.responseLanguage,
-              input: envelope,
-              evidence: evidence,
-              quotes: quotes,
-              dictionaryProfiles: profiles,
-              userRequest: requestedUser,
               rawOutput: raw,
               errors: repairErrors,
+              availableIds: _availableIds(quotes, evidence),
             ),
             cancellation,
             label: 'analysis_repair',
@@ -515,6 +518,7 @@ class AgentOrchestrator {
       // analysis, show it before the language/rich-text post-checks run.
       final repairedIsValid =
           analysis != null && validation?.valid == true && formatErrors.isEmpty;
+      noteTruncation(analysis);
       if (provisional == null || (provisional == false && repairedIsValid)) {
         final repairedProvisional = _emitProvisionalResult(
           onProvisionalResult: onProvisionalResult,
@@ -588,11 +592,6 @@ class AgentOrchestrator {
                 model: analysisModel,
                 mode: request.mode,
                 responseLanguage: request.responseLanguage,
-                input: envelope,
-                evidence: evidence,
-                quotes: quotes,
-                dictionaryProfiles: profiles,
-                userRequest: requestedUser,
                 rawOutput: raw,
                 mismatchedFields: languageCheck.mismatchedFields,
               ),
@@ -640,6 +639,8 @@ class AgentOrchestrator {
         }
       }
 
+      // A language-repair response is parsed through the same capped parser.
+      noteTruncation(analysis);
       if (analysis == null || validation == null || !validation.valid) {
         final salvaged = analysis == null
             ? null
@@ -677,6 +678,7 @@ class AgentOrchestrator {
             warnings.add(agentLanguageWarning(uiLanguage));
           }
           checkCancelled();
+          noteTruncation(salvaged.analysis);
           var result = _buildResult(
             envelope: envelope,
             evidence: evidence,
@@ -792,14 +794,9 @@ class AgentOrchestrator {
     final segmentSources = <String>[
       for (final segment in result.analysis.segments) segment.interpretation,
     ];
-    final segmentNoteSources = <String>[
-      for (final segment in result.analysis.segments)
-        agentSegmentNotesSource(segment),
-    ];
     final hasFormattingSources =
         originalSource.isNotEmpty ||
-        segmentSources.any((text) => text.isNotEmpty) ||
-        segmentNoteSources.any((text) => text.isNotEmpty);
+        segmentSources.any((text) => text.isNotEmpty);
     if (!hasFormattingSources) return result;
 
     Future<AgentRichTextOutputs?> format() => _formatRichText(
@@ -807,7 +804,6 @@ class AgentOrchestrator {
       model: model,
       originalSource: originalSource,
       segmentSources: segmentSources,
-      segmentNoteSources: segmentNoteSources,
       cancellation: cancellation,
     );
 
@@ -849,29 +845,36 @@ class AgentOrchestrator {
     }
   }
 
-  /// Formats the independent display sections with one bounded worker pool.
-  /// Empty sections are not sent, and identical text (for example repeated
-  /// notes) is requested only once.
+  /// Formats the original section and all sentence interpretations in one
+  /// batched request. Dictionary notes are intentionally excluded: their
+  /// readings come from local `word[YOMI]reading[/YOMI]` /
+  /// `reading【surface】` conversion, so they never consume a provider call.
   Future<AgentRichTextOutputs?> _formatRichText({
     required LlmPort llm,
     required String model,
     required String originalSource,
     required List<String> segmentSources,
-    required List<String> segmentNoteSources,
     required AgentCancellation? cancellation,
   }) async {
-    final sources = <String>[
-      if (originalSource.isNotEmpty) originalSource,
-      ...segmentSources,
-      ...segmentNoteSources,
-    ];
-    if (sources.isEmpty) return null;
+    final sectionIds = <String>[];
+    final sectionTexts = <String>[];
+    if (originalSource.isNotEmpty) {
+      sectionIds.add('original');
+      sectionTexts.add(originalSource);
+    }
+    for (var index = 0; index < segmentSources.length; index++) {
+      final source = segmentSources[index];
+      if (source.isEmpty) continue;
+      sectionIds.add('segment-$index');
+      sectionTexts.add(source);
+    }
+    if (sectionTexts.isEmpty) return null;
     final results = await RichTextPostProcessor(llm: llm, model: model)
-        .processAll(
-          sources,
+        .processSections(
+          sectionIds,
+          sectionTexts,
           cancellation: cancellation,
-          detailed: true,
-          concurrency: limits.richTextConcurrency,
+          maxChars: limits.maxRichTextChars,
         );
 
     var cursor = 0;
@@ -882,7 +885,6 @@ class AgentOrchestrator {
       _logRichText('original', originalSource, rich);
     }
     final outputs = <String>[];
-    final noteOutputs = <String>[];
     for (var index = 0; index < segmentSources.length; index++) {
       final source = segmentSources[index];
       if (source.isEmpty) {
@@ -892,19 +894,10 @@ class AgentOrchestrator {
         outputs.add(rich.taggedText ?? '');
         _logRichText('segment', source, rich);
       }
-      final noteSource = segmentNoteSources[index];
-      if (noteSource.isEmpty) {
-        noteOutputs.add('');
-      } else {
-        final rich = results[cursor++];
-        noteOutputs.add(rich.taggedText ?? '');
-        _logRichText('notes', noteSource, rich);
-      }
     }
     return AgentRichTextOutputs(
       originalText: richOriginalText,
       segmentTexts: outputs,
-      segmentNotes: noteOutputs,
     );
   }
 
@@ -956,7 +949,10 @@ class AgentOrchestrator {
     if (citations >= limits.maxEvidenceEntries) return true;
     final targets = evidence.budget.uniqueTargets;
     if (targets <= 0) return false;
-    return citations < targets;
+    // Per design §6.3.1: run coverage when at least one retrieval target has
+    // no citation. The old count comparison could skip a run when a few
+    // targets had multiple citations and other targets had none.
+    return evidence.budget.targetsWithCitations < targets;
   }
 
   /// F7: one bounded coverage review after the initial evidence. It may run one
@@ -1174,7 +1170,7 @@ class AgentOrchestrator {
   }) {
     // Pre-fill display fields with deterministic local RUBY. The optional
     // formatting model only adds BOLD/UNDERLINE later; it must not be the
-    // reason a reading appears as plain `word（reading）` in the first frame.
+    // reason a reading appears as plain `reading【surface】` in the first frame.
     final originalSource = agentOriginalSource(quotes);
     final localOriginalText = originalSource.isEmpty
         ? null
@@ -1475,6 +1471,23 @@ class AgentOrchestrator {
     return versions;
   }
 
+  /// Compact id list for the format repair prompt. It deliberately omits
+  /// quote text, token fields and citation snippets: the repair may only reuse
+  /// ids, never re-read the evidence.
+  List<String> _availableIds(
+    List<AgentQuoteRef> quotes,
+    AgentEvidenceBundle evidence,
+  ) {
+    final ids = <String>[
+      for (final quote in quotes) 'quote ${quote.id}',
+      for (final source in evidence.sources)
+        for (final token in source.tokens) 'token ${token.id}',
+      for (final pattern in evidence.patterns) 'pattern ${pattern.id}',
+      for (final citation in evidence.citations) 'citation ${citation.id}',
+    ];
+    return ids;
+  }
+
   ({AgentAnalysis? analysis, List<String> integrityErrors}) _parseAndNormalize(
     String raw,
     List<AgentQuoteRef> quotes,
@@ -1482,10 +1495,14 @@ class AgentOrchestrator {
     String? expectedSourceId,
   }) {
     final integrityErrors = analysisTagIntegrityErrors(raw);
-    final parsed = parseTaggedAnalysis(raw, sourceId: expectedSourceId ?? '');
+    final parsed = parseTaggedAnalysis(
+      raw,
+      sourceId: expectedSourceId ?? '',
+      limits: limits,
+    );
     if (parsed == null ||
-        parsed.translation.isEmpty ||
-        parsed.segments.isEmpty) {
+        (parsed.noAnalysisReason.isEmpty &&
+            (parsed.translation.isEmpty || parsed.segments.isEmpty))) {
       if (kDebugMode) {
         debugPrint(
           '[AgentAnalysis] parse failed chars=${raw.length} '

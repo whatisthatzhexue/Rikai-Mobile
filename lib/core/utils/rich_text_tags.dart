@@ -27,16 +27,17 @@ final RegExp _rubyBlockPattern = RegExp(
   caseSensitive: false,
 );
 
-/// RUBY pair plus an optional parenthetical reading immediately after it.
-/// The post-processor often wraps an existing `surface（reading）` annotation
-/// and leaves the original parentheses outside the pair.
-final RegExp _rubyWithTrailingReadingPattern = RegExp(
-  r'\[RUBY=([^\]]*)\]([\s\S]*?)\[/RUBY\]([（(][^（）()\r\n]*[）)])?',
+/// RUBY pair plus an optional trailing reading annotation. Brackets are the
+/// current display form; parentheses are kept only for old data.
+final RegExp _rubyWithTrailingAnnotationPattern = RegExp(
+  r'\[RUBY=([^\]]*)\]([\s\S]*?)\[/RUBY\]([【（(][^【】（）()\r\n]*[】）)])?',
   caseSensitive: false,
 );
 
-final RegExp _trailingReadingPattern = RegExp(r'[（(]([^（）()\r\n]*)[）)]$');
-final RegExp _leadingReadingPattern = RegExp(r'^[（(]([^（）()\r\n]*)[）)]');
+final RegExp _trailingBracketPattern = RegExp(r'【([^【】\r\n]*)】$');
+final RegExp _trailingParenPattern = RegExp(r'[（(]([^（）()\r\n]*)[）)]$');
+final RegExp _leadingBracketPattern = RegExp(r'^【([^【】\r\n]*)】');
+final RegExp _leadingParenPattern = RegExp(r'^[（(]([^（）()\r\n]*)[）)]');
 
 /// Full-width and half-width punctuation that may wrap or trail a reading
 /// annotation. It is removed before comparing YOMI contents and before a
@@ -50,48 +51,95 @@ final RegExp _readingPunctuationPattern = RegExp(
 /// permitted.
 final RegExp _readingPattern = RegExp(r'^[^\[\]\r\n\x00-\x1F]+$');
 
-/// A Japanese word followed by a kana-only parenthetical reading, e.g.
-/// `自分（じぶん）`. This is the display form used before RUBY tags are applied;
-/// the result model is asked to emit YOMI instead, but local fallback still
-/// needs to recognize the parenthetical form.
-final RegExp _parentheticalReadingPattern = RegExp(
-  r'([぀-ヿ㐀-䶿一-鿿々〆ヶー]{1,16})'
-  r'([（(])'
-  r'([぀-ゟ゠-ヿー]{1,24})'
-  r'([）)])',
+/// Reading annotations use corner brackets. Both `reading【surface】` (the
+/// display/export form, e.g. `すき【好き】`) and the conventional
+/// `surface【reading】` (e.g. `好き【すき】`) are accepted. Parentheses are
+/// ordinary explanations and are never treated as readings.
+final RegExp _bracketReadingPattern = RegExp(
+  r'(^|[\s、。，．！？：；「」『』（）\[\]【】])'
+  r'([^\s、。，．！？：；「」『』（）【】\[\]]{1,16})'
+  r'【([^【】\[\]\r\n]{1,32})】',
 );
 
-/// A word immediately before one or more closing emphasis tags, followed by
-/// its parenthetical reading, e.g. `[BOLD]自分[/BOLD]（じぶん）`. The formatter
-/// sometimes closes BOLD/UNDERLINE before the reading, which leaves the
-/// reading outside the emphasis and not bold. The reading must be moved inside
-/// the still-open span as RUBY so it inherits the base's emphasis.
-final RegExp _baseThenClosingTagsThenReadingPattern = RegExp(
-  r'([぀-ヿ㐀-䶿一-鿿々〆ヶー]{1,16})'
+/// A bracket reading whose word is inside a BOLD/UNDERLINE span that closes
+/// before the bracket, e.g. `[BOLD]すき[/BOLD]【好き】`. The RUBY must be moved
+/// inside the still-open emphasis span so the reading inherits bold.
+final RegExp _baseThenClosingTagsThenBracketPattern = RegExp(
+  r'([^\s【】\[\]]{1,16})'
   r'((?:\[/(?:BOLD|UNDERLINE)\])+)'
-  r'([（(])'
-  r'([぀-ゟ゠-ヿー]{1,24})'
-  r'([）)])',
+  r'【([^【】\[\]\r\n]{1,32})】',
   caseSensitive: false,
 );
 
-/// A RUBY pair (optionally wrapped by closing emphasis tags) followed by the
-/// same parenthetical reading, e.g.
-/// `[BOLD][RUBY=じぶん]自分[/RUBY][/BOLD]（じぶん）`. The parentheses are a
-/// duplicate display annotation and must be dropped rather than rendered as
-/// non-bold text.
-final RegExp _rubyThenClosingTagsThenReadingPattern = RegExp(
+/// A RUBY pair followed by a full bracket annotation, optionally separated by
+/// closing emphasis tags: `[RUBY=すき]好き[/RUBY]すき【好き】`.
+final RegExp _rubyThenClosingTagsThenBracketPattern = RegExp(
+  r'\[RUBY=([^\]]*)\]([\s\S]*?)\[/RUBY\]'
+  r'((?:\[/(?:BOLD|UNDERLINE)\])*)'
+  r'([^\s【】\[\]]{1,16})【([^【】\[\]\r\n]{1,32})】',
+  caseSensitive: false,
+);
+
+/// A RUBY pair followed by a bare bracket, e.g.
+/// `[RUBY=すき]好き[/RUBY]【すき】`.
+final RegExp _rubyThenClosingTagsThenBareBracketPattern = RegExp(
+  r'\[RUBY=([^\]]*)\]([\s\S]*?)\[/RUBY\]'
+  r'((?:\[/(?:BOLD|UNDERLINE)\])*)'
+  r'【([^【】\[\]\r\n]{1,32})】',
+  caseSensitive: false,
+);
+
+/// A RUBY pair followed by an old-style parenthetical duplicate. Parentheses
+/// are no longer converted, but an exact duplicate after RUBY is noise.
+final RegExp _rubyThenClosingTagsThenParenPattern = RegExp(
   r'\[RUBY=([^\]]*)\]([\s\S]*?)\[/RUBY\]'
   r'((?:\[/(?:BOLD|UNDERLINE)\])*)'
   r'[（(]([^（）()\r\n]*)[）)]',
   caseSensitive: false,
 );
 
+final RegExp _kanaOnlyPattern = RegExp(r'^[぀-ヿー・]+$');
+final RegExp _cjkPattern = RegExp(r'[㐀-䶿一-鿿豈-﫿々〆ヶ]');
+final RegExp _latinOnlyPattern = RegExp(r'^[A-Za-zÀ-ÖØ-öø-ÿĀ-ž]+$');
+
+/// Resolves a bracket annotation to the actual surface and reading. Kana/Latin
+/// is treated as the reading side; the other side is the surface. This accepts
+/// both `すき【好き】` and `好き【すき】`. Ambiguous all-kanji or all-Latin
+/// brackets are left untouched to avoid false positives.
+({String surface, String reading})? _resolveBracketReading(
+  String outside,
+  String inside,
+) {
+  final o = outside.trim();
+  final i = inside.trim();
+  if (o.isEmpty || i.isEmpty) return null;
+  final or = cleanReading(o);
+  final ir = cleanReading(i);
+  if (or.isEmpty || ir.isEmpty) return null;
+  if (or == ir) return (surface: o, reading: or);
+  final oKana = _kanaOnlyPattern.hasMatch(or);
+  final iKana = _kanaOnlyPattern.hasMatch(ir);
+  final oLatin = _latinOnlyPattern.hasMatch(or);
+  final iLatin = _latinOnlyPattern.hasMatch(ir);
+  final oCjk = _cjkPattern.hasMatch(or);
+  final iCjk = _cjkPattern.hasMatch(ir);
+  final oReading = oKana || (oLatin && iCjk);
+  final iReading = iKana || (iLatin && oCjk);
+  if (oReading && !iReading) return (surface: i, reading: or);
+  if (iReading && !oReading) return (surface: o, reading: ir);
+  if (oReading && iReading) {
+    // Both sides are kana: the outside is the user's reading-first form.
+    if (oKana && iKana) return (surface: i, reading: or);
+    return null;
+  }
+  return null;
+}
+
 /// The result model's `word[YOMI]reading[/YOMI]` annotation. The visible result
 /// must carry RUBY from the first frame, so this is converted locally before
 /// the optional display-formatting model runs.
 final RegExp _yomiToRubyPattern = RegExp(
-  r'([぀-ヿ㐀-䶿一-鿿豈-﫿々〆ヶー]+)'
+  r'([぀-ヿ㐀-䶿一-鿿豈-﫿々〆ヶーA-Za-zÀ-ÖØ-öø-ÿĀ-ž]+)'
   r'\[YOMI\]([\s\S]*?)\[\/YOMI\]',
   caseSensitive: false,
 );
@@ -120,58 +168,103 @@ String yomiToRuby(String text) {
 }
 
 /// The local display conversion used before the optional formatting model
-/// runs: both YOMI and parenthetical readings become RUBY. The result preview
-/// therefore shows RUBY immediately instead of waiting for the network pass.
+/// runs: YOMI and bracket readings become RUBY. The result preview therefore
+/// shows RUBY immediately instead of waiting for the network pass.
 String localReadingsToRuby(String text) =>
-    parentheticalReadingsToRuby(yomiToRuby(text));
+    bracketReadingsToRuby(yomiToRuby(text));
 
-/// Converts `word（reading）` annotations to RUBY without touching existing
-/// RUBY/YOMI spans. A reading identical to its base is dropped. This is a
+/// Converts bracket reading annotations to RUBY without touching existing
+/// RUBY/YOMI spans. A reading identical to its surface is dropped. This is a
 /// display-only helper: the base characters are never changed.
 ///
 /// The conversion is tag-aware. If the formatter closed BOLD/UNDERLINE before
-/// the reading (`[BOLD]自分[/BOLD]（じぶん）`), the reading is moved inside the
-/// emphasis span as RUBY; if a RUBY pair is followed by the same parenthetical
-/// reading, the duplicate parentheses are removed.
-String parentheticalReadingsToRuby(String text) {
-  final normalized = _dropReadingAfterClosedRuby(text);
+/// the reading (`[BOLD]すき[/BOLD]【好き】`), the reading is moved inside the
+/// emphasis span as RUBY; a duplicate annotation after RUBY is removed.
+String bracketReadingsToRuby(String text) {
+  final normalized = _dropDuplicateBracketAfterRuby(
+    _dropDuplicateParenAfterRuby(text),
+  );
   final buffer = StringBuffer();
   var cursor = 0;
   for (final match in _protectedDisplaySpanPattern.allMatches(normalized)) {
     buffer.write(
-      _convertParentheticalReadings(normalized.substring(cursor, match.start)),
+      _convertBracketReadings(normalized.substring(cursor, match.start)),
     );
     buffer.write(match.group(0));
     cursor = match.end;
   }
-  buffer.write(_convertParentheticalReadings(normalized.substring(cursor)));
+  buffer.write(_convertBracketReadings(normalized.substring(cursor)));
   return buffer.toString();
 }
 
-String _convertParentheticalReadings(String text) {
-  final moved = text.replaceAllMapped(_baseThenClosingTagsThenReadingPattern, (
+String _convertBracketReadings(String text) {
+  final moved = text.replaceAllMapped(_baseThenClosingTagsThenBracketPattern, (
     match,
   ) {
-    final base = match.group(1) ?? '';
+    final outside = match.group(1) ?? '';
     final closings = match.group(2) ?? '';
-    final reading = cleanReading(match.group(4) ?? '');
-    if (base.isEmpty || reading.isEmpty || reading == base) {
-      return '$base$closings';
+    final inside = match.group(3) ?? '';
+    final resolved = _resolveBracketReading(outside, inside);
+    if (resolved == null) return match.group(0) ?? '';
+    if (cleanReading(resolved.surface) == resolved.reading) {
+      return '${resolved.surface}$closings';
     }
-    return '[RUBY=$reading]$base[/RUBY]$closings';
+    return '[RUBY=${resolved.reading}]${resolved.surface}[/RUBY]$closings';
   });
-  return moved.replaceAllMapped(_parentheticalReadingPattern, (match) {
-    final base = match.group(1) ?? '';
-    final reading = cleanReading(match.group(3) ?? '');
-    if (base.isEmpty || reading.isEmpty || reading == base) return base;
-    return '[RUBY=$reading]$base[/RUBY]';
+  return moved.replaceAllMapped(_bracketReadingPattern, (match) {
+    final prefix = match.group(1) ?? '';
+    final outside = match.group(2) ?? '';
+    final inside = match.group(3) ?? '';
+    final resolved = _resolveBracketReading(outside, inside);
+    if (resolved == null) return match.group(0) ?? '';
+    if (cleanReading(resolved.surface) == resolved.reading) {
+      return '$prefix${resolved.surface}';
+    }
+    return '$prefix[RUBY=${resolved.reading}]${resolved.surface}[/RUBY]';
   });
 }
 
-/// Drops a parenthetical reading that duplicates a RUBY pair, even when one or
-/// more closing emphasis tags sit between `[/RUBY]` and the parentheses.
-String _dropReadingAfterClosedRuby(String text) {
-  return text.replaceAllMapped(_rubyThenClosingTagsThenReadingPattern, (match) {
+/// Drops a bracket annotation that duplicates a preceding RUBY pair, even when
+/// closing emphasis tags sit between them.
+String _dropDuplicateBracketAfterRuby(String text) {
+  var result = text.replaceAllMapped(_rubyThenClosingTagsThenBracketPattern, (
+    match,
+  ) {
+    final rubyReading = cleanReading(match.group(1) ?? '');
+    final rubyBase = match.group(2) ?? '';
+    final closings = match.group(3) ?? '';
+    final outside = match.group(4) ?? '';
+    final inside = match.group(5) ?? '';
+    final resolved = _resolveBracketReading(outside, inside);
+    if (resolved == null) return match.group(0) ?? '';
+    final matchesReading = cleanReading(resolved.reading) == rubyReading;
+    final matchesBase =
+        cleanReading(resolved.surface) == cleanReading(rubyBase);
+    if (matchesReading || matchesBase) {
+      return '[RUBY=$rubyReading]$rubyBase[/RUBY]$closings';
+    }
+    return match.group(0) ?? '';
+  });
+  result = result.replaceAllMapped(_rubyThenClosingTagsThenBareBracketPattern, (
+    match,
+  ) {
+    final rubyReading = cleanReading(match.group(1) ?? '');
+    final rubyBase = match.group(2) ?? '';
+    final closings = match.group(3) ?? '';
+    final bracket = cleanReading(match.group(4) ?? '');
+    if (bracket.isNotEmpty &&
+        (bracket == rubyReading || bracket == cleanReading(rubyBase))) {
+      return '[RUBY=$rubyReading]$rubyBase[/RUBY]$closings';
+    }
+    return match.group(0) ?? '';
+  });
+  return result;
+}
+
+/// Drops an old-style parenthetical duplicate that immediately follows a RUBY
+/// pair. Standalone parentheses are ordinary explanations and are not touched.
+String _dropDuplicateParenAfterRuby(String text) {
+  return text.replaceAllMapped(_rubyThenClosingTagsThenParenPattern, (match) {
     final reading = cleanReading(match.group(1) ?? '');
     final base = match.group(2) ?? '';
     final closings = match.group(3) ?? '';
@@ -183,29 +276,43 @@ String _dropReadingAfterClosedRuby(String text) {
   });
 }
 
-/// Removes a parenthetical reading at the end of [base] when it is exactly the
+/// Removes a bracket reading at the end of [base] when it is exactly the
 /// reading already supplied by the RUBY tag. This prevents
-/// `[RUBY=いま]今（いま）[/RUBY]` from rendering as `今（いま）（いま）`.
+/// `[RUBY=いま]今【いま】[/RUBY]` from rendering as `今【いま】【いま】`.
+/// Old parenthetical duplicates are also removed.
 String rubyDisplayBase(String base, String reading) {
   final cleanedReading = cleanReading(reading);
   if (cleanedReading.isEmpty) return base;
-  final match = _trailingReadingPattern.firstMatch(base);
-  if (match == null) return base;
-  if (cleanReading(match.group(1) ?? '') != cleanedReading) return base;
-  return base.substring(0, match.start);
+  final bracket = _trailingBracketPattern.firstMatch(base);
+  if (bracket != null &&
+      cleanReading(bracket.group(1) ?? '') == cleanedReading) {
+    return base.substring(0, bracket.start);
+  }
+  final paren = _trailingParenPattern.firstMatch(base);
+  if (paren != null && cleanReading(paren.group(1) ?? '') == cleanedReading) {
+    return base.substring(0, paren.start);
+  }
+  return base;
 }
 
-/// Returns the offset after a parenthetical reading that immediately follows
-/// a RUBY span and duplicates its reading, for example
-/// `[RUBY=いま]今[/RUBY]（いま）`. The duplicate parentheses are display-only
-/// noise and must not be shown or copied twice.
+/// Returns the offset after a bracket reading that immediately follows a RUBY
+/// span and duplicates its reading, for example
+/// `[RUBY=いま]今[/RUBY]【いま】`. Old parenthetical duplicates are also
+/// skipped. The duplicate annotation must not be shown or copied twice.
 int skipDuplicateRubyReading(String text, int offset, String reading) {
   final cleanedReading = cleanReading(reading);
   if (cleanedReading.isEmpty || offset >= text.length) return offset;
-  final match = _leadingReadingPattern.firstMatch(text.substring(offset));
-  if (match == null) return offset;
-  if (cleanReading(match.group(1) ?? '') != cleanedReading) return offset;
-  return offset + match.end;
+  final rest = text.substring(offset);
+  final bracket = _leadingBracketPattern.firstMatch(rest);
+  if (bracket != null &&
+      cleanReading(bracket.group(1) ?? '') == cleanedReading) {
+    return offset + bracket.end;
+  }
+  final paren = _leadingParenPattern.firstMatch(rest);
+  if (paren != null && cleanReading(paren.group(1) ?? '') == cleanedReading) {
+    return offset + paren.end;
+  }
+  return offset;
 }
 
 String stripRichTextTags(String text) =>
@@ -218,7 +325,7 @@ final RegExp _rubyThenYomiPattern = RegExp(
 
 /// Removes a YOMI block immediately after a RUBY pair when both carry the
 /// same reading. The formatter is told to delete the YOMI itself, but a
-/// retained duplicate must never render/export as `RUBY + （reading）`.
+/// retained duplicate must never render/export as RUBY plus a bracket reading.
 String _dropDuplicateYomiAfterRuby(String text) {
   return text.replaceAllMapped(_rubyThenYomiPattern, (match) {
     final reading = cleanReading(match.group(1) ?? '');
@@ -230,23 +337,28 @@ String _dropDuplicateYomiAfterRuby(String text) {
   });
 }
 
-/// Converts YOMI annotations to plain parenthetical readings for fallback
-/// display. The result-generation model writes `word[YOMI]reading[/YOMI]`
-/// without parentheses; a plain renderer needs `word（reading）`. Older output
-/// that already contains parentheses is preserved. A YOMI block that
-/// duplicates the reading of an immediately preceding RUBY pair is dropped.
+final RegExp _wordYomiPattern = RegExp(
+  r'([぀-ヿ㐀-䶿一-鿿豈-﫿々〆ヶーA-Za-zÀ-ÖØ-öø-ÿĀ-ž]+)'
+  r'\[YOMI\]([\s\S]*?)\[/YOMI\]',
+  caseSensitive: false,
+);
+
+/// Converts YOMI annotations to the bracket display form used by Markdown and
+/// plain fallbacks: `reading【surface】` (for example `すき【好き】`). A YOMI
+/// block that duplicates the reading of an immediately preceding RUBY pair is
+/// dropped. A bare YOMI without a surface keeps its cleaned reading.
 String stripYomiTags(String text) {
-  return _dropDuplicateYomiAfterRuby(text)
-      .replaceAllMapped(yomiBlockPattern, (match) {
-        final content = match.group(1) ?? '';
-        final trimmed = content.trim();
-        if (trimmed.isEmpty) return '';
-        final alreadyParenthesized =
-            (trimmed.startsWith('（') && trimmed.endsWith('）')) ||
-            (trimmed.startsWith('(') && trimmed.endsWith(')'));
-        return alreadyParenthesized ? content : '（$trimmed）';
-      })
-      .replaceAll(yomiTagPattern, '');
+  var result = _dropDuplicateYomiAfterRuby(text);
+  result = result.replaceAllMapped(_wordYomiPattern, (match) {
+    final base = match.group(1) ?? '';
+    final reading = cleanReading(match.group(2) ?? '');
+    if (reading.isEmpty || reading == cleanReading(base)) return base;
+    return '$reading【$base】';
+  });
+  result = result.replaceAllMapped(yomiBlockPattern, (match) {
+    return cleanReading(match.group(1) ?? '');
+  });
+  return result.replaceAll(yomiTagPattern, '');
 }
 
 /// Removes whole YOMI blocks (tags + reading). Used only by the diff guard so
@@ -297,28 +409,46 @@ String cleanRubyReadings(String text) {
 }
 
 /// Converts rich-text markup to a copyable plain string:
-/// RUBY becomes `base（reading）`, BOLD/UNDERLINE tags disappear, and YOMI
-/// wrappers are removed while their parenthetical reading is kept.
+/// RUBY becomes `reading【base】`, BOLD/UNDERLINE tags disappear, and YOMI
+/// wrappers are converted to the same bracket form.
 String richTextToPlain(String text) {
   var plain = _dropDuplicateYomiAfterRuby(text);
-  plain = plain.replaceAllMapped(_rubyWithTrailingReadingPattern, (match) {
+  plain = _dropDuplicateBracketAfterRuby(plain);
+  plain = plain.replaceAllMapped(_rubyWithTrailingAnnotationPattern, (match) {
     final reading = cleanReading(match.group(1) ?? '');
     final base = match.group(2) ?? '';
     final trailing = match.group(3) ?? '';
     if (reading.isEmpty) return '$base$trailing';
     final displayBase = rubyDisplayBase(base, reading);
     if (displayBase.isEmpty) return '$base$trailing';
-    // A parenthetical immediately after [/RUBY] is the same annotation when
-    // its cleaned content equals the RUBY reading; keep at most one copy.
-    final keepTrailing =
-        trailing.isNotEmpty && cleanReading(trailing) != reading
-        ? trailing
-        : '';
-    if (reading == displayBase) return '$displayBase$keepTrailing';
-    return '$displayBase（$reading）$keepTrailing';
+    final keepTrailing = _keepTrailingAnnotation(
+      trailing,
+      reading,
+      displayBase,
+    );
+    if (reading == cleanReading(displayBase)) {
+      return '$displayBase$keepTrailing';
+    }
+    return '$reading【$displayBase】$keepTrailing';
   });
   plain = plain.replaceAll(richTextTagPattern, '');
   return stripYomiTags(plain);
+}
+
+String _keepTrailingAnnotation(
+  String trailing,
+  String reading,
+  String displayBase,
+) {
+  if (trailing.isEmpty) return '';
+  final isBracket = trailing.startsWith('【') && trailing.endsWith('】');
+  final isParen =
+      (trailing.startsWith('（') && trailing.endsWith('）')) ||
+      (trailing.startsWith('(') && trailing.endsWith(')'));
+  if (!isBracket && !isParen) return trailing;
+  final content = cleanReading(trailing.substring(1, trailing.length - 1));
+  if (content == reading || content == cleanReading(displayBase)) return '';
+  return trailing;
 }
 
 /// True when every YOMI block kept in [candidate] also exists, unchanged and

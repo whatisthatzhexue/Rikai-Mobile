@@ -9,6 +9,79 @@ const _tagged =
     '[UNDERLINE]お願いします[/UNDERLINE]。';
 
 void main() {
+  group('batched sections degrade independently', () {
+    test('accepts each valid section in one batched response', () async {
+      final provider = FakeProvider(
+        responseText: '''
+<<<RIKAI_SECTION original>>>
+[RUBY=なにとぞ]何卒[/RUBY]宜しく
+<<<RIKAI_END original>>>
+<<<RIKAI_SECTION segment-0>>>
+[BOLD]何卒[/BOLD]
+<<<RIKAI_END segment-0>>>
+''',
+      );
+      final results = await RichTextPostProcessor(llm: provider, model: 'small')
+          .processSections(
+            <String>['original', 'segment-0'],
+            <String>['何卒宜しく', '何卒'],
+          );
+      expect(results, hasLength(2));
+      expect(results[0].taggedText, contains('[RUBY=なにとぞ]'));
+      expect(results[1].taggedText, contains('[BOLD]何卒[/BOLD]'));
+      expect(provider.requests, hasLength(1));
+    });
+
+    test('a damaged marker only rejects that section', () async {
+      final provider = FakeProvider(
+        responseText: '''
+<<<RIKAI_SECTION original>>>
+[RUBY=なにとぞ]何卒[/RUBY]宜しく
+<<<RIKAI_END original>>>
+<<<RIKAI_SECTION segment-0
+[BOLD]何卒[/BOLD]
+<<<RIKAI_END segment-0>>>
+<<<RIKAI_SECTION segment-1>>>
+[BOLD]宜しく[/BOLD]
+<<<RIKAI_END segment-1>>>
+''',
+      );
+      final results = await RichTextPostProcessor(llm: provider, model: 'small')
+          .processSections(
+            <String>['original', 'segment-0', 'segment-1'],
+            <String>['何卒宜しく', '何卒', '宜しく'],
+          );
+      expect(results[0].accepted, isTrue);
+      expect(results[1].accepted, isFalse);
+      expect(results[1].rejectionReason, 'batch_marker');
+      expect(results[2].accepted, isTrue);
+    });
+
+    test('a diff failure only rejects that section', () async {
+      final provider = FakeProvider(
+        responseText: '''
+<<<RIKAI_SECTION original>>>
+[RUBY=なにとぞ]何卒[/RUBY]
+<<<RIKAI_END original>>>
+<<<RIKAI_SECTION segment-0>>>
+[BOLD]何卒！[/BOLD]
+<<<RIKAI_END segment-0>>>
+<<<RIKAI_SECTION segment-1>>>
+[BOLD]宜しく[/BOLD]
+<<<RIKAI_END segment-1>>>
+''',
+      );
+      final results = await RichTextPostProcessor(llm: provider, model: 'small')
+          .processSections(
+            <String>['original', 'segment-0', 'segment-1'],
+            <String>['何卒', '何卒', '宜しく'],
+          );
+      expect(results[0].accepted, isTrue);
+      expect(results[1].accepted, isFalse);
+      expect(results[2].accepted, isTrue);
+    });
+  });
+
   test('strips only known tags and keeps every other character', () {
     expect(stripRichTextTags(_tagged), _plain);
     expect(stripRichTextTags('plain text'), 'plain text');
@@ -68,13 +141,13 @@ void main() {
     },
   );
 
-  test('converts bare YOMI to a parenthetical fallback', () {
-    expect(stripYomiTags('何卒[YOMI]なにとぞ[/YOMI]'), '何卒（なにとぞ）');
-    expect(stripYomiTags('何卒[YOMI]（なにとぞ）[/YOMI]'), '何卒（なにとぞ）');
-    expect(stripYomiTags('ます[YOMI]ます[/YOMI]'), 'ます（ます）');
+  test('converts bare YOMI to the bracket display form', () {
+    expect(stripYomiTags('何卒[YOMI]なにとぞ[/YOMI]'), 'なにとぞ【何卒】');
+    expect(stripYomiTags('何卒[YOMI]（なにとぞ）[/YOMI]'), 'なにとぞ【何卒】');
+    expect(stripYomiTags('ます[YOMI]ます[/YOMI]'), 'ます');
     expect(
       richTextToPlain('[RUBY=なにとぞ]何卒[/RUBY][YOMI]なにとぞ[/YOMI]'),
-      '何卒（なにとぞ）',
+      'なにとぞ【何卒】',
     );
   });
 
@@ -104,19 +177,42 @@ void main() {
     expect(result.rejectionReason, 'local_yomi_fallback');
   });
 
-  test('converts a parenthetical reading to RUBY locally', () async {
-    const source = '今（いま）は';
+  test('does not convert a parenthesized Chinese explanation', () async {
+    const source = '她（かのじょ）は';
     final result = await RichTextPostProcessor(
       llm: FakeProvider(responseText: source),
       model: 'small',
     ).process(source);
 
     expect(result.accepted, isTrue);
-    expect(result.taggedText, '[RUBY=いま]今[/RUBY]は');
+    expect(result.taggedText, source);
+    expect(result.taggedText, isNot(contains('[RUBY=')));
   });
 
-  test('does not convert a non-kana parenthetical', () async {
-    const source = '今（自問）は';
+  test('converts a bracket reading to RUBY locally', () async {
+    const source = 'すき【好き】';
+    final result = await RichTextPostProcessor(
+      llm: FakeProvider(responseText: source),
+      model: 'small',
+    ).process(source);
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, '[RUBY=すき]好き[/RUBY]');
+  });
+
+  test('accepts the reversed bracket order', () async {
+    const source = '好き【すき】';
+    final result = await RichTextPostProcessor(
+      llm: FakeProvider(responseText: source),
+      model: 'small',
+    ).process(source);
+
+    expect(result.accepted, isTrue);
+    expect(result.taggedText, '[RUBY=すき]好き[/RUBY]');
+  });
+
+  test('does not convert an ambiguous all-kanji bracket', () async {
+    const source = '大切【重要】';
     final result = await RichTextPostProcessor(
       llm: FakeProvider(responseText: source),
       model: 'small',
@@ -126,14 +222,14 @@ void main() {
     expect(result.taggedText, source);
   });
 
-  test('falls back to parenthetical RUBY when the provider fails', () async {
+  test('falls back to bracket RUBY when the provider fails', () async {
     final result = await RichTextPostProcessor(
       llm: FakeProvider(responseText: 'not a valid tagged response'),
       model: 'small',
-    ).process('今（いま）は');
+    ).process('すき【好き】');
 
     expect(result.accepted, isTrue);
-    expect(result.taggedText, '[RUBY=いま]今[/RUBY]は');
+    expect(result.taggedText, '[RUBY=すき]好き[/RUBY]');
   });
 
   test('keeps model BOLD while converting retained YOMI locally', () async {
@@ -169,41 +265,41 @@ void main() {
     );
   });
 
-  test('converts display tags to copyable plain text', () {
+  test('converts display tags to the bracket copyable form', () {
     expect(
       richTextToPlain('[RUBY=なにとぞ]何卒[/RUBY][BOLD]宜しく[/BOLD]'),
-      '何卒（なにとぞ）宜しく',
+      'なにとぞ【何卒】宜しく',
     );
     expect(richTextToPlain('[RUBY=ます]ます[/RUBY]'), 'ます');
-    expect(richTextToPlain('[RUBY=（いま）]今[/RUBY]'), '今（いま）');
-    expect(richTextToPlain('[RUBY=いま]今（いま）[/RUBY]'), '今（いま）');
-    expect(richTextToPlain('[RUBY=いま]今(いま)[/RUBY]'), '今（いま）');
-    expect(richTextToPlain('[RUBY=いま]今[/RUBY]（いま）'), '今（いま）');
-    expect(richTextToPlain('ます[YOMI]（ます）[/YOMI]'), 'ます（ます）');
+    expect(richTextToPlain('[RUBY=（いま）]今[/RUBY]'), 'いま【今】');
+    expect(richTextToPlain('[RUBY=いま]今（いま）[/RUBY]'), 'いま【今】');
+    expect(richTextToPlain('[RUBY=いま]今(いま)[/RUBY]'), 'いま【今】');
+    expect(richTextToPlain('[RUBY=いま]今[/RUBY]（いま）'), 'いま【今】');
+    expect(richTextToPlain('[RUBY=いま]今[/RUBY]【いま】'), 'いま【今】');
+    expect(richTextToPlain('[RUBY=いま]今[/RUBY]【今】'), 'いま【今】');
+    expect(richTextToPlain('[RUBY=すき]好き[/RUBY]'), 'すき【好き】');
+    expect(richTextToPlain('ます[YOMI]（ます）[/YOMI]'), 'ます');
   });
 
-  test(
-    'keeps one parenthetical reading when RUBY wraps the annotation',
-    () async {
-      const source = '今（いま）：现在、此刻';
-      for (final candidate in <String>[
-        '[RUBY=いま]今（いま）[/RUBY]：现在、此刻',
-        '[RUBY=いま]今[/RUBY]（いま）：现在、此刻',
-      ]) {
-        final result = await RichTextPostProcessor(
-          llm: FakeProvider(responseText: candidate),
-          model: 'small',
-        ).process(source);
+  test('keeps one bracket reading when RUBY wraps the annotation', () async {
+    const source = 'いま【今】：现在、此刻';
+    for (final candidate in <String>[
+      '[RUBY=いま]今【いま】[/RUBY]：现在、此刻',
+      '[RUBY=いま]今[/RUBY]【いま】：现在、此刻',
+    ]) {
+      final result = await RichTextPostProcessor(
+        llm: FakeProvider(responseText: candidate),
+        model: 'small',
+      ).process(source);
 
-        expect(result.accepted, isTrue);
-        expect(richTextToPlain(result.taggedText!), source);
-      }
-    },
-  );
+      expect(result.accepted, isTrue);
+      expect(richTextToPlain(result.taggedText!), source);
+    }
+  });
 
   test('moves a reading outside a closed BOLD back inside as RUBY', () async {
-    const source = '今[YOMI]いま[/YOMI]は大切（たいせつ）';
-    const candidate = '今[YOMI]いま[/YOMI]は[BOLD]大切[/BOLD]（たいせつ）';
+    const source = '今[YOMI]いま[/YOMI]は、たいせつ【大切】';
+    const candidate = '今[YOMI]いま[/YOMI]は、[BOLD]たいせつ[/BOLD]【大切】';
     final result = await RichTextPostProcessor(
       llm: FakeProvider(responseText: candidate),
       model: 'small',
@@ -212,15 +308,15 @@ void main() {
     expect(result.accepted, isTrue);
     expect(
       result.taggedText,
-      '[RUBY=いま]今[/RUBY]は[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]',
+      '[RUBY=いま]今[/RUBY]は、[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]',
     );
-    expect(result.taggedText, isNot(contains('（たいせつ）')));
+    expect(result.taggedText, isNot(contains('【大切】')));
   });
 
   test('wraps a reading inside BOLD as RUBY', () async {
-    const source = '大切（たいせつ）';
+    const source = 'たいせつ【大切】';
     final result = await RichTextPostProcessor(
-      llm: FakeProvider(responseText: '[BOLD]大切（たいせつ）[/BOLD]'),
+      llm: FakeProvider(responseText: '[BOLD]たいせつ【大切】[/BOLD]'),
       model: 'small',
     ).process(source);
 
@@ -229,25 +325,25 @@ void main() {
   });
 
   test('drops a duplicate reading after a closed BOLD RUBY', () async {
-    const source = '大切（たいせつ）';
+    const source = 'たいせつ【大切】';
     final result = await RichTextPostProcessor(
       llm: FakeProvider(
-        responseText: '[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]（たいせつ）',
+        responseText: '[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]たいせつ【大切】',
       ),
       model: 'small',
     ).process(source);
 
     expect(result.accepted, isTrue);
     expect(result.taggedText, '[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]');
-    expect(result.taggedText, isNot(contains('（たいせつ）')));
+    expect(result.taggedText, isNot(contains('【大切】')));
   });
 
   test(
     'moves a reading outside a closed UNDERLINE back inside as RUBY',
     () async {
-      const source = '大切（たいせつ）';
+      const source = 'たいせつ【大切】';
       final result = await RichTextPostProcessor(
-        llm: FakeProvider(responseText: '[UNDERLINE]大切[/UNDERLINE]（たいせつ）'),
+        llm: FakeProvider(responseText: '[UNDERLINE]たいせつ[/UNDERLINE]【大切】'),
         model: 'small',
       ).process(source);
 
@@ -256,28 +352,55 @@ void main() {
     },
   );
 
-  test('keeps a non-kana parenthetical outside BOLD', () async {
-    const source = '大切（重要）';
+  test('keeps an ambiguous all-kanji bracket outside BOLD', () async {
+    const source = '大切【重要】';
     final result = await RichTextPostProcessor(
-      llm: FakeProvider(responseText: '[BOLD]大切[/BOLD]（重要）'),
+      llm: FakeProvider(responseText: '[BOLD]大切[/BOLD]【重要】'),
       model: 'small',
     ).process(source);
 
     expect(result.accepted, isTrue);
-    expect(result.taggedText, '[BOLD]大切[/BOLD]（重要）');
+    expect(result.taggedText, '[BOLD]大切[/BOLD]【重要】');
   });
 
   test('local display converts YOMI and tag-boundary readings to RUBY', () {
-    expect(localReadingsToRuby('今[YOMI]いま[/YOMI]（いま）は'), '[RUBY=いま]今[/RUBY]は');
+    expect(localReadingsToRuby('今[YOMI]いま[/YOMI]は'), '[RUBY=いま]今[/RUBY]は');
     expect(
-      parentheticalReadingsToRuby('[BOLD]大切[/BOLD]（たいせつ）'),
+      bracketReadingsToRuby('[BOLD]たいせつ[/BOLD]【大切】'),
       '[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]',
     );
     expect(
-      parentheticalReadingsToRuby('[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]（たいせつ）'),
+      bracketReadingsToRuby('[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]たいせつ【大切】'),
       '[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]',
     );
+    expect(bracketReadingsToRuby('すき【好き】'), '[RUBY=すき]好き[/RUBY]');
+    expect(bracketReadingsToRuby('好き【すき】'), '[RUBY=すき]好き[/RUBY]');
+    expect(bracketReadingsToRuby('她（かのじょ）'), '她（かのじょ）');
   });
+
+  test(
+    'batch mode converts bracket readings inside and outside BOLD',
+    () async {
+      final provider = FakeProvider(
+        responseText: '''
+<<<RIKAI_SECTION original>>>
+たいせつ【大切】
+<<<RIKAI_END original>>>
+<<<RIKAI_SECTION segment-0>>>
+[BOLD]たいせつ[/BOLD]【大切】
+<<<RIKAI_END segment-0>>>
+''',
+      );
+      final results = await RichTextPostProcessor(llm: provider, model: 'small')
+          .processSections(
+            <String>['original', 'segment-0'],
+            <String>['たいせつ【大切】', '[BOLD]たいせつ[/BOLD]【大切】'],
+          );
+
+      expect(results[0].taggedText, '[RUBY=たいせつ]大切[/RUBY]');
+      expect(results[1].taggedText, '[BOLD][RUBY=たいせつ]大切[/RUBY][/BOLD]');
+    },
+  );
 
   test('allows a whole YOMI block to be replaced by RUBY', () async {
     const source = 'ます[YOMI]（ます）[/YOMI]';
@@ -373,9 +496,11 @@ void main() {
       );
       expect(
         normalizedPrompt,
-        contains(
-          'replace the whole annotation with [RUBY=reading]surface[/RUBY]',
-        ),
+        contains('Reading annotations use corner brackets'),
+      );
+      expect(
+        normalizedPrompt,
+        contains('Parentheses `（...）` are ordinary Chinese explanations'),
       );
       expect(normalizedPrompt, contains('put the RUBY inside that span'));
     },
@@ -406,15 +531,18 @@ void main() {
     expect(result.rejectionReason, 'local_yomi_fallback');
   });
 
-  test('rejects a moved YOMI block', () async {
+  test('falls back locally when a YOMI block moves', () async {
     const source = 'A[YOMI]（a）[/YOMI]B';
     final result = await RichTextPostProcessor(
       llm: FakeProvider(responseText: '[YOMI]（a）[/YOMI]AB'),
       model: 'small',
     ).process(source);
 
-    expect(result.accepted, isFalse);
-    expect(result.rejectionReason, 'yomi_changed');
+    // The moved model annotation is rejected; the source's own YOMI is still
+    // converted locally so the reading is not lost.
+    expect(result.accepted, isTrue);
+    expect(result.rejectionReason, 'local_yomi_fallback');
+    expect(result.taggedText, '[RUBY=a]A[/RUBY]B');
   });
 
   test('falls back to the source when a YOMI block is malformed', () async {

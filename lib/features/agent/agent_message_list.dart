@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/models/agent/agent_input.dart';
+import '../../core/models/agent/agent_ocr.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/agent/agent_tool.dart';
 import '../../core/theme/app_tokens.dart';
@@ -16,6 +17,7 @@ import '../../services/agent/agent_result_markdown.dart';
 import '../../services/agent/agent_run.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../state/agent_ocr_variants.dart';
+import '../../state/agent_run_controller.dart';
 import 'agent_actions.dart';
 import 'agent_evidence_panel.dart';
 import 'agent_message_widgets.dart';
@@ -44,13 +46,8 @@ class AgentMessageList extends ConsumerWidget {
   final VoidCallback onLooseRetry;
   final VoidCallback onRegenerate;
   final VoidCallback onEditMessage;
-  final Future<void> Function(AgentRunResult result, String imageId)?
-  onGenerateOcrVariants;
-  final void Function(
-    AgentRunResult result,
-    String imageId,
-    AgentOcrVariant variant,
-  )?
+  final Future<void> Function(String imageId)? onGenerateOcrVariants;
+  final void Function(String imageId, AgentOcrVariant variant)?
   onReanalyzeOcrVariant;
 
   @override
@@ -65,6 +62,23 @@ class AgentMessageList extends ConsumerWidget {
     }
     final uiLanguage = resolveAgentUiLanguage(run.responseLanguage);
     final strings = AgentUiStrings.of(uiLanguage);
+    final lastImages = result == null
+        ? ref.read(agentRunControllerProvider.notifier).lastImages
+        : const <AgentImageInput>[];
+    final imageSources = result != null
+        ? result.input.sources
+              .where((source) => source.isImage)
+              .toList(growable: false)
+        : <AgentSourceInput>[
+            for (final (index, image) in lastImages.indexed)
+              AgentSourceInput(
+                id: 'src-${index + 1}',
+                kind: AgentSourceKind.imageOcr,
+                imageId: image.id,
+                variants: image.variants,
+                selectedVariantId: image.selectedVariantId,
+              ),
+          ];
     return ScrollConfiguration(
       behavior: const NoScrollbarBehavior(),
       child: ListView(
@@ -169,24 +183,26 @@ class AgentMessageList extends ConsumerWidget {
                 );
               },
             ),
-          if (result != null &&
-              result.input.sources.any((source) => source.isImage))
+          if (run.sentImagePaths.isNotEmpty &&
+              imageSources.isNotEmpty &&
+              (result != null || run.errorMessage != null))
             AgentOcrVariantsPanel(
               result: result,
+              imageSources: imageSources,
+              ocrQuality: result?.ocrQuality ?? const <String, OcrQuality>{},
               variantsState: ref.watch(agentOcrVariantsProvider),
               strings: strings,
               imagePaths: run.sentImagePaths,
               onGenerate: run.isRunning || onGenerateOcrVariants == null
                   ? null
-                  : (imageId) =>
-                        unawaited(onGenerateOcrVariants!(result, imageId)),
+                  : (imageId) => unawaited(onGenerateOcrVariants!(imageId)),
               onCancelGenerate: (imageId) => ref
                   .read(agentOcrVariantsProvider.notifier)
                   .cancelImage(imageId),
               onReanalyze: run.isRunning || onReanalyzeOcrVariant == null
                   ? null
                   : (imageId, variant) =>
-                        onReanalyzeOcrVariant!(result, imageId, variant),
+                        onReanalyzeOcrVariant!(imageId, variant),
             ),
         ],
       ),

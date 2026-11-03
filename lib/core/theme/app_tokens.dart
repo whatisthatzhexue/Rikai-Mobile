@@ -38,6 +38,7 @@ abstract final class AppColors {
   static const Color error = Color(0xFFD54941);
   static const Color warning = Color(0xFFE37318);
   static const Color success = Color(0xFF2BA471);
+  static const Color successSurface = Color(0xFFE8F7F0);
 
   /// Camera preview controls sit on this scrim so they stay readable over
   /// arbitrary photo content.

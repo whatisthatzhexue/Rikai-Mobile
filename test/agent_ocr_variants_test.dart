@@ -279,11 +279,48 @@ void main() {
         state.qualities['img-1'],
         containsPair('var-img-1-vertical-paddle_v5', isNotNull),
       );
+      expect(state.baselineVariants['img-1']?.id, 'var-1');
+      final preview = state.previews['img-1']?['var-1'];
+      expect(preview, isNotNull);
+      expect(preview!.hitCount, greaterThan(0));
+      expect(preview.entries.single.headword, '何卒');
+      expect(preview.entries.single.snippet, '何卒');
       expect(state.generatedImages, contains('img-1'));
       expect(state.repairs['img-1'], isNotEmpty);
       expect(state.repairBaselineIds['img-1'], 'var-1');
       expect(state.repairs['img-1']!.single.original, 'ニチ');
       expect(state.repairs['img-1']!.single.candidates.single.text, 'ニッポン');
+    },
+  );
+
+  test(
+    'failed run without a result publishes the locally recognized baseline',
+    () async {
+      final ocr = _FakeOcr();
+      final container = ProviderContainer(
+        overrides: [
+          agentRunServicesProvider.overrideWithValue(
+            ({required bool needsOcr, bool Function()? isCancelled}) async =>
+                _services(ocr),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(agentOcrVariantsProvider.notifier);
+
+      await controller.generate(
+        images: const <AgentImageInput>[
+          AgentImageInput(id: 'img-1', localPath: '/tmp/one.png'),
+        ],
+        baselineVariants: const <String, List<AgentOcrVariant>>{},
+        dictionaries: const <DictionaryInfo>[_dictionary],
+      );
+
+      final state = container.read(agentOcrVariantsProvider);
+      expect(state.errorCode, isNull);
+      expect(state.baselineVariants['img-1']?.text, '何卒コンニチハ');
+      expect(state.extraVariants['img-1'], hasLength(3));
+      expect(state.previews['img-1']?['var-img-1-auto-paddle_v5'], isNotNull);
     },
   );
 

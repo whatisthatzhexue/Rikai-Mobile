@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/agent_analysis.dart';
 import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
@@ -6,12 +7,14 @@ import 'package:rikai_mobile/core/models/agent/agent_input.dart';
 import 'package:rikai_mobile/core/models/agent/agent_ocr.dart';
 import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
+import 'package:rikai_mobile/features/agent/agent_message_list.dart';
 import 'package:rikai_mobile/features/agent/agent_ocr_variants_panel.dart';
 import 'package:rikai_mobile/services/agent/agent_run.dart';
 import 'package:rikai_mobile/services/agent/agent_ui_strings.dart';
 import 'package:rikai_mobile/services/agent/agent_validator.dart';
 import 'package:rikai_mobile/services/agent/ocr_consensus.dart';
 import 'package:rikai_mobile/state/agent_ocr_variants.dart';
+import 'package:rikai_mobile/state/agent_run_controller.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
 
 const _baseline = AgentOcrVariant(
@@ -140,6 +143,23 @@ AgentOcrVariantsState _state({String repairBaselineId = 'var-1'}) {
   );
 }
 
+class _FailedImageRunController extends AgentRunController {
+  @override
+  AgentRunSnapshot build() => const AgentRunSnapshot(
+    runId: 'run-failed',
+    status: AgentRunStatus.error,
+    errorMessage: '生成失败',
+    sentText: '何卒',
+    sentImage: true,
+    sentImagePaths: <String>['/tmp/missing.png'],
+  );
+
+  @override
+  List<AgentImageInput> get lastImages => const <AgentImageInput>[
+    AgentImageInput(id: 'local-1', localPath: '/tmp/missing.png'),
+  ];
+}
+
 Future<void> _pumpPanel(
   WidgetTester tester, {
   required void Function(String imageId, AgentOcrVariant variant) onReanalyze,
@@ -238,6 +258,140 @@ void main() {
     await tester.tap(find.text('使用此版本重新分析'));
     await tester.pump();
     expect(selected?.id, 'var-2');
+  });
+
+  testWidgets(
+    'failed run shows the comparison entry and blocks missing paths',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: AgentOcrVariantsPanel(
+              result: null,
+              imageSources: const <AgentSourceInput>[
+                AgentSourceInput(
+                  id: 'src-1',
+                  kind: AgentSourceKind.imageOcr,
+                  imageId: 'img-1',
+                ),
+              ],
+              variantsState: const AgentOcrVariantsState(),
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+              imagePaths: const <String>[],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('文字识别结果'), findsOneWidget);
+      expect(find.text('原图不可用，无法重新识别'), findsOneWidget);
+      expect(find.text('对比识别'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'failed run shows generated baseline, variants and lookup previews',
+    (tester) async {
+      final state = AgentOcrVariantsState(
+        baselineVariants: const <String, AgentOcrVariant>{'img-1': _baseline},
+        extraVariants: const <String, List<AgentOcrVariant>>{
+          'img-1': <AgentOcrVariant>[_horizontal],
+        },
+        qualities: <String, Map<String, OcrQuality>>{
+          'img-1': <String, OcrQuality>{
+            'var-1': OcrConsensus.assess(variant: _baseline),
+            'var-2': OcrConsensus.assess(variant: _horizontal),
+          },
+        },
+        previews: const <String, Map<String, OcrVariantLookupPreview>>{
+          'img-1': <String, OcrVariantLookupPreview>{
+            'var-1': OcrVariantLookupPreview(
+              hitCount: 2,
+              entries: <OcrLookupPreviewEntry>[
+                OcrLookupPreviewEntry(
+                  dictionaryId: 'dict_a',
+                  dictionaryTitle: 'A',
+                  headword: '何卒',
+                  snippet: 'なにとぞ。どうか。',
+                ),
+              ],
+            ),
+          },
+        },
+        repairBaselineIds: const <String, String>{'img-1': 'var-1'},
+        generatedImages: const <String>{'img-1'},
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: AgentOcrVariantsPanel(
+              result: null,
+              imageSources: const <AgentSourceInput>[
+                AgentSourceInput(
+                  id: 'src-1',
+                  kind: AgentSourceKind.imageOcr,
+                  imageId: 'img-1',
+                ),
+              ],
+              variantsState: state,
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+              imagePaths: const <String>[],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('paddle_v5 · 自动 · 90%'), findsOneWidget);
+      expect(find.text('paddle_v5 · 横向 · 80%'), findsOneWidget);
+      expect(find.text('词典预览'), findsOneWidget);
+      expect(find.text('命中 2 个词'), findsOneWidget);
+      expect(find.textContaining('A · 何卒：なにとぞ。'), findsOneWidget);
+    },
+  );
+
+  testWidgets('failed image run still exposes the OCR variant section', (
+    tester,
+  ) async {
+    final controller = _FailedImageRunController();
+    final scroll = ScrollController();
+    addTearDown(scroll.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [agentRunControllerProvider.overrideWith(() => controller)],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: AgentMessageList(
+              scrollController: scroll,
+              providers: const [],
+              provider: null,
+              run: const AgentRunSnapshot(
+                runId: 'run-failed',
+                status: AgentRunStatus.error,
+                errorMessage: '生成失败',
+                sentText: '何卒',
+                sentImage: true,
+                sentImagePaths: <String>['/tmp/missing.png'],
+              ),
+              onRetry: () {},
+              onLooseRetry: () {},
+              onRegenerate: () {},
+              onEditMessage: () {},
+              onGenerateOcrVariants: (_) async {},
+              onReanalyzeOcrVariant: (_, _) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('文字识别结果'), findsOneWidget);
+    expect(find.text('原图不可用，无法重新识别'), findsOneWidget);
   });
 
   testWidgets(

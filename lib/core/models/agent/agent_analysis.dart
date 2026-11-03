@@ -259,6 +259,8 @@ class AgentAnalysis {
     this.unresolved = const <AgentUnresolved>[],
     this.citationsUsed = const <String>[],
     this.modelSupplements = const <AgentModelSupplement>[],
+    this.noAnalysisReason = '',
+    this.truncated = false,
   });
 
   static const String schema = 'rikai.agent.analysis.v1';
@@ -270,6 +272,14 @@ class AgentAnalysis {
   final List<AgentUnresolved> unresolved;
   final List<String> citationsUsed;
   final List<AgentModelSupplement> modelSupplements;
+
+  /// Set only when the model returned `[NO_ANALYSIS reason="..."]`. It is
+  /// mutually exclusive with translation/segments/options/supplements.
+  final String noAnalysisReason;
+
+  /// True when the parser applied an output cap and dropped content that the
+  /// model returned. The UI must show a visible truncation warning.
+  final bool truncated;
 
   Map<String, Object?> toJson() => {
     'schema': schema,
@@ -285,6 +295,8 @@ class AgentAnalysis {
       'model_supplements': modelSupplements
           .map((item) => item.toJson())
           .toList(),
+    if (noAnalysisReason.isNotEmpty) 'no_analysis_reason': noAnalysisReason,
+    if (truncated) 'truncated': true,
   };
 
   factory AgentAnalysis.fromJson(Map<String, Object?> json) {
@@ -346,6 +358,8 @@ class AgentAnalysis {
                 )
                 .toList(growable: false)
           : const <AgentModelSupplement>[],
+      noAnalysisReason: agentString(json['no_analysis_reason']),
+      truncated: agentBool(json['truncated']),
     );
   }
 }

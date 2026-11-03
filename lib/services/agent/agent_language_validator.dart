@@ -44,7 +44,11 @@ class AgentLanguageValidator {
     }.toList(growable: false)..sort((a, b) => b.length.compareTo(a.length));
 
     String prepare(String text) {
-      var prepared = stripYomiTags(text);
+      // Reading annotations are not prose. Remove the whole YOMI/YOMI base and
+      // the bracket form (`reading【surface】`) before counting scripts.
+      var prepared = stripYomiBlocks(text);
+      prepared = prepared.replaceAll(RegExp(r'[^\s【】\[\]]{1,16}【[^】]*】'), ' ');
+      prepared = stripYomiTags(prepared);
       prepared = _stripParentheticals(prepared);
       prepared = _stripQuotes(prepared);
       for (final term in allowed) {
@@ -79,6 +83,10 @@ class AgentLanguageValidator {
     for (final supplement in analysis.modelSupplements) {
       inspect('supplement', supplement.text);
     }
+    final noAnalysisReason = analysis.noAnalysisReason.trim();
+    if (noAnalysisReason.isNotEmpty) {
+      inspect('no_analysis', noAnalysisReason);
+    }
     return AgentLanguageCheck(List<String>.unmodifiable(mismatched));
   }
 
@@ -109,7 +117,10 @@ class AgentLanguageValidator {
 String _stripParentheticals(String text) {
   return text
       .replaceAll(RegExp(r'（[^）]*）'), ' ')
-      .replaceAll(RegExp(r'\([^)]*\)'), ' ');
+      .replaceAll(RegExp(r'\([^)]*\)'), ' ')
+      // Bracket readings (`reading【surface】`) are display annotations, not
+      // prose; do not count their kana as untranslated Japanese.
+      .replaceAll(RegExp(r'【[^】]*】'), ' ');
 }
 
 String _stripQuotes(String text) {

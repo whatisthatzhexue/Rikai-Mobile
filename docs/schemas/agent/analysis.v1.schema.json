@@ -38,8 +38,33 @@
       "type": "array",
       "maxItems": 20,
       "items": {"$ref": "#/$defs/supplement"}
+    },
+    "no_analysis_reason": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Set only for a standalone [NO_ANALYSIS] result; mutually exclusive with translation/segments/interpretations/model_supplements."
+    },
+    "truncated": {
+      "type": "boolean",
+      "description": "True when a hard output cap dropped model content. The UI and Markdown export must show a visible truncation warning."
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "required": ["no_analysis_reason"],
+        "properties": {"no_analysis_reason": {"minLength": 1}}
+      },
+      "then": {
+        "properties": {
+          "translation": {"maxItems": 0},
+          "segments": {"maxItems": 0},
+          "interpretations": {"maxItems": 0},
+          "model_supplements": {"maxItems": 0}
+        }
+      }
+    }
+  ],
   "$defs": {
     "citation_ids": {
       "type": "array",
@@ -68,7 +93,7 @@
         "interpretation": {"type": "string", "minLength": 1, "maxLength": 8000},
         "word_notes": {
           "type": "array",
-          "maxItems": 40,
+          "maxItems": 20,
           "items": {"$ref": "#/$defs/word_note"}
         },
         "grammar_notes": {

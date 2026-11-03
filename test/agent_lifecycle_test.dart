@@ -209,7 +209,14 @@ class _BlockingRichTextProvider implements LlmPort {
     if (!formattingStarted.isCompleted) formattingStarted.complete();
     await releaseFormatting.future;
     final text = request.messages.last.text;
-    yield LlmEvent(type: LlmEventType.textDelta, text: '[BOLD]$text[/BOLD]');
+    // Preserve the batch section markers and bold each section body.
+    final response = text.replaceAllMapped(
+      RegExp(r'(<<<RIKAI_SECTION ([^>]+)>>>)\n([\s\S]*?)\n<<<RIKAI_END \2>>>'),
+      (match) =>
+          '${match.group(1)}\n[BOLD]${match.group(3)}[/BOLD]\n'
+          '<<<RIKAI_END ${match.group(2)}>>>',
+    );
+    yield LlmEvent(type: LlmEventType.textDelta, text: response);
     yield LlmEvent.done();
   }
 }
@@ -693,7 +700,9 @@ void main() {
       expect(current.richTextFormatting, isFalse);
       expect(current.result?.richOriginalText, '[BOLD]何卒[/BOLD]');
       expect(current.result?.richSegmentTexts, <String>['[BOLD]正式请求[/BOLD]']);
-      expect(current.result?.richSegmentNotes, <String>['[BOLD]何卒：请务必[/BOLD]']);
+      // Dictionary notes are local-only; the batch formatter does not touch
+      // them.
+      expect(current.result?.richSegmentNotes, <String>['何卒：请务必']);
     },
   );
 }

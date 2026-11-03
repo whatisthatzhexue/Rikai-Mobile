@@ -397,6 +397,18 @@ class AgentUiStrings {
   String get unresolvedTitle => _pick('未解决', 'Unresolved', '未解決');
   String get unresolvedFallback => _pick('未解决', 'Unresolved', '未解決');
   String get modelSupplements => _pick('模型补充', 'Model supplements', 'モデル補足');
+  String get noAnalysisTitle =>
+      _pick('无法可靠分析', 'Unable to analyze reliably', '信頼できる分析ができません');
+  String get noAnalysisFallback => _pick(
+    '模型无法可靠分析这段文本。',
+    'The model could not analyze this text reliably.',
+    'このテキストを信頼できる形で分析できませんでした。',
+  );
+  String get analysisTruncated => _pick(
+    '已按上限缩减输出，未显示的部分不会出现在结果中。',
+    'Output was truncated to the configured limits; omitted parts are not shown.',
+    '上限に達したため一部を省略しました。省略された内容は表示されません。',
+  );
   String get dictionaryEvidence => _pick('词典依据', 'Dictionary evidence', '辞書根拠');
   String evidenceEntryCount(int count) =>
       _pick('$count 条', '$count entry(s)', '$count 件');
@@ -415,6 +427,10 @@ class AgentUiStrings {
   String get pitchInfoLabel => _pick('音调信息', 'Pitch accent', 'アクセント情報');
   String confidence(int percent) =>
       _pick('置信度 $percent%', 'Confidence $percent%', '信頼度 $percent%');
+  String situationLabel(String label) =>
+      _pick('情况$label', 'Case $label', '状況$label');
+  String possibility(int percent) =>
+      _pick('可能性$percent%', 'Possibility $percent%', '可能性$percent%');
   String citationLabel(int number) =>
       _pick('依据$number', 'Citation $number', '根拠$number');
   String citationSemantics(int number, String headword) => _pick(
@@ -457,6 +473,16 @@ class AgentUiStrings {
   String get ocrVariantsFailed =>
       _pick('文字识别对比失败', 'Text recognition comparison failed', '文字認識の比較に失敗しました');
   String get ocrCancelComparison => _pick('停止对比', 'Stop comparison', '比較を停止');
+  String get ocrPreviewTitle => _pick('词典预览', 'Dictionary preview', '辞書プレビュー');
+  String ocrPreviewHits(int count) =>
+      _pick('命中 $count 个词', '$count word(s) found', '$count 語ヒット');
+  String get ocrPreviewEmpty =>
+      _pick('未找到词典条目', 'No dictionary entries found', '辞書項目が見つかりません');
+  String get ocrOriginalUnavailable => _pick(
+    '原图不可用，无法重新识别',
+    'Original image unavailable; cannot recognize again',
+    '元画像を利用できないため再認識できません',
+  );
   String get ocrDiffTitle => _pick('差异预览', 'Difference preview', '差分プレビュー');
   String get ocrDiffHint => _pick(
     '高亮文字与其他版本不一致',

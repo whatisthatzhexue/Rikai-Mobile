@@ -475,6 +475,10 @@ pattern id + 清洗 citation 摘要，保留 offset 与 entry_key/matched_key，
   已达全局上限（需要验证重复以释放槽位）时运行；全部目标已有 citation 且仍有
   剩余槽位时跳过，避免每个 run 固定多一次小模型调用。
   `AgentLimits.adaptiveCoverageReview=false` 可强制每次都审查。
+  2026-11-04 修正：判断使用 `AgentEvidenceBudget.targetsWithCitations` 与
+  `uniqueTargets` 的真实 per-target 比较，不再用
+  `citations < targets` 的数量代理（多词典/多义项会让数量代理误跳过仍有空目标的
+  run）。
 - 2026-11-03 补充检索去重：MISSING query 如果已被现有 citation、或已有
   citation_ids 的 token/pattern 覆盖（按归一化 key），不再重复查词；重复 query
   也跳过。补充查词每个缺失 query 每本词典只取 1 条，避免 coverage 自己把
@@ -503,6 +507,14 @@ Stage 0 envelope + Stage 1 evidence + 已确认的 dictionary profiles。输出�
 不是各选项独立的概率**：解析器只给 0.5/0.7 的相对权重，`normalizeAnalysis`/
 `salvageAnalysis` 会归一化为总和 100% 的分布（两个选项 50/50，三个
 34/33/33），避免出现 70%+70%=140%；不要为此在 prompt 中要求模型输出概率。
+
+**2026-11-04 输出上限与 NO_ANALYSIS**：解析器强制执行 SEGMENT 40、
+每 quote 每 type 1 段、OPTION 8、每段 WORD/GRAMMAR 20 的硬上限；超限内容被
+截断并设置 `AgentAnalysis.truncated=true`，UI 与 Markdown 导出必须显示本地化
+截断警告，禁止静默丢弃（R-AGENT-LIMITS-001）。模型可用
+`[NO_ANALYSIS reason="short reason"]` 单独返回“无法可靠分析”，该标签不能与
+TRANSLATION/SEGMENT/OPTION/UNRESOLVED/SUPPLEMENT 共存；parser/validator/UI
+接受零翻译零段落，语言后校验包含该 reason。
 旧 JSON 输出回退和 `response_format`/`json_schema` 请求均已移除；下面的 JSON
 结构仅作为内部 DTO/存储结构，不是模型响应格式：
 
@@ -561,13 +573,23 @@ substring 校验。`literal` 字段由编排器按 quote 填充，模型不得�
 3. `quote_id/quote_text` 必须匹配 `analysis_text`（NFKC + 空白归一化后的 substring）。
 4. 严格模式 claim 校验（见 §10）：`dictionary_fact`/`structural_analysis` 必须有
    对应引用；`context_inference` 必须有支持 citation 或进入 `unresolved`；
-   `model_supplements` 必须为空/隐藏；译文标注“模型译文”。
-5. 读音校验：模型给出的读音必须匹配 token 读音或 citation 摘要；否则移除或标
-   `未验证`。
+   `model_supplements` 必须为空/隐藏；译文标注“模型译文”。**每条 WORD、每个
+   OPTION 必须有 citation；`dictionary_fact` 段中的 GRAMMAR 也必须有 citation**。
+   无依据时模型应省略该 WORD/OPTION/GRAMMAR 并改用 `UNRESOLVED`；prompt 与
+   validator 必须同时维护该规则。
+5. 读音校验：模型给出的读音必须匹配 token 读音或 citation 摘要；prompt 要求
+   `WORD` 的 reading 直接复制所引用 token 的 reading，token 无读音时留空；
+   否则移除或标 `未验证`。
 6. 词典顺序：证据按 `dictionaryOrder` 排序；提示词要求模型按序引用；UI 渲染层再次
    排序，保证“输出顺序严格按用户设置”。
-7. 失败时做一次修复调用（同一证据、带校验错误）；仍失败则返回部分结果 + 可见的
+7. 失败时做一次修复调用；**格式修复使用 small model + 紧凑 prompt**（只发
+   `availableIds`、previous output、validation errors，不重发 input/evidence/
+   profiles；`maxTokens` 按 raw output 长度计算），**语言修复使用 complex model
+   + 紧凑 prompt**（不重发完整 evidence）。仍失败则返回部分结果 + 可见的
    `validation_errors`，严格模式拒绝无依据部分，不静默删改。
+8. `NO_ANALYSIS`：若 analysis 带 `no_analysis_reason`，只允许零
+   translation/segments/interpretations/supplements；validator 直接返回有效，
+   语言后校验检查 reason，UI 显示原因与证据。
 
 UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语法注释 → 多解释候选 →
 按词典顺序分组的证据卡片 → citation chip。citation 点击复用现有
@@ -583,7 +605,10 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
   `AgentLimits.coverage*` 常量派生，不单独配置。
 - 历史 tool loop 预算（6 次/单工具 60s/总 90s）仅作未来参考，不是当前实现。
 - 超预算时显示“已按预算缩减，未分析的部分不会出现在结果中”，并允许用户缩小范围；
-  记录 `truncated` 标记。
+  记录 `truncated` 标记。**有损上限原则（R-AGENT-LIMITS-001）**：SEGMENT 40、
+  每 quote 每 type 1 段、OPTION 8、每段 WORD/GRAMMAR 20 是硬上限；任何截断必须
+  在 UI 与 Markdown 导出中显式警告，禁止静默丢弃。`NO_ANALYSIS` 是唯一合法的
+  零结果路径，不能与翻译/段落/选项共存。
 - 每个阶段可取消；取消 OCR 调用 `OcrService.cancel()`；已发出的 MDict/MeCab 请求
   无法中断时用 generation token 丢弃结果；provider 用 `CancelToken` 取消。
 - 阶段进度通过事件/状态流推给 UI，不在页面 State 里私存。
@@ -846,27 +871,36 @@ P6.7 历史复用上述表，不新增图片字段：`agent_runs.result_json` �
 - 结果：译文/结论在 AI 气泡正文；原文引用、逐句理解、词/语法注释、多解释作为
   消息内可折叠“详细解析”；证据默认折叠为「依据 N 条 ▾」，展开按词典顺序显示
   证据卡片与 citation chip；严格模式无依据显示“无词典依据”，宽松模式“模型补充”
-  独立标签。P7.0 增量对详细解析的“原文”、逐句理解和词典事实解释做
+  独立标签。可能的理解使用 `[OPTION]` 的结构化 `label`/`confidence`：正文只写
+  含义，下方显示“情况A”绿色胶囊 + “可能性70%”文本，不把 `A：...（70%）` 拼进
+  正文；所有情况引用同一组依据时 citation chip 只在最后一个情况下方显示一次，
+  不同则逐情况保留。P7.0 增量对详细解析的“原文”、逐句理解和词典事实解释做
   RUBY/BOLD/UNDERLINE 后处理；AI 气泡摘要只做本地 RUBY 化，不加载模型
   BOLD/UNDERLINE，避免中文译文被模型强调标签误标注。可能的理解、未解决、
   模型补充、逐句引用行和词注/语法注 fallback 也只做本地 RUBY 化；citation
   snippet 保持词典原文。
   后处理 AI 直接阅读文本生成注音，不使用 UniDic 读音表；结果生成模型用
   `word[YOMI]reading[/YOMI]`（读音不带括号；单词=读音时只写单词）标记
-  `[MEANING]` 与词条解释开头，禁止 `word（reading）`。后处理允许整块删除
+  `[MEANING]` 与词条解释开头。普通括号 `（...）` 是解释性文字，不是读音；
+  纯显示/导出读数使用 `reading【surface】`（例如 `すき【好き】`，反向
+  `surface【reading】` 也接受）。后处理允许整块删除
   YOMI，但保留块必须内容/位置不变；标签必须成对且正确嵌套（RUBY 可在
   BOLD/UNDERLINE 内），必须通过标签剥离逐字符 diff，冗余 RUBY 取消；任何
-  section 失败时保留结果构建时的本地 RUBY 基线，不退回括号纯文本。异步富文本
-  后处理运行期间，会话上方显示可关闭的绿色横幅“界面美化正在进行中…”；完成、
-  失败或取消后自动消失。关闭横幅只隐藏当前 run 的提示，不取消后处理、不影响
-  已显示结果。
-  括号读音转换是标签感知的：包住已有 `surface（reading）` 时只显示一份读音，
-  `[BOLD]base[/BOLD]（reading）` 会把读音移入 BOLD 内成为 RUBY（读音继承粗体）；
-  RUBY base 使用与
+  section 失败时保留结果构建时的本地 RUBY 基线，不退回括号纯文本。2026-11-04
+  起“原文 + 逐句理解”合并为一次批量请求（`<<<RIKAI_SECTION id>>>` /
+  `<<<RIKAI_END id>>>` marker），词注/词典事实解释不进入批量请求、继续本地
+  RUBY；响应必须按 section 独立解析和逐字符 diff，单个 marker 损坏或 diff 失败
+  只降级该 section，绝不整批回退（T-137）。只有 provider 错误、空响应、批量响应
+  完全缺失 marker 或 `maxRichTextChars` 超限才允许整批回退。异步富文本后处理运行期间，会话上方
+  显示可关闭的绿色横幅“界面美化正在进行中…”；完成、失败或取消后自动消失。
+  关闭横幅只隐藏当前 run 的提示，不取消后处理、不影响已显示结果。
+  读数转换是标签感知的：包住已有 `reading【surface】` 时只显示一份读音，
+  `[BOLD]reading[/BOLD]【surface】` 会把读音移入 BOLD 内成为 RUBY（读音继承
+  粗体）；普通括号不转换。RUBY base 使用与
   周围正文相同的行高/metrics，以 alphabetic baseline 对齐；UNDERLINE 由
   baseline 相对偏移的自绘线完成（不使用字体 decoration），保证汉字、标点
   （如 `；`）和 RUBY base 的下划线高度一致；读音继承 BOLD、永不加下划线。
-  Markdown 导出通过 `richTextToPlain` 转为不带标签的 `base（reading）`。
+  Markdown 导出通过 `richTextToPlain` 转为不带标签的 `reading【surface】`。
   声调（P6.7 已实现）：只在词注/词典事实行使用 UniDic
   声调字段 24–26 画高低线，无可靠数据不显示，不用 AI 猜；详见 §17.2.3。
 - 状态/错误：空闲/提交中/流式/完成/中断/降级/离线/错误均有视觉标识；失败保留
@@ -1034,8 +1068,9 @@ P7 的整体规划（核心翻译/语法解析/富文本后处理拆分、模型
 `docs/agent_docs/p7-task-decomposition-plan.md`。2026-11-03 已增量实现 P7.0：
 详细解析（原文/逐句理解/词典事实解释）的 RUBY/BOLD/UNDERLINE 后处理 + `[YOMI]`
 读音标记（允许整块删除，保留块内容/位置不变）+ 正确嵌套标签 + 标签剥离逐字符
-diff + 冗余 RUBY 取消 + 重复括号读音折叠 + 失败回退纯文本；P7.1–P7.4 尚未实现，
-不得写成已支持。
+diff + 冗余 RUBY 取消 + 重复 `reading【surface】` 读数折叠 + 结果构建时本地
+RUBY 化（预览首帧可见）+ 失败保留本地 RUBY 基线；P7.1–P7.4 尚未实现，不得写成
+已支持。
 
 ## 17.2 P6.7 设计决议与实现状态（2026-11-03）
 
@@ -1142,7 +1177,7 @@ AI 推测声调；把图片、路径、base64 或 Key 写入历史或 provider �
 - **缩放**：200% 字号下线和偏移随文字缩放；空间不足时优先换行，不得覆盖读音、
   下划线或相邻文字；必要时省略声调线而不是压缩到不可读。
 - **隐私/协议**：声调是本地 UniDic 数据，不进入 provider 请求、日志、citation
-  或历史导出的 Markdown；复制/导出只保留 `surface（reading）`，不输出声调线。
+  或历史导出的 Markdown；复制/导出只保留 `reading【surface】`，不输出声调线。
 - 实现契约见 `docs/phase6-agent-contracts.md` §14.2。
 
 ### 17.2.4 标注 DSL
@@ -1172,7 +1207,7 @@ AI 推测声调；把图片、路径、base64 或 Key 写入历史或 provider �
 - 模型 wire format 保持**方括号标签**；主结果由结构化 DTO + Flutter 组件/
   `AgentRichText` 渲染，不把 Markdown 重新变成模型输出协议。
 - Markdown 只用于两个场景：
-  1. `buildAgentResultMarkdown` 的复制/导出（RUBY 转 `base（reading）`，剥离
+  1. `buildAgentResultMarkdown` 的复制/导出（RUBY 转 `reading【surface】`，剥离
      BOLD/UNDERLINE/YOMI，不带标签）；
   2. 用户可编辑词典档案的受限 Markdown 预览。
 - 档案预览只允许白名单：段落、标题、列表、粗体/斜体、行内代码；禁止 HTML、JS、
@@ -1192,15 +1227,18 @@ AI 推测声调；把图片、路径、base64 或 Key 写入历史或 provider �
 
 ### 17.2.7 P6.6 遗留（纳入 P6.7 设计）
 
-- **失败态多 OCR 入口**：当前变体面板只在 `result != null` 时挂载。P6.7 设计为
-  只要本次 run 有 `sentImagePaths` 且存在 result 或错误，就显示 OCR 变体区；
-  生成按钮使用当前本地图片路径。路径已失效时禁用并提示“原图不可用，无法重新
-  识别”，不伪造结果。
-- **选版本前依据预览**：对每个候选变体在本地执行分词 + 词典查询，显示命中数/
-  前几条摘要，供用户在确认前比较；不调用 provider，不生成正式 citation。每次
-  最多 4 个变体、每变体最多 3 条预览摘要，沿用 citation 清洗/截断规则。用户
-  选中并重新分析后，才由 orchestrator 重建正式 citation。
-- 两项都只修改 P6.6 对比/选择路径，不改变照片集 OCR 行为；仍待实现。
+- **失败态多 OCR 入口（已实现 2026-11-03）**：只要本次 run 有
+  `sentImagePaths` 且存在 result 或错误，就显示 OCR 变体区；生成按钮使用当前
+  本地图片路径。路径已失效时禁用并提示“原图不可用，无法重新识别”，不伪造结果。
+  失败 run 没有 result 时，本地首次识别得到 baseline variant 后写入
+  `AgentOcrVariantsState.baselineVariants`，供 chip、diff 和预览使用。
+- **选版本前依据预览（已实现 2026-11-03）**：对每个候选变体在本地执行分词 +
+  词典查询，显示命中数/前 3 条摘要，供用户在确认前比较；不调用 provider，不生成
+  正式 citation。每次最多 4 个变体；摘要使用 `htmlToPlainText` +
+  `cleanDictionaryText`，最多 240 字符；预览只存在内存中，不写入
+  `agent_citations` 或历史。用户选中并重新分析后，才由 orchestrator 重建正式
+  citation。
+- 两项都只修改 P6.6 对比/选择路径，不改变照片集 OCR 行为。
 
 ### 17.2.8 实施顺序与门禁
 
@@ -1208,7 +1246,7 @@ AI 推测声调；把图片、路径、base64 或 Key 写入历史或 provider �
    漫画页/200% 字号）由另一工作流继续；本工作流经用户明确允许并行开始 P6.7。
 2. P6.7-1 历史/持久化（含全变体持久化、档案队列、interrupted）——
    已实现（2026-11-03）。
-3. P6.6 遗留（失败态入口、逐版本依据预览）——待实现。
+3. P6.6 遗留（失败态入口、逐版本依据预览）——已实现（2026-11-03）。
 4. P6.7-2 安全富文本/ruby/声调——UniDic 声调已实现（2026-11-03）。
 5. P6.7-3 annotation DSL（阅读器/照片集/语料）——待实现。
 6. P6.7-4 provider 测试连接、无障碍/空错误态、许可/签名/发布验收——待实现。

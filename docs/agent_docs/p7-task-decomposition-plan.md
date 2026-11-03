@@ -80,24 +80,26 @@ P6.8 解决“已生成结果如何更早显示”；P7 解决“不要把所有
 > original text (including punctuation, spaces and line breaks). Only
 > `[RUBY=xxx]`, `[BOLD]` and `[UNDERLINE]` may be inserted. The output must
 > contain the complete original text. Leave every `[YOMI]...[/YOMI]` block
-> exactly as supplied. The only exception is a parenthetical reading:
-> `surface（reading）` may be replaced by `[RUBY=reading]surface[/RUBY]`; the
-> base characters must not change.
+> exactly as supplied. The only exception is a bracket reading:
+> `reading【surface】` (or the reversed `surface【reading】`) may be replaced by
+> `[RUBY=reading]surface[/RUBY]`; the base characters must not change.
+> Parentheses `（...）` are ordinary explanations.
 
 结果生成模型在 `[MEANING]` 中把读音写成 `word[YOMI]reading[/YOMI]`（不带括号；
-单词=读音时只写单词；禁止 `word（reading）` 或 `word[YOMI]（reading）[/YOMI]`）。
+单词=读音时只写单词）；普通括号是解释性文字，不是读音。纯显示/导出读数使用
+`reading【surface】`（例如 `すき【好き】`，反向 `surface【reading】` 也接受）。
 格式化调用**不预注入 RUBY**：模型输入就是结果模型文本与 YOMI；本地
 `localReadingsToRuby` 在 provisional/final/salvage 结果构建时始终执行，预览首帧
-即 RUBY；provider/校验失败、模型保留 YOMI/括号或 section 被拒绝时，同一本地转换
+即 RUBY；provider/校验失败、模型保留 YOMI/`reading【surface】` 或 section 被拒绝时，同一本地转换
 兜底，模型格式化只追加 BOLD/UNDERLINE。代码端必须剥离显示标签，并按
 YOMI 规则（允许整块删除；保留块内容/位置不变）与原文逐字符比较；不完全一致就
 丢弃该块格式化结果，保留本地 RUBY 基线。标签必须成对且正确嵌套：RUBY 可在
 BOLD/UNDERLINE 内，BOLD/UNDERLINE 可以相互包裹，但不得进入 RUBY base 或嵌套
 自身；RUBY 读音继承 BOLD、永不加下划线，并以 base 的 alphabetic baseline 对齐。
 RUBY 是语言无关的发音标注，不限定书写系统，禁止标签/换行；RUBY 读音等于 base
-时取消该 RUBY。括号读音转换是标签感知的：包住已有 `surface（reading）` 注记时
-显示只保留一份读音，`[BOLD]surface[/BOLD]（reading）` 会把读音移入 BOLD 内成为
-RUBY（读音继承粗体）；Markdown 导出仍输出 `base（reading）`。
+时取消该 RUBY。读数转换是标签感知的：包住已有 `reading【surface】` 注记时
+显示只保留一份读音，`[BOLD]reading[/BOLD]【surface】` 会把读数移入 BOLD 内成为
+RUBY（读音继承粗体）；普通括号不转换；Markdown 导出输出 `reading【surface】`。
 Prompt 不使用“uncertain 就返回原文”的模糊兜底，也不要求“必须产生变化”。
 该任务没有修改原文的权限，因此不能用来修错、翻译或补内容。
 

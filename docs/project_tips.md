@@ -4,8 +4,8 @@
 > 其它文档只引用 `T-###`，不再复制误区正文；**今后的新误区只在本文件追加**。
 >
 > - last_migrated: 2026-11-01（从原交接文档 §5 迁移，共 129 条）
-> - last_updated: 2026-11-03（新增 T-135–T-136）
-> - 编号说明：条目使用连续的 `T-001`–`T-136`；原文档 §5.14 的 #122–#130
+> - last_updated: 2026-11-04（新增 T-137）
+> - 编号说明：条目使用连续的 `T-001`–`T-137`；原文档 §5.14 的 #122–#130
 >   顺延为 `T-121`–`T-129`。编号一经发布不再复用。
 >
 > **何时查看**：遇到报错、异常行为、构建失败或准备重复试错时；接手 OCR、
@@ -44,7 +44,7 @@
 | §5.12 Phase 4.5 OCR 收敛 | §11 | T-082–T-112 |
 | §5.13 Agent v2 设计期 | §12 | T-113–T-120 |
 | §5.14 Phase 5 语料/引导 | §13 | T-121–T-129 |
-| 新增（Agent 请求/覆盖/滚动/解释概率/推理空正文/富文本 diff/流结束后延迟） | §14 | T-130–T-136 |
+| 新增（Agent 请求/覆盖/滚动/解释概率/推理空正文/富文本 diff/流结束后延迟/批量独立降级） | §14 | T-130–T-137 |
 
 ## 1. 架构与 OCR（T-001–T-005）
 
@@ -1172,7 +1172,7 @@ block JSON），UI 保存用 fake `HistoryStore`。若将来必须测数据库�
 --split-per-abi --config-only` 重新生成 release 注册文件，再跑正式 release
 build；`flutter clean` 不一定能解决。不要改注册文件本身。
 
-## 14. Agent 请求、覆盖审查、结果滚动与解释概率（T-130–T-136）
+## 14. Agent 请求、覆盖审查、结果滚动与解释概率（T-130–T-137）
 
 ### T-130 模型偶尔直接返回 HTTP 400（请求格式/参数不合法）
 
@@ -1258,8 +1258,9 @@ reasoning-effort/thinking-off 参数；要真正缩短思考时间，应把复�
 译文被模型强调标签误标注；citation snippet 仍是词典原文。后处理只允许在原文之间插入 `[RUBY=reading]base[/RUBY]`、
 `[BOLD]...[/BOLD]`、`[UNDERLINE]...[/UNDERLINE]`；注音由 AI 根据文本自身判断，
 不读取 UniDic 读音表。结果生成模型会把 `[MEANING]` 和词条解释开头的读音标注成
-`word[YOMI]reading[/YOMI]`（读音不带括号；单词=读音时只写单词；禁止
-`word（reading）` 或 `word[YOMI]（reading）[/YOMI]`）；后处理可以把整个 YOMI 块
+`word[YOMI]reading[/YOMI]`（读音不带括号；单词=读音时只写单词）；普通括号
+`（...）` 是解释性文字，不是读音。纯显示/导出读音使用 `reading【surface】`
+（例如 `すき【好き】`，反向 `surface【reading】` 也接受）。后处理可以把整个 YOMI 块
 （标签和读出内容）替换成等价 RUBY，但不得新增、改写、移动或嵌套 YOMI。代码必须先用
 `stripRichTextTags` 剥离显示标签，按 YOMI 规则允许整块删除、要求保留块内容/位置
 不变，再与原始字符串**逐字符严格比较**（不 trim、不做 Unicode 规范化）；只有完全
@@ -1268,19 +1269,20 @@ RUBY 可以位于 BOLD/UNDERLINE 内，BOLD/UNDERLINE 也可以相互包裹；BO
 不得进入 RUBY 的 base，同一标签不得嵌套自身。每个 RUBY 的读音不得等于 base
 （如 `[RUBY=reading]reading[/RUBY]`），这类冗余 RUBY 必须取消。YOMI 内容比较前要
 清洗全角/半角标点；模型输出的 `[RUBY=内容]` 也要先清洗全角/半角标点，清洗后为空
-或等于 base 时移除 RUBY。若后处理把已有的 `surface（reading）` 注记包进 RUBY，
-显示必须折叠成一份读音：base 末尾与 RUBY 读音相同的括号会被隐藏，`[/RUBY]` 后
-（即使隔着 `[/BOLD]`/`[/UNDERLINE]`）的相同括号会被本地转换删除；
-`richTextToPlain` 仍输出 `base（reading）`。模型若输出
-`[BOLD]surface[/BOLD]（reading）`，本地转换必须把读音移入强调 span 为
-`[BOLD][RUBY=reading]surface[/RUBY][/BOLD]`，不能留下非粗体括号；
-`[BOLD]surface（reading）[/BOLD]` 同样转 RUBY。RUBY 位于
+或等于 base 时移除 RUBY。若后处理把已有的 `reading【surface】` 注记包进 RUBY，
+显示必须折叠成一份读音：base 末尾与 RUBY 读音相同的读数会被隐藏，`[/RUBY]` 后
+（即使隔着 `[/BOLD]`/`[/UNDERLINE]`）的相同读数会被本地转换删除；
+`richTextToPlain` 输出 `reading【surface】`。模型若输出
+`[BOLD]reading[/BOLD]【surface】`（或反向 `[BOLD]surface[/BOLD]【reading】`），
+本地转换必须把读音移入强调 span 为
+`[BOLD][RUBY=reading]surface[/RUBY][/BOLD]`，不能留下非粗体读数；
+`[BOLD]reading【surface】[/BOLD]` 同样转 RUBY。普通括号不转换。RUBY 位于
 BOLD 内时读音随 base 加粗；读音永远不加下划线（即使位于 UNDERLINE 内）；RUBY
 base 使用与周围正文相同的行高/metrics，以 alphabetic baseline 对齐，不能把小字当作
 基线而让 base 下沉。UNDERLINE 不要用 `TextStyle.decoration`（字体/字形 metrics
 会让 `；` 与汉字的下划线高度不同），应使用 baseline 相对偏移的自绘线。保留的
-YOMI 和假名括号读音在结果构建时本地转成 RUBY（预览首帧即可见）；Markdown
-导出仍用 `base（reading）`。任何差异、未闭合/错误嵌套标签、空输出或 provider
+YOMI 和 `reading【surface】` 读数在结果构建时本地转成 RUBY（预览首帧即可见）；
+Markdown 导出用 `reading【surface】`。任何差异、未闭合/错误嵌套标签、空输出或 provider
 失败都直接丢弃该块格式化结果，保留本地 RUBY 基线；不弹用户错误、不重试、不把失败输出交给
 前端。Prompt 不得使用“uncertain 就返回原文”的模糊兜底；只允许不确定的具体词保持
 原样。相关实现：`rich_text_post_processor.dart`、`rich_text_tags.dart`；契约
@@ -1289,17 +1291,19 @@ YOMI 和假名括号读音在结果构建时本地转成 RUBY（预览首帧即�
 **2026-11-03 修正**：不再在调用后处理模型前把 YOMI 预转成 RUBY。模型输入保留
 结果模型原始文本和 `word[YOMI]reading[/YOMI]`，prompt 也不再包含“保留已有
 RUBY”“不要原样返回”“把 YOMI 转成 RUBY”三组规则，只保留标签格式、只插标签
-不改字、合法嵌套。`surface（reading）` → `[RUBY=reading]surface[/RUBY]` 是
-“不改字”规则的唯一例外，base 字符仍不得变化；BOLD/UNDERLINE 内的读音必须
+不改字、合法嵌套。`reading【surface】` → `[RUBY=reading]surface[/RUBY]` 是
+“不改字”规则的唯一例外，base 字符仍不得变化；普通括号 `（...）` 不是读数，
+prompt 要求不转换。BOLD/UNDERLINE 内的读数必须
 放在同一强调 span 内。本地 `localReadingsToRuby` 在 provisional/final/salvage 结果
-构建时始终执行，预览首帧即 RUBY；provider/校验失败、模型保留 YOMI/括号或某个
-section 被拒绝时，同一转换兜底，模型格式化只追加 BOLD/UNDERLINE。预注入会让
+构建时始终执行，预览首帧即 RUBY；provider/校验失败、模型保留 YOMI/`reading【surface】`
+或某个 section 被拒绝时，同一转换兜底，模型格式化只追加 BOLD/UNDERLINE。预注入会让
 轻量模型把格式化任务误解为改写任务，增加原样返回/非法输出。改动前的回归样本
 读音/依据覆盖 9/9（100%），见 `docs/agent_output/` 与 `T-135` 相关记录。本地转换
-同时识别 `word（reading）`（假名读音）并转成等价 RUBY；比较时把
-`word（reading）` 与 `[RUBY=reading]word[/RUBY]` 归一化为同一 base，非假名括号
-（解释性文字）不转换，base 字符仍须完全一致。转换是标签感知的：BOLD/UNDERLINE
-在读音前关闭时把读音移入强调 span，RUBY 后（含隔着强调闭合标签）的重复括号删除。
+识别 `reading【surface】` 和反向 `surface【reading】`（kana/Latin 侧视为读音）
+并转成等价 RUBY；比较时把 `reading【surface】` 与
+`[RUBY=reading]surface[/RUBY]` 归一化为同一 base，普通括号（解释性文字）不转换，
+base 字符仍须完全一致。转换是标签感知的：BOLD/UNDERLINE 在读数前关闭时把读数
+移入强调 span，RUBY 后（含隔着强调闭合标签）的重复读数删除。
 
 ### T-136 SSE 已收到 finish=stop，UI 仍等数秒才显示结果
 
@@ -1318,6 +1322,33 @@ controller、ui_result_frame）。不要在这条路径上同步等待 SQLite/�
 记录耗时/数量，禁止 prompt、citation、路径或 Key。相关实现：
 `agent_orchestrator.dart`、`openai_compatible_provider.dart`、
 `anthropic_provider.dart`、`provider_http.dart`、`agent_run_controller.dart`。
+
+### T-137 富文本批量请求中单个 section 损坏导致整批回退
+
+**误区**：为了省调用，把“原文 + 逐句理解”合并成一个带 section marker 的请求后，
+只要某个 marker 丢失/写错或某个 section 的 diff 失败，就 `return` 整批 local
+fallback。用户会看到其他本来可以正常格式化的 section 也退回纯文本；省了成本，
+却造成无故的显示质量下降。
+
+**正确做法**：批量协议必须按 section 独立解析、独立校验、独立降级。
+
+- 实现使用 `<<<RIKAI_SECTION id>>>` / `<<<RIKAI_END id>>>` 作为 section marker
+  （概念上的 `[SECTION]`）；prompt 要求模型原样保留 marker。
+- 按 id 逐个查找 open/close marker。某个 section 的 marker 缺失或损坏时，只把
+  该 section 标为失败；继续从当前 cursor 搜索后续 section，不得 `return null`
+  导致整批回退。
+- 每个 section 单独执行 YOMI/标签完整性/`reading【surface】` 归一化/逐字符 diff。
+  某个 section 的 diff 失败时只 `_localFallback` 该 section，其他 section 仍可
+  采用模型输出。
+- 只有 provider 错误、空响应、批量响应完全缺失 marker、总字符超过
+  `maxRichTextChars` 等全局失败才允许整批回退；此时每个 section 都应保留本地
+  RUBY 基线。
+- 词注/词典事实解释不进入批量请求；仍由本地 `word[YOMI]reading[/YOMI]` /
+  `reading【surface】` 转 RUBY。
+
+参考实现：`rich_text_post_processor.dart` 的 `processSections`/`_splitSections`；
+`agent_prompts.dart` 的 `buildBatchedRichTextPostProcessRequest`；契约 §5.3；
+规则 `R-AGENT-LIMITS-001`。
 
 > 先按症状定位 `T-###`，再阅读对应条目；本表不重复完整做法。
 
@@ -1378,3 +1409,5 @@ controller、ui_result_frame）。不要在这条路径上同步等待 SQLite/�
 | 推理模型只有 reasoning_content、textChars=0，耗时翻倍 | OpenAI-compatible 默认不发送 max_tokens；provider 可选 `maxOutputTokens`；reasoning-only 直接报 `PROVIDER_EMPTY_OUTPUT`，不重试；建议改用非推理模型（`T-134`） |
 | 富文本后处理后结果被改字/标点 | 剥离 RUBY/BOLD/UNDERLINE 标签后与原文逐字符严格比较；不一致就丢弃并渲染纯文本（`T-135`） |
 | SSE 已 finish=stop，UI 仍等数秒 | provider 在 finish_reason/[DONE]/message_stop 立即停读；首个解析/校验后先渲染 provisional 结果（“结果已出，正在复核…”）；检查 repair/rich-text 后置请求；看 `[AgentTiming]`（`T-136`） |
+| 富文本批量请求中一个 section 损坏，其他 section 也退回纯文本 | 按 section 独立解析/校验；marker 缺失或 diff 失败只降级该 section；只有 provider/空响应/超长才整批回退（`T-137`） |
+| 长结果被静默截断，UI/导出没有提示 | 解析器设置 `AgentAnalysis.truncated`；UI `result.warnings` 与 Markdown 导出显示截断警告；禁止静默丢弃（`R-AGENT-LIMITS-001`） |

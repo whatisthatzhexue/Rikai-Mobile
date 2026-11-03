@@ -20,7 +20,9 @@ import 'agent_run_services.dart';
 class AgentOcrVariantsState {
   const AgentOcrVariantsState({
     this.extraVariants = const <String, List<AgentOcrVariant>>{},
+    this.baselineVariants = const <String, AgentOcrVariant>{},
     this.qualities = const <String, Map<String, OcrQuality>>{},
+    this.previews = const <String, Map<String, OcrVariantLookupPreview>>{},
     this.repairs = const <String, List<OcrRepairSuggestion>>{},
     this.repairBaselineIds = const <String, String>{},
     this.generatedImages = const <String>{},
@@ -33,8 +35,17 @@ class AgentOcrVariantsState {
   /// used by the run lives in the result input, not here.
   final Map<String, List<AgentOcrVariant>> extraVariants;
 
+  /// Baseline variant generated locally when a failed run has no displayable
+  /// result (for example OCR succeeded but the provider failed before a result
+  /// was assembled). The result input remains the source of truth when present.
+  final Map<String, AgentOcrVariant> baselineVariants;
+
   /// Quality per image id and variant id. It includes the baseline variant.
   final Map<String, Map<String, OcrQuality>> qualities;
+
+  /// Bounded local dictionary lookups per image and variant. These are display
+  /// previews only, never formal citations or provider input.
+  final Map<String, Map<String, OcrVariantLookupPreview>> previews;
 
   /// Dictionary repair suggestions for the baseline text of each image.
   final Map<String, List<OcrRepairSuggestion>> repairs;
@@ -66,7 +77,9 @@ class AgentOcrVariantsState {
 
   AgentOcrVariantsState copyWith({
     Map<String, List<AgentOcrVariant>>? extraVariants,
+    Map<String, AgentOcrVariant>? baselineVariants,
     Map<String, Map<String, OcrQuality>>? qualities,
+    Map<String, Map<String, OcrVariantLookupPreview>>? previews,
     Map<String, List<OcrRepairSuggestion>>? repairs,
     Map<String, String>? repairBaselineIds,
     Set<String>? generatedImages,
@@ -76,7 +89,9 @@ class AgentOcrVariantsState {
   }) {
     return AgentOcrVariantsState(
       extraVariants: extraVariants ?? this.extraVariants,
+      baselineVariants: baselineVariants ?? this.baselineVariants,
       qualities: qualities ?? this.qualities,
+      previews: previews ?? this.previews,
       repairs: repairs ?? this.repairs,
       repairBaselineIds: repairBaselineIds ?? this.repairBaselineIds,
       generatedImages: generatedImages ?? this.generatedImages,
@@ -182,13 +197,23 @@ class AgentOcrVariantsController extends Notifier<AgentOcrVariantsState> {
     if (!current()) return;
 
     final imageQuality = <String, OcrQuality>{...?state.qualities[image.id]};
-    imageQuality[baseline.id] = await _assess(
+    final imagePreviews = <String, OcrVariantLookupPreview>{
+      ...?state.previews[image.id],
+    };
+    final baselineAssessment = await _assess(
       baseline,
       services,
       dictionaries,
       () => !current(),
     );
     if (!current()) return;
+    imageQuality[baseline.id] = baselineAssessment.quality;
+    final baselinePreview = baselineAssessment.preview;
+    if (baselinePreview != null) {
+      imagePreviews[baseline.id] = baselinePreview;
+    } else {
+      imagePreviews.remove(baseline.id);
+    }
 
     // The baseline is never its own "alternative". Source variants from a
     // previous re-analysis and variants generated but not yet used are both
@@ -212,13 +237,20 @@ class AgentOcrVariantsController extends Notifier<AgentOcrVariantsState> {
     }
     for (final variant in imageExtras) {
       if (imageQuality.containsKey(variant.id)) continue;
-      imageQuality[variant.id] = await _assess(
+      final assessment = await _assess(
         variant,
         services,
         dictionaries,
         () => !current(),
       );
       if (!current()) return;
+      imageQuality[variant.id] = assessment.quality;
+      final preview = assessment.preview;
+      if (preview != null) {
+        imagePreviews[variant.id] = preview;
+      } else {
+        imagePreviews.remove(variant.id);
+      }
     }
 
     // Generate a model x orientation matrix instead of asking the same model
@@ -262,13 +294,20 @@ class AgentOcrVariantsController extends Notifier<AgentOcrVariantsState> {
         if (imageExtras.length >= _maxAlternatives) continue;
         imageExtras.add(variant);
         known.add(variant);
-        imageQuality[variant.id] = await _assess(
+        final assessment = await _assess(
           variant,
           services,
           dictionaries,
           () => !current(),
         );
         if (!current()) return;
+        imageQuality[variant.id] = assessment.quality;
+        final preview = assessment.preview;
+        if (preview != null) {
+          imagePreviews[variant.id] = preview;
+        } else {
+          imagePreviews.remove(variant.id);
+        }
       } on AgentCapabilityException catch (error) {
         if (error.code == AgentToolErrorCode.toolCancelled) return;
         // One unavailable engine/orientation (for example MangaOCR missing)
@@ -297,8 +336,10 @@ class AgentOcrVariantsController extends Notifier<AgentOcrVariantsState> {
     _publishImage(
       imageId: image.id,
       epoch: epoch,
+      baseline: baseline,
       alternatives: imageExtras,
       quality: imageQuality,
+      previews: imagePreviews,
       repairs: repairs,
       baselineId: baseline.id,
     );
@@ -379,8 +420,10 @@ class AgentOcrVariantsController extends Notifier<AgentOcrVariantsState> {
   void _publishImage({
     required String imageId,
     required int epoch,
+    required AgentOcrVariant baseline,
     required List<AgentOcrVariant> alternatives,
     required Map<String, OcrQuality> quality,
+    required Map<String, OcrVariantLookupPreview> previews,
     required List<OcrRepairSuggestion> repairs,
     required String baselineId,
   }) {
@@ -390,9 +433,17 @@ class AgentOcrVariantsController extends Notifier<AgentOcrVariantsState> {
         ...state.extraVariants,
         imageId: alternatives,
       },
+      baselineVariants: <String, AgentOcrVariant>{
+        ...state.baselineVariants,
+        imageId: baseline,
+      },
       qualities: <String, Map<String, OcrQuality>>{
         ...state.qualities,
         imageId: quality,
+      },
+      previews: <String, Map<String, OcrVariantLookupPreview>>{
+        ...state.previews,
+        imageId: previews,
       },
       repairs: <String, List<OcrRepairSuggestion>>{
         ...state.repairs,
@@ -475,16 +526,16 @@ class AgentOcrVariantsController extends Notifier<AgentOcrVariantsState> {
     );
   }
 
-  Future<OcrQuality> _assess(
+  Future<({OcrQuality quality, OcrVariantLookupPreview? preview})> _assess(
     AgentOcrVariant variant,
     AgentRunServices services,
     List<DictionaryInfo> dictionaries,
     bool Function() cancelled,
   ) async {
-    ({double rate, int words})? hits;
+    OcrDictionaryProbe? probe;
     if (dictionaries.isNotEmpty && !cancelled()) {
       try {
-        hits = await OcrConsensus.measureDictionaryHits(
+        probe = await OcrConsensus.probeDictionary(
           text: variant.text,
           tokenizePort: services.tokenizePort,
           lookupPort: services.lookupPort,
@@ -495,10 +546,13 @@ class AgentOcrVariantsController extends Notifier<AgentOcrVariantsState> {
         // Quality is advisory; keep the text-only assessment.
       }
     }
-    return OcrConsensus.assess(
-      variant: variant,
-      dictionaryHitRate: hits?.rate,
-      contentWords: hits?.words ?? 0,
+    return (
+      quality: OcrConsensus.assess(
+        variant: variant,
+        dictionaryHitRate: probe?.rate,
+        contentWords: probe?.words ?? 0,
+      ),
+      preview: probe?.preview,
     );
   }
 

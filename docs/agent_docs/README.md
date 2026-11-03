@@ -53,9 +53,12 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
   不一致就保留结果构建时的本地 RUBY 基线。标签必须正确
   嵌套：RUBY 可在 BOLD/UNDERLINE 内，BOLD/UNDERLINE 可相互包裹，但不得进入
   RUBY base 或嵌套自身。YOMI 内容比较忽略全/半角标点，RUBY 读音先清洗标点；
-  RUBY 读音等于 base 时必须移除该 RUBY。括号读音转换是标签感知的：包住已有
-  `surface（reading）` 时只保留一份读音，BOLD/UNDERLINE 在读音前关闭时把读音
-  移入强调 span；RUBY 以 base 的基线对齐，读音继承 BOLD 但永不加下划线。注音由 AI
+  RUBY 读音等于 base 时必须移除该 RUBY。读数转换是标签感知的：包住已有
+  `reading【surface】` 时只保留一份读音，BOLD/UNDERLINE 在读数前关闭时把读数
+  移入强调 span；普通括号 `（...）` 是解释性文字，不转换。可能的理解用
+  `[OPTION]` 的结构化 label/confidence 显示“情况A”绿色胶囊 + “可能性N%”
+  文本；所有情况引用同一组依据时 chip 只在最后一个情况下方显示一次，不同则
+  逐情况保留。RUBY 以 base 的基线对齐，读音继承 BOLD 但永不加下划线。注音由 AI
   判断，不读取 UniDic 读音表。（R-AGENT-23、T-135）
 - **P6.7 部分实现**：历史一条=一次 run、只读、不存图片/路径；声调只用 UniDic
   字段 24–26，只在词注/词典事实行；这两项已实现并有自动化测试。annotation DSL

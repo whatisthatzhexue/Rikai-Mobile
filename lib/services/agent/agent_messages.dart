@@ -12,6 +12,9 @@ String agentRepairingMessage(AgentUiLanguage language) =>
 String agentLanguageWarning(AgentUiLanguage language) =>
     AgentUiStrings.of(language).languageWarning;
 
+String agentAnalysisTruncatedWarning(AgentUiLanguage language) =>
+    AgentUiStrings.of(language).analysisTruncated;
+
 String agentCoverageUnavailable(AgentUiLanguage language) =>
     AgentUiStrings.of(language).coverageUnavailable;
 

@@ -44,6 +44,15 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     return AgentRunSnapshot.idle;
   }
 
+  /// Local input images from the most recent request. Used by the failed-run
+  /// multi-OCR entry; paths are never sent to the provider or persisted here.
+  List<AgentImageInput> get lastImages =>
+      _lastInputs?.images ?? const <AgentImageInput>[];
+
+  /// Dictionaries selected for the most recent request.
+  List<DictionaryInfo> get lastDictionaries =>
+      _lastInputs?.dictionaries ?? const <DictionaryInfo>[];
+
   Future<void> start({
     required String userText,
     required List<AgentImageInput> images,

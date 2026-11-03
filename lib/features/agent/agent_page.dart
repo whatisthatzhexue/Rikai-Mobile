@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -238,77 +239,102 @@ class _AgentPageState extends ConsumerState<AgentPage> {
     unawaited(_runController.regenerate());
   }
 
-  Future<void> _generateOcrVariants(
-    AgentRunResult result,
-    String imageId,
-  ) async {
-    final run = ref.read(agentRunControllerProvider);
-    if (run.isRunning || run.sentImagePaths.isEmpty) return;
-    AgentSourceInput? target;
-    var imageIndex = -1;
-    var imageCount = 0;
+  /// Local input images for the current result, or for the failed run when no
+  /// result exists. Order matches `sentImagePaths` so thumbnails stay aligned.
+  List<AgentImageInput> _baseImages(
+    AgentRunResult? result,
+    AgentRunSnapshot run,
+  ) {
+    final lastImages = _runController.lastImages;
+    if (result == null) return lastImages;
+    final images = <AgentImageInput>[];
+    var index = 0;
     for (final source in result.input.sources) {
       if (!source.isImage) continue;
-      imageCount++;
-      final id = source.imageId ?? source.id;
-      if (id == imageId) {
-        target = source;
-        imageIndex = imageCount - 1;
+      final lastImage = index < lastImages.length ? lastImages[index] : null;
+      final localPath = index < run.sentImagePaths.length
+          ? run.sentImagePaths[index]
+          : lastImage?.localPath ?? '';
+      images.add(
+        AgentImageInput(
+          id: source.imageId ?? lastImage?.id ?? 'img-${index + 1}',
+          localPath: localPath,
+          mode: source.selectedVariant?.mode ?? lastImage?.mode ?? OcrMode.auto,
+          variants: source.variants,
+          selectedVariantId:
+              source.selectedVariantId ?? lastImage?.selectedVariantId,
+        ),
+      );
+      index++;
+    }
+    return images;
+  }
+
+  Future<void> _generateOcrVariants(String imageId) async {
+    final run = ref.read(agentRunControllerProvider);
+    if (run.isRunning) return;
+    final result = run.result ?? run.provisionalResult ?? run.retainedResult;
+    final images = _baseImages(result, run);
+    AgentImageInput? target;
+    for (final image in images) {
+      if (image.id == imageId) {
+        target = image;
         break;
       }
     }
-    if (target == null) return;
-    final localPath = imageIndex < run.sentImagePaths.length
-        ? run.sentImagePaths[imageIndex]
-        : '';
-    final images = <AgentImageInput>[
-      AgentImageInput(
-        id: imageId,
-        localPath: localPath,
-        mode: target.selectedVariant?.mode ?? OcrMode.auto,
-        selectedVariantId: target.selectedVariantId,
-      ),
-    ];
-    final baselineVariants = <String, List<AgentOcrVariant>>{
-      imageId: target.variants,
-    };
-    final enabled = ref.read(enabledDictionariesProvider);
-    final preferences = ref.read(agentDictionaryPreferencesProvider);
-    final runDictionaryIds = result.input.dictionaries
-        .map((dictionary) => dictionary.id)
-        .toSet();
-    final dictionaries = _selectedDictionaries(enabled, preferences)
-        .where((dictionary) => runDictionaryIds.contains(dictionary.id))
-        .toList(growable: false);
+    if (target == null || target.localPath.isEmpty) return;
+    try {
+      if (!File(target.localPath).existsSync()) return;
+    } catch (_) {
+      return;
+    }
+    final baselineVariants = target.variants.isEmpty
+        ? const <String, List<AgentOcrVariant>>{}
+        : <String, List<AgentOcrVariant>>{imageId: target.variants};
+    final List<DictionaryInfo> dictionaries;
+    if (result != null) {
+      final enabled = ref.read(enabledDictionariesProvider);
+      final preferences = ref.read(agentDictionaryPreferencesProvider);
+      final runDictionaryIds = result.input.dictionaries
+          .map((dictionary) => dictionary.id)
+          .toSet();
+      dictionaries = _selectedDictionaries(enabled, preferences)
+          .where((dictionary) => runDictionaryIds.contains(dictionary.id))
+          .toList(growable: false);
+    } else {
+      dictionaries = _runController.lastDictionaries;
+    }
     await ref
         .read(agentOcrVariantsProvider.notifier)
         .generate(
-          images: images,
+          images: <AgentImageInput>[target],
           baselineVariants: baselineVariants,
           dictionaries: dictionaries,
         );
   }
 
-  void _reanalyzeOcrVariant(
-    AgentRunResult result,
-    String imageId,
-    AgentOcrVariant selected,
-  ) {
+  void _reanalyzeOcrVariant(String imageId, AgentOcrVariant selected) {
     final run = ref.read(agentRunControllerProvider);
     if (run.isRunning) return;
-    final extras = ref.read(agentOcrVariantsProvider).extraVariants;
-    final images = <AgentImageInput>[];
-    var imageIndex = 0;
-    for (final source in result.input.sources) {
-      if (!source.isImage) continue;
-      final id = source.imageId ?? 'img-${imageIndex + 1}';
+    final result = run.result ?? run.provisionalResult ?? run.retainedResult;
+    final images = _baseImages(result, run);
+    if (images.isEmpty) return;
+    final variantsState = ref.read(agentOcrVariantsProvider);
+    final extras = variantsState.extraVariants;
+    final baselines = variantsState.baselineVariants;
+    final next = <AgentImageInput>[];
+    for (final image in images) {
       final all = <String, AgentOcrVariant>{
-        for (final variant in source.variants) variant.id: variant,
-        for (final variant in extras[id] ?? const <AgentOcrVariant>[])
+        for (final variant in image.variants) variant.id: variant,
+        for (final variant in extras[image.id] ?? const <AgentOcrVariant>[])
           variant.id: variant,
+        if (baselines[image.id] != null)
+          baselines[image.id]!.id: baselines[image.id]!,
       };
-      final selectedId = id == imageId ? selected.id : source.selectedVariantId;
-      if (id == imageId) all[selected.id] = selected;
+      final selectedId = image.id == imageId
+          ? selected.id
+          : image.selectedVariantId ?? baselines[image.id]?.id;
+      if (image.id == imageId) all[selected.id] = selected;
       // Keep the selected variant plus the highest-priority alternatives and
       // stay within the four-variant provider contract.
       final ordered = <AgentOcrVariant>[
@@ -316,20 +342,17 @@ class _AgentPageState extends ConsumerState<AgentPage> {
         for (final variant in all.values)
           if (variant.id != selectedId) variant,
       ].take(AgentOcrVariant.maxPerSource).toList(growable: false);
-      final localPath = imageIndex < run.sentImagePaths.length
-          ? run.sentImagePaths[imageIndex]
-          : '';
-      images.add(
+      next.add(
         AgentImageInput(
-          id: id,
-          localPath: localPath,
+          id: image.id,
+          localPath: image.localPath,
+          mode: image.mode,
           variants: ordered,
           selectedVariantId: selectedId,
         ),
       );
-      imageIndex++;
     }
-    unawaited(_runController.reanalyzeWithImages(images));
+    unawaited(_runController.reanalyzeWithImages(next));
   }
 
   void _cancel() {

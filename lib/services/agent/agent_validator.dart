@@ -42,6 +42,20 @@ class AgentValidator {
     String? expectedSourceId,
   }) {
     final errors = <String>[];
+    final noAnalysisReason = analysis.noAnalysisReason.trim();
+    if (noAnalysisReason.isNotEmpty) {
+      if (analysis.translation.isNotEmpty ||
+          analysis.segments.isNotEmpty ||
+          analysis.interpretations.isNotEmpty ||
+          analysis.modelSupplements.isNotEmpty) {
+        errors.add('NO_ANALYSIS 不能与其他分析结果共存');
+      }
+      return AgentValidationResult(
+        valid: errors.isEmpty,
+        errors: List<String>.unmodifiable(errors),
+        citationsUsed: const <String>[],
+      );
+    }
     final citationMap = <String, AgentCitation>{
       for (final citation in evidence.citations) citation.id: citation,
     };
@@ -158,9 +172,7 @@ class AgentValidator {
 
       switch (segment.epistemic) {
         case AgentEpistemic.dictionaryFact:
-          if (mode == AgentMode.strict &&
-              claimCitations.isEmpty &&
-              errors.isEmpty) {
+          if (mode == AgentMode.strict && claimCitations.isEmpty) {
             errors.add('段落 ${segment.id} 的词典事实没有 citation');
           }
         case AgentEpistemic.structuralAnalysis:

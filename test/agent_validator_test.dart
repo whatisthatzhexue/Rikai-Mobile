@@ -107,6 +107,11 @@ void main() {
     );
     expect(missing.valid, isFalse);
     expect(missing.errors.any((error) => error.contains('缺少词典依据')), isTrue);
+    // The segment-level fact error must not be suppressed by an earlier error.
+    expect(
+      missing.errors.any((error) => error.contains('词典事实没有 citation')),
+      isTrue,
+    );
 
     final rewritten = validator.validate(
       analysis: _analysis(literal: '改写'),
@@ -187,5 +192,61 @@ void main() {
       mode: AgentMode.strict,
     );
     expect(resolved.valid, isTrue);
+  });
+
+  test('a standalone NO_ANALYSIS result is valid', () {
+    final result = validator.validate(
+      analysis: const AgentAnalysis(
+        sourceId: 'src-1',
+        noAnalysisReason: 'OCR 文本无法辨认',
+      ),
+      evidence: _evidence,
+      quotes: _quotes,
+      mode: AgentMode.strict,
+    );
+    expect(result.valid, isTrue);
+    expect(result.citationsUsed, isEmpty);
+  });
+
+  test('NO_ANALYSIS cannot be combined with translation or segments', () {
+    final result = validator.validate(
+      analysis: AgentAnalysis(
+        sourceId: 'src-1',
+        noAnalysisReason: '无法辨认',
+        translation: _analysis().translation,
+      ),
+      evidence: _evidence,
+      quotes: _quotes,
+      mode: AgentMode.strict,
+    );
+    expect(result.valid, isFalse);
+    expect(result.errors.any((error) => error.contains('NO_ANALYSIS')), isTrue);
+  });
+
+  test('strict mode requires citations on OPTION blocks', () {
+    final analysis = AgentAnalysis(
+      sourceId: 'src-1',
+      translation: _analysis().translation,
+      segments: _analysis().segments,
+      interpretations: const <AgentInterpretation>[
+        AgentInterpretation(
+          id: 'i1',
+          label: 'A',
+          meaning: '另一种理解',
+          confidence: 0.7,
+        ),
+      ],
+    );
+    final result = validator.validate(
+      analysis: analysis,
+      evidence: _evidence,
+      quotes: _quotes,
+      mode: AgentMode.strict,
+    );
+    expect(result.valid, isFalse);
+    expect(
+      result.errors.any((error) => error.contains('解释 A 在严格模式下缺少词典依据')),
+      isTrue,
+    );
   });
 }

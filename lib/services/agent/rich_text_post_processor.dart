@@ -1,3 +1,4 @@
+import '../../core/models/agent/agent_limits.dart';
 import '../../core/models/agent/agent_tool.dart';
 import '../../core/utils/rich_text_tags.dart';
 import 'agent_prompts.dart';
@@ -20,7 +21,7 @@ class RichTextPostProcessResult {
 /// model, not to this pass. They are sent to the formatter unchanged. When the
 /// formatter fails or leaves a YOMI block in place, the local converter turns
 /// that block into an equivalent RUBY pair; if no reading is available, the
-/// block is finally stripped to a plain parenthetical.
+/// block is finally converted to the bracket display form (`reading【surface】`).
 class RichTextPostProcessor {
   const RichTextPostProcessor({required LlmPort llm, required String model})
     : _llm = llm,
@@ -59,7 +60,7 @@ class RichTextPostProcessor {
       return RichTextPostProcessResult(rejectionReason: reason);
     }
     final sourcePlain = stripRichTextTags(
-      parentheticalReadingsToRuby(stripYomiBlocks(source)),
+      bracketReadingsToRuby(stripYomiBlocks(source)),
     );
     if (!isWellFormedRichText(local) ||
         stripRichTextTags(local) != sourcePlain) {
@@ -195,7 +196,123 @@ class RichTextPostProcessor {
       return _localFallback(text, 'provider_error');
     }
 
-    final candidate = buffer.toString();
+    return _acceptCandidate(text, buffer.toString());
+  }
+
+  /// Formats the original section and every sentence-level interpretation in
+  /// one request. Dictionary notes are intentionally excluded: their readings
+  /// are rendered locally from `word[YOMI]reading[/YOMI]` / `reading【surface】`,
+  /// so they never need a provider call.
+  ///
+  /// The response is split by the section markers and each section still goes
+  /// through the same character diff as [process]. One bad section falls back
+  /// locally without discarding the other sections.
+  Future<List<RichTextPostProcessResult>> processSections(
+    List<String> sectionIds,
+    List<String> sectionTexts, {
+    LlmCancelToken? cancellation,
+    int maxChars = AgentLimits.defaultMaxRichTextChars,
+  }) async {
+    assert(sectionIds.length == sectionTexts.length);
+    if (sectionTexts.isEmpty) return const <RichTextPostProcessResult>[];
+    final totalChars = sectionTexts.fold<int>(
+      0,
+      (sum, text) => sum + text.length,
+    );
+    if (totalChars > maxChars) {
+      return _fallbackAll(sectionTexts, 'batch_too_long');
+    }
+    final maxTokens = (totalChars + 2000).clamp(
+      4000,
+      AgentLimits.analysisMaxTokens,
+    );
+    final request = buildBatchedRichTextPostProcessRequest(
+      model: _model,
+      sectionIds: sectionIds,
+      sectionTexts: sectionTexts,
+      maxTokens: maxTokens,
+    );
+    final buffer = StringBuffer();
+    try {
+      await for (final event in _llm.stream(
+        request,
+        cancellation: cancellation,
+      )) {
+        if (cancellation?.isCancelled == true) {
+          throw const AgentCapabilityException(
+            AgentToolErrorCode.toolCancelled,
+            '已取消',
+          );
+        }
+        switch (event.type) {
+          case LlmEventType.textDelta:
+            buffer.write(event.text);
+          case LlmEventType.error:
+            return _fallbackAll(sectionTexts, 'provider_error');
+          case LlmEventType.reasoningDelta:
+          case LlmEventType.done:
+            break;
+        }
+      }
+    } on AgentCapabilityException catch (error) {
+      if (error.code == AgentToolErrorCode.toolCancelled) rethrow;
+      return _fallbackAll(sectionTexts, error.message);
+    } catch (_) {
+      return _fallbackAll(sectionTexts, 'provider_error');
+    }
+
+    final sections = _splitSections(buffer.toString(), sectionIds);
+    return <RichTextPostProcessResult>[
+      for (var index = 0; index < sectionTexts.length; index++)
+        sections[index] == null
+            ? _localFallback(sectionTexts[index], 'batch_marker')
+            : _acceptCandidate(sectionTexts[index], sections[index]!),
+    ];
+  }
+
+  List<RichTextPostProcessResult> _fallbackAll(
+    List<String> texts,
+    String reason,
+  ) {
+    return <RichTextPostProcessResult>[
+      for (final text in texts) _localFallback(text, reason),
+    ];
+  }
+
+  /// Splits a batched response by section id. A missing or damaged marker
+  /// yields null for that section only; later sections are still searched and
+  /// can be accepted. This is required by R-AGENT-LIMITS-001/T-137: one bad
+  /// section must never force a whole-batch local fallback.
+  List<String?> _splitSections(String raw, List<String> ids) {
+    final sections = <String?>[];
+    var cursor = 0;
+    for (final id in ids) {
+      final openMarker = richTextSectionOpen(id);
+      final closeMarker = richTextSectionClose(id);
+      final openIndex = raw.indexOf(openMarker, cursor);
+      if (openIndex < 0) {
+        sections.add(null);
+        continue;
+      }
+      final bodyStart = openIndex + openMarker.length;
+      final closeIndex = raw.indexOf(closeMarker, bodyStart);
+      if (closeIndex < 0) {
+        sections.add(null);
+        // Continue after the open marker so later sections can still be
+        // recovered instead of losing the whole batch.
+        cursor = bodyStart;
+        continue;
+      }
+      // The prompt builder puts one newline after the open marker and one
+      // before the close marker. Section sources are already trimmed, so
+      // trimming the captured body is the stable normalization.
+      sections.add(raw.substring(bodyStart, closeIndex).trim());
+      cursor = closeIndex + closeMarker.length;
+    }
+    return sections;
+  }
+
+  RichTextPostProcessResult _acceptCandidate(String text, String candidate) {
     if (candidate.isEmpty) {
       return _localFallback(text, 'empty_output');
     }
@@ -213,13 +330,14 @@ class RichTextPostProcessor {
     // The analysis model may already have emitted display tags despite the
     // prompt (for example [RUBY=...]). They are formatting, not source text,
     // so both sides must be compared with their display tags removed.
-    // Parenthetical readings are display annotations too: `word（reading）`
-    // and `[RUBY=reading]word[/RUBY]` describe the same base text.
+    // Bracket readings are display annotations too: `reading【surface】` and
+    // `[RUBY=reading]surface[/RUBY]` describe the same base text. Parentheses
+    // are ordinary explanations and are deliberately not normalized.
     final sourcePlain = stripRichTextTags(
-      parentheticalReadingsToRuby(stripYomiBlocks(text)),
+      bracketReadingsToRuby(stripYomiBlocks(text)),
     );
     final candidatePlain = stripRichTextTags(
-      parentheticalReadingsToRuby(stripYomiBlocks(normalized)),
+      bracketReadingsToRuby(stripYomiBlocks(normalized)),
     );
     if (candidatePlain != sourcePlain) {
       return _localFallback(text, 'text_changed');
@@ -227,11 +345,11 @@ class RichTextPostProcessor {
     if (!_preservesSourceRuby(text, normalized)) {
       return _localFallback(text, 'source_ruby_dropped');
     }
-    // If the formatter left YOMI blocks or parenthetical readings in place,
-    // convert them locally. This avoids a plain `word（reading）` result when
-    // the model chose not to add RUBY. The converter is tag-aware, so a
-    // reading outside a just-closed BOLD/UNDERLINE is moved back inside the
-    // emphasis span as RUBY (and a duplicate after RUBY is dropped).
+    // If the formatter left YOMI blocks or bracket readings in place, convert
+    // them locally. This avoids a plain `reading【surface】` result when the
+    // model chose not to add RUBY. The converter is tag-aware, so a reading
+    // outside a just-closed BOLD/UNDERLINE is moved back inside the emphasis
+    // span as RUBY (and a duplicate after RUBY is dropped).
     final local = localReadingsToRuby(normalized);
     if (local != normalized &&
         isWellFormedRichText(local) &&

@@ -176,6 +176,41 @@ AgentRunResult _resultWithPitch() => AgentRunResult(
   },
 );
 
+AgentRunResult _resultWithSegments(List<AgentSegment> segments) {
+  return AgentRunResult(
+    input: _result.input,
+    evidence: _result.evidence,
+    quotes: _result.quotes,
+    analysis: AgentAnalysis(
+      sourceId: 'src-1',
+      translation: _result.analysis.translation,
+      segments: segments,
+    ),
+    validation: _result.validation,
+    sources: _result.sources,
+    dictionaryProfiles: _result.dictionaryProfiles,
+  );
+}
+
+AgentRunResult _noAnalysisResult() {
+  return AgentRunResult(
+    input: _result.input,
+    evidence: _result.evidence,
+    quotes: _result.quotes,
+    analysis: const AgentAnalysis(
+      sourceId: 'src-1',
+      noAnalysisReason: 'OCR 文本无法辨认',
+    ),
+    validation: const AgentValidationResult(
+      valid: true,
+      errors: <String>[],
+      citationsUsed: <String>[],
+    ),
+    sources: _result.sources,
+    dictionaryProfiles: _result.dictionaryProfiles,
+  );
+}
+
 void main() {
   testWidgets('renders quotes, evidence and clickable citations', (
     tester,
@@ -323,6 +358,166 @@ void main() {
     expect(find.textContaining('（せいしき）'), findsNothing);
   });
 
+  testWidgets('renders possible understandings as a green situation badge', (
+    tester,
+  ) async {
+    final result = AgentRunResult(
+      input: _result.input,
+      evidence: _result.evidence,
+      quotes: _result.quotes,
+      analysis: AgentAnalysis(
+        sourceId: 'src-1',
+        segments: _result.analysis.segments,
+        interpretations: const <AgentInterpretation>[
+          AgentInterpretation(
+            id: 'i1',
+            label: 'A',
+            meaning: '正式委托',
+            confidence: 0.7,
+            citationIds: <String>['source-1'],
+          ),
+        ],
+      ),
+      validation: _result.validation,
+      sources: _result.sources,
+      dictionaryProfiles: _result.dictionaryProfiles,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentResultView(
+              result: result,
+              onCitationTap: (_) {},
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('正式委托'), findsOneWidget);
+    expect(find.text('情况A'), findsOneWidget);
+    expect(find.text('可能性70%'), findsOneWidget);
+    expect(find.textContaining('A：'), findsNothing);
+    expect(find.textContaining('（70%）'), findsNothing);
+  });
+
+  testWidgets(
+    'shared interpretation citations render once below the last case',
+    (tester) async {
+      final result = AgentRunResult(
+        input: _result.input,
+        evidence: _result.evidence,
+        quotes: _result.quotes,
+        analysis: const AgentAnalysis(
+          sourceId: 'src-1',
+          interpretations: <AgentInterpretation>[
+            AgentInterpretation(
+              id: 'i1',
+              label: 'A',
+              meaning: '起点',
+              confidence: 0.5,
+              citationIds: <String>['source-1'],
+            ),
+            AgentInterpretation(
+              id: 'i2',
+              label: 'B',
+              meaning: '原因',
+              confidence: 0.5,
+              citationIds: <String>['source-1'],
+            ),
+          ],
+        ),
+        validation: _result.validation,
+        sources: _result.sources,
+        dictionaryProfiles: _result.dictionaryProfiles,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AgentResultView(
+                result: result,
+                onCitationTap: (_) {},
+                strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('情况A'), findsOneWidget);
+      expect(find.text('情况B'), findsOneWidget);
+      expect(find.text('可能性50%'), findsNWidgets(2));
+      // A and B share source-1, so the chip is rendered once for the section.
+      expect(find.text('依据1'), findsOneWidget);
+    },
+  );
+
+  testWidgets('different interpretation citations stay with their case', (
+    tester,
+  ) async {
+    final result = AgentRunResult(
+      input: _result.input,
+      evidence: _result.evidence,
+      quotes: _result.quotes,
+      analysis: const AgentAnalysis(
+        sourceId: 'src-1',
+        interpretations: <AgentInterpretation>[
+          AgentInterpretation(
+            id: 'i1',
+            label: 'A',
+            meaning: '起点',
+            confidence: 0.5,
+            citationIds: <String>['source-1'],
+          ),
+          AgentInterpretation(
+            id: 'i2',
+            label: 'B',
+            meaning: '原因',
+            confidence: 0.5,
+          ),
+        ],
+      ),
+      validation: _result.validation,
+      sources: _result.sources,
+      dictionaryProfiles: _result.dictionaryProfiles,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentResultView(
+              result: result,
+              onCitationTap: (_) {},
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('情况A'), findsOneWidget);
+    expect(find.text('情况B'), findsOneWidget);
+    expect(find.text('依据1'), findsOneWidget);
+    // The A-only evidence stays inside A, above B, rather than becoming a
+    // shared row below both cases.
+    expect(
+      tester.getTopLeft(find.text('依据1')).dy,
+      lessThan(tester.getTopLeft(find.text('情况B')).dy),
+    );
+  });
+
   testWidgets('renders RUBY in the original and segment text', (tester) async {
     final result = AgentRunResult(
       input: _result.input,
@@ -438,5 +633,67 @@ void main() {
     expect(find.text('A · 1 条'), findsOneWidget);
     expect(find.text('未採用語'), findsNothing);
     expect(find.text('依据1'), findsWidgets);
+  });
+
+  testWidgets('renders the same quote once per segment group', (tester) async {
+    final result = _resultWithSegments(<AgentSegment>[
+      const AgentSegment(
+        id: 'seg-1',
+        quoteId: 'q1',
+        interpretation: '词典事实',
+        epistemic: AgentEpistemic.dictionaryFact,
+      ),
+      const AgentSegment(
+        id: 'seg-2',
+        quoteId: 'q1',
+        interpretation: '结构分析',
+        epistemic: AgentEpistemic.structuralAnalysis,
+      ),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentResultView(
+              result: result,
+              onCitationTap: (_) {},
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final texts = tester
+        .widgetList<AgentRichText>(find.byType(AgentRichText))
+        .map((widget) => widget.text)
+        .toList();
+    final quoteWidgets = texts.where((text) => text == '何卒').length;
+    // One original-text box + one group header; the two segment cards must
+    // not repeat the quote.
+    expect(quoteWidgets, 2, reason: 'AgentRichText texts=$texts');
+  });
+
+  testWidgets('renders a standalone NO_ANALYSIS reason', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentResultView(
+              result: _noAnalysisResult(),
+              onCitationTap: (_) {},
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('无法可靠分析'), findsOneWidget);
+    expect(find.textContaining('OCR 文本无法辨认'), findsOneWidget);
   });
 }

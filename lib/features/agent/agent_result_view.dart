@@ -110,6 +110,41 @@ class AgentResultView extends StatelessWidget {
         ),
       );
     }
+    final noAnalysisReason = result.analysis.noAnalysisReason.trim();
+    if (noAnalysisReason.isNotEmpty) {
+      blocks.add(const SizedBox(height: AppSpacing.md));
+      blocks.add(
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceMuted,
+            border: Border.all(color: AppColors.warning),
+            borderRadius: BorderRadius.circular(AgentTokens.evidenceRadius),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                strings.noAnalysisTitle,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: AgentTokens.helper,
+                  color: AppColors.warning,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              AgentRichText(
+                text: stripYomiTags(localReadingsToRuby(noAnalysisReason)),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: AgentTokens.body,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     if (result.profileWarnings.isNotEmpty) {
       blocks.add(const SizedBox(height: AppSpacing.sm));
       for (final warning in result.profileWarnings) {
@@ -198,33 +233,84 @@ class AgentResultView extends StatelessWidget {
     if (result.analysis.segments.isNotEmpty) {
       blocks.add(const SizedBox(height: AppSpacing.md));
       blocks.add(_SectionTitle(strings.segmentUnderstanding));
+      // A quote can carry several epistemically different segments. Render
+      // the quote once per group so the same sentence is not repeated for
+      // every fact/structure/inference block.
+      final segmentGroups = <String, List<(int, AgentSegment)>>{};
       for (final (index, segment) in result.analysis.segments.indexed) {
-        blocks.add(
-          AgentFadeIn(
-            index: index,
-            enabled: index < AgentFadeIn.maxAnimatedItems,
-            child: _SegmentBlock(
-              segment: segment,
-              richInterpretation: index < result.richSegmentTexts.length
-                  ? result.richSegmentTexts[index]
-                  : '',
-              richNotes: index < result.richSegmentNotes.length
-                  ? result.richSegmentNotes[index]
-                  : '',
-              quote: quotes[segment.quoteId],
-              pitchAccents: result.pitchAccents,
-              citations: citations,
-              citationNumbers: citationNumbers,
-              onCitationTap: onCitationTap,
-              strings: strings,
+        segmentGroups
+            .putIfAbsent(segment.quoteId, () => <(int, AgentSegment)>[])
+            .add((index, segment));
+      }
+      for (final entry in segmentGroups.entries) {
+        final quote = quotes[entry.key];
+        if (quote != null) {
+          blocks.add(
+            Container(
+              margin: const EdgeInsets.only(top: AppSpacing.sm),
+              padding: const EdgeInsets.all(AgentTokens.cardPadding),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceMuted,
+                borderRadius: BorderRadius.circular(AgentTokens.evidenceRadius),
+              ),
+              child: AgentRichText(
+                text: stripYomiTags(localReadingsToRuby(quote.text)),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: AgentTokens.helper,
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ),
-          ),
-        );
+          );
+        }
+        for (final (index, segment) in entry.value) {
+          blocks.add(
+            AgentFadeIn(
+              index: index,
+              enabled: index < AgentFadeIn.maxAnimatedItems,
+              child: _SegmentBlock(
+                segment: segment,
+                richInterpretation: index < result.richSegmentTexts.length
+                    ? result.richSegmentTexts[index]
+                    : '',
+                richNotes: index < result.richSegmentNotes.length
+                    ? result.richSegmentNotes[index]
+                    : '',
+                quote: null,
+                pitchAccents: result.pitchAccents,
+                citations: citations,
+                citationNumbers: citationNumbers,
+                onCitationTap: onCitationTap,
+                strings: strings,
+              ),
+            ),
+          );
+        }
       }
     }
     if (result.analysis.interpretations.isNotEmpty) {
       blocks.add(const SizedBox(height: AppSpacing.md));
       blocks.add(_SectionTitle(strings.possibleUnderstandings));
+      final interpretationCitationSets = <List<String>>[
+        for (final interpretation in result.analysis.interpretations)
+          interpretation.citationIds
+              .where(citations.containsKey)
+              .toList(growable: false),
+      ];
+      final firstInterpretationCitations = interpretationCitationSets.first;
+      final sharedInterpretationCitations =
+          firstInterpretationCitations.isNotEmpty &&
+          interpretationCitationSets.every(
+            (ids) =>
+                ids.length == firstInterpretationCitations.length &&
+                ids.toSet().containsAll(firstInterpretationCitations),
+          );
+      final sharedInterpretationIds = sharedInterpretationCitations
+          ? (firstInterpretationCitations.toList()..sort(
+              (a, b) =>
+                  (citationNumbers[a] ?? 0).compareTo(citationNumbers[b] ?? 0),
+            ))
+          : const <String>[];
       for (final interpretation in result.analysis.interpretations) {
         blocks.add(
           _InterpretationBlock(
@@ -233,6 +319,30 @@ class AgentResultView extends StatelessWidget {
             citationNumbers: citationNumbers,
             onCitationTap: onCitationTap,
             strings: strings,
+            showCitations: !sharedInterpretationCitations,
+          ),
+        );
+      }
+      if (sharedInterpretationIds.isNotEmpty) {
+        blocks.add(
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: Wrap(
+              alignment: WrapAlignment.start,
+              crossAxisAlignment: WrapCrossAlignment.start,
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final id in sharedInterpretationIds)
+                  if (citations[id] != null && citationNumbers[id] != null)
+                    _CitationChip(
+                      citation: citations[id]!,
+                      number: citationNumbers[id]!,
+                      onTap: onCitationTap,
+                      strings: strings,
+                    ),
+              ],
+            ),
           ),
         );
       }
@@ -632,12 +742,12 @@ class _WordNoteLine extends StatelessWidget {
       reading: note.reading,
       accent: validAccent,
     )) {
+      final reading = note.reading.trim();
+      final display = reading.isEmpty || reading == note.surface
+          ? note.surface
+          : '$reading【${note.surface}】';
       return AgentRichText(
-        text: localReadingsToRuby(
-          '${note.surface}'
-          '${note.reading.isEmpty ? '' : '（${note.reading}）'}'
-          '：${note.sense}',
-        ),
+        text: localReadingsToRuby('$display：${note.sense}'),
         style: style,
       );
     }
@@ -823,6 +933,7 @@ class _InterpretationBlock extends StatelessWidget {
     required this.citationNumbers,
     required this.onCitationTap,
     required this.strings,
+    this.showCitations = true,
   });
 
   final AgentInterpretation interpretation;
@@ -830,37 +941,54 @@ class _InterpretationBlock extends StatelessWidget {
   final Map<String, int> citationNumbers;
   final ValueChanged<AgentCitation> onCitationTap;
   final AgentUiStrings strings;
+  final bool showCitations;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.xs),
-      child: Wrap(
-        spacing: AppSpacing.xs,
-        runSpacing: AppSpacing.xs,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AgentRichText(
-            text: stripYomiTags(
-              localReadingsToRuby(
-                '${interpretation.label}：${interpretation.meaning}'
-                '（${(interpretation.confidence * 100).round()}%）',
-              ),
-            ),
+            text: stripYomiTags(localReadingsToRuby(interpretation.meaning)),
             style: theme.textTheme.bodyMedium?.copyWith(
               fontSize: AgentTokens.helper,
               color: AppColors.textPrimary,
             ),
           ),
-          for (final id in interpretation.citationIds)
-            if (citations[id] != null)
-              _CitationChip(
-                citation: citations[id]!,
-                number: citationNumbers[id]!,
-                onTap: onCitationTap,
-                strings: strings,
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _BadgeChip(
+                label: strings.situationLabel(interpretation.label),
+                background: AppColors.successSurface,
+                foreground: AppColors.success,
               ),
+              Text(
+                strings.possibility(
+                  (interpretation.confidence.clamp(0, 1) * 100).round(),
+                ),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: AgentTokens.badge,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              if (showCitations)
+                for (final id in interpretation.citationIds)
+                  if (citations[id] != null)
+                    _CitationChip(
+                      citation: citations[id]!,
+                      number: citationNumbers[id]!,
+                      onTap: onCitationTap,
+                      strings: strings,
+                    ),
+            ],
+          ),
         ],
       ),
     );

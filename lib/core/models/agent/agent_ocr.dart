@@ -204,6 +204,35 @@ class OcrRepairSuggestion {
   final List<OcrRepairCandidate> candidates;
 }
 
+/// One local dictionary snippet shown before committing an OCR variant.
+///
+/// This is not a formal Agent citation: it is produced by a bounded local
+/// lookup for comparison only and is never sent to a provider.
+class OcrLookupPreviewEntry {
+  const OcrLookupPreviewEntry({
+    required this.dictionaryId,
+    required this.dictionaryTitle,
+    required this.headword,
+    required this.snippet,
+  });
+
+  final String dictionaryId;
+  final String dictionaryTitle;
+  final String headword;
+  final String snippet;
+}
+
+/// Bounded local lookup signal for one OCR variant.
+class OcrVariantLookupPreview {
+  const OcrVariantLookupPreview({
+    required this.hitCount,
+    this.entries = const <OcrLookupPreviewEntry>[],
+  });
+
+  final int hitCount;
+  final List<OcrLookupPreviewEntry> entries;
+}
+
 /// One user-selected replacement: exactly one candidate per suspicious span.
 class OcrRepairSelection {
   const OcrRepairSelection({required this.suggestion, required this.candidate});

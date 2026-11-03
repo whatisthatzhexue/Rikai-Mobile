@@ -1,6 +1,6 @@
 # Phase 6 status — dictionary assistant core
 
-Date: 2026-11-03
+Date: 2026-11-04
 Base: Phase 5 complete (`docs/phase5-status.md`)
 Design: `docs/phase6-agent-design.md` v2
 Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
@@ -29,6 +29,27 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > source text. `AgentUiStrings` supplies Chinese/English/Japanese Agent-area
 > copy. Wave 3 adds `AgentLanguageValidator` post-validation of human-readable
 > fields plus one language repair with a visible warning when it still differs.
+
+## 2026-11-04 输出上限 / NO_ANALYSIS / 批量降级
+
+- **有损上限原则**：解析器强制执行 SEGMENT 40、每 quote 每 type 1 段、OPTION 8、
+  每段 WORD/GRAMMAR 20；超限设置 `AgentAnalysis.truncated=true`。UI 通过
+  `AgentRunResult.warnings`、Markdown 导出通过 `analysisTruncated` 显示截断警告，
+  不静默丢弃（`R-AGENT-LIMITS-001`）。
+- **NO_ANALYSIS**：`[NO_ANALYSIS reason="..."]` 只允许独立出现，parser/validator
+  接受零翻译零段落；UI 显示“无法可靠分析”+原因+证据；语言后校验包含 reason。
+- **批量富文本**：原文+逐句理解合并为一次 `processSections` 请求；词注/词典事实
+  解释继续本地 RUBY。按 section 独立解析/校验/降级，单个 marker 或 diff 失败只
+  影响该 section（`T-137`）；只有 provider/空响应/`maxRichTextChars` 超限才整批
+  回退。
+- **coverage 触发**：改用 `AgentEvidenceBudget.targetsWithCitations` 的 per-target
+  判断，符合 design §6.3.1。
+- **repair 路由**：格式修复改为 small model + 紧凑 prompt（只发 available ids/
+  previous output/errors）；语言修复保持 complex model + 紧凑 prompt，不再重发
+  完整 evidence/input。
+- **自动化验证**：`flutter analyze` 通过；完整 `flutter test` 通过（含
+  parser/validator/orchestrator/rich-text/result-view/coverage/evidence/models
+  新增用例）。真实 provider、设备与 arm64 验收仍未进行，不能写成已验证。
 
 ## Implemented
 
@@ -368,12 +389,26 @@ P6.6 automated closeout (2026-11-03):
 - No new P6.6 feature is added in this closeout. The remaining P6.6 work is
   device acceptance (real manga pages, forced MangaOCR, the real 463k-entry
   dictionary, 200% font, re-analysis latency) and the gaps listed below.
-- Known functional gaps kept for P6.7: the comparison panel is mounted only
-  when a displayable result exists, so a run that fails before producing one
-  has no multi-OCR entry; per-variant citations are still rebuilt only after
-  the user commits a variant; only the selected variant is written to
-  `AgentSourceVersion`, and all-variant persistence belongs to the P6.7
-  history work.
+- Known functional gaps at closeout: the comparison panel was mounted only
+  when a displayable result existed, per-variant citations were rebuilt only
+  after the user committed a variant, and only the selected variant was written
+  to `AgentSourceVersion`. The first two gaps were closed by the P6.6 carryover
+  implementation below; all-variant persistence was closed by P6.7 history.
+
+P6.6 carryover implementation (2026-11-03):
+
+- Failed-run multi-OCR entry: `AgentMessageList` now mounts the variant panel
+  for an image run with a result **or** an error. It falls back to the
+  controller's last local images when no result exists; the panel can generate
+  a baseline locally and publish it as
+  `AgentOcrVariantsState.baselineVariants`. A missing local path disables
+  generation with “原图不可用，无法重新识别”.
+- Per-variant lookup preview: `OcrConsensus.probeDictionary` performs the same
+  bounded local tokenize/lookup pass used for quality scoring and also collects
+  at most three cleaned snippets per variant (240-char cap). They live only in
+  `AgentOcrVariantsState.previews`; no provider call, formal citation or
+  history write is involved. The panel shows the selected variant's hit count
+  and snippets before “使用此版本重新分析”.
 
 2026-11-02 stability/feedback fixes:
 
@@ -487,13 +522,15 @@ P7.0 rich-text post-processing (2026-11-03, incremental):
 - The analysis prompt asks the result-generation model to write reading
   annotations as `word[YOMI]reading[/YOMI]` (bare kana, no parentheses) inside
   `[MEANING]` and word-entry explanations. If the reading equals the word, only
-  the word is written. `word（reading）` and
-  `word[YOMI]（reading）[/YOMI]` are forbidden. Local word-note sources use the
-  same format. Repair/language-repair prompts preserve YOMI blocks exactly.
-  The formatter prompt requires replacing a source `surface（reading）` with
-  `[RUBY=reading]surface[/RUBY]` (no leftover parentheses) and placing the
-  RUBY inside BOLD/UNDERLINE when the word is emphasized; the local converter
-  is tag-aware as a safety net. `[TRANSLATION]` stays plain.
+  the word is written. Parentheses `（...）` are ordinary explanations, not
+  readings. The plain display/export form is `reading【surface】` (for example
+  `すき【好き】`); the reversed `surface【reading】` is also accepted. Local
+  word-note sources use the same format. Repair/language-repair prompts
+  preserve YOMI blocks exactly. The formatter prompt requires replacing a
+  source `reading【surface】` with `[RUBY=reading]surface[/RUBY]` (no leftover
+  brackets) and placing the RUBY inside BOLD/UNDERLINE when the word is
+  emphasized; the local converter is tag-aware as a safety net.
+  `[TRANSLATION]` stays plain.
 - `rich_text_tags.dart` strips every known tag and checks balanced, correctly
   nested tags and safe pronunciation annotations without assuming a script.
   RUBY may be nested inside BOLD/UNDERLINE (and BOLD/UNDERLINE may wrap each
@@ -502,12 +539,12 @@ P7.0 rich-text post-processing (2026-11-03, incremental):
   retained YOMI blocks are unchanged and in the same base position;
   whole-block deletion is allowed. Model RUBY readings are cleaned of full-/
   half-width punctuation before being stored; an empty or base-equal reading
-  removes the RUBY pair. The parenthetical converter is tag-aware: when the
-  formatter outputs `[BOLD]surface[/BOLD]（reading）`, the reading is moved
+  removes the RUBY pair. The bracket converter is tag-aware: when the
+  formatter outputs `[BOLD]reading[/BOLD]【surface】`, the reading is moved
   inside the emphasis span as `[BOLD][RUBY=reading]surface[/RUBY][/BOLD]` so it
   inherits bold; duplicate readings after `[/RUBY]`, even across
-  `[/BOLD]`/`[/UNDERLINE]`, are dropped. Markdown export
-  (`richTextToPlain`) still emits one `base（reading）`.
+  `[/BOLD]`/`[/UNDERLINE]`, are dropped. Parentheses are not converted.
+  Markdown export (`richTextToPlain`) emits one `reading【surface】`.
   UNDERLINE is painted by a baseline-relative custom line, not
   `TextStyle.decoration`, so kanji and punctuation such as `；` share the same
   underline height; RUBY bases use the surrounding text metrics so they do not
@@ -533,7 +570,7 @@ P7.0 rich-text post-processing (2026-11-03, incremental):
 - 2026-11-03 salvage formatting fix: when analysis validation fails and
   `salvageAnalysis` returns a displayable result, the orchestrator now runs the
   same rich-text pass before returning it. Previously the salvage path returned
-  early, so the UI showed plain notes/parenthetical readings and no
+  early, so the UI showed plain notes/bracket readings and no
   BOLD/UNDERLINE even though the post-processor was configured. Debug logs now
   include `[AgentValidation] errors=...` (also `after_repair=...`),
   `[AgentSalvage] errors=...`, and `[AgentRichText] accepted=/changed=/tags=/
@@ -542,27 +579,32 @@ P7.0 rich-text post-processing (2026-11-03, incremental):
 - 2026-11-03 RUBY-first preview: `_buildResult` pre-fills
   `richOriginalText`/`richSegmentTexts`/`richSegmentNotes` with
   `localReadingsToRuby`. The detailed preview therefore shows RUBY as soon as
-  the result appears, instead of showing parentheses until the asynchronous
-  formatter finishes. The AI bubble summary, segment quote lines, non-pitch
-  word-note and grammar-note fallbacks, possible understandings, unresolved
-  reasons and model supplements use the same local conversion, so
-  historical/fallback entries also stop showing bare parenthetical readings.
-  Citation snippets remain dictionary text and are not converted.
+  the result appears, instead of showing bracket readings until the
+  asynchronous formatter finishes. The AI bubble summary, segment quote lines,
+  non-pitch word-note and grammar-note fallbacks, possible understandings,
+  unresolved reasons and model supplements use the same local conversion, so
+  historical/fallback entries also stop showing bare bracket readings.
+  Citation snippets remain dictionary text and are not converted. Possible
+  understandings use the structured `[OPTION]` label/confidence and render a
+  green “情况X” capsule plus “可能性N%” text below the meaning, not the inline
+  `A：...（70%）` form. When all interpretations share the same visible citation
+  set, the citation chips are rendered once below the last case; differing
+  sets keep their per-case chips.
 - `AgentRunResult.richOriginalText` carries the whole original section;
   `AgentRunResult.richSegmentTexts` is aligned with `analysis.segments`;
   `AgentRunResult.richSegmentNotes` carries the AI-formatted dictionary-fact
   word senses/grammar explanations (not citation snippets). All three are
   pre-filled locally with RUBY before the formatting model runs; retained
-  YOMI and kana parentheses are converted locally, not shown as
-  `base（reading）`. `AgentRichText` renders
+  YOMI and `reading【surface】` annotations are converted locally, not shown as
+  bracket text. `AgentRichText` renders
   ruby/bold/underline in the detailed original, segment interpretation and
   dictionary-fact notes only. Ruby uses the body text color and aligns the
   annotated base to the line's alphabetic baseline (the reading sits above and
   never pushes the base down). A reading inside BOLD inherits the bold weight;
   a reading is never underlined, even inside UNDERLINE. Duplicate
-  `surface（reading）` annotations produced by wrapping an existing note are
+  `reading【surface】` annotations produced by wrapping an existing note are
   collapsed to one reading. UNDERLINE is body-colored with 2x thickness. The
-  Markdown export uses `richTextToPlain` (RUBY becomes `base（reading）`;
+  Markdown export uses `richTextToPlain` (RUBY becomes `reading【surface】`;
   BOLD/UNDERLINE/YOMI tags are removed) so copied text contains no tags.
 - `AgentLimits.enableRichTextPostProcess` (default true) is disabled in tests
   that assert provider request sequences; a `formatting` stage is reported.
@@ -595,10 +637,10 @@ Current known gaps:
 - P6.6 device acceptance is pending: horizontal/vertical variant quality on
   real manga pages, dictionary candidate usefulness against the real 463k-entry
   dictionary, contrast/overflow at 200% font, and re-analysis latency.
-- P6.6 variant comparison is mounted only when a displayable result exists
-  (`agent_message_list.dart`); an OCR/analysis failure before that point has no
-  multi-OCR comparison or repair entry yet. Keep this as a documented P6.6/P6.7
-  follow-up rather than claiming every failure path is covered.
+- P6.6 failed-state comparison entry is implemented; the panel is mounted from
+  the run's last images when no displayable result exists. Image paths that no
+  longer exist stay unavailable (generation disabled) rather than being faked.
+  Device acceptance on real failure paths remains pending.
 - Native OCR calls are serialized through a queue; two image comparisons show
   independent loading/error state and can both be started, but the second waits
   for the first engine call to finish.
@@ -616,11 +658,10 @@ Current known gaps:
   non-reasoning complex model (for example deepseek-chat/flash) is the current
   way to shorten analysis time. Automated tests cannot prove real provider
   latency.
-- P6.6 does not yet show per-variant citations before the user commits to a
-  re-analysis; citations are rebuilt after the selected variant is analyzed.
-  All variants are in the input envelope, but only the selected variant is
-  recorded in `AgentSourceVersion` (the SQLite source-version store is not yet
-  wired to persist every variant).
+- P6.6 per-variant dictionary previews are now shown before the user commits
+  to a re-analysis; formal citations are still rebuilt only after the selected
+  variant is analyzed. All variant texts are persisted by P6.7 history, while
+  `AgentSourceVersion.selected` marks the variant used by that run.
 - Process-death recovery of the in-memory profile inbox remains P6.7; the queue
   survives page navigation but not process death.
 - P6.7 之后的任务级流式规划：
@@ -755,8 +796,8 @@ plus pitch cases in `evidence_builder_test.dart` and `agent_result_view_test.dar
   photo and corpus first; Agent results later; no free-form editor in P6.7.
 - **Markdown**: bracket-tag wire format remains; Markdown only for copy/export
   and restricted profile preview; no general Markdown renderer.
-- **P6.6 carryovers**: failed-run multi-OCR entry and per-variant citation
-  preview are now part of the P6.7 design; implementation follows Wave 4.
+- **P6.6 carryovers**: failed-run multi-OCR entry and per-variant lookup preview
+  are implemented (2026-11-03); real-device acceptance still follows Wave 4.
 - **Docs/schemas**: `docs/phase6-agent-design.md` §17.2,
   `docs/phase6-agent-contracts.md` §14, `docs/design-tokens.md` P6.7 rows,
   `docs/project-rules.md` R-AGENT-24–27, and new schemas under
@@ -799,13 +840,13 @@ plus pitch cases in `evidence_builder_test.dart` and `agent_result_view_test.dar
   `agent_history_ui_test`, `agent_store_migration_test`,
   `agent_profile_inbox_persistence_test`, `unidic_accent_parser_test`, plus
   pitch cases in `evidence_builder_test`/`agent_result_view_test`, plus
-  multi-select history UI/batch-delete and beautifying-banner tests. Full
-  `flutter test` passed (454 executed, 445 declarations in 85 files) and debug
-  APK built; the workspace also contains concurrent rich-text changes from
-  another workstream. `docs/project-data.md` was synced with user consent.
-- **Still pending**: P6.6 failed-run multi-OCR entry and per-variant citation
-  preview; P6.7 annotation DSL, provider test connection, accessibility/release
-  polish; real-device/visual acceptance.
+  multi-select history UI/batch-delete, beautifying-banner, failed-run variant
+  entry and per-variant lookup preview tests. Full `flutter test` passed (479
+  executed, 470 declarations in 86 files) and debug APK built; the workspace
+  also contains concurrent rich-text changes from another workstream.
+  `docs/project-data.md` was synced with user consent.
+- **Still pending**: P6.7 annotation DSL, provider test connection,
+  accessibility/release polish; real-device/visual acceptance.
 
 ## Not implemented / next
 
@@ -816,9 +857,9 @@ plus pitch cases in `evidence_builder_test.dart` and `agent_result_view_test.dar
    this does not turn the pending Wave 4 device checks into verified results.
 2. **P6.6 multi-OCR**: core implemented 2026-11-02 (quality/diff/ranking,
    dictionary-assisted candidates, user-confirmed variant re-analysis and UI);
-   all variant texts are now persisted by P6.7 history. Remaining: real-device
-   visual/OCR/dictionary acceptance, failed-run multi-OCR entry and per-variant
-   citation preview (§17.2.7).
+   failed-run entry and per-variant lookup previews implemented 2026-11-03;
+   all variant texts are persisted by P6.7 history. Remaining: real-device
+   visual/OCR/dictionary acceptance.
 3. **P6.7**: history/persistence and UniDic pitch are implemented (2026-11-03).
    Remaining: annotation DSL (safe AST, built-in rules, preview/rollback),
    provider test-connection, accessibility/empty/error polish and release

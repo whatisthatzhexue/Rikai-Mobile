@@ -176,7 +176,7 @@ class AgentRunResult {
   ///
   /// Sections the formatter rejected or returned empty keep the local RUBY
   /// baseline built with the result; a failed network pass must not downgrade
-  /// a reading back to `word（reading）`.
+  /// a reading back to plain bracket text.
   AgentRunResult copyWithRichText(AgentRichTextOutputs rich) {
     final original = rich.originalText;
     return AgentRunResult(
@@ -336,6 +336,9 @@ String agentOriginalSource(List<AgentQuoteRef> quotes) {
 /// BOLD/UNDERLINE pass. This raw value still keeps YOMI wrappers for
 /// [agentSummaryDisplayText] and plain-text consumers.
 String agentSummarySource(AgentAnalysis analysis) {
+  if (analysis.noAnalysisReason.isNotEmpty) {
+    return analysis.noAnalysisReason;
+  }
   if (analysis.translation.isNotEmpty) {
     return analysis.translation.map((item) => item.text).join('\n');
   }

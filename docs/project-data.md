@@ -4,11 +4,11 @@
 > 开发数据统计和固定 UI 文案以本文件为准。其他文档只引用本文件对应小节，不再
 > 复制具体数值；历史记录可以保留“当时值”，但必须标注为历史快照。
 >
-> - last_verified: 2026-11-03
+> - last_verified: 2026-11-04
 > - last_verified_code_commit: `d167ad0`（P6.7 历史/声调工作区基于该提交；P6.7
 >   改动当前未提交）
-> - last_doc_sync: 2026-11-03（P6.7-1/2：同步历史多选删除、界面美化横幅与音调
->   信息徽标测试基线；工作区同时包含并行富文本改动；固定文案/预算未改）
+> - last_doc_sync: 2026-11-04（P6.6 失败态/逐版本预览、P6.7 历史多选、界面美化
+>   横幅与音调信息徽标测试基线；工作区同时包含并行富文本改动；固定文案/预算未改）
 > - 设备基线: `Medium_Phone_API_36.1`（x86_64 模拟器，API 36）；无 arm64 真机
 > - 维护规则：数据变化时只改本文件，并同步更新 `last_verified`/
 >   `last_verified_code_commit`；其他文档的引用链接不需要改。不要把本文件自身的
@@ -40,11 +40,11 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **445** |
-| 当前测试文件数 | **85** |
+| 当前 test/testWidgets 声明数 | **470** |
+| 当前测试文件数 | **86** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | **454 passed**（声明 445；参数化/循环用例产生 454 个执行用例） |
-| 最近 `flutter build apk --debug` | success（2026-11-03 P6.7 验证） |
+| 最近 `flutter test` | **479 passed**（声明 470；参数化/循环用例产生 479 个执行用例） |
+| 最近 `flutter build apk --debug` | success（2026-11-04 P6.6/P6.7 验证） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
 > 该数字对应 P6.7-1 历史/持久化与 P6.7-2 UniDic 声调工作区（含 Wave 3、P6.6、
@@ -74,7 +74,8 @@
 | P6.7 音调信息徽标 | 442（声明 433） | 音调词行增加红色“音调信息”徽标与布局回归 |
 | 历史多选 + 并行富文本修正 | 451（声明 442） | 历史多选删除与批量级联测试；工作区同时包含另一工作流的富文本/测试改动 |
 | 美化横幅 + 并行富文本修正 | 454（声明 445） | 界面美化横幅显示/关闭/自动消失与 controller 状态测试；包含并行改动 |
-| 当前 | **454（声明 445）** | 见 §2.1 |
+| P6.6 失败态/逐版本预览 + 并行修正 | 479（声明 470） | 失败态多 OCR 入口、baseline 本地识别、逐版本词典预览；含并行改动 |
+| 当前 | **479（声明 470）** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
@@ -152,6 +153,7 @@ arm64 真机性能另需复测。
 | 主页五个按钮 | 拍照识别、查句子、查单词、历史记录、词典助手 |
 | 模式 | 严格模式、宽松模式 |
 | 结果区标题 | 原文、译文、逐句理解、可能的理解、未解决、词典依据 |
+| 可能的理解标记 | 情况A（绿色胶囊）、可能性70%（文本） |
 | 模型标记 | 模型译文、模型补充 |
 | 证据折叠 | 依据 N 条 ▾ |
 | 状态 | 本机 OCR、熟悉词典、分词、生成、校验、已停止、生成中断、无词典依据 |
@@ -195,7 +197,15 @@ arm64 真机性能另需复测。
 | 每次 run 图片数 | 6 | `AgentLimits.maxImagesPerRun`（F11 已实现） |
 | 覆盖审查 missing / duplicate / fallback | 20 / 10 / 1 | `AgentLimits`（F7 已实现，单次回退） |
 | 覆盖审查自适应触发 | 默认开启 | `AgentLimits.adaptiveCoverageReview`；全部 target 已有 citation 且未达上限时跳过 |
+| 覆盖审查触发口径 | per-target | 2026-11-04：`targetsWithCitations < uniqueTargets`，不用 citation 总数代理 |
 | 富文本格式化并发 | 3 | `AgentLimits.richTextConcurrency`；同文本只请求一次 |
+| 富文本批量请求 | 原文+逐句 1 次 | 词注/词典事实解释本地 RUBY；按 section 独立解析/降级 |
+| 富文本批量最大字符 | 20,000 | `AgentLimits.maxRichTextChars`；超限整批本地回退 |
+| 分析输出 SEGMENT 上限 | 40 | `AgentLimits.maxSegments`；parser 截断并设置 `truncated` |
+| 每 quote 每 type SEGMENT 上限 | 1 | `AgentLimits.maxSegmentsPerQuotePerType` |
+| OPTION 上限 | 8 | `AgentLimits.maxOptionsPerRun` |
+| 每段 WORD/GRAMMAR 上限 | 20 | `AgentLimits.maxNotesPerSegment` |
+| NO_ANALYSIS | 独立结果 | `[NO_ANALYSIS reason="..."]`；零翻译零段落，不能与其他结果共存 |
 | MDict 批量查询 | 12 | `AgentLimits.lookupBatchSize`；单次 worker 往返内的查询数 |
 | 历史 tool loop | 6 次 / 60s / 90s | **未来参考，不是当前实现** |
 

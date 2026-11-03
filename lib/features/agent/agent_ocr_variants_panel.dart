@@ -13,12 +13,16 @@ import '../../state/agent_ocr_variants.dart';
 import 'agent_message_widgets.dart' show openAgentImageViewer;
 import 'agent_thumbnail.dart';
 
-/// P6.6: explicit multi-OCR comparison, diff preview and dictionary-backed
-/// repair suggestions. It never applies a variant or repair automatically.
+/// P6.6: explicit multi-OCR comparison, diff preview, bounded dictionary
+/// previews and dictionary-backed repair suggestions. It also renders for a
+/// failed run with no result (using the locally generated baseline). It never
+/// applies a variant or repair automatically and never calls a provider.
 class AgentOcrVariantsPanel extends StatefulWidget {
   const AgentOcrVariantsPanel({
     super.key,
-    required this.result,
+    this.result,
+    this.imageSources = const <AgentSourceInput>[],
+    this.ocrQuality = const <String, OcrQuality>{},
     required this.variantsState,
     required this.strings,
     this.imagePaths = const <String>[],
@@ -27,7 +31,12 @@ class AgentOcrVariantsPanel extends StatefulWidget {
     this.onReanalyze,
   });
 
-  final AgentRunResult result;
+  final AgentRunResult? result;
+
+  /// Image sources when no result exists (for example the analysis failed).
+  /// When [result] is present its image sources take precedence.
+  final List<AgentSourceInput> imageSources;
+  final Map<String, OcrQuality> ocrQuality;
   final AgentOcrVariantsState variantsState;
   final AgentUiStrings strings;
 
@@ -73,9 +82,14 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final imageSources = widget.result.input.sources
-        .where((source) => source.isImage && source.selectedVariant != null)
-        .toList(growable: false);
+    final result = widget.result;
+    final imageSources = result != null
+        ? result.input.sources
+              .where((source) => source.isImage)
+              .toList(growable: false)
+        : widget.imageSources
+              .where((source) => source.isImage)
+              .toList(growable: false);
     if (imageSources.isEmpty) return const SizedBox.shrink();
     final theme = Theme.of(context);
     return Container(
@@ -112,7 +126,73 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
   ) {
     final theme = Theme.of(context);
     final imageId = source.imageId ?? source.id;
-    final baseline = source.selectedVariant!;
+    final pathAvailable = _hasImagePath(imageNumber);
+    final baseline =
+        source.selectedVariant ??
+        widget.variantsState.baselineVariants[imageId];
+    if (baseline == null) {
+      final loading = widget.variantsState.loadingImageIds.contains(imageId);
+      final errorCode = widget.variantsState.errorFor(imageId);
+      final canGenerate = pathAvailable && widget.onGenerate != null;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildImageHeader(context, imageNumber),
+          const SizedBox(height: AppSpacing.xxs),
+          if (!pathAvailable)
+            Text(
+              widget.strings.ocrOriginalUnavailable,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: AgentTokens.helper,
+                color: AppColors.warning,
+              ),
+            )
+          else if (loading)
+            Row(
+              children: [
+                const SizedBox(
+                  width: AppSizes.iconSmall,
+                  height: AppSizes.iconSmall,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    widget.strings.ocrVariantsLoading,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: AgentTokens.helper,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: widget.onCancelGenerate == null
+                      ? null
+                      : () => widget.onCancelGenerate!(imageId),
+                  child: Text(widget.strings.ocrCancelComparison),
+                ),
+              ],
+            )
+          else ...[
+            if (errorCode != null)
+              Text(
+                widget.strings.errorMessageFor(
+                  errorCode,
+                  widget.strings.ocrVariantsFailed,
+                ),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: AgentTokens.helper,
+                  color: AppColors.warning,
+                ),
+              ),
+            _GenerateButton(
+              label: widget.strings.ocrVariantsGenerate,
+              onPressed: canGenerate ? () => widget.onGenerate!(imageId) : null,
+            ),
+          ],
+        ],
+      );
+    }
     final variants = <String, AgentOcrVariant>{baseline.id: baseline};
     for (final variant in source.variants) {
       variants.putIfAbsent(variant.id, () => variant);
@@ -122,13 +202,17 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
             const <AgentOcrVariant>[]) {
       variants.putIfAbsent(variant.id, () => variant);
     }
+    final stateBaseline = widget.variantsState.baselineVariants[imageId];
+    if (stateBaseline != null) {
+      variants.putIfAbsent(stateBaseline.id, () => stateBaseline);
+    }
     final all = variants.values.toList(growable: false);
+    final resultQuality =
+        widget.ocrQuality[imageId] ?? widget.result?.ocrQuality[imageId];
     final qualityById = <String, OcrQuality>{
       for (final variant in all)
-        variant.id:
-            variant.id == baseline.id &&
-                widget.result.ocrQuality[imageId] != null
-            ? widget.result.ocrQuality[imageId]!
+        variant.id: variant.id == baseline.id && resultQuality != null
+            ? resultQuality
             : widget.variantsState.qualities[imageId]?[variant.id] ??
                   OcrConsensus.assess(variant: variant),
     };
@@ -157,11 +241,23 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
     final generated = widget.variantsState.generatedImages.contains(imageId);
     final loading = widget.variantsState.loadingImageIds.contains(imageId);
     final errorCode = widget.variantsState.errorFor(imageId);
+    final canGenerate = pathAvailable && widget.onGenerate != null;
+    final preview = widget.variantsState.previews[imageId]?[selected.id];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildImageHeader(context, imageNumber),
+        if (!pathAvailable) ...[
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            widget.strings.ocrOriginalUnavailable,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: AgentTokens.helper,
+              color: AppColors.warning,
+            ),
+          ),
+        ],
         const SizedBox(height: AppSpacing.xxs),
         Wrap(
           alignment: WrapAlignment.start,
@@ -190,6 +286,10 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
               color: AppColors.warning,
             ),
           ),
+        ],
+        if (!loading && preview != null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          _VariantLookupPreview(preview: preview, strings: widget.strings),
         ],
         if (loading) ...[
           const SizedBox(height: AppSpacing.xs),
@@ -232,16 +332,12 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
           ),
           _GenerateButton(
             label: widget.strings.ocrVariantsGenerate,
-            onPressed: widget.onGenerate == null
-                ? null
-                : () => widget.onGenerate!(imageId),
+            onPressed: canGenerate ? () => widget.onGenerate!(imageId) : null,
           ),
         ] else if (!generated) ...[
           _GenerateButton(
             label: widget.strings.ocrVariantsGenerate,
-            onPressed: widget.onGenerate == null
-                ? null
-                : () => widget.onGenerate!(imageId),
+            onPressed: canGenerate ? () => widget.onGenerate!(imageId) : null,
           ),
         ] else if (view.comparisons.length <= 1) ...[
           const SizedBox(height: AppSpacing.xxs),
@@ -254,16 +350,12 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
           ),
           _GenerateButton(
             label: widget.strings.ocrVariantsRegenerate,
-            onPressed: widget.onGenerate == null
-                ? null
-                : () => widget.onGenerate!(imageId),
+            onPressed: canGenerate ? () => widget.onGenerate!(imageId) : null,
           ),
         ] else if (isBaseline && repairs.isEmpty) ...[
           _GenerateButton(
             label: widget.strings.ocrRepairSearch,
-            onPressed: widget.onGenerate == null
-                ? null
-                : () => widget.onGenerate!(imageId),
+            onPressed: canGenerate ? () => widget.onGenerate!(imageId) : null,
           ),
         ],
         if (!loading && !isBaseline) ...[
@@ -387,6 +479,18 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
     return '$engine · $mode$confidence';
   }
 
+  bool _hasImagePath(int imageNumber) {
+    final path = imageNumber - 1 < widget.imagePaths.length
+        ? widget.imagePaths[imageNumber - 1]
+        : '';
+    if (path.isEmpty) return false;
+    try {
+      return File(path).existsSync();
+    } catch (_) {
+      return false;
+    }
+  }
+
   Widget _buildImageHeader(BuildContext context, int imageNumber) {
     final theme = Theme.of(context);
     final path = imageNumber - 1 < widget.imagePaths.length
@@ -499,6 +603,70 @@ class _AgentOcrVariantsPanelState extends State<AgentOcrVariantsPanel> {
     if (repaired == null) return;
     setState(() => _repairSelections.remove(imageId));
     widget.onReanalyze?.call(imageId, repaired);
+  }
+}
+
+class _VariantLookupPreview extends StatelessWidget {
+  const _VariantLookupPreview({required this.preview, required this.strings});
+
+  final OcrVariantLookupPreview preview;
+  final AgentUiStrings strings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            strings.ocrPreviewTitle,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: AgentTokens.helper,
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            strings.ocrPreviewHits(preview.hitCount),
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: AgentTokens.helper,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          if (preview.entries.isEmpty && preview.hitCount == 0) ...[
+            const SizedBox(height: AppSpacing.xxs),
+            Text(
+              strings.ocrPreviewEmpty,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontSize: AgentTokens.helper,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ] else
+            for (final entry in preview.entries)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xxs),
+                child: Text(
+                  '${entry.dictionaryTitle} · ${entry.headword}：${entry.snippet}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: AgentTokens.helper,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+        ],
+      ),
+    );
   }
 }
 

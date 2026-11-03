@@ -10,9 +10,24 @@ import '../../core/models/lookup_match_mode.dart';
 import '../../core/models/lookup_models.dart';
 import '../../core/models/lookup_request.dart';
 import '../../core/models/token.dart';
+import '../../core/utils/html_text.dart';
 import 'ports/agent_capability_exception.dart';
 import 'ports/lookup_port.dart';
 import 'ports/tokenize_port.dart';
+
+/// Local dictionary probe result shared by OCR quality scoring and the
+/// pre-commit variant preview. It never creates a formal citation.
+class OcrDictionaryProbe {
+  const OcrDictionaryProbe({
+    required this.rate,
+    required this.words,
+    required this.preview,
+  });
+
+  final double rate;
+  final int words;
+  final OcrVariantLookupPreview preview;
+}
 
 /// Local, deterministic OCR comparison and dictionary-assisted repair.
 ///
@@ -238,6 +253,30 @@ abstract final class OcrConsensus {
     int maxWords = maxHitRateWords,
     bool Function()? isCancelled,
   }) async {
+    final probe = await probeDictionary(
+      text: text,
+      tokenizePort: tokenizePort,
+      lookupPort: lookupPort,
+      dictionaries: dictionaries,
+      maxWords: maxWords,
+      isCancelled: isCancelled,
+    );
+    return probe == null ? null : (rate: probe.rate, words: probe.words);
+  }
+
+  /// Measures the same bounded hit rate as [measureDictionaryHits] and also
+  /// collects up to [maxPreviewEntries] cleaned snippets for the pre-commit
+  /// variant comparison. No provider or CitationRegistry is involved.
+  static Future<OcrDictionaryProbe?> probeDictionary({
+    required String text,
+    required TokenizePort tokenizePort,
+    required LookupPort lookupPort,
+    required List<DictionaryInfo> dictionaries,
+    int maxWords = maxHitRateWords,
+    int maxPreviewEntries = 3,
+    int maxSnippetChars = 240,
+    bool Function()? isCancelled,
+  }) async {
     if (dictionaries.isEmpty || text.trim().isEmpty) return null;
     List<Token> tokens;
     try {
@@ -256,6 +295,8 @@ abstract final class OcrConsensus {
     if (candidates.length < OcrQuality.minContentWordsForHitRate) return null;
     var hits = 0;
     var failed = 0;
+    final entries = <OcrLookupPreviewEntry>[];
+    final seenEntries = <String>{};
     for (final candidate in candidates) {
       if (isCancelled?.call() == true) return null;
       try {
@@ -272,7 +313,35 @@ abstract final class OcrConsensus {
           failed++;
           continue;
         }
-        if (result.hasHits) hits++;
+        if (result.hasHits) {
+          hits++;
+          if (entries.length < maxPreviewEntries) {
+            for (final group in result.groups) {
+              if (group.entries.isEmpty) continue;
+              final entry = group.entries.first;
+              final headword = entry.headword.isEmpty
+                  ? entry.matchedKey
+                  : entry.headword;
+              final key =
+                  '${group.dictionary.id}\u0000$headword\u0000${entry.matchedKey}';
+              if (!seenEntries.add(key)) continue;
+              final snippet = cleanDictionaryText(
+                htmlToPlainText(entry.html),
+                maxLength: maxSnippetChars,
+              );
+              if (snippet.isEmpty) continue;
+              entries.add(
+                OcrLookupPreviewEntry(
+                  dictionaryId: group.dictionary.id,
+                  dictionaryTitle: group.dictionary.title,
+                  headword: headword,
+                  snippet: snippet,
+                ),
+              );
+              if (entries.length >= maxPreviewEntries) break;
+            }
+          }
+        }
       } on AgentCapabilityException catch (error) {
         if (error.code == AgentToolErrorCode.toolCancelled) rethrow;
         failed++;
@@ -283,7 +352,14 @@ abstract final class OcrConsensus {
     }
     final attempted = candidates.length - failed;
     if (attempted == 0) return null;
-    return (rate: hits / attempted, words: attempted);
+    return OcrDictionaryProbe(
+      rate: hits / attempted,
+      words: attempted,
+      preview: OcrVariantLookupPreview(
+        hitCount: hits,
+        entries: List<OcrLookupPreviewEntry>.unmodifiable(entries),
+      ),
+    );
   }
 
   /// Suggest dictionary-backed replacements for suspicious spans in [text].

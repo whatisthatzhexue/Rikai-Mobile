@@ -204,8 +204,8 @@ Phase 5（语料/历史、首次引导与发布打磨）也已于 2026-10-30 完
 用户发布为 1.0 release。
 
 Phase 6（`docs/phase6-agent-design.md`，**设计 v2；P6.1–P6.5 与 P6.6 多 OCR
-核心已实现，P6.6 真机验收未完成；P6.7-1 历史/持久化与 P6.7-2 UniDic 声调已于
-2026-11-03 实现，DSL/发布仍未完成**；契约见 `docs/phase6-agent-contracts.md`）
+核心及失败态/逐版本预览已实现，P6.6 真机验收未完成；P6.7-1 历史/持久化与
+P6.7-2 UniDic 声调已于 2026-11-03 实现，DSL/发布仍未完成**；契约见 `docs/phase6-agent-contracts.md`）
 增加「词典助手」：可选地调用
 用户配置的远程文本 LLM（DeepSeek/Claude 等），把本地 OCR、UniDic、MDict 作为
 schema 化证据；采用固定流水线，模型无工具调用（2026-10-31 决策）。图片仅在本机
@@ -335,9 +335,9 @@ OCR 插件新增可选 `engine` 约束；版本 chip 左对齐/自动换行/固�
 存于 `docs/agent_output/YYYY-MM-DD-HH-mm.txt`。流式结束后先渲染已解析/校验的主
 结果（“结果已出，正在复核…”），不等待格式/语言/富文本后置调用；provider 在
 `finish_reason`/`[DONE]`/`message_stop` 到达时立即停止读取。P6.6 真机验收仍待
-另一工作流；P6.7-1 历史/持久化与 P6.7-2 UniDic 声调已实现（design §17.2、
-contracts §14、design-tokens P6.7 行），annotation DSL、provider 测试连接与发布
-打磨未完成。
+另一工作流；P6.7-1 历史/持久化、P6.7-2 UniDic 声调与 P6.6 失败态/逐版本预览
+已实现（design §17.2、contracts §14、design-tokens P6.7 行），annotation DSL、
+provider 测试连接与发布打磨未完成。
 当前进度、验证记录与工作队列只维护在以下文档，本文件不再复述：
 
 - 实现进度与验证记录：`docs/phase6-status.md`
@@ -356,10 +356,10 @@ contracts §14、design-tokens P6.7 行），annotation DSL、provider 测试连
   secure storage 设备 I/O）；Wave 1–3 的自动化测试不能替代设备验收。
 - P6.6 多 OCR 版本/词典辅助修复：核心已实现（显式多版本、质量/diff、词典候选、
   用户确认后重新分析）；剩余真机视觉/OCR/词典质量验收，不能把图片发给模型。
-- P6.7：历史/持久化与 UniDic 声调已实现（`docs/phase6-agent-design.md` §17.2、
-  `docs/phase6-agent-contracts.md` §14、`docs/design-tokens.md` P6.7 行、
-  `docs/project-rules.md` R-AGENT-24–27）。剩余：P6.6 失败态多 OCR 入口/逐版本
-  依据预览、annotation DSL（先阅读器/照片集/语料）、provider 测试连接、无障碍/
+- P6.7：历史/持久化、UniDic 声调与 P6.6 失败态多 OCR 入口/逐版本依据预览已实现
+  （`docs/phase6-agent-design.md` §17.2、`docs/phase6-agent-contracts.md` §14、
+  `docs/design-tokens.md` P6.7 行、`docs/project-rules.md` R-AGENT-24–27）。
+  剩余：annotation DSL（先阅读器/照片集/语料）、provider 测试连接、无障碍/
   发布验收；真机/视觉验收未完成。Wave 4 由另一工作流继续。
 - P7 任务解耦/模型路由/并发流式为规划项（
   `docs/agent_docs/p7-task-decomposition-plan.md`）；P7.0 富文本后处理已增量

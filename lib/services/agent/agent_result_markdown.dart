@@ -37,6 +37,25 @@ String buildAgentResultMarkdown(AgentRunResult result, AgentUiStrings strings) {
     }
   }
 
+  final noAnalysisReason = result.analysis.noAnalysisReason.trim();
+  if (noAnalysisReason.isNotEmpty) {
+    buffer
+      ..writeln('## ${strings.noAnalysisTitle}')
+      ..writeln()
+      ..writeln(richTextToPlain(noAnalysisReason))
+      ..writeln();
+  }
+  if (result.evidence.truncated) {
+    buffer
+      ..writeln('- ${strings.resultTruncated}')
+      ..writeln();
+  }
+  if (result.analysis.truncated) {
+    buffer
+      ..writeln('- ${strings.analysisTruncated}')
+      ..writeln();
+  }
+
   if (result.analysis.translation.isNotEmpty) {
     buffer
       ..writeln('## ${strings.translationTitle}')
@@ -51,57 +70,70 @@ String buildAgentResultMarkdown(AgentRunResult result, AgentUiStrings strings) {
     buffer
       ..writeln('## ${strings.segmentUnderstanding}')
       ..writeln();
+    final segmentGroups = <String, List<(int, AgentSegment)>>{};
     for (final (index, segment) in result.analysis.segments.indexed) {
-      final quote = quotes[segment.quoteId];
+      segmentGroups
+          .putIfAbsent(segment.quoteId, () => <(int, AgentSegment)>[])
+          .add((index, segment));
+    }
+    for (final entry in segmentGroups.entries) {
+      final quote = quotes[entry.key];
       if (quote != null && quote.isNotEmpty) {
         buffer
           ..writeln('> $quote')
           ..writeln();
       }
-      final rich = index < result.richSegmentTexts.length
-          ? result.richSegmentTexts[index]
-          : '';
-      buffer
-        ..writeln(richTextToPlain(rich.isEmpty ? segment.interpretation : rich))
-        ..writeln();
-      final epistemic = switch (segment.epistemic) {
-        AgentEpistemic.dictionaryFact => strings.epistemicDictionaryFact,
-        AgentEpistemic.structuralAnalysis => strings.epistemicStructural,
-        AgentEpistemic.contextInference => strings.epistemicInference,
-        AgentEpistemic.translation => strings.epistemicTranslation,
-      };
-      buffer.writeln(
-        '- $epistemic · ${strings.confidence((segment.confidence.clamp(0, 1) * 100).round())}',
-      );
-      final richNotes = index < result.richSegmentNotes.length
-          ? result.richSegmentNotes[index]
-          : '';
-      if (richNotes.isNotEmpty) {
-        for (final line in richTextToPlain(richNotes).split('\n')) {
-          if (line.trim().isNotEmpty) buffer.writeln('- ${line.trim()}');
-        }
-      } else {
-        for (final note in segment.wordNotes) {
-          final reading = note.reading.isEmpty ? '' : '（${note.reading}）';
-          buffer.writeln('- ${note.surface}$reading：${note.sense}');
-        }
-        for (final note in segment.grammarNotes) {
-          buffer.writeln('- ${note.explanation}');
-        }
-      }
-      final ids =
-          <String>{
-            for (final note in segment.wordNotes) ...note.citationIds,
-            for (final note in segment.grammarNotes) ...note.citationIds,
-          }.where(citationNumbers.containsKey).toList(growable: false)..sort(
-            (a, b) => citationNumbers[a]!.compareTo(citationNumbers[b]!),
-          );
-      if (ids.isNotEmpty) {
+      for (final (index, segment) in entry.value) {
+        final rich = index < result.richSegmentTexts.length
+            ? result.richSegmentTexts[index]
+            : '';
+        buffer
+          ..writeln(
+            richTextToPlain(rich.isEmpty ? segment.interpretation : rich),
+          )
+          ..writeln();
+        final epistemic = switch (segment.epistemic) {
+          AgentEpistemic.dictionaryFact => strings.epistemicDictionaryFact,
+          AgentEpistemic.structuralAnalysis => strings.epistemicStructural,
+          AgentEpistemic.contextInference => strings.epistemicInference,
+          AgentEpistemic.translation => strings.epistemicTranslation,
+        };
         buffer.writeln(
-          '- ${ids.map((id) => strings.citationLabel(citationNumbers[id]!)).join(' ')}',
+          '- $epistemic · ${strings.confidence((segment.confidence.clamp(0, 1) * 100).round())}',
         );
+        final richNotes = index < result.richSegmentNotes.length
+            ? result.richSegmentNotes[index]
+            : '';
+        if (richNotes.isNotEmpty) {
+          for (final line in richTextToPlain(richNotes).split('\n')) {
+            if (line.trim().isNotEmpty) buffer.writeln('- ${line.trim()}');
+          }
+        } else {
+          for (final note in segment.wordNotes) {
+            final reading = note.reading.trim();
+            final display = reading.isEmpty || reading == note.surface
+                ? note.surface
+                : '$reading【${note.surface}】';
+            buffer.writeln('- $display：${note.sense}');
+          }
+          for (final note in segment.grammarNotes) {
+            buffer.writeln('- ${note.explanation}');
+          }
+        }
+        final ids =
+            <String>{
+              for (final note in segment.wordNotes) ...note.citationIds,
+              for (final note in segment.grammarNotes) ...note.citationIds,
+            }.where(citationNumbers.containsKey).toList(growable: false)..sort(
+              (a, b) => citationNumbers[a]!.compareTo(citationNumbers[b]!),
+            );
+        if (ids.isNotEmpty) {
+          buffer.writeln(
+            '- ${ids.map((id) => strings.citationLabel(citationNumbers[id]!)).join(' ')}',
+          );
+        }
+        buffer.writeln();
       }
-      buffer.writeln();
     }
   }
 
