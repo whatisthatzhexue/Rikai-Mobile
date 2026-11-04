@@ -149,8 +149,8 @@ annotation-rules）；模型响应用方括号标签协议，不是 JSON 响应 
 何时查看：改 DTO/请求/证据/历史/声调/DSL 结构或校验器前。
 
 `docs/adr/`：
-内容：四个架构决策（ONNX OCR、UniDic 原地读取、MDict `dict_reader`、Agent
-能力边界）。
+内容：五个架构决策（ONNX OCR、UniDic 原地读取、MDict `dict_reader`、Agent
+能力边界、Agent 档案编译器/单次分析；0005 仍为 Phase 0 提案，未实现）。
 何时查看：质疑/修改核心架构前；需要决策理由时。
 
 `docs/dev-setup.md`：

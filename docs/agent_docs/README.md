@@ -101,6 +101,9 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
 - P7 任务解耦/模型路由/并发流式规划：
   [p7-task-decomposition-plan.md](p7-task-decomposition-plan.md)（整体规划中；
   P7.0 富文本后处理已增量实现，其余未实现）。
+- Agent-Refactor-Idea 的 Phase 0 决策与设计增量：
+  [agent-refactor-idea-design-delta.md](agent-refactor-idea-design-delta.md)
+  （ADR 0005；仅提案，未实现，不要当作当前能力）。
 
 ## 回归与维护性评审
 
