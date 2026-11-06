@@ -7,6 +7,7 @@ String profileToMarkdown(
   final labels = switch (language) {
     AgentProfileLanguage.chinese => const _ProfileLabels(
       type: '类型',
+      intro: '简介',
       languages: '语言',
       entryStructure: '条目结构',
       headwordFields: '见出し字段',
@@ -16,6 +17,12 @@ String profileToMarkdown(
       exactForms: '可查形式',
       prefix: '前缀建议',
       recommended: '推荐查询',
+      coverage: '覆盖样本',
+      sampleEntries: '样本条数',
+      entryCount: '词典词条',
+      headwordScripts: '见出し文字',
+      definitionScripts: '释义文字',
+      featureCount: '结构特征',
       strengthsCaveats: '强项 / 注意事项',
       strengths: '强项',
       caveats: '注意',
@@ -26,6 +33,7 @@ String profileToMarkdown(
     ),
     AgentProfileLanguage.english => const _ProfileLabels(
       type: 'Type',
+      intro: 'Introduction',
       languages: 'Languages',
       entryStructure: 'Entry structure',
       headwordFields: 'Headword fields',
@@ -35,6 +43,12 @@ String profileToMarkdown(
       exactForms: 'Searchable forms',
       prefix: 'Prefix suggestions',
       recommended: 'Recommended queries',
+      coverage: 'Coverage sample',
+      sampleEntries: 'Sample entries',
+      entryCount: 'Dictionary entries',
+      headwordScripts: 'Headword scripts',
+      definitionScripts: 'Definition scripts',
+      featureCount: 'Structural features',
       strengthsCaveats: 'Strengths / caveats',
       strengths: 'Strengths',
       caveats: 'Caveats',
@@ -45,6 +59,7 @@ String profileToMarkdown(
     ),
     AgentProfileLanguage.japanese => const _ProfileLabels(
       type: '種類',
+      intro: '概要',
       languages: '言語',
       entryStructure: '項目構造',
       headwordFields: '見出し字段',
@@ -54,6 +69,12 @@ String profileToMarkdown(
       exactForms: '検索可能な形',
       prefix: '前方一致候補',
       recommended: '推奨クエリ',
+      coverage: 'カバレッジ',
+      sampleEntries: 'サンプル項目',
+      entryCount: '辞書項目',
+      headwordScripts: '見出し文字',
+      definitionScripts: '語義文字',
+      featureCount: '構造特徴',
       strengthsCaveats: '強み / 注意',
       strengths: '強み',
       caveats: '注意',
@@ -70,10 +91,18 @@ String profileToMarkdown(
     if (profile.entryStructure.hasAudio) 'audio',
     if (profile.entryStructure.hasImages) 'images',
   ].join(labels.joiner);
-  final buffer = StringBuffer()
-    ..writeln('## ${profile.title}')
+  final languageText = profile.languagePairs.isEmpty
+      ? profile.languages.join(labels.joiner)
+      : profile.languagePairs.map((pair) => pair.label).join(labels.joiner);
+  final buffer = StringBuffer()..writeln('## ${profile.title}');
+  if (profile.intro.isNotEmpty) {
+    buffer
+      ..writeln('- ${labels.intro}: ${profile.intro}')
+      ..writeln('');
+  }
+  buffer
     ..writeln('- ${labels.type}: ${profile.kind}')
-    ..writeln('- ${labels.languages}: ${profile.languages.join(labels.joiner)}')
+    ..writeln('- ${labels.languages}: $languageText')
     ..writeln('')
     ..writeln('### ${labels.entryStructure}')
     ..writeln(
@@ -98,7 +127,24 @@ String profileToMarkdown(
     ..writeln(
       '- ${labels.recommended}: '
       '${profile.recommendedQueryForms.join(labels.joiner)}',
-    )
+    );
+  if (!profile.coverage.isEmpty) {
+    buffer
+      ..writeln('')
+      ..writeln('### ${labels.coverage}')
+      ..writeln('- ${labels.sampleEntries}: ${profile.coverage.sampleEntries}')
+      ..writeln('- ${labels.entryCount}: ${profile.coverage.entryCount}')
+      ..writeln(
+        '- ${labels.headwordScripts}: '
+        '${profile.coverage.headwordScripts.map((script) => _scriptLabel(script, language)).join(labels.joiner)}',
+      )
+      ..writeln(
+        '- ${labels.definitionScripts}: '
+        '${profile.coverage.definitionScripts.map((script) => _scriptLabel(script, language)).join(labels.joiner)}',
+      )
+      ..writeln('- ${labels.featureCount}: ${profile.coverage.featureCount}');
+  }
+  buffer
     ..writeln('')
     ..writeln('### ${labels.strengthsCaveats}')
     ..writeln('- ${labels.strengths}: ${profile.strengths.join(labels.joiner)}')
@@ -108,9 +154,51 @@ String profileToMarkdown(
   return buffer.toString().trim();
 }
 
+String _scriptLabel(String script, AgentProfileLanguage language) {
+  return switch (language) {
+    AgentProfileLanguage.chinese => switch (script) {
+      'han' => '汉字',
+      'hiragana' => '平假名',
+      'katakana' => '片假名',
+      'latin' => '拉丁字母',
+      'hangul' => '韩文',
+      'cyrillic' => '西里尔字母',
+      'greek' => '希腊字母',
+      'thai' => '泰文',
+      'arabic' => '阿拉伯文',
+      _ => script,
+    },
+    AgentProfileLanguage.english => switch (script) {
+      'han' => 'Han',
+      'hiragana' => 'Hiragana',
+      'katakana' => 'Katakana',
+      'latin' => 'Latin',
+      'hangul' => 'Hangul',
+      'cyrillic' => 'Cyrillic',
+      'greek' => 'Greek',
+      'thai' => 'Thai',
+      'arabic' => 'Arabic',
+      _ => script,
+    },
+    AgentProfileLanguage.japanese => switch (script) {
+      'han' => '漢字',
+      'hiragana' => 'ひらがな',
+      'katakana' => 'カタカナ',
+      'latin' => 'ラテン文字',
+      'hangul' => 'ハングル',
+      'cyrillic' => 'キリル文字',
+      'greek' => 'ギリシア文字',
+      'thai' => 'タイ文字',
+      'arabic' => 'アラビア文字',
+      _ => script,
+    },
+  };
+}
+
 class _ProfileLabels {
   const _ProfileLabels({
     required this.type,
+    required this.intro,
     required this.languages,
     required this.entryStructure,
     required this.headwordFields,
@@ -120,6 +208,12 @@ class _ProfileLabels {
     required this.exactForms,
     required this.prefix,
     required this.recommended,
+    required this.coverage,
+    required this.sampleEntries,
+    required this.entryCount,
+    required this.headwordScripts,
+    required this.definitionScripts,
+    required this.featureCount,
     required this.strengthsCaveats,
     required this.strengths,
     required this.caveats,
@@ -130,6 +224,7 @@ class _ProfileLabels {
   });
 
   final String type;
+  final String intro;
   final String languages;
   final String entryStructure;
   final String headwordFields;
@@ -139,6 +234,12 @@ class _ProfileLabels {
   final String exactForms;
   final String prefix;
   final String recommended;
+  final String coverage;
+  final String sampleEntries;
+  final String entryCount;
+  final String headwordScripts;
+  final String definitionScripts;
+  final String featureCount;
   final String strengthsCaveats;
   final String strengths;
   final String caveats;

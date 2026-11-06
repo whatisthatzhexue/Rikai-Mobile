@@ -26,6 +26,33 @@ void main() {
   });
 
   test(
+    'dictionary fingerprint changes with the profile prompt version',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('rikai-agent-fp');
+      addTearDown(() => directory.delete(recursive: true));
+      final mdx = File(p.join(directory.path, 'dict.mdx'));
+      await mdx.writeAsString('a');
+      final dictionary = DictionaryInfo(
+        id: 'dict_a',
+        title: 'A',
+        mdxPath: mdx.path,
+        entryCount: 10,
+        encoding: 'UTF-8',
+      );
+
+      final v1 = await dictionaryProfileFingerprint(
+        dictionary,
+        promptVersion: 1,
+      );
+      final v2 = await dictionaryProfileFingerprint(
+        dictionary,
+        promptVersion: 2,
+      );
+      expect(v2, isNot(v1));
+    },
+  );
+
+  test(
     'UniDic fingerprint is stable and path hash ignores trailing slashes',
     () async {
       final directory = await Directory.systemTemp.createTemp(

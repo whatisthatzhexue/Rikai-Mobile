@@ -143,10 +143,7 @@ class _CompoundTokenize implements TokenizePort {
       );
     }
 
-    return <Token>[
-      make('ところ', '名詞', 0, 3),
-      make('が', '助詞', 3, 4),
-    ];
+    return <Token>[make('ところ', '名詞', 0, 3), make('が', '助詞', 3, 4)];
   }
 }
 

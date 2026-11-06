@@ -9,6 +9,7 @@ void main() {
 [ID]dict_a[/ID]
 [TITLE]A[/TITLE]
 [KIND]国語辞典[/KIND]
+[INTRO]国語辞典のサンプル。[/INTRO]
 [LANGUAGES]ja|zh[/LANGUAGES]
 [HEADWORD_FIELDS]見出し|かな[/HEADWORD_FIELDS]
 [DEFINITION_FIELDS]語義|例文[/DEFINITION_FIELDS]
@@ -39,6 +40,7 @@ void main() {
     expect(first.dictionaryId, 'dict_a');
     expect(first.title, 'A');
     expect(first.kind, '国語辞典');
+    expect(first.intro, '国語辞典のサンプル。');
     expect(first.languages, <String>['ja', 'zh']);
     expect(first.entryStructure.hasRuby, isTrue);
     expect(first.entryStructure.hasExamples, isTrue);

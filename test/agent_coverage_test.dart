@@ -149,7 +149,7 @@ void main() {
     final expectedChars =
         AgentLimits.coverageRootAndNotesChars +
         limits.maxCoverageMissing *
-            (AgentLimits.coverageQueryChars +
+            (limits.maxCoverageQueryChars +
                 AgentLimits.coverageRefsChars +
                 AgentLimits.coverageReasonChars +
                 AgentLimits.coverageTagChars) +
@@ -471,7 +471,9 @@ void main() {
       limits: AgentLimits.standard,
     );
 
-    expect(validated.missing.map((item) => item.query), <String>['take care of']);
+    expect(validated.missing.map((item) => item.query), <String>[
+      'take care of',
+    ]);
     expect(validated.droppedMissing, 0);
   });
 
@@ -507,10 +509,10 @@ void main() {
       patterns: const <AgentGrammarPatternEvidence>[
         AgentGrammarPatternEvidence(
           id: 'p1',
-          surface: '何卒',
+          surface: 'ところ',
           tokenIds: <String>[],
           start: 0,
-          end: 2,
+          end: 3,
         ),
       ],
     );
@@ -525,7 +527,7 @@ void main() {
           ),
           AgentCoverageMissing(
             kind: AgentCoverageKind.word,
-            query: '何卒',
+            query: 'ところ',
             sourceRefs: <String>['p1'],
             reason: 'known pattern',
           ),
@@ -536,7 +538,7 @@ void main() {
       limits: AgentLimits.standard,
     );
 
-    expect(validated.missing.map((item) => item.query), <String>['何卒']);
+    expect(validated.missing.map((item) => item.query), <String>['ところ']);
     expect(validated.droppedMissing, 1);
   });
 

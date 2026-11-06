@@ -28,6 +28,17 @@ const _profileJson = <String, Object?>{
   'dictionary_id': 'dict_a',
   'title': 'A',
   'kind': '国語辞典',
+  'intro': '国語辞典のサンプル。',
+  'language_pairs': <Map<String, Object?>>[
+    <String, Object?>{'source': 'ja', 'target': 'ja', 'confidence': 0.85},
+  ],
+  'coverage': <String, Object?>{
+    'sample_entries': 12,
+    'entry_count': 1000,
+    'headword_scripts': <String>['han', 'hiragana'],
+    'definition_scripts': <String>['han', 'hiragana'],
+    'feature_count': 2,
+  },
   'entry_structure': <String, Object?>{
     'headword_fields': <String>['見出し'],
     'definition_fields': <String>['語義'],
@@ -49,6 +60,8 @@ const _profileTagged = '''
 [ID]dict_a[/ID]
 [TITLE]A[/TITLE]
 [KIND]国語辞典[/KIND]
+[INTRO]国語辞典のサンプル。[/INTRO]
+[LANGUAGES]ja|ja[/LANGUAGES]
 [HEADWORD_FIELDS]見出し[/HEADWORD_FIELDS]
 [DEFINITION_FIELDS]語義[/DEFINITION_FIELDS]
 [FLAGS]examples[/FLAGS]
@@ -125,8 +138,33 @@ void main() {
     final result = await service.ensure(_dictionary);
     expect(result.action, FamiliarizationAction.pending);
     expect(result.draft!.kind, '国語辞典');
+    expect(result.draft!.intro, '国語辞典のサンプル。');
+    expect(result.draft!.languagePairs.single.label, 'ja→ja');
+    expect(result.draft!.coverage.sampleEntries, 1);
+    expect(result.draft!.coverage.entryCount, 10);
+    expect(result.draft!.coverage.headwordScripts, contains('han'));
+    expect(result.draft!.coverage.definitionScripts, contains('hiragana'));
     expect(await repository.load('dict_a'), isNull);
     expect(samples.calls, 1);
+  });
+
+  test('profile prompt asks for a one-sentence intro', () async {
+    final repository = InMemoryDictionaryProfileRepository();
+    final samples = _FakeSamplePort();
+    final llm = FakeProvider(responseText: _profileTagged);
+    final service = _service(
+      samples: samples,
+      repository: repository,
+      llm: llm,
+    );
+
+    await service.ensure(_dictionary);
+
+    final prompt = llm.requests.single.messages
+        .map((message) => message.text)
+        .join('\n');
+    expect(prompt, contains('[INTRO]'));
+    expect(prompt, contains('one short sentence'));
   });
 
   test('confirmed profile is reused without another LLM call', () async {
@@ -343,10 +381,12 @@ void main() {
 
   test('profile markdown follows the selected language', () {
     final profile = DictionaryProfile.fromJson(_profileJson);
-    expect(
-      profileToMarkdown(profile, AgentProfileLanguage.chinese),
-      contains('类型'),
-    );
+    final chinese = profileToMarkdown(profile, AgentProfileLanguage.chinese);
+    expect(chinese, contains('类型'));
+    expect(chinese, contains('国語辞典のサンプル。'));
+    expect(chinese, contains('ja→ja'));
+    expect(chinese, contains('覆盖样本'));
+    expect(chinese, contains('样本条数: 12'));
     expect(
       profileToMarkdown(profile, AgentProfileLanguage.english),
       contains('Type'),

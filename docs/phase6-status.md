@@ -1,6 +1,6 @@
 # Phase 6 status — dictionary assistant core
 
-Date: 2026-11-04
+Date: 2026-11-06
 Base: Phase 5 complete (`docs/phase5-status.md`)
 Design: `docs/phase6-agent-design.md` v2
 Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
@@ -11,7 +11,9 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > completed on 2026-11-03; P6.6 device acceptance remains pending. P6.7
 > history/persistence and UniDic pitch are implemented (2026-11-03); annotation
 > DSL, provider test connection and release polish are still pending. P6.7
-> device/visual acceptance remains pending.**
+> device/visual acceptance remains pending. Phase 1a (F7 compound expansion)
+> and Phase 1b (profile compiler v2) of the Agent refactor are implemented
+> (2026-11-06); Phase 2–4 are not.**
 
 > Follow `docs/agent_docs/device-feedback-2026-10-31.md` for the remaining
 > Wave 4 device checks. **Current test/device/build/environment numbers are
@@ -50,6 +52,39 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 - **自动化验证**：`flutter analyze` 通过；完整 `flutter test` 通过（含
   parser/validator/orchestrator/rich-text/result-view/coverage/evidence/models
   新增用例）。真实 provider、设备与 arm64 验收仍未进行，不能写成已验证。
+
+## 2026-11-06 F7 复合词补查（Phase 1a）
+
+- `coverageSystemPrompt` 增加复合词/固定搭配整体 `MISSING` 规则（例如
+  `ところが` 而不是 `ところ` + `が`）。
+- `validateCoverageReview` 对未知 `kind=word` query 增加 token 跨度校验：
+  源文本连续子串、不含换行、至少一处匹配覆盖 ≤
+  `AgentLimits.maxCoverageCompoundTokens`（默认 6）个 source token；无
+  tokenizer 或该 source 无 tokens 时只接受已知 token/pattern/citation key。
+  校验基于 token 跨度，不设字符数上限；`AgentLimits.maxCoverageQueryChars`
+  保留为超长字符串的全局安全上限。
+- 覆盖审查仍只做一次审查 + 一次补充检索，不构成工具循环；被丢弃的 query 计入
+  `droppedMissing`。
+- 自动化验证：`flutter analyze` 通过，完整 `flutter test` 通过（含 coverage
+  unit/orchestrator 新增用例）；测试基线已按用户同意更新到
+  `docs/project-data.md` §2。真实 provider/设备仍未验证。
+
+## 2026-11-06 档案编译器 v2（Phase 1b）
+
+- `DictionaryProfile` 增加可选 `intro`、方向性 `language_pairs`、`coverage`；
+  profile v1 JSON schema 增加对应可选字段；profile prompt 版本升到 2，旧档案
+  通过指纹失效并重新生成（schema 标识仍为 v1，旧 JSON 向后兼容）。
+- 新增 `dictionary_sample_analysis.dart`：从标题脚本提示 + headword/definition
+  文字脚本确定性检测方向性语言对，并计算样本条数、词条数、文字覆盖和结构特征数。
+  低置信度使用同一档案请求的 `[LANGUAGES]` 回退，不额外发请求。
+- 探针扩展到 16 条精确 + 11 条前缀；每词典样本上限 20；档案请求按 1–3 本/批
+  合并（`maxBatchTokens=20000`），保留一次格式修复。
+- Markdown 显示简介、`ja→zh` 方向对和覆盖段；档案卡片 subtitle 显示方向对；
+  用户确认流程不变（R-AGENT-10）。
+- 未新增“选中词典即自动联网”的后台预热（R-PROD-03）；档案仍在 run 开始或
+  档案管理页显式生成，失败/待确认时保留 `noProfileInstruction` 降级。
+- 自动化验证：新增/更新 profile parser、sample analysis、service、model、
+  profile page 用例；真实 provider/设备仍未验证。
 
 ## Implemented
 

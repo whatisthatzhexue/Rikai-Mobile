@@ -8,7 +8,7 @@ import '../../../core/models/agent/agent_profile.dart';
 import '../../../core/models/dict_info.dart';
 
 const int dictionaryProfileSchemaVersion = 1;
-const int dictionaryProfilePromptVersion = 1;
+const int dictionaryProfilePromptVersion = 2;
 const int unidicProfileSchemaVersion = 1;
 
 /// Stable dictionary fingerprint; file stat changes invalidate a profile.

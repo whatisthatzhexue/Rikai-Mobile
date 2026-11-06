@@ -202,6 +202,17 @@ void main() {
       dictionaryId: 'dict_a',
       title: 'A',
       kind: '国語辞典',
+      intro: '国語辞典のサンプル。',
+      languagePairs: <DictionaryLanguagePair>[
+        DictionaryLanguagePair(source: 'ja', target: 'ja', confidence: 0.8),
+      ],
+      coverage: DictionaryCoverage(
+        sampleEntries: 12,
+        entryCount: 100,
+        headwordScripts: <String>['han', 'hiragana'],
+        definitionScripts: <String>['han', 'hiragana'],
+        featureCount: 2,
+      ),
       entryStructure: DictionaryEntryStructure(
         headwordFields: <String>['見出し'],
         definitionFields: <String>['語義'],
@@ -213,10 +224,12 @@ void main() {
       ),
       confidence: 0.8,
     );
-    expect(
-      DictionaryProfile.fromJson(profile.toJson()).entryStructure.hasRuby,
-      isTrue,
-    );
+    final restoredProfile = DictionaryProfile.fromJson(profile.toJson());
+    expect(restoredProfile.entryStructure.hasRuby, isTrue);
+    expect(restoredProfile.intro, '国語辞典のサンプル。');
+    expect(restoredProfile.languagePairs.single.label, 'ja→ja');
+    expect(restoredProfile.coverage.sampleEntries, 12);
+    expect(restoredProfile.coverage.featureCount, 2);
 
     const quote = AgentQuoteRef(
       id: 'q1',

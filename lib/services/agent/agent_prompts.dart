@@ -697,6 +697,7 @@ Do not return JSON. Do not use Markdown fences. Use this flat tag format:
 [ID]dictionary_id[/ID]
 [TITLE]display title[/TITLE]
 [KIND]dictionary type[/KIND]
+[INTRO]one short sentence describing the dictionary and its best use[/INTRO]
 [LANGUAGES]ja|zh[/LANGUAGES]
 [HEADWORD_FIELDS]field1|field2[/HEADWORD_FIELDS]
 [DEFINITION_FIELDS]field1|field2[/DEFINITION_FIELDS]
@@ -709,9 +710,10 @@ Do not return JSON. Do not use Markdown fences. Use this flat tag format:
 [RECOMMENDED]query form|query form[/RECOMMENDED]
 [ENTRY_NOTES]short note[/ENTRY_NOTES]
 [/PROFILE]
-Use "|" between list items. Omit a tag or leave it empty when unknown. Do not
-write confidence values, percentages, citations or internal field names in the
-text. Keep every description concise.
+Use "|" between list items. Omit a tag or leave it empty when unknown. INTRO
+must be one short sentence and must not repeat the title. Do not write
+confidence values, percentages, citations or internal field names in the text.
+Keep every description concise.
 ''';
 
 LlmRequest buildDictionaryProfileBatchRepairRequest({

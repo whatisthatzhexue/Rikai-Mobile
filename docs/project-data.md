@@ -4,11 +4,11 @@
 > 开发数据统计和固定 UI 文案以本文件为准。其他文档只引用本文件对应小节，不再
 > 复制具体数值；历史记录可以保留“当时值”，但必须标注为历史快照。
 >
-> - last_verified: 2026-11-04
-> - last_verified_code_commit: `d167ad0`（P6.7 历史/声调工作区基于该提交；P6.7
->   改动当前未提交）
-> - last_doc_sync: 2026-11-04（P6.6 失败态/逐版本预览、P6.7 历史多选、界面美化
->   横幅与音调信息徽标测试基线；工作区同时包含并行富文本改动；固定文案/预算未改）
+> - last_verified: 2026-11-06
+> - last_verified_code_commit: `458c6bc`（Phase 1a 代码基线；Phase 1b 增量在其后
+>   提交）
+> - last_doc_sync: 2026-11-06（Phase 1b：档案样本 20、batch 20,000、测试基线
+>   499/490；同时保留 F7 复合词预算行）
 > - 设备基线: `Medium_Phone_API_36.1`（x86_64 模拟器，API 36）；无 arm64 真机
 > - 维护规则：数据变化时只改本文件，并同步更新 `last_verified`/
 >   `last_verified_code_commit`；其他文档的引用链接不需要改。不要把本文件自身的
@@ -40,15 +40,15 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **470** |
+| 当前 test/testWidgets 声明数 | **490** |
 | 当前测试文件数 | **86** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | **479 passed**（声明 470；参数化/循环用例产生 479 个执行用例） |
+| 最近 `flutter test` | **499 passed**（声明 490；参数化/循环用例产生 499 个执行用例） |
 | 最近 `flutter build apk --debug` | success（2026-11-04 P6.6/P6.7 验证） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
-> 该数字对应 P6.7-1 历史/持久化与 P6.7-2 UniDic 声调工作区（含 Wave 3、P6.6、
-> P7.0 富文本修正）。新增/删除测试后只更新本节。
+> 该数字对应 2026-11-06 Phase 1b 档案编译器 v2 工作区（含 Wave 3、P6.6、P7.0
+> 富文本修正、Phase 1a）。新增/删除测试后只更新本节。
 
 ### 2.2 历史测试基线（不要当作当前值）
 
@@ -75,7 +75,9 @@
 | 历史多选 + 并行富文本修正 | 451（声明 442） | 历史多选删除与批量级联测试；工作区同时包含另一工作流的富文本/测试改动 |
 | 美化横幅 + 并行富文本修正 | 454（声明 445） | 界面美化横幅显示/关闭/自动消失与 controller 状态测试；包含并行改动 |
 | P6.6 失败态/逐版本预览 + 并行修正 | 479（声明 470） | 失败态多 OCR 入口、baseline 本地识别、逐版本词典预览；含并行改动 |
-| 当前 | **479（声明 470）** | 见 §2.1 |
+| Phase 1a F7 复合词补查 | 489（声明 480） | F7 复合词整体 MISSING、token 跨度校验、无 tokenizer 已知术语回退 |
+| Phase 1b 档案编译器 v2 | 499（声明 490） | intro/方向性语言对/覆盖指标、样本 20、batch 20,000、prompt v2 |
+| 当前 | **499（声明 490）** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
@@ -186,9 +188,10 @@ arm64 真机性能另需复测。
 | 每词每典条数 | 3 | `AgentLimits.maxEntriesPerDictionary`；lookup |
 | 摘要长度 | 400 字符 | `AgentLimits.maxSnippetChars`；citation 展示清洗另截断至 240 |
 | 单个 source 的 quote 上限 | 40 | `quote_builder.dart` |
-| 熟悉期每词典样本 | 12 | `DictionaryFamiliarizationService` |
+| 熟悉期每词典样本 | 20 | `DictionaryFamiliarizationService`；探针 16 精确 + 11 前缀 |
 | UniDic 熟悉样本句 | 4 | `UnidicFamiliarizationService` |
-| 熟悉期 batch tokens | 4,000（最多 6,000） | 当前服务 |
+| 熟悉期 batch tokens | 20,000（输出上限 6,000） | 当前服务；1–3 本/批 |
+| 档案 profile prompt 版本 | 2 | 新增 INTRO/本地语言对与覆盖字段；旧档案指纹失效 |
 | 分析请求 maxTokens | 12,000（仅 Anthropic 发送） | `analysis_prompts.dart`；provider 可选 `maxOutputTokens` 覆盖 |
 | Provider 最大输出 tokens | 可选，0=未设置 | Agent 设置页；存于 `capabilities_json.max_output_tokens` |
 | 模型额外工具调用 | 0 | 当前固定流水线、模型无工具 |
@@ -196,6 +199,8 @@ arm64 真机性能另需复测。
 | 输入 variants / sources | 4 / 8 | Schema 契约上限；当前 UI 支持多图（最多 6），每图最多 4 个 `(engine, mode)` 变体（P6.6） |
 | 每次 run 图片数 | 6 | `AgentLimits.maxImagesPerRun`（F11 已实现） |
 | 覆盖审查 missing / duplicate / fallback | 20 / 10 / 1 | `AgentLimits`（F7 已实现，单次回退） |
+| 覆盖审查 query 字符上限 | 100 | `AgentLimits.maxCoverageQueryChars`；仅防超长字符串 |
+| 复合词补查 token 跨度 | 6 | `AgentLimits.maxCoverageCompoundTokens`；未知 word query；无 tokenizer 时只接受已知术语 |
 | 覆盖审查自适应触发 | 默认开启 | `AgentLimits.adaptiveCoverageReview`；全部 target 已有 citation 且未达上限时跳过 |
 | 覆盖审查触发口径 | per-target | 2026-11-04：`targetsWithCitations < uniqueTargets`，不用 citation 总数代理 |
 | 富文本格式化并发 | 3 | `AgentLimits.richTextConcurrency`；同文本只请求一次 |

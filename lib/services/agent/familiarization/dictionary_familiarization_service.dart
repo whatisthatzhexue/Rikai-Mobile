@@ -12,6 +12,7 @@ import '../ports/llm_port.dart';
 import '../agent_prompts.dart';
 import 'dictionary_profile_markdown.dart';
 import 'dictionary_profile_tag_parser.dart';
+import 'dictionary_sample_analysis.dart';
 import 'profile_fingerprint.dart';
 import 'profile_repository.dart';
 
@@ -143,8 +144,8 @@ class DictionaryFamiliarizationService {
     required String smallModel,
     this.promptVersion = dictionaryProfilePromptVersion,
     this.schemaVersion = dictionaryProfileSchemaVersion,
-    this.maxEntries = 12,
-    this.maxBatchTokens = 4000,
+    this.maxEntries = 20,
+    this.maxBatchTokens = 20000,
     this.profileLanguage = AgentProfileLanguage.chinese,
   }) : _samplePort = samplePort,
        _repository = repository,
@@ -439,7 +440,15 @@ class DictionaryFamiliarizationService {
           );
           continue;
         }
-        final markdown = profileToMarkdown(draft, profileLanguage);
+        final sample = samples[dictionary.id];
+        final analysis = sample == null
+            ? null
+            : analyzeDictionarySample(sample, modelLanguages: draft.languages);
+        final profile = draft.copyWith(
+          languagePairs: analysis?.languagePairs,
+          coverage: analysis?.coverage,
+        );
+        final markdown = profileToMarkdown(profile, profileLanguage);
         proposalSerial++;
         proposals.add(
           AgentProfileProposal(
@@ -448,7 +457,7 @@ class DictionaryFamiliarizationService {
                 '$proposalSerial-${dictionary.id}',
             dictionary: dictionary,
             fingerprint: fingerprints[dictionary.id]!,
-            profile: draft,
+            profile: profile,
             markdown: markdown,
             runId: runId,
             modelId: _smallModel,

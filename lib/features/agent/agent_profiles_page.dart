@@ -63,8 +63,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     final profilesAsync = ref.watch(agentProfilesProvider);
     final enabled = ref.watch(enabledDictionariesProvider);
     final pending = ref.watch(agentProfileInboxProvider).pending;
-    final profilesInUse =
-        ref.watch(agentRunControllerProvider).profilesInUse;
+    final profilesInUse = ref.watch(agentRunControllerProvider).profilesInUse;
     final regeneration = ref.watch(agentProfileRegenerationProvider);
     final settings = ref.watch(appSettingsProvider);
     final canRegenerateSelection =
@@ -296,6 +295,12 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
       }
     }
     final selected = _selected.contains(profile.dictionaryId);
+    final pairLabel =
+        profile.profile?.languagePairs.map((pair) => pair.label).join(' · ') ??
+        '';
+    final dateLabel = profile.confirmedAt == null
+        ? ''
+        : formatCorpusDate(profile.confirmedAt!);
     final card = _ProfileCard(
       title: profile.displayTitle,
       statusLabel: profile.status == DictionaryProfileStatus.confirmed
@@ -304,9 +309,10 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
       statusColor: profile.status == DictionaryProfileStatus.confirmed
           ? AppColors.success
           : AppColors.textSecondary,
-      subtitle: profile.confirmedAt == null
-          ? ''
-          : formatCorpusDate(profile.confirmedAt!),
+      subtitle: <String>[
+        if (pairLabel.isNotEmpty) pairLabel,
+        if (dateLabel.isNotEmpty) dateLabel,
+      ].join(' · '),
       leading: _selecting
           ? Checkbox(
               value: selected,
@@ -485,7 +491,8 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     final seen = <String>{};
     final targets = <DictionaryInfo>[
       for (final dictionary in dictionaries)
-        if (!regeneration.isGenerating(dictionary.id) && seen.add(dictionary.id))
+        if (!regeneration.isGenerating(dictionary.id) &&
+            seen.add(dictionary.id))
           dictionary,
     ];
     if (targets.isEmpty) return;

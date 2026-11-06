@@ -34,6 +34,9 @@ const _stored = StoredDictionaryProfile(
     dictionaryId: 'dict-a',
     title: '测试词典A',
     kind: '国語辞典',
+    languagePairs: <DictionaryLanguagePair>[
+      DictionaryLanguagePair(source: 'ja', target: 'ja', confidence: 0.8),
+    ],
     entryStructure: DictionaryEntryStructure(),
     searchBehavior: DictionarySearchBehavior(),
   ),
@@ -101,9 +104,7 @@ Future<void> _pumpProfilesPage(
             AgentProfileRegenerationState(activeDictionaries: active),
           ),
         ),
-        agentRunControllerProvider.overrideWith(
-          () => _FixedRunController(run),
-        ),
+        agentRunControllerProvider.overrideWith(() => _FixedRunController(run)),
       ],
       child: MaterialApp(
         theme: AppTheme.light(),
@@ -146,6 +147,7 @@ void main() {
     expect(find.text('词典档案'), findsOneWidget);
     expect(find.text('测试词典A'), findsOneWidget);
     expect(find.text('已信任'), findsOneWidget);
+    expect(find.textContaining('ja→ja'), findsOneWidget);
 
     final modeTooltip = tester.element(find.byTooltip('多选'));
 

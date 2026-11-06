@@ -1,7 +1,7 @@
 # Agent 重构实施计划（Agent-Refactor-Idea）
 
-- 状态：Phase 0 提案，2026-11-04（2026-11-06 修订 F7 约束为 token 跨度）；
-  **未实现，不改变当前行为**。
+- 状态：Phase 1a（F7 复合词补查）与 Phase 1b（档案编译器 v2）已实现
+  （2026-11-06）；Phase 2–4 未实现。
 - 文档角色：
   - 原始提案：`Agent-Refactor-Idea.txt`（项目根目录；产品逻辑锚点，不是当前规则）。
   - 决策：[ADR 0005](../adr/0005-agent-profile-compiler.md)（why/what；被拒方案）。
@@ -44,7 +44,7 @@
   └─ L4 富文本后处理（小模型，批量、离核心路径）
 ```
 
-## 3. Phase 1a：F7 复合词补查（先做，最小改动）
+## 3. Phase 1a：F7 复合词补查（已实现，2026-11-06）
 
 ### 3.1 要解决的问题
 
@@ -53,9 +53,9 @@
 `[MISSING]` 请求有界补查，因此不需要给模型开工具循环，只需在覆盖审查里
 显式允许“整体形式”查询，并在本地加硬约束。
 
-### 3.2 Prompt（拟加入 `coverageSystemPrompt` 的 Rules 段）
+### 3.2 Prompt（已加入 `coverageSystemPrompt` 的 Rules 段）
 
-英文原文，Phase 1 移入 `agent_prompts.dart`：
+英文原文，已移入 `agent_prompts.dart`：
 
 ```text
 - A source word may be split into pieces or be part of a fixed expression. If a
@@ -81,14 +81,12 @@
 2. 否则必须同时满足：
    - 是某个 source text 的精确连续子串（现有规则）；
    - 不含换行；
-   - **若 tokenization 可用**（`structureUnavailable == false` 且该 source
-     有 tokens）：在 source 的匹配位置中，至少有一处覆盖的 token 数 ≤ 6。
-     6 是 `AgentLimits` 的可配置预算，不是硬编码字符数；
+   - **若该 source 有 tokens**：在 source 的匹配位置中，至少有一处覆盖的
+     token 数 ≤ 6。6 是 `AgentLimits` 的可配置预算，不是硬编码字符数；
    - **若 tokenization 不可用或该 source 无 tokens**：只接受精确已知术语
      （token/pattern/citation key），任意子串丢弃；不做字符数兜底。
-3. 不满足时丢弃该 MISSING，计入 `droppedMissing`，debug 日志记录
-   `dropped MISSING[i] compound query=...`；沿用现有“有丢弃时提示可验证性
-   警告”的行为，不新增 UI 文案。
+3. 不满足时丢弃该 MISSING，计入 `droppedMissing`；沿用现有“有丢弃时提示
+   可验证性警告”的行为，不新增 UI 文案。
 4. `grammar`/`usage`/`context` 查询不套用 6-token 限制；仍受现有 100 字符
    全局上限、traceable 和 refs 校验约束。
 
@@ -127,30 +125,42 @@ tokenizer 调整，不需要改校验迁移逻辑。Phase 1 用真实样本回�
   后续编辑删除。
 - 全量 `flutter analyze` / `flutter test`；不使用真实 API Key。
 
-### 3.5 文档更新（Phase 1 实现后）
+### 3.5 文档更新（已执行，2026-11-06）
 
-- `docs/phase6-agent-design.md` §6.3.1：补一句“F7 允许有界的复合词/固定搭配
+- `docs/phase6-agent-design.md` §6.3.1：已补“F7 允许有界的复合词/固定搭配
   整体补查；本地限制为可配置的 token 跨度（默认 6）；不构成工具循环”。
-- `docs/phase6-agent-contracts.md` §5.1：补 MISSING 校验规则和丢弃行为。
+- `docs/phase6-agent-contracts.md` §5.1：已补 MISSING 校验规则和丢弃行为。
+- `docs/project-data.md` §8.1：已新增 `maxCoverageQueryChars`/
+  `maxCoverageCompoundTokens` 与 profile prompt 版本行；§2 测试基线已按
+  Phase 1b 结果更新（当前值以该文件为准）。
 - `docs/project_tips.md`：只有出现真实失败模式时才新增 T-138，不预先写。
-- 不在 Phase 0 修改现有设计/契约正文；本文件先作为提案。
+- 本次实现已同步更新 `docs/phase6-status.md`、ADR 0005 和 `README.md` 状态。
 
-## 4. Phase 1b：档案编译器 v2
+## 4. Phase 1b：档案编译器 v2（已实现，2026-11-06）
 
-1. 扩展现有档案 schema，新增方向性语言对、短简介、覆盖指标；字段名和
-   JSON 键在 `docs/phase6-agent-contracts.md` / `docs/schemas/agent/` 定义。
-2. 本地语言对分类：样本 headword/definition 的 Unicode 脚本比例 + 词典
-   元数据；输出 confidence；低置信度才发 1 次小模型回退。
-3. 探针保持 12–24 条，覆盖名词/动词/形容词/助词/片假名/汉字/英文/数字；
-   继续使用 `assets/agent/dictionary_probes.json`。
-4. 档案请求按 1–3 本/批合并（当前批上限偏保守，可提到 8k 或缩短 snippet）；
-   保留一次“正文不变、仅补标签”的修复。
-5. 档案在词典导入/选中时后台预热；分析时档案未就绪则用
-   `noProfileInstruction` 继续，不阻塞主流程。
-6. UI 显示方向性语言对和覆盖指标；用户确认流程不变（R-AGENT-10）。
+1. 扩展现有 profile v1 schema（可选字段）：短简介 `intro`、方向性
+   `language_pairs`、本地 `coverage`；JSON 键见
+   `docs/schemas/agent/dictionary-profile.v1.schema.json`。profile prompt 版本
+   升到 2，旧档案通过指纹失效并重新生成；schema 标识仍为 v1（向后兼容）。
+2. 本地语言对分类：标题脚本提示（日中/中日/和英/英和/三语标题等）+
+   headword/definition 的 Unicode 脚本比例；输出 confidence。模型
+   `[LANGUAGES]` 只作同一档案请求内的低置信度回退，**不额外发语言调用**。
+3. 探针扩到 16 条精确探针 + 11 条前缀探针，覆盖名词/动词/形容词/语法词/
+   片假名/汉字/英文/数字；每词典样本上限 20 条，继续使用
+   `assets/agent/dictionary_probes.json`。
+4. 档案请求按 1–3 本/批合并（`maxBatchTokens=20000`）；保留一次“正文不变、
+   仅补标签”的修复。`intro`/`language_pairs`/`coverage` 不改变用户确认流程。
+5. **预热范围**：没有新增“词典选中即自动联网”的后台预热（避免违反
+   R-PROD-03 的主动发送边界）。档案仍在 Agent run 开始或档案管理页显式生成；
+   生成失败/待确认时保留 `noProfileInstruction` 降级，不谎称已有档案。
+6. UI：Markdown 显示 `intro`、方向性语言对和覆盖指标；档案卡片 subtitle 显示
+   `ja→zh` 等方向对；用户确认流程不变（R-AGENT-10）。
 
-**验收**：5 本词典冷启动 ≤6 次调用；第二次 0 次；语言对误判有回退；
-切换词表不使档案失效。
+**验收**：5 本词典冷启动 ≤6 次调用（3 本/批）；第二次 0 次；语言对误判有
+模型 `[LANGUAGES]` 回退；无自动联网；切换词表不使档案失效。测试见
+`dictionary_sample_analysis_test.dart`、`dictionary_familiarization_service_test.dart`、
+`dictionary_profile_tag_parser_test.dart`、`agent_models_test.dart`、
+`agent_profiles_page_test.dart`。
 
 ## 5. Phase 2：请求管线收敛
 
@@ -203,9 +213,12 @@ citation/quote/词典顺序不回归。
 | F7 复合词查询通过率/丢弃率 | 持续跟踪，异常升高说明阈值或 prompt 退化 |
 | 格式/语言修复触发率 | 持续跟踪，异常升高说明 prompt 退化 |
 
-## 10. Phase 0 完成定义
+## 10. Phase 0 / 1a / 1b 完成定义
 
 - ADR 0005 和本实施计划已落盘；
-- 明确 F7 复合词能力“未实现”，不写进 UI/状态文档；
-- 不修改现有规则、契约正文或 `project-data.md`；
-- Phase 1a 的 prompt/guard/test 清单可直接执行。
+- Phase 1a 的 prompt、token 跨度校验和测试已实现；F7 复合词能力已在 design/
+  contracts/status 中记录为已实现；
+- Phase 1b 的 intro、方向性语言对、覆盖指标、探针/批量调整、Markdown/卡片
+  显示和测试已实现；未新增自动后台联网预热；
+- 未修改现有规则正文；`project-data.md` 的预算/测试基线更新需用户同意；
+- Phase 2–4 仍为未实现，不能写成已支持。

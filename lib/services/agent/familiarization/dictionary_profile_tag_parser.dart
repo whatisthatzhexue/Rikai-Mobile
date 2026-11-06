@@ -5,6 +5,7 @@ const _profileFieldTags = <String>{
   'ID',
   'TITLE',
   'KIND',
+  'INTRO',
   'LANGUAGES',
   'HEADWORD_FIELDS',
   'DEFINITION_FIELDS',
@@ -52,6 +53,7 @@ List<DictionaryProfile> parseTaggedProfiles(
     if (id.isEmpty) continue;
     final title = _tag(block, 'TITLE');
     final kind = _tag(block, 'KIND');
+    final intro = _tag(block, 'INTRO');
     final flags = <String>{
       for (final flag in _listTag(block, 'FLAGS')) flag.toLowerCase(),
     };
@@ -61,6 +63,7 @@ List<DictionaryProfile> parseTaggedProfiles(
         dictionaryId: id,
         title: title.isEmpty ? id : title,
         kind: kind.isEmpty ? 'unknown' : kind,
+        intro: intro,
         languages: _listTag(block, 'LANGUAGES'),
         entryStructure: DictionaryEntryStructure(
           headwordFields: _listTag(block, 'HEADWORD_FIELDS'),

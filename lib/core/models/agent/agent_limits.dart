@@ -97,6 +97,9 @@ class AgentLimits {
   static const int coverageNotesChars = 500;
   static const int coverageRootAndNotesChars =
       coverageRootTagChars + coverageNotesChars;
+
+  /// Default for [maxCoverageQueryChars]. The budget formula uses the
+  /// instance value so a configured limit cannot under-estimate the request.
   static const int coverageQueryChars = 100;
   static const int coverageRefsChars = 64;
   static const int coverageReasonChars = 500;
@@ -121,7 +124,7 @@ class AgentLimits {
     final chars =
         coverageRootAndNotesChars +
         maxCoverageMissing *
-            (coverageQueryChars +
+            (maxCoverageQueryChars +
                 coverageRefsChars +
                 coverageReasonChars +
                 coverageTagChars) +

@@ -782,7 +782,7 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
 
 > **2026-11-01 运行时格式**：模型输出 `[PROFILE]...[/PROFILE]` 扁平标签块
 > （`lib/services/agent/familiarization/dictionary_profile_tag_parser.dart`）：
-> `[ID]`/`[TITLE]`/`[KIND]`/`[LANGUAGES]`/`[HEADWORD_FIELDS]`/
+> `[ID]`/`[TITLE]`/`[KIND]`/`[INTRO]`/`[LANGUAGES]`/`[HEADWORD_FIELDS]`/
 > `[DEFINITION_FIELDS]`/`[FLAGS]`/`[EXACT_FORMS]`/`[PREFIX]`/`[SEARCH_NOTES]`/
 > `[STRENGTHS]`/`[CAVEATS]`/`[RECOMMENDED]`/`[ENTRY_NOTES]`。列表使用 `|`。
 > 解析失败、缺少某本词典或标签块完整性校验失败时，发送一次保持正文不变、仅补
@@ -797,7 +797,18 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
   "dictionary_id": "dict_a",
   "title": "講談社 日本語大辞典",
   "kind": "国語辞典",
+  "intro": "国語辞典。語義と用例が充実した中級向けの辞典。",
   "languages": ["ja", "zh"],
+  "language_pairs": [
+    {"source": "ja", "target": "ja", "confidence": 0.85}
+  ],
+  "coverage": {
+    "sample_entries": 20,
+    "entry_count": 120000,
+    "headword_scripts": ["han", "hiragana", "katakana"],
+    "definition_scripts": ["han", "hiragana"],
+    "feature_count": 3
+  },
   "entry_structure": {
     "headword_fields": ["見出し", "読み"],
     "definition_fields": ["語義", "用例"],
@@ -822,7 +833,13 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
 ```
 
 - 档案只保存结构与短样例；不保存大段原文/HTML/路径。
+- `intro` 是模型生成的一句简介；`language_pairs` 和 `coverage` 由本地样本
+  分析（`dictionary_sample_analysis.dart`）确定，模型不输出数值/置信度。
+  方向性语言对优先使用标题脚本提示和样本文字脚本；模型 `[LANGUAGES]` 只作
+  低置信度回退，不额外发请求。无 tokenizer/无法判断时语言对可为空。
 - 用户可编辑 Markdown 摘要；该 Markdown 是 prompt 的权威版本，JSON 作为结构备份。
+- profile prompt 版本已升到 2（新增 INTRO/本地分析字段）；旧档案通过指纹失效后
+  重新生成，JSON schema 标识仍为 v1（新字段可选，旧 JSON 可读）。
 - 指纹：`dictionary_id + mdx size/mtime + entryCount + encoding +
   profile_schema_version + prompt_version`；`model_id` 只作元数据。
 
