@@ -40,6 +40,8 @@ DictionarySampleAnalysis analyzeDictionarySample(
       headwordScripts: _scriptLabels(headwords),
       definitionScripts: _scriptLabels(definitions),
       featureCount: _featureCount(sample.entries),
+      sampleTruncated: sample.truncated,
+      unsampledProbeCount: sample.unsampledProbeCount,
     ),
   );
 }

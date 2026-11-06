@@ -185,6 +185,8 @@ class DictionaryCoverage {
     this.headwordScripts = const <String>[],
     this.definitionScripts = const <String>[],
     this.featureCount = 0,
+    this.sampleTruncated = false,
+    this.unsampledProbeCount = 0,
   });
 
   final int sampleEntries;
@@ -193,12 +195,21 @@ class DictionaryCoverage {
   final List<String> definitionScripts;
   final int featureCount;
 
+  /// True when the sampler entry cap stopped at least one probe. The profile is
+  /// still usable, but its coverage evidence is incomplete.
+  final bool sampleTruncated;
+
+  /// Number of configured probes skipped because of the entry cap.
+  final int unsampledProbeCount;
+
   bool get isEmpty =>
       sampleEntries == 0 &&
       entryCount == 0 &&
       headwordScripts.isEmpty &&
       definitionScripts.isEmpty &&
-      featureCount == 0;
+      featureCount == 0 &&
+      !sampleTruncated &&
+      unsampledProbeCount == 0;
 
   Map<String, Object?> toJson() => {
     'sample_entries': sampleEntries,
@@ -206,6 +217,8 @@ class DictionaryCoverage {
     'headword_scripts': headwordScripts,
     'definition_scripts': definitionScripts,
     'feature_count': featureCount,
+    if (sampleTruncated) 'sample_truncated': true,
+    if (unsampledProbeCount > 0) 'unsampled_probe_count': unsampledProbeCount,
   };
 
   factory DictionaryCoverage.fromJson(Map<String, Object?> json) {
@@ -215,6 +228,8 @@ class DictionaryCoverage {
       headwordScripts: agentStringList(json['headword_scripts']),
       definitionScripts: agentStringList(json['definition_scripts']),
       featureCount: agentInt(json['feature_count']),
+      sampleTruncated: agentBool(json['sample_truncated']),
+      unsampledProbeCount: agentInt(json['unsampled_probe_count']),
     );
   }
 }

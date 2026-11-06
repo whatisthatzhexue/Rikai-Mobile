@@ -334,7 +334,14 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   greeting/family/food/person_name/place_name）。`WordListPack` 本地校验数量/
   标签/重复；`evaluateWordListCoverage` 只用 exact→prefix→suffix 本地查词计算
   命中率。词表不参与 profile 格式推断，也不进入档案指纹；当前没有词表 UI、
-  用户导入或模型生成入口。
+  用户导入或模型生成入口。**词表覆盖仅表示语义场景覆盖，不是词性覆盖**；不给
+  词表加 POS tag，也不产出 POS 覆盖率（方案 C，2026-11-06）。
+- 2026-11-06 采样截断显式化：`DictionarySample.truncated`/
+  `unsampledProbes` 记录因 `maxEntries` 上限而未执行的探针；
+  `DictionaryCoverage.sampleTruncated`/`unsampledProbeCount` 随档案保存。
+  档案 Markdown、档案卡片和 familiarization warnings 显示本地化提示；该
+  诊断元数据只在本机使用，不进入 profile 模型 prompt，避免把内部预算字段
+  当作词典事实发送。
 - 用户确认：sheet 预览，可编辑 Markdown；按钮“保存并信任 / 本次跳过 / 不再询问”。
   “不再询问”= 保存当前档案并开启 `agent_profiles_auto_accept`；用户也可在 Agent
   设置中随时关闭/开启该选项（默认关闭）。档案确认由共享
@@ -427,8 +434,10 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
     `はず`、`わけ`、`ことになる`、`ようにする` 等），按 token 序列/lemma 最长匹配
     优先，重叠模式去重，用源文本子串查词典。
   - 不做无界 n-gram；不做全词典遍历。
-- 每目标按**用户词典顺序**逐本查；每词每典最多 3 条（覆盖多义/同形），摘要
-  ≤400 字符；去重 `(dictionaryId, entryKey)`；记录 `dictionaryOrder`。
+- 每目标按**用户词典顺序**携带全部选中词典查询；每词每典最多 3 条（覆盖多义/
+  同形），摘要 ≤400 字符；去重 `(dictionaryId, entryKey)`；记录
+  `dictionaryOrder`。2026-11-06 起 citation 发放的 group 起点按 target/query
+  序号轮转，避免第一本词典独占预算（详见下方 breadth-first 条目）。
   2026-10-31 反馈（F6，Wave 3 已实现）为全局递进：所有 target 先 exact；若唯一
   citation 数未达 `AgentLimits.maxEvidenceEntries`（默认 60，禁止散落硬编码），
   依次跑 prefix → suffix → incremental；每个模式只处理尚未满额的 target；某模式
@@ -438,6 +447,10 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   `AgentLimits` 同时控制 UI 的“已检索 N / 上限 M”。
 - `CitationRegistry.issue(toolCallId, dictionary, entryKey, headword, snippet,
   sourceSpan)` 发放 `source-N`；模型只看到 `source-N`，不能自造。
+  2026-11-06 P0：WORD note 的每个 citation 必须属于该 token 的 `citation_ids`；
+  GRAMMAR note 的每个 citation 必须属于该 pattern 的 `citation_ids` 或其组成
+  token 的 `citation_ids`；否则 validator 拒绝。repair prompt 的 `Available ids`
+  为 token/pattern 附带其 citation ids，保证修复时能重新归属而无需重发 evidence。
 - 证据包只含：token ID/文本/读音/词性/offset、语法模式、清洗后的 citation 摘要；
   **不含原始 HTML、路径、MDD 资源、音频**。
 - 2026-11-03 性能/证据质量增量：`EvidenceBuilder` 采用 **breadth-first + depth**
@@ -445,6 +458,10 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   suffix→incremental），避免前几个词把全局 citation 预算吃满；随后复用已取得的
   lookup 结果，在仍有预算时再补第 2/3 条和其他词典（每词每典上限仍为 3）。词典
   数据充足时，这能让更多 target 获得依据，而不是堆叠早期词条的冗余义项。
+  2026-11-06 P0：breadth/depth 的词典 group 顺序按 target 序号轮转起点，coverage
+  补充检索按 query 序号轮转，避免第一本词典按 `dictionary_order` 独占 60 条预算；
+  轮转仍遵守每词每典上限和用户词典顺序展示。选中但最终 0 条 citation 且没有查询
+  错误的词典写入 `AgentRunResult.warnings`，不静默隐藏。
   同一模式的多个 target 查询通过 `BatchLookupPort` 合并为一次 MDict worker 往返
   （worker 内部仍顺序执行，上限见 `AgentLimits.lookupBatchSize`）。主分析 prompt
   使用紧凑投影，只发送选中的 OCR variant 文本一次，evidence 不重复 source text，

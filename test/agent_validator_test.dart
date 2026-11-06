@@ -84,6 +84,18 @@ AgentAnalysis _analysis({
   );
 }
 
+const _citationB = AgentCitation(
+  id: 'source-2',
+  kind: 'mdict',
+  dictionaryId: 'dict_b',
+  dictionaryTitle: 'B',
+  dictionaryOrder: 1,
+  entryKey: '東京',
+  headword: '東京',
+  snippet: 'とうきょう。',
+  toolCallId: 'call-2',
+);
+
 void main() {
   const validator = AgentValidator();
 
@@ -246,6 +258,86 @@ void main() {
     expect(result.valid, isFalse);
     expect(
       result.errors.any((error) => error.contains('解释 A 在严格模式下缺少词典依据')),
+      isTrue,
+    );
+  });
+
+  test('word note citations must belong to the token evidence', () {
+    final evidence = AgentEvidenceBundle(
+      sources: _evidence.sources,
+      citations: <AgentCitation>[..._evidence.citations, _citationB],
+    );
+    final strict = validator.validate(
+      analysis: _analysis(citationIds: const <String>['source-2']),
+      evidence: evidence,
+      quotes: _quotes,
+      mode: AgentMode.strict,
+    );
+    expect(strict.valid, isFalse);
+    expect(strict.errors.any((error) => error.contains('不属于该词条的检索结果')), isTrue);
+
+    final loose = validator.validate(
+      analysis: _analysis(citationIds: const <String>['source-2']),
+      evidence: evidence,
+      quotes: _quotes,
+      mode: AgentMode.loose,
+    );
+    expect(loose.valid, isFalse);
+    expect(loose.errors.any((error) => error.contains('不属于该词条的检索结果')), isTrue);
+  });
+
+  test('grammar note citations must belong to the pattern or its tokens', () {
+    final pattern = AgentGrammarPatternEvidence(
+      id: 'p1',
+      surface: '何卒',
+      tokenIds: const <String>['t1'],
+      start: 0,
+      end: 2,
+      citationIds: const <String>['source-1'],
+    );
+    final evidence = AgentEvidenceBundle(
+      sources: _evidence.sources,
+      patterns: <AgentGrammarPatternEvidence>[pattern],
+      citations: <AgentCitation>[..._evidence.citations, _citationB],
+    );
+    AgentAnalysis analysisWith(List<String> citationIds) => AgentAnalysis(
+      sourceId: 'src-1',
+      translation: _analysis().translation,
+      segments: <AgentSegment>[
+        AgentSegment(
+          id: 'seg-1',
+          quoteId: 'q1',
+          literal: '何卒',
+          interpretation: '正式请求',
+          epistemic: AgentEpistemic.structuralAnalysis,
+          grammarNotes: <AgentGrammarNote>[
+            AgentGrammarNote(
+              patternId: 'p1',
+              explanation: '副词修饰',
+              citationIds: citationIds,
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final linked = validator.validate(
+      analysis: analysisWith(const <String>['source-1']),
+      evidence: evidence,
+      quotes: _quotes,
+      mode: AgentMode.strict,
+    );
+    expect(linked.valid, isTrue);
+
+    final unrelated = validator.validate(
+      analysis: analysisWith(const <String>['source-2']),
+      evidence: evidence,
+      quotes: _quotes,
+      mode: AgentMode.strict,
+    );
+    expect(unrelated.valid, isFalse);
+    expect(
+      unrelated.errors.any((error) => error.contains('不属于该模式或组成词')),
       isTrue,
     );
   });

@@ -1,7 +1,8 @@
 # Agent 重构实施计划（Agent-Refactor-Idea）
 
 - 状态：Phase 1a–3 已实现（2026-11-06）；Phase 4 的安全子集（静态词表包 +
-  非日语源降级）已实现，用户导入/词表 UI/非日语 tokenizer 仍未实现。
+  非日语源降级 + 采样截断显式化）已实现。词表仅表示语义覆盖，不提供 POS
+  覆盖率；用户导入/词表 UI/非日语 tokenizer 仍未实现。
 - 文档角色：
   - 原始提案：`Agent-Refactor-Idea.txt`（项目根目录；产品逻辑锚点，不是当前规则）。
   - 决策：[ADR 0005](../adr/0005-agent-profile-compiler.md)（why/what；被拒方案）。
@@ -210,15 +211,24 @@ citation/quote/词典顺序不回归；telemetry 不含正文/路径/Key。
 - 静态词表包：`assets/agent/word_lists/{ja,zh,en}.json`，每包 21 项
   （5/5/5/3/3 的 greeting/family/food/person_name/place_name 内部 tag）。
   `WordListPack` 本地校验数量/标签/重复/语言代码；不默认调用模型生成。
+- **词表边界（方案 C，2026-11-06）**：词表覆盖是语义场景覆盖，不是词性覆盖；
+  不新增 POS 指标，也不给 21 词词表加 POS tag。词性若未来需要，应另做探针或
+  UniDic 维度，不能把词表命中率包装成 POS 覆盖率。
 - 覆盖评估：`evaluateWordListCoverage` 只用本地 exact→prefix→suffix 查词计算
-  命中率和分标签命中；不进入 profile 格式推断，也不进入档案指纹。
+  命中率和分标签命中；不进入 profile 格式推断，也不进入档案指纹。当前没有
+  生产调用点，不能写成已接入 UI/档案。
+- **采样截断显式化（2026-11-06）**：`DictionarySample` 增加本地
+  `truncated`/`unsampledProbes`；达到 `maxEntries` 后未执行的 exact/prefix
+  探针必须记录，不能静默跳过。`DictionaryCoverage` 增加
+  `sampleTruncated`/`unsampledProbeCount`，档案 Markdown、档案卡片和
+  familiarization warnings 显示本地化提示；截断元数据不进入模型 prompt。
 - 非日语源：`script_language.dart` 检测脚本。假名→日语 tokenizer；拉丁/韩文/
   西里尔/泰文/阿拉伯文/希腊文等明确非日语脚本跳过 UniDic，设置
   `structureUnavailable`，只保留有界 raw-surface 查词；分析 prompt 不再允许
   `WORD`/`GRAMMAR`/`structure` 声明。Han-only 暂按日语处理（中文/韩文汉字
   歧义；需要显式 source language 或新 tokenizer 才能完整支持）。
-- **未实现**：词表管理 UI、用户导入、模型生成词表、非日语 `TokenizerPort`。
-  不得把这些写成已支持。
+- **未实现**：词表管理 UI、用户导入、模型生成词表、非日语 `TokenizerPort`、
+  POS 覆盖率。不得把这些写成已支持。
 
 ## 8. 不做什么
 

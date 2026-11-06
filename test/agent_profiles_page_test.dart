@@ -63,6 +63,29 @@ const _storedB = StoredDictionaryProfile(
   schemaVersion: 1,
 );
 
+const _storedTruncated = StoredDictionaryProfile(
+  dictionaryId: 'dict-a',
+  title: '测试词典A',
+  fingerprint: 'outdated',
+  markdown: '这是一份样本不完整的词典档案。',
+  status: DictionaryProfileStatus.confirmed,
+  profile: DictionaryProfile(
+    dictionaryId: 'dict-a',
+    title: '测试词典A',
+    kind: '国語辞典',
+    coverage: DictionaryCoverage(
+      sampleEntries: 20,
+      sampleTruncated: true,
+      unsampledProbeCount: 3,
+    ),
+    entryStructure: DictionaryEntryStructure(),
+    searchBehavior: DictionarySearchBehavior(),
+  ),
+  modelId: 'small',
+  promptVersion: 1,
+  schemaVersion: 1,
+);
+
 class _FixedRegenerationController extends AgentProfileRegenerationController {
   _FixedRegenerationController(this._initial);
 
@@ -318,4 +341,32 @@ void main() {
       expect(deleteSelected.onPressed, isNotNull);
     },
   );
+
+  testWidgets('profile card warns when the dictionary sample was truncated', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final preferences = await SharedPreferences.getInstance();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          agentProfilesProvider.overrideWith(
+            (ref) async => <StoredDictionaryProfile>[_storedTruncated],
+          ),
+          enabledDictionariesProvider.overrideWithValue(<DictionaryInfo>[
+            _dictionary,
+          ]),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const AgentProfilesPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('3 个探针未采样'), findsOneWidget);
+  });
 }

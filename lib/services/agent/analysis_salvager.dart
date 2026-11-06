@@ -49,7 +49,18 @@ AnalysisSalvageResult salvageAnalysis({
     for (final source in evidence.sources)
       for (final token in source.tokens) token.id: token.reading,
   };
+  final tokenCitations = <String, Set<String>>{
+    for (final source in evidence.sources)
+      for (final token in source.tokens) token.id: token.citationIds.toSet(),
+  };
   final patternIds = evidence.patterns.map((item) => item.id).toSet();
+  final patternCitations = <String, Set<String>>{
+    for (final pattern in evidence.patterns)
+      pattern.id: <String>{
+        ...pattern.citationIds,
+        for (final tokenId in pattern.tokenIds) ...?tokenCitations[tokenId],
+      },
+  };
   final notes = <String>[];
   final unresolved = <AgentUnresolved>[];
   final unresolvedQuotes = <String>{};
@@ -59,12 +70,18 @@ AnalysisSalvageResult salvageAnalysis({
     unresolved.add(AgentUnresolved(quoteId: quoteId, reason: reason));
   }
 
-  List<String> keepCitations(List<String> ids, {required bool required}) {
+  List<String> keepCitations(
+    List<String> ids, {
+    required bool required,
+    Set<String>? allowed,
+  }) {
     final kept = <String>[
       for (final id in ids)
-        if (citationIds.contains(id)) id,
+        if (citationIds.contains(id) &&
+            (allowed == null || allowed.contains(id)))
+          id,
     ];
-    if (kept.length != ids.length) notes.add('已移除无效 citation');
+    if (kept.length != ids.length) notes.add('已移除无效或未归属的 citation');
     if (required && kept.isEmpty) return const <String>[];
     return kept;
   }
@@ -101,7 +118,11 @@ AnalysisSalvageResult salvageAnalysis({
         notes.add('已移除未知 token 的词注');
         continue;
       }
-      final kept = keepCitations(note.citationIds, required: false);
+      final kept = keepCitations(
+        note.citationIds,
+        required: false,
+        allowed: tokenCitations[note.tokenId],
+      );
       if (mode == AgentMode.strict && kept.isEmpty) {
         notes.add('已移除无词典依据的词注');
         continue;
@@ -130,7 +151,11 @@ AnalysisSalvageResult salvageAnalysis({
         notes.add('已移除未知语法模式');
         continue;
       }
-      final kept = keepCitations(note.citationIds, required: false);
+      final kept = keepCitations(
+        note.citationIds,
+        required: false,
+        allowed: patternCitations[note.patternId],
+      );
       grammarNotes.add(
         AgentGrammarNote(
           patternId: note.patternId,

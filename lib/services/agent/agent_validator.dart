@@ -128,7 +128,8 @@ class AgentValidator {
       }
       final claimCitations = <String>[];
       for (final note in segment.wordNotes) {
-        if (!tokenMap.containsKey(note.tokenId)) {
+        final token = tokenMap[note.tokenId];
+        if (token == null) {
           errors.add('词注引用了不存在的 token ${note.tokenId}');
         }
         validateCitations(
@@ -136,9 +137,16 @@ class AgentValidator {
           '词注 ${note.surface}',
           requiredInStrict: mode == AgentMode.strict,
         );
+        // A citation ID existing is not enough: it must be one of the entries
+        // retrieved for this token. Otherwise a model can attach dictionary A's
+        // entry to a word that only dictionary B covered.
+        if (token != null &&
+            note.citationIds.isNotEmpty &&
+            note.citationIds.any((id) => !token.citationIds.contains(id))) {
+          errors.add('词注 ${note.surface} 的 citation 不属于该词条的检索结果');
+        }
         claimCitations.addAll(note.citationIds);
         if (note.reading.isNotEmpty) {
-          final token = tokenMap[note.tokenId];
           final tokenReading = token?.reading ?? '';
           if (tokenReading.isNotEmpty && tokenReading != note.reading) {
             errors.add('词注 ${note.surface} 的读音与 UniDic 不一致');
@@ -151,7 +159,8 @@ class AgentValidator {
         }
       }
       for (final note in segment.grammarNotes) {
-        if (!patternMap.containsKey(note.patternId)) {
+        final pattern = patternMap[note.patternId];
+        if (pattern == null) {
           errors.add('语法注引用了不存在的模式 ${note.patternId}');
         }
         validateCitations(
@@ -161,6 +170,16 @@ class AgentValidator {
               mode == AgentMode.strict &&
               segment.epistemic == AgentEpistemic.dictionaryFact,
         );
+        if (pattern != null && note.citationIds.isNotEmpty) {
+          final allowed = <String>{
+            ...pattern.citationIds,
+            for (final tokenId in pattern.tokenIds)
+              ...?tokenMap[tokenId]?.citationIds,
+          };
+          if (note.citationIds.any((id) => !allowed.contains(id))) {
+            errors.add('语法注 ${note.patternId} 的 citation 不属于该模式或组成词的检索结果');
+          }
+        }
         claimCitations.addAll(note.citationIds);
         if (mode == AgentMode.strict &&
             segment.epistemic == AgentEpistemic.structuralAnalysis &&

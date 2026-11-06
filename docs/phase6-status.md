@@ -14,7 +14,8 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > device/visual acceptance remains pending. Phase 1a–3 of the Agent refactor
 > and the Phase 4 safe subset (static coverage packs + non-Japanese script
 > degradation) are implemented (2026-11-06); word-list UI/import/generation
-> and non-Japanese tokenizers are not.**
+> and non-Japanese tokenizers are not. Word-list coverage is semantic-only, not
+> POS coverage; sample-cap truncation is explicitly reported.**
 
 > Follow `docs/agent_docs/device-feedback-2026-10-31.md` for the remaining
 > Wave 4 device checks. **Current test/device/build/environment numbers are
@@ -126,8 +127,43 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 - 新增 `script_language.dart`：假名→日语 tokenizer；拉丁/韩文/西里尔/泰文/
   阿拉伯文/希腊文等明确非日语脚本跳过 UniDic，设置 `structureUnavailable`，
   只保留有界 raw-surface 查词；Han-only 暂按日语处理（歧义）。
-- **未实现**：词表管理 UI、用户导入、模型生成词表、非日语 `TokenizerPort`；
-  不能写成已支持。真实 provider/设备未验收。
+- **未实现**：词表管理 UI、用户导入、模型生成词表、非日语 `TokenizerPort`、
+  POS 覆盖率；不能写成已支持。真实 provider/设备未验收。
+
+## 2026-11-06 Phase 4 补充：词表语义边界与采样截断显式化
+
+- 词表方案定为 C：21 项词表只表示语义场景覆盖（寒暄/家庭/饮食/人名/地名），
+  不是词性覆盖；不新增 POS 指标，也不给词表加 POS tag。`evaluateWordListCoverage`
+  仍只做本地命中统计，且当前没有生产调用点。
+- `DictionarySample` 新增本地 `truncated`/`unsampledProbes`：`maxEntries` 上限
+  导致未执行的 exact/prefix 探针必须记录；`toPromptJson()` 明确排除这些内部
+  字段，profile prompt 形状不变。
+- `DictionaryCoverage` 新增可选 `sampleTruncated`/`unsampledProbeCount`；
+  档案 Markdown、档案卡片和 familiarization warnings 显示本地化提示。
+- 自动化验证：`flutter analyze` 通过；完整 `flutter test` 通过，新增 sample
+  截断 round-trip、sample analysis coverage、familiarization warnings/Markdown、
+  profile card warning 用例。真实 MDict 截断行为仍需设备/真实词典冒烟，不能
+  写成已验证。
+
+## 2026-11-06 P0 citation allocation / attribution
+
+- `EvidenceBuilder` breadth/depth 的 group 顺序按 target 序号轮转用户词典起点；
+  coverage `lookupExtraQueries` 按 query 序号轮转。5 词典 × 20 target 的合成
+  全命中用例从“第一本词典 20 条”变为每本 12 条（全局上限 60），每个 target
+  仍有至少一条依据。轮转按 `DictionaryInfo.order` 排名，不依赖调用方列表顺序。
+- `AgentValidator` 增加 citation 归属：WORD note 的每个 citation 必须属于该
+  token 的 `citation_ids`；GRAMMAR note 的每个 citation 必须属于该 pattern 或
+  其组成 token 的 `citation_ids`。该规则在严格/宽松模式都生效。repair 仍失败时，
+  `salvageAnalysis` 也会移除无效或未归属的 citation，避免降级结果继续展示错误依据。
+- repair prompt 的 `Available ids` 改为 `token/pattern ... citations ...`，使一次
+  格式修复可以重新归属 citation，同时仍不发送完整 evidence/input。
+- 选中但最终 0 条 citation 且没有查询错误的词典写入
+  `AgentRunResult.warnings`（中/英/日文案由 `AgentUiStrings` 提供），不再静默
+  隐藏；查询错误仍由现有 `dictionaryIssues` 警告覆盖。
+- 自动化验证：`flutter analyze` 无问题；完整 `flutter test` 通过。新增
+  evidence builder 轮转、coverage 轮转、validator 归属、salvage 归属过滤、
+  orchestrator 零引用警告和 repair id 映射测试。真实 provider/arm64/真实大词典
+  仍未验收。
 
 ## Implemented
 

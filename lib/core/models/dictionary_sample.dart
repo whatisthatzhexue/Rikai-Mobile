@@ -118,13 +118,34 @@ class DictionarySample {
     required this.dictionaryId,
     required this.metadata,
     required this.entries,
+    this.truncated = false,
+    this.unsampledProbes = const <String>[],
   });
 
   final String dictionaryId;
   final DictionarySampleMetadata metadata;
   final List<DictionarySampleEntry> entries;
 
-  Map<String, Object?> toJson() => {
+  /// True when the entry cap stopped one or more configured probes before they
+  /// could run. The sample is still usable, but coverage is incomplete.
+  final bool truncated;
+
+  /// Probes skipped because [entries] reached the sampler limit. Kept local:
+  /// this metadata is never sent to the profile model.
+  final List<String> unsampledProbes;
+
+  int get unsampledProbeCount => unsampledProbes.length;
+
+  /// Full local representation, including truncation diagnostics.
+  Map<String, Object?> toJson() => <String, Object?>{
+    ...toPromptJson(),
+    if (truncated) 'truncated': true,
+    if (unsampledProbes.isNotEmpty) 'unsampled_probes': unsampledProbes,
+  };
+
+  /// Model-facing projection. Internal budget/truncation fields are omitted so
+  /// the profile prompt keeps its previous shape.
+  Map<String, Object?> toPromptJson() => <String, Object?>{
     'dictionary_id': dictionaryId,
     'metadata': metadata.toJson(),
     'entries': entries.map((entry) => entry.toJson()).toList(),
@@ -145,6 +166,8 @@ class DictionarySample {
                 )
                 .toList(growable: false)
           : const <DictionarySampleEntry>[],
+      truncated: agentBool(json['truncated']),
+      unsampledProbes: agentStringList(json['unsampled_probes']),
     );
   }
 }

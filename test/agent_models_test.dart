@@ -212,6 +212,8 @@ void main() {
         headwordScripts: <String>['han', 'hiragana'],
         definitionScripts: <String>['han', 'hiragana'],
         featureCount: 2,
+        sampleTruncated: true,
+        unsampledProbeCount: 4,
       ),
       entryStructure: DictionaryEntryStructure(
         headwordFields: <String>['見出し'],
@@ -230,6 +232,8 @@ void main() {
     expect(restoredProfile.languagePairs.single.label, 'ja→ja');
     expect(restoredProfile.coverage.sampleEntries, 12);
     expect(restoredProfile.coverage.featureCount, 2);
+    expect(restoredProfile.coverage.sampleTruncated, isTrue);
+    expect(restoredProfile.coverage.unsampledProbeCount, 4);
 
     const quote = AgentQuoteRef(
       id: 'q1',
@@ -287,10 +291,16 @@ void main() {
           features: DictionarySampleFeatures(hasRuby: true, tagCount: 3),
         ),
       ],
+      truncated: true,
+      unsampledProbes: <String>['は', 'です'],
     );
     final restored = DictionarySample.fromJson(sample.toJson());
     expect(restored.entries.single.features.hasRuby, isTrue);
     expect(restored.entries.single.snippet, 'なにとぞ');
+    expect(restored.truncated, isTrue);
+    expect(restored.unsampledProbes, <String>['は', 'です']);
+    expect(sample.toPromptJson().containsKey('truncated'), isFalse);
+    expect(sample.toPromptJson().containsKey('unsampled_probes'), isFalse);
   });
 
   test('provider base URLs require HTTPS and a host', () {

@@ -28,6 +28,13 @@ const _dictionary = DictionaryInfo(
   order: 0,
 );
 
+const _dictionaryB = DictionaryInfo(
+  id: 'dict_b',
+  title: 'B',
+  mdxPath: '/b.mdx',
+  order: 1,
+);
+
 const _provider = AgentProviderConfig(
   id: 'p1',
   kind: AgentProviderKind.openAiCompatible,
@@ -150,6 +157,39 @@ class _FakeTokenize implements TokenizePort {
   }
 }
 
+/// Only [dictionary] returns entries; another selected dictionary is queried
+/// but produces no citations (not an error).
+class _OneDictionaryLookup implements LookupPort {
+  _OneDictionaryLookup(this.dictionary);
+
+  final DictionaryInfo dictionary;
+
+  @override
+  Future<LookupResult> lookup(LookupRequest request) async {
+    return LookupResult(
+      query: request.query,
+      candidates: request.rawCandidates,
+      groups: <DictionaryLookupGroup>[
+        DictionaryLookupGroup(
+          dictionary: dictionary,
+          entries: const <LookupEntry>[
+            LookupEntry(matchedKey: '何卒', headword: '何卒', html: '<b>なにとぞ</b>'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<List<String>> suggest({
+    required String prefix,
+    required List<DictionaryInfo> dictionaries,
+    int limit = 10,
+  }) async {
+    return const <String>[];
+  }
+}
+
 class _FakeLookup implements LookupPort {
   @override
   Future<LookupResult> lookup(LookupRequest request) async {
@@ -209,6 +249,7 @@ class _BlockingRepairProvider implements LlmPort {
 AgentOrchestrator _orchestrator({
   required LlmPort provider,
   _FakeOcr? ocr,
+  LookupPort? lookup,
   AgentLimits limits = const AgentLimits(
     maxCoverageFallback: 0,
     enableRichTextPostProcess: false,
@@ -217,7 +258,7 @@ AgentOrchestrator _orchestrator({
   return AgentOrchestrator(
     ocrPort: ocr ?? _FakeOcr(),
     tokenizePort: _FakeTokenize(),
-    lookupPort: _FakeLookup(),
+    lookupPort: lookup ?? _FakeLookup(),
     grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
     citations: CitationRegistry(),
     llmFactory: (_) => provider,
@@ -252,6 +293,31 @@ void main() {
         .join('\n');
     expect(requestText.contains('何卒'), isTrue);
     expect(requestText.contains('/sdcard'), isFalse);
+  });
+
+  test('warns when a selected dictionary produced no citation', () async {
+    final provider = FakeProvider(responseText: _analysisTagged);
+    final result =
+        await _orchestrator(
+          provider: provider,
+          lookup: _OneDictionaryLookup(_dictionary),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.strict,
+            dictionaries: <DictionaryInfo>[_dictionary, _dictionaryB],
+            provider: _provider,
+            userText: '何卒',
+          ),
+        );
+
+    expect(result.warnings, isNotEmpty);
+    expect(
+      result.warnings.any(
+        (warning) => warning.contains('B') && warning.contains('依据'),
+      ),
+      isTrue,
+    );
   });
 
   test('OCR image paths are never placed in the provider request', () async {
@@ -334,6 +400,7 @@ void main() {
       expect(repairPrompt.contains('Validation errors'), isTrue);
       expect(repairPrompt.contains('Previous output'), isTrue);
       expect(repairPrompt.contains('Available ids'), isTrue);
+      expect(repairPrompt.contains('token t1 citations source-1'), isTrue);
       expect(repairPrompt.contains('Input envelope'), isFalse);
       expect(repairPrompt.contains('Evidence bundle'), isFalse);
       expect(provider.requests.last.model, 'small');

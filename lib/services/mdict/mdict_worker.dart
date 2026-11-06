@@ -925,6 +925,7 @@ Future<Map<String, Object?>> _sample(
   final dictionary = await _ensureOpen(rawDescriptor, openDictionaries);
   final entries = <Map<String, Object?>>[];
   final seen = <String>{};
+  final unsampledProbes = <String>[];
 
   Future<void> addHit(RecordOffsetInfo hit) async {
     if (entries.length >= maxEntries) return;
@@ -939,17 +940,26 @@ Future<Map<String, Object?>> _sample(
     }
   }
 
-  for (final probe in exactProbes) {
+  // Record probes skipped by the entry cap. The profile layer turns this into
+  // a visible warning instead of silently shrinking coverage.
+  var exactIndex = 0;
+  for (; exactIndex < exactProbes.length; exactIndex++) {
     if (entries.length >= maxEntries) break;
+    final probe = exactProbes[exactIndex];
     final hits = await dictionary.mdx.locateAll(probe);
     for (final hit in hits) {
       await addHit(hit);
       if (entries.length >= maxEntries) break;
     }
   }
+  if (exactIndex < exactProbes.length) {
+    unsampledProbes.addAll(exactProbes.skip(exactIndex));
+  }
 
-  for (final probe in prefixProbes) {
+  var prefixIndex = 0;
+  for (; prefixIndex < prefixProbes.length; prefixIndex++) {
     if (entries.length >= maxEntries) break;
+    final probe = prefixProbes[prefixIndex];
     final keys = dictionary.mdx.search(probe, limit: perProbe);
     for (final key in keys) {
       if (entries.length >= maxEntries) break;
@@ -959,6 +969,9 @@ Future<Map<String, Object?>> _sample(
         if (entries.length >= maxEntries) break;
       }
     }
+  }
+  if (prefixIndex < prefixProbes.length) {
+    unsampledProbes.addAll(prefixProbes.skip(prefixIndex));
   }
 
   final rawCss = rawDescriptor['cssPaths'];
@@ -973,6 +986,8 @@ Future<Map<String, Object?>> _sample(
       'has_css': rawCss is List && rawCss.isNotEmpty,
     },
     'entries': entries,
+    'truncated': unsampledProbes.isNotEmpty,
+    'unsampled_probes': unsampledProbes,
   };
 }
 

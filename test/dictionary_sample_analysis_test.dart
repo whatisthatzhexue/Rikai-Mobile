@@ -19,11 +19,15 @@ DictionarySample _sample(
   String title,
   List<DictionarySampleEntry> entries, {
   int entryCount = 1000,
+  bool truncated = false,
+  List<String> unsampledProbes = const <String>[],
 }) {
   return DictionarySample(
     dictionaryId: 'dict_a',
     metadata: DictionarySampleMetadata(title: title, entryCount: entryCount),
     entries: entries,
+    truncated: truncated,
+    unsampledProbes: unsampledProbes,
   );
 }
 
@@ -123,5 +127,22 @@ void main() {
 
     expect(analysis.languagePairs, isEmpty);
     expect(analysis.coverage.isEmpty, isTrue);
+  });
+
+  test('keeps explicit truncation diagnostics in coverage', () {
+    final analysis = analyzeDictionarySample(
+      _sample(
+        '国語辞典',
+        <DictionarySampleEntry>[_entry('食べる', 'たべる。食事をする。')],
+        truncated: true,
+        unsampledProbes: const <String>['は', 'です'],
+      ),
+    );
+
+    expect(analysis.coverage.isEmpty, isFalse);
+    expect(analysis.coverage.sampleTruncated, isTrue);
+    expect(analysis.coverage.unsampledProbeCount, 2);
+    expect(analysis.coverage.toJson()['sample_truncated'], isTrue);
+    expect(analysis.coverage.toJson()['unsampled_probe_count'], 2);
   });
 }

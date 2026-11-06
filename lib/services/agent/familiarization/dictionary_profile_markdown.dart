@@ -23,6 +23,8 @@ String profileToMarkdown(
       headwordScripts: '见出し文字',
       definitionScripts: '释义文字',
       featureCount: '结构特征',
+      sampleTruncated: '采样提示',
+      unsampledProbes: '个探针未采样',
       strengthsCaveats: '强项 / 注意事项',
       strengths: '强项',
       caveats: '注意',
@@ -49,6 +51,8 @@ String profileToMarkdown(
       headwordScripts: 'Headword scripts',
       definitionScripts: 'Definition scripts',
       featureCount: 'Structural features',
+      sampleTruncated: 'Sampling warning',
+      unsampledProbes: ' probes were not sampled',
       strengthsCaveats: 'Strengths / caveats',
       strengths: 'Strengths',
       caveats: 'Caveats',
@@ -75,6 +79,8 @@ String profileToMarkdown(
       headwordScripts: '見出し文字',
       definitionScripts: '語義文字',
       featureCount: '構造特徴',
+      sampleTruncated: 'サンプリング警告',
+      unsampledProbes: ' 個の探針が未サンプル',
       strengthsCaveats: '強み / 注意',
       strengths: '強み',
       caveats: '注意',
@@ -143,6 +149,12 @@ String profileToMarkdown(
         '${profile.coverage.definitionScripts.map((script) => _scriptLabel(script, language)).join(labels.joiner)}',
       )
       ..writeln('- ${labels.featureCount}: ${profile.coverage.featureCount}');
+    if (profile.coverage.sampleTruncated) {
+      buffer.writeln(
+        '- ${labels.sampleTruncated}: '
+        '${profile.coverage.unsampledProbeCount}${labels.unsampledProbes}',
+      );
+    }
   }
   buffer
     ..writeln('')
@@ -214,6 +226,8 @@ class _ProfileLabels {
     required this.headwordScripts,
     required this.definitionScripts,
     required this.featureCount,
+    required this.sampleTruncated,
+    required this.unsampledProbes,
     required this.strengthsCaveats,
     required this.strengths,
     required this.caveats,
@@ -240,6 +254,8 @@ class _ProfileLabels {
   final String headwordScripts;
   final String definitionScripts;
   final String featureCount;
+  final String sampleTruncated;
+  final String unsampledProbes;
   final String strengthsCaveats;
   final String strengths;
   final String caveats;

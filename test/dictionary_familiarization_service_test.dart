@@ -90,6 +90,9 @@ const _profileTaggedOther = '''
 ''';
 
 class _FakeSamplePort implements DictionarySamplePort {
+  _FakeSamplePort({this.truncated = false});
+
+  final bool truncated;
   int calls = 0;
 
   @override
@@ -112,6 +115,8 @@ class _FakeSamplePort implements DictionarySamplePort {
           features: DictionarySampleFeatures(),
         ),
       ],
+      truncated: truncated,
+      unsampledProbes: truncated ? const <String>['は', 'です'] : const <String>[],
     );
   }
 }
@@ -146,6 +151,35 @@ void main() {
     expect(result.draft!.coverage.definitionScripts, contains('hiragana'));
     expect(await repository.load('dict_a'), isNull);
     expect(samples.calls, 1);
+  });
+
+  test('surfaces truncated samples in warnings and markdown only', () async {
+    final repository = InMemoryDictionaryProfileRepository();
+    final samples = _FakeSamplePort(truncated: true);
+    final llm = FakeProvider(responseText: _profileTagged);
+    final service = _service(
+      samples: samples,
+      repository: repository,
+      llm: llm,
+    );
+
+    final generation = await service.generateMany(<DictionaryInfo>[
+      _dictionary,
+    ]);
+
+    expect(generation.proposals, hasLength(1));
+    expect(generation.warnings.single, contains('2 个探针未采样'));
+    final proposal = generation.proposals.single;
+    expect(proposal.profile.coverage.sampleTruncated, isTrue);
+    expect(proposal.profile.coverage.unsampledProbeCount, 2);
+    expect(proposal.markdown, contains('采样提示'));
+    expect(proposal.markdown, contains('2个探针未采样'));
+
+    // Truncation diagnostics stay local; the model-facing sample JSON keeps
+    // its previous shape.
+    final prompt = llm.requests.single.messages.last.text;
+    expect(prompt, isNot(contains('"truncated"')));
+    expect(prompt, isNot(contains('unsampled_probes')));
   });
 
   test('profile prompt asks for a one-sentence intro', () async {

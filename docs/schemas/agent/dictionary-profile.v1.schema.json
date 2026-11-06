@@ -56,7 +56,9 @@
           "maxItems": 9,
           "items": {"type": "string", "maxLength": 16}
         },
-        "feature_count": {"type": "integer", "minimum": 0, "maximum": 6}
+        "feature_count": {"type": "integer", "minimum": 0, "maximum": 6},
+        "sample_truncated": {"type": "boolean"},
+        "unsampled_probe_count": {"type": "integer", "minimum": 0}
       }
     },
     "entry_structure": {

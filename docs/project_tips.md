@@ -4,7 +4,7 @@
 > 其它文档只引用 `T-###`，不再复制误区正文；**今后的新误区只在本文件追加**。
 >
 > - last_migrated: 2026-11-01（从原交接文档 §5 迁移，共 129 条）
-> - last_updated: 2026-11-04（新增 T-137）
+> - last_updated: 2026-11-06（新增词典采样截断速查）
 > - 编号说明：条目使用连续的 `T-001`–`T-137`；原文档 §5.14 的 #122–#130
 >   顺延为 `T-121`–`T-129`。编号一经发布不再复用。
 >
@@ -1411,3 +1411,4 @@ fallback。用户会看到其他本来可以正常格式化的 section 也退回
 | SSE 已 finish=stop，UI 仍等数秒 | provider 在 finish_reason/[DONE]/message_stop 立即停读；首个解析/校验后先渲染 provisional 结果（“结果已出，正在复核…”）；检查 repair/rich-text 后置请求；看 `[AgentTiming]`（`T-136`） |
 | 富文本批量请求中一个 section 损坏，其他 section 也退回纯文本 | 按 section 独立解析/校验；marker 缺失或 diff 失败只降级该 section；只有 provider/空响应/超长才整批回退（`T-137`） |
 | 长结果被静默截断，UI/导出没有提示 | 解析器设置 `AgentAnalysis.truncated`；UI `result.warnings` 与 Markdown 导出显示截断警告；禁止静默丢弃（`R-AGENT-LIMITS-001`） |
+| 词典档案样本只有 20 条，后续探针像没执行 | 检查 `DictionarySample.truncated`/`unsampledProbes`；`DictionaryCoverage.sampleTruncated` 在 Markdown/档案卡片/warnings 显示；不要静默跳过探针（`R-AGENT-LIMITS-001`） |

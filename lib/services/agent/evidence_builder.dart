@@ -67,6 +67,7 @@ class EvidenceBuilder {
     var structureUnavailable = false;
     final dictionaryIssues = <String, AgentEvidenceDictionaryIssue>{};
     final sourceCharLimit = maxSourceChars ?? limits.maxSourceChars;
+    final dictionaryOrder = _dictionaryRanks(dictionaries);
 
     for (final source in sources) {
       final text = _sourceText(source);
@@ -216,6 +217,7 @@ class EvidenceBuilder {
 
     for (var index = 0; index < selectedTargets.length; index++) {
       selectedTargets[index].toolCallId = 'evidence-${index + 1}';
+      selectedTargets[index].ordinal = index;
     }
 
     // F6 breadth pass: give every target at most one citation before granting
@@ -237,7 +239,12 @@ class EvidenceBuilder {
     bool applyBreadth(_LookupTarget target, LookupResult result) {
       recordGroupErrors(result);
       if (target.citationIds.isNotEmpty) return false;
-      for (final group in result.groups) {
+      final groups = _groupsInRotation(
+        result.groups,
+        target.ordinal,
+        dictionaryOrder,
+      );
+      for (final group in groups) {
         var remaining =
             maxEntriesPerDictionary -
             (target.perDictionary[group.dictionary.id] ?? 0);
@@ -290,7 +297,12 @@ class EvidenceBuilder {
       required bool firstPerDictionaryOnly,
     }) {
       recordGroupErrors(result);
-      for (final group in result.groups) {
+      final groups = _groupsInRotation(
+        result.groups,
+        target.ordinal,
+        dictionaryOrder,
+      );
+      for (final group in groups) {
         final current = target.perDictionary[group.dictionary.id] ?? 0;
         if (firstPerDictionaryOnly && current > 0) continue;
         var remaining = maxEntriesPerDictionary - current;
@@ -546,6 +558,7 @@ class EvidenceBuilder {
       order.add(query);
       result[query] = <AgentCitation>[];
     }
+    final dictionaryOrder = _dictionaryRanks(dictionaries);
     if (order.isEmpty || dictionaries.isEmpty || maxNewCitations <= 0) {
       return result;
     }
@@ -569,7 +582,12 @@ class EvidenceBuilder {
 
     void applyLookup(String query, int queryIndex, LookupResult lookup) {
       final counts = perQuery[query]!;
-      for (final group in lookup.groups) {
+      final groups = _groupsInRotation(
+        lookup.groups,
+        queryIndex,
+        dictionaryOrder,
+      );
+      for (final group in groups) {
         if (group.error.isNotEmpty) {
           onDictionaryError?.call(group.dictionary, group.error);
         }
@@ -768,6 +786,7 @@ abstract class _LookupTarget {
   List<String> get candidates;
 
   var toolCallId = '';
+  var ordinal = 0;
 
   final Set<String> citationIds = <String>{};
   final Map<String, int> perDictionary = <String, int>{};
@@ -795,6 +814,48 @@ class _PatternTarget extends _LookupTarget {
 }
 
 String _targetKey(List<String> candidates) => candidates.join('\u0000');
+
+/// Rank by the user-visible [DictionaryInfo.order], not by the caller's list
+/// position. The Agent UI supplies a sorted list, but tests and integrations
+/// may pass dictionaries in another order.
+Map<String, int> _dictionaryRanks(List<DictionaryInfo> dictionaries) {
+  final ordered = List<DictionaryInfo>.of(dictionaries)
+    ..sort((left, right) => left.order.compareTo(right.order));
+  return <String, int>{
+    for (var index = 0; index < ordered.length; index++)
+      ordered[index].id: index,
+  };
+}
+
+/// Rotates lookup groups by the target/query ordinal so the global citation
+/// budget is not consumed by the first dictionary in user order.
+///
+/// The result is a stable permutation: groups are ordered by their position in
+/// the user dictionary list, starting at `start % dictionaryCount` and wrapping
+/// around. Unknown groups keep their original relative order after known ones.
+List<DictionaryLookupGroup> _groupsInRotation(
+  List<DictionaryLookupGroup> groups,
+  int start,
+  Map<String, int> dictionaryOrder,
+) {
+  if (groups.length <= 1 || dictionaryOrder.isEmpty) return groups;
+  final count = dictionaryOrder.length;
+  final rotation = start % count;
+  final indexes = List<int>.generate(groups.length, (index) => index);
+  indexes.sort((left, right) {
+    final leftOrder =
+        dictionaryOrder[groups[left].dictionary.id] ?? (count + left);
+    final rightOrder =
+        dictionaryOrder[groups[right].dictionary.id] ?? (count + right);
+    final leftRotated = (leftOrder - rotation) % count;
+    final rightRotated = (rightOrder - rotation) % count;
+    if (leftRotated != rightRotated) {
+      return leftRotated.compareTo(rightRotated);
+    }
+    return left.compareTo(right);
+  });
+  return <DictionaryLookupGroup>[for (final index in indexes) groups[index]];
+}
 
 /// Bounded word-like candidates for the UniDic-unavailable fallback.
 ///

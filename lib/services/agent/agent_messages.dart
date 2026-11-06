@@ -33,6 +33,11 @@ String agentCoverageNoNew(AgentUiLanguage language) =>
 String agentDictionaryLookupFailed(AgentUiLanguage language, String name) =>
     AgentUiStrings.of(language).dictionaryLookupFailed(name);
 
+String agentDictionaryNoEvidence(
+  AgentUiLanguage language,
+  List<String> names,
+) => AgentUiStrings.of(language).dictionaryNoEvidence(names);
+
 String agentInputRequiredMessage(AgentUiLanguage language) =>
     AgentUiStrings.of(language).inputRequired;
 

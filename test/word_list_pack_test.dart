@@ -19,6 +19,25 @@ void main() {
     }
   });
 
+  test('word-list tags stay semantic, not part-of-speech', () {
+    expect(
+      wordListTagIds,
+      unorderedEquals(<String>[
+        'greeting',
+        'family',
+        'food',
+        'person_name',
+        'place_name',
+      ]),
+    );
+    expect(
+      wordListTagIds.where(
+        const <String>{'verb', 'adjective', 'particle', 'auxiliary'}.contains,
+      ),
+      isEmpty,
+    );
+  });
+
   test('validation rejects wrong counts, duplicates and unknown tags', () {
     final source = WordListPack.fromJson(<String, Object?>{
       'id': 'test',

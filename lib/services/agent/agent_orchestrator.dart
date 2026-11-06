@@ -374,6 +374,12 @@ class AgentOrchestrator {
           'cap=${limits.maxEvidenceEntries}',
         );
       }
+      _noteDictionariesWithoutEvidence(
+        dictionaries: request.dictionaries,
+        evidence: evidence,
+        warnings: warnings,
+        uiLanguage: uiLanguage,
+      );
 
       notify(
         AgentStage.reasoning,
@@ -1203,6 +1209,33 @@ class AgentOrchestrator {
         analysis.modelSupplements.isNotEmpty;
   }
 
+  /// Makes a selected-but-unused dictionary visible. Lookup failures already
+  /// have their own dictionaryIssues warning; this only covers dictionaries
+  /// that were queried successfully but produced no citation (no hit, or the
+  /// global citation budget was exhausted before they were reached).
+  void _noteDictionariesWithoutEvidence({
+    required List<DictionaryInfo> dictionaries,
+    required AgentEvidenceBundle evidence,
+    required List<String> warnings,
+    required AgentUiLanguage uiLanguage,
+  }) {
+    if (dictionaries.isEmpty) return;
+    final cited = <String>{
+      for (final citation in evidence.citations) citation.dictionaryId,
+    };
+    final failed = <String>{
+      for (final issue in evidence.dictionaryIssues) issue.dictionaryId,
+    };
+    final missing = <String>[
+      for (final dictionary in dictionaries)
+        if (!cited.contains(dictionary.id) && !failed.contains(dictionary.id))
+          dictionary.title,
+    ];
+    if (missing.isEmpty) return;
+    final warning = agentDictionaryNoEvidence(uiLanguage, missing);
+    if (!warnings.contains(warning)) warnings.add(warning);
+  }
+
   /// Coverage review is useful when at least one lookup target has no hit, or
   /// when the evidence is already at the global cap and verified duplicates
   /// may free slots. If every target already produced a citation and there is
@@ -1743,7 +1776,9 @@ class AgentOrchestrator {
 
   /// Compact id list for the format repair prompt. It deliberately omits
   /// quote text, token fields and citation snippets: the repair may only reuse
-  /// ids, never re-read the evidence.
+  /// ids, never re-read the evidence. Token/pattern rows include their linked
+  /// citation ids so the repair can fix an attribution error without receiving
+  /// the full evidence bundle.
   List<String> _availableIds(
     List<AgentQuoteRef> quotes,
     AgentEvidenceBundle evidence,
@@ -1751,8 +1786,12 @@ class AgentOrchestrator {
     final ids = <String>[
       for (final quote in quotes) 'quote ${quote.id}',
       for (final source in evidence.sources)
-        for (final token in source.tokens) 'token ${token.id}',
-      for (final pattern in evidence.patterns) 'pattern ${pattern.id}',
+        for (final token in source.tokens)
+          'token ${token.id} citations '
+              '${token.citationIds.isEmpty ? '(none)' : token.citationIds.join(',')}',
+      for (final pattern in evidence.patterns)
+        'pattern ${pattern.id} citations '
+            '${pattern.citationIds.isEmpty ? '(none)' : pattern.citationIds.join(',')}',
       for (final citation in evidence.citations) 'citation ${citation.id}',
     ];
     return ids;

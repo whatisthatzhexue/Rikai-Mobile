@@ -356,12 +356,27 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
             ),
     );
 
+    final coverage = profile.profile?.coverage;
+    final coverageWarning = coverage != null && coverage.sampleTruncated
+        ? Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Text(
+              strings.profileSampleTruncated(coverage.unsampledProbeCount),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: AgentTokens.helper,
+                color: AppColors.warning,
+              ),
+            ),
+          )
+        : null;
+
     final dictionaryForFingerprint = dictionary;
     if (dictionaryForFingerprint == null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           card,
+          ?coverageWarning,
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: Text(
@@ -390,6 +405,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           card,
+          ?coverageWarning,
           if (snapshot.data == true)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sm),

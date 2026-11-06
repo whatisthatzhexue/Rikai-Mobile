@@ -3,7 +3,7 @@
 > **单一规则源**：所有跨文档复用的 MUST / MUST NOT 规则以本文件为准。其他文档
 > 只引用规则 ID，不再复制规则正文。
 >
-> 最后同步：2026-11-01。规则变更只改本文件。
+> 最后同步：2026-11-06。规则变更只改本文件。
 
 ## 0. 规则写法
 
@@ -90,7 +90,7 @@
 | R-AGENT-25 | MUST | 声调只允许来自 UniDic 字段 24–26（`aType` + 读音 mora 数），不得用 AI/模型推测或补全；只在词注/词典事实行显示，AI 气泡/原文/逐句/证据/citation/导出不显示；无可靠数据、越界、读音为空或词形不匹配时不画线；**汉字词没有独立振假名/读音时不画线**（可能是多音词）；声调不进入 provider 请求/日志 | pitch parser/UI/请求体测试；真实 UniDic 样例夹具；汉字无读音用例 | 设计 §17.2.3、契约 §14.2 |
 | R-AGENT-26 | MUST | annotation DSL 只接受安全 JSON AST 白名单（text/ruby/pitch/bold/underline/group/when），禁止任意代码、HTML、JS、URL、网络、文件访问、图片和外部链接；求值器纯本地、确定性；无效/超限规则集整体拒绝并保留上一有效版本；P6.7 只做内置规则+预览/版本回滚，先覆盖阅读器/照片集/语料，不接入 Agent 结果，不开放自由编辑器 | DSL schema/求值/注入/回滚测试 | 设计 §17.2.4、契约 §14.3 |
 | R-AGENT-27 | MUST | 模型 wire format 保持方括号标签；Markdown 只用于结果复制/导出和用户可编辑档案的受限预览，不得作为主结果渲染协议，不得引入通用 Markdown 渲染器；受限预览禁止 HTML/JS/图片/外部链接/自动 URL，未知语法按纯文本 | 导出/预览注入测试；依赖审查 | 设计 §17.2.5、契约 §14.4 |
-| R-AGENT-LIMITS-001 | MUST | **有损上限原则**：为防止长文本导致 API 超时和 UI 渲染崩溃，系统强制执行 SEGMENT 40、每 quote 每 type 1 段、OPTION 8、每段 WORD/GRAMMAR 20 等硬上限。任何被上限截断的内容必须在 UI 和 Markdown 导出中显式警告（`AgentAnalysis.truncated` + 本地化警告），严禁静默丢弃；`[NO_ANALYSIS]` 是唯一合法的零结果路径，且不得与 TRANSLATION/SEGMENT/OPTION/UNRESOLVED/SUPPLEMENT 共存 | parser cap/`truncated`/UI warning/Markdown export 测试；`NO_ANALYSIS` 共存测试 | `analysis_tag_parser.dart`、`agent_orchestrator.dart`、`agent_result_view.dart`、`agent_result_markdown.dart`、契约 §5.4 |
+| R-AGENT-LIMITS-001 | MUST | **有损上限原则**：为防止长文本导致 API 超时和 UI 渲染崩溃，系统强制执行 SEGMENT 40、每 quote 每 type 1 段、OPTION 8、每段 WORD/GRAMMAR 20 等硬上限。任何被上限截断的内容必须在 UI 和 Markdown 导出中显式警告（`AgentAnalysis.truncated` + 本地化警告），严禁静默丢弃；`[NO_ANALYSIS]` 是唯一合法的零结果路径，且不得与 TRANSLATION/SEGMENT/OPTION/UNRESOLVED/SUPPLEMENT 共存。词典档案采样达到 `maxEntries` 时必须记录未执行的探针（`DictionarySample.truncated`/`unsampledProbes`），在档案 Markdown/卡片显示，且截断元数据不得进入 provider prompt | parser cap/`truncated`/UI warning/Markdown export 测试；`NO_ANALYSIS` 共存测试；profile sample truncation/JSON prompt 测试 | `analysis_tag_parser.dart`、`agent_orchestrator.dart`、`agent_result_view.dart`、`agent_result_markdown.dart`、`mdict_worker.dart`、`dictionary_familiarization_service.dart`、契约 §5.4/§6 |
 
 ## 5. UI / UX（R-UI）
 
@@ -160,7 +160,7 @@
 | R-AGENT-21 provider payload | implemented | model/messages 预校验、Anthropic role 合并、非法 Unicode/控制字符清理、`max_tokens` 正整数校验；400 按真实 error body 分类，不设统一上限 |
 | R-AGENT-23 rich-text post-process | implemented（P7.0 增量） | 仅对详细“原文”、逐句理解和词典事实解释插入 RUBY/BOLD/UNDERLINE；AI 气泡/理解/未解决/补充/引用行/词注 fallback 本地 RUBY 化、不加模型强调；结果构建时本地 RUBY 化，预览首帧即可见；标签正确嵌套、剥离后逐字符 diff；模型失败保留本地 RUBY；`reading【surface】` 标签感知转换，BOLD/UNDERLINE 外的读数移入并继承强调，重复读数去重；普通括号不转换；可能的理解用 `[OPTION]` 结构化 label/confidence 显示“情况X”绿色胶囊 + “可能性N%”；相同可见依据只在最后一个情况下方显示一次，不同则逐情况保留 |
 | R-AGENT-22 coverage stability | implemented | 紧凑输入、单项容错、空 sufficient 规范化、独立预算公式、debug 诊断；真实请求失败仍 warning |
-| R-AGENT-LIMITS-001 lossy caps | implemented（2026-11-04） | SEGMENT 40/每 quote 每 type 1/OPTION 8/每段注 20；解析器设置 `AgentAnalysis.truncated`，UI `result.warnings` 与 Markdown 导出均显示截断警告；`[NO_ANALYSIS]` 仅允许独立结果 |
+| R-AGENT-LIMITS-001 lossy caps | implemented（2026-11-04；profile 采样截断 2026-11-06） | SEGMENT 40/每 quote 每 type 1/OPTION 8/每段注 20；解析器设置 `AgentAnalysis.truncated`，UI `result.warnings` 与 Markdown 导出均显示截断警告；`[NO_ANALYSIS]` 仅允许独立结果。词典档案采样记录 `DictionarySample.truncated`/`unsampledProbes`，`DictionaryCoverage.sampleTruncated` 在 Markdown/档案卡片/warnings 显示；截断元数据不进入 provider prompt |
 | P6.7 | partial（2026-11-03） | 历史/持久化、UniDic 声调已实现并有自动化测试；annotation DSL、provider 测试连接、无障碍/发布验收仍待做；真机/视觉验收未完成 |
 
 ## 9. 变更流程

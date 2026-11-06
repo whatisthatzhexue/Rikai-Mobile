@@ -341,6 +341,15 @@ class AgentUiStrings {
     'Dictionary lookup failed: $names. The result may be incomplete.',
     '辞書検索に失敗しました：$names。結果が不完全な可能性があります。',
   );
+  String dictionaryNoEvidence(List<String> names) {
+    final joined = names.join(language == AgentUiLanguage.english ? ', ' : '、');
+    return _pick(
+      '本次结果未包含这些词典的可用依据：$joined',
+      'This result does not include usable evidence from: $joined',
+      '今回の結果にこれらの辞書の有効な根拠は含まれていません：$joined',
+    );
+  }
+
   String get languageWarning => _pick(
     '部分内容未按设置语言输出',
     'Some content was not written in the selected language',
@@ -520,6 +529,11 @@ class AgentUiStrings {
   String get profileStatusDeclined => _pick('已拒绝', 'Declined', '拒否済み');
   String get profileStatusPending => _pick('待确认', 'Pending', '確認待ち');
   String get profileStatusStale => _pick('已失效', 'Stale', '無効');
+  String profileSampleTruncated(int probes) => _pick(
+    '词典样本达到上限，$probes 个探针未采样',
+    'Dictionary sample hit its limit; $probes probes were not sampled',
+    '辞書サンプルが上限に達し、$probes 個の探針が未サンプルです',
+  );
   String get profileUnavailableDictionary =>
       _pick('词典当前不可用', 'Dictionary currently unavailable', '辞書は現在利用できません');
   String get profileEdit => _pick('修改', 'Edit', '編集');

@@ -807,7 +807,9 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
     "entry_count": 120000,
     "headword_scripts": ["han", "hiragana", "katakana"],
     "definition_scripts": ["han", "hiragana"],
-    "feature_count": 3
+    "feature_count": 3,
+    "sample_truncated": true,
+    "unsampled_probe_count": 6
   },
   "entry_structure": {
     "headword_fields": ["見出し", "読み"],
@@ -837,6 +839,13 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
   分析（`dictionary_sample_analysis.dart`）确定，模型不输出数值/置信度。
   方向性语言对优先使用标题脚本提示和样本文字脚本；模型 `[LANGUAGES]` 只作
   低置信度回退，不额外发请求。无 tokenizer/无法判断时语言对可为空。
+- 采样截断：`DictionarySample` 的本地字段 `truncated`/`unsampled_probes`
+  记录因 `maxEntries` 上限未执行的探针；`DictionaryCoverage` 只持久化
+  `sample_truncated`/`unsampled_probe_count`。这些字段用于本地告警，不进入
+  profile 模型 prompt；截断时档案 Markdown、档案卡片和 familiarization
+  warnings 必须显示提示，不能静默丢弃探针。
+- 词表覆盖（`word_list_coverage.dart`）是语义场景覆盖，不是 POS 覆盖率；
+  不新增 POS schema/指标。
 - 用户可编辑 Markdown 摘要；该 Markdown 是 prompt 的权威版本，JSON 作为结构备份。
 - profile prompt 版本已升到 2（新增 INTRO/本地分析字段）；旧档案通过指纹失效后
   重新生成，JSON schema 标识仍为 v1（新字段可选，旧 JSON 可读）。
@@ -991,6 +1000,13 @@ validate(analysis, evidence, quotes, mode):
   要求写在 prompt 中**（无 citation 时省略该 WORD/OPTION 并改用 UNRESOLVED）；
   `dictionary_fact` 段中的 GRAMMAR 同样需要 citation。validator 与 prompt 必须
   同时维护。
+- 2026-11-06 citation 归属：WORD note 的每个 citation 必须属于该 token 的
+  `citation_ids`；GRAMMAR note 的每个 citation 必须属于该 pattern 的
+  `citation_ids` 或其组成 token 的 `citation_ids`，否则校验失败。repair prompt 的
+  `Available ids` 以 `token/pattern ... citations ...` 形式携带该映射，修复时不重发
+  evidence。EvidenceBuilder 的 breadth/depth 与 coverage 补充检索按 target/query
+  序号轮转词典起点，避免第一本词典独占全局 citation 预算；选中词典最终 0 条
+  citation（且无查询错误）时写入 `AgentRunResult.warnings`。
 - 修复：一次格式修复调用，使用 **small model + 紧凑 prompt**：只发送
   `availableIds`（quote/token/pattern/citation id 列表）、previous output
   （untrusted）和 validation errors（untrusted），不重发 input/evidence/

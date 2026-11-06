@@ -5,10 +5,10 @@
 > 复制具体数值；历史记录可以保留“当时值”，但必须标注为历史快照。
 >
 > - last_verified: 2026-11-06
-> - last_verified_code_commit: `d4939a4`（Phase 3 代码基线；Phase 4 增量在其后
->   提交）
-> - last_doc_sync: 2026-11-06（Phase 4 安全子集：静态词表/非日语脚本降级；
->   测试基线 519/510）
+> - last_verified_code_commit: `a6a3185`（Phase 4 安全子集；采样截断显式化为
+>   未提交工作区增量）
+> - last_doc_sync: 2026-11-06（Phase 4 安全子集 + 采样截断显式化；测试基线
+>   523/514）
 > - 设备基线: `Medium_Phone_API_36.1`（x86_64 模拟器，API 36）；无 arm64 真机
 > - 维护规则：数据变化时只改本文件，并同步更新 `last_verified`/
 >   `last_verified_code_commit`；其他文档的引用链接不需要改。不要把本文件自身的
@@ -40,15 +40,15 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **510** |
+| 当前 test/testWidgets 声明数 | **514** |
 | 当前测试文件数 | **93** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | **519 passed**（声明 510；参数化/循环用例产生 519 个执行用例） |
+| 最近 `flutter test` | **523 passed**（声明 514；参数化/循环用例产生 523 个执行用例） |
 | 最近 `flutter build apk --debug` | success（2026-11-04 P6.6/P6.7 验证） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
-> 该数字对应 2026-11-06 Phase 4 安全子集工作区（含 Wave 3、P6.6、P7.0 富文本
-> 修正、Phase 1a–3）。新增/删除测试后只更新本节。
+> 该数字对应 2026-11-06 Phase 4 安全子集 + 采样截断显式化工作区（含 Wave 3、
+> P6.6、P7.0 富文本修正、Phase 1a–3）。新增/删除测试后只更新本节。
 
 ### 2.2 历史测试基线（不要当作当前值）
 
@@ -80,7 +80,8 @@
 | Phase 2 请求管线收敛 | 505（声明 496） | 本地意图提示、单次主分析断言、AgentRunTelemetry、coverage 计数重算 |
 | Phase 3 条件 fan-out | 512（声明 503） | 证据分区、analysis 合并、2 词典成功/单词典失败、默认关闭 |
 | Phase 4 安全子集 | 519（声明 510） | 静态 ja/zh/en 词表包、覆盖评估、非日语脚本跳过 UniDic |
-| 当前 | **519（声明 510）** | 见 §2.1 |
+| Phase 4 采样截断显式化 | 523（声明 514） | 词表语义边界测试、DictionarySample/coverage 截断字段、Markdown/卡片/warnings 警告、prompt 投影 |
+| 当前 | **523（声明 514）** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 

@@ -286,10 +286,17 @@ class DictionaryFamiliarizationService {
     final samples = <String, DictionarySample>{};
     for (final dictionary in pending) {
       try {
-        samples[dictionary.id] = await _samplePort.sample(
+        final sample = await _samplePort.sample(
           dictionary,
           maxEntries: maxEntries,
         );
+        samples[dictionary.id] = sample;
+        if (sample.truncated) {
+          warnings.add(
+            '${dictionary.title}: 词典样本达到上限，'
+            '${sample.unsampledProbeCount} 个探针未采样',
+          );
+        }
       } catch (error) {
         const reason = '词典采样失败';
         warnings.add('${dictionary.title}: $reason');
@@ -512,7 +519,8 @@ class DictionaryFamiliarizationService {
     for (final dictionary in dictionaries) {
       final sample = samples[dictionary.id];
       if (sample == null) continue;
-      final estimated = 1200 + (jsonEncode(sample.toJson()).length / 2).ceil();
+      final estimated =
+          1200 + (jsonEncode(sample.toPromptJson()).length / 2).ceil();
       if (current.isNotEmpty && currentTokens + estimated > maxBatchTokens) {
         batches.add(current);
         current = <DictionaryInfo>[];

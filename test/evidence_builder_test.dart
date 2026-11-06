@@ -100,6 +100,50 @@ class _FakeLookup implements LookupPort {
   }
 }
 
+/// Every dictionary returns [entriesPerDictionary] entries for every lookup.
+/// The entry keys include the requested surface so different targets do not
+/// dedupe into one citation.
+class _AllHitsLookup implements LookupPort {
+  _AllHitsLookup(this.entriesPerDictionary);
+
+  final int entriesPerDictionary;
+
+  @override
+  Future<LookupResult> lookup(LookupRequest request) async {
+    final base = request.rawCandidates.firstWhere(
+      (value) => value.startsWith('語'),
+      orElse: () => request.query,
+    );
+    return LookupResult(
+      query: request.query,
+      candidates: request.rawCandidates,
+      groups: <DictionaryLookupGroup>[
+        for (final dictionary in request.dictionaries)
+          DictionaryLookupGroup(
+            dictionary: dictionary,
+            entries: <LookupEntry>[
+              for (var index = 0; index < entriesPerDictionary; index++)
+                LookupEntry(
+                  matchedKey: '${dictionary.id}:$base:$index',
+                  headword: '${dictionary.id}:$base:$index',
+                  html: '<b>$base</b>',
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  @override
+  Future<List<String>> suggest({
+    required String prefix,
+    required List<DictionaryInfo> dictionaries,
+    int limit = 10,
+  }) async {
+    return const <String>[];
+  }
+}
+
 class _ModeLookup implements LookupPort {
   _ModeLookup(this.entriesByMode, {this.onLookup});
 
@@ -455,5 +499,91 @@ void main() {
       ),
     );
     expect(lookup.modes, <LookupMatchMode>[LookupMatchMode.exact]);
+  });
+
+  test(
+    'rotates the first dictionary per target so the citation budget is shared',
+    () async {
+      final dictionaries = <DictionaryInfo>[
+        for (var index = 0; index < 5; index++)
+          DictionaryInfo(
+            id: 'd$index',
+            title: 'D$index',
+            mdxPath: '/d$index.mdx',
+            order: index,
+          ),
+      ];
+      final tokens = <Token>[
+        for (var index = 0; index < 20; index++) _token('語$index', index * 3),
+      ];
+      final citations = CitationRegistry();
+      final builder = EvidenceBuilder(
+        tokenizePort: _FakeTokenize(tokens),
+        lookupPort: _AllHitsLookup(3),
+        grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+        citations: citations,
+      );
+
+      final bundle = await builder.build(
+        sources: <AgentSourceInput>[
+          _source(List<String>.generate(20, (index) => '語$index').join()),
+        ],
+        dictionaries: dictionaries,
+      );
+
+      final counts = <String, int>{};
+      for (final citation in bundle.citations) {
+        counts.update(
+          citation.dictionaryId,
+          (value) => value + 1,
+          ifAbsent: () => 1,
+        );
+      }
+      expect(bundle.citations, hasLength(60));
+      for (final dictionary in dictionaries) {
+        expect(
+          counts[dictionary.id],
+          12,
+          reason: '${dictionary.id} should receive a fair share of citations',
+        );
+      }
+      expect(
+        bundle.sources.single.tokens.every(
+          (token) => token.citationIds.isNotEmpty,
+        ),
+        isTrue,
+      );
+      expect(bundle.truncated, isTrue);
+    },
+  );
+
+  test('coverage supplements rotate the starting dictionary too', () async {
+    final dictionaries = <DictionaryInfo>[
+      for (var index = 0; index < 5; index++)
+        DictionaryInfo(
+          id: 'd$index',
+          title: 'D$index',
+          mdxPath: '/d$index.mdx',
+          order: index,
+        ),
+    ];
+    final builder = EvidenceBuilder(
+      tokenizePort: _FakeTokenize(const <Token>[]),
+      lookupPort: _AllHitsLookup(3),
+      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+      citations: CitationRegistry(),
+    );
+
+    final result = await builder.lookupExtraQueries(
+      queries: const <String>['補足一', '補足二'],
+      dictionaries: dictionaries,
+      maxNewCitations: 2,
+    );
+
+    final dictionariesUsed = <String>[
+      for (final query in const <String>['補足一', '補足二'])
+        for (final citation in result[query]!) citation.dictionaryId,
+    ];
+    expect(dictionariesUsed, <String>['d0', 'd1']);
   });
 }
