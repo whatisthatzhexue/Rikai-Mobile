@@ -1,7 +1,8 @@
 # Agent 重构实施计划（Agent-Refactor-Idea）
 
-- 状态：Phase 1a（F7 复合词补查）、Phase 1b（档案编译器 v2）与 Phase 2
-  （请求管线收敛）已实现（2026-11-06）；Phase 3–4 未实现。
+- 状态：Phase 1a（F7 复合词补查）、Phase 1b（档案编译器 v2）、Phase 2
+  （请求管线收敛）与 Phase 3（条件 fan-out，默认关闭）已实现（2026-11-06）；
+  Phase 4 未实现。
 - 文档角色：
   - 原始提案：`Agent-Refactor-Idea.txt`（项目根目录；产品逻辑锚点，不是当前规则）。
   - 决策：[ADR 0005](../adr/0005-agent-profile-compiler.md)（why/what；被拒方案）。
@@ -183,12 +184,27 @@ tokenizer 调整，不需要改校验迁移逻辑。Phase 1 用真实样本回�
 **验收**：一次请求核心调用 ≤4 次（主分析 + 至多 3 次条件调用）；
 citation/quote/词典顺序不回归；telemetry 不含正文/路径/Key。
 
-## 6. Phase 3：条件性 fan-out
+## 6. Phase 3：条件性 fan-out（已实现，2026-11-06，默认关闭）
 
-- 仅当 `D > 8` 或 evidence 超过上下文预算时，按词典并行分析（2–3 并发）。
-- 每个词典仍走同一标签协议；本地按词典顺序合并，再跑 validator。
-- 单词典失败只降级该词典，其他结果保留。
-- 默认关闭；真实 provider/arm64 验收后再考虑默认开启。
+- 触发：`AgentLimits.enableDictionaryFanOut=false` 默认关闭。启用后，当
+  词典数 > `dictionaryFanOutThreshold`（默认 8）或 source+citation 字符估算 >
+  `dictionaryFanOutEvidenceChars`（默认 16,000）时进入 fan-out。
+- 分区（`evidence_partition.dart`）：按词典过滤 citation 和 token/pattern 的
+  citationIds；source 文本/UniDic tokens/grammar patterns 保留，保证结构分析
+  仍可用；无 citation 的词典跳过，不浪费调用。
+- 并发：`Future.wait` + 有界 worker（`dictionaryFanOutConcurrency=2`）；每次
+  请求带单词典 input/evidence，标签协议与主分析相同；无 token 流式。
+- 合并（`analysis_merge.dart`）：按用户词典顺序保留第一个非空译文/每
+  quote+type 段；同段 word/grammar notes 合并去重；OPTION 按 meaning 去重并
+  重新编号 A/B/C；segments/options 受 `AgentLimits` 上限约束，超限设置
+  `truncated`。合并后在完整 evidence 上重新跑 validator。
+- 降级：单个词典请求/解析失败只丢弃该词典结果，合并其余结果并加
+  `agentFanOutPartialWarning`；全部失败则回退单次主分析。fan-out 路径当前
+  不做 per-dictionary 格式修复、语言修复或 provisional 流式；语言偏离只记
+  warning（最终结果仍是完整校验后的合并结果）。
+- telemetry 标签为 `analysis:<dictionary_id>`，`analysisCalls` 计为多次主分析
+  调用；仍然总调用数受控、无无界并发。
+- **默认关闭**；真实 provider/arm64 验收通过前不得默认开启。
 
 ## 7. Phase 4：词表与多语言（延后，独立立项）
 
@@ -219,7 +235,7 @@ citation/quote/词典顺序不回归；telemetry 不含正文/路径/Key。
 | F7 复合词查询通过率/丢弃率 | 持续跟踪，异常升高说明阈值或 prompt 退化 |
 | 格式/语言修复触发率 | 持续跟踪，异常升高说明 prompt 退化 |
 
-## 10. Phase 0 / 1a / 1b / 2 完成定义
+## 10. Phase 0–3 完成定义
 
 - ADR 0005 和本实施计划已落盘；
 - Phase 1a 的 prompt、token 跨度校验和测试已实现；F7 复合词能力已在 design/
@@ -228,5 +244,7 @@ citation/quote/词典顺序不回归；telemetry 不含正文/路径/Key。
   显示和测试已实现；未新增自动后台联网预热；
 - Phase 2 的本地意图提示、单次主分析断言、`AgentRunTelemetry` 和覆盖计数
   重算已实现；
+- Phase 3 的默认关闭 fan-out、证据分区、并发调度、合并/失败隔离和默认关闭
+  验收已实现；真实 provider/arm64 验收前不默认开启；
 - 未修改现有规则正文；`project-data.md` 的预算/测试基线更新需用户同意；
-- Phase 3–4 仍为未实现，不能写成已支持。
+- Phase 4 仍为未实现，不能写成已支持。

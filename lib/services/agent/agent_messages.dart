@@ -12,6 +12,9 @@ String agentRepairingMessage(AgentUiLanguage language) =>
 String agentLanguageWarning(AgentUiLanguage language) =>
     AgentUiStrings.of(language).languageWarning;
 
+String agentFanOutPartialWarning(AgentUiLanguage language) =>
+    AgentUiStrings.of(language).fanOutPartial;
+
 String agentAnalysisTruncatedWarning(AgentUiLanguage language) =>
     AgentUiStrings.of(language).analysisTruncated;
 

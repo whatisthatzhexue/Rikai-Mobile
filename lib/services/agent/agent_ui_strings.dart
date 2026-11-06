@@ -346,6 +346,11 @@ class AgentUiStrings {
     'Some content was not written in the selected language',
     '一部の内容が設定した言語で出力されていません',
   );
+  String get fanOutPartial => _pick(
+    '部分词典分析失败，已保留其余结果',
+    'Some dictionary analyses failed; other results were kept',
+    '一部の辞書分析に失敗しました。残りの結果を保持しました',
+  );
   String get coverageUnavailable => _pick(
     '覆盖审查不可用，已保留现有资料',
     'Coverage review was unavailable; the existing evidence was kept',

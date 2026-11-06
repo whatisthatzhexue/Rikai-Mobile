@@ -24,6 +24,13 @@ const _dictionary = DictionaryInfo(
   order: 0,
 );
 
+const _dictionaryB = DictionaryInfo(
+  id: 'dict_b',
+  title: 'B',
+  mdxPath: '/b.mdx',
+  order: 1,
+);
+
 const _provider = AgentProviderConfig(
   id: 'p1',
   kind: AgentProviderKind.openAiCompatible,
@@ -39,6 +46,22 @@ const _analysisTagged = '''
 [SEGMENT type="fact" quote="q1"]
 [MEANING]正式请求[/MEANING]
 [WORD id="t1"]何卒||请务必|source-1[/WORD]
+[/SEGMENT]
+''';
+
+const _fanOutA = '''
+[TRANSLATION quote="q1"]A译文[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]A义[/MEANING]
+[WORD id="t1"]何卒||A|source-1[/WORD]
+[/SEGMENT]
+''';
+
+const _fanOutB = '''
+[TRANSLATION quote="q1"]B译文[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]B义[/MEANING]
+[WORD id="t1"]何卒||B|source-2[/WORD]
 [/SEGMENT]
 ''';
 
@@ -182,6 +205,32 @@ class _LookupScript implements LookupPort {
           dictionary: request.dictionaries.first,
           entries: entries,
         ),
+      ],
+    );
+  }
+
+  @override
+  Future<List<String>> suggest({
+    required String prefix,
+    required List<DictionaryInfo> dictionaries,
+    int limit = 10,
+  }) async {
+    return const <String>[];
+  }
+}
+
+class _MultiDictionaryLookup implements LookupPort {
+  @override
+  Future<LookupResult> lookup(LookupRequest request) async {
+    return LookupResult(
+      query: request.query,
+      candidates: request.rawCandidates,
+      groups: <DictionaryLookupGroup>[
+        for (final dictionary in request.dictionaries)
+          DictionaryLookupGroup(
+            dictionary: dictionary,
+            entries: <LookupEntry>[_entry('何卒', 'なにとぞ。')],
+          ),
       ],
     );
   }
@@ -360,6 +409,88 @@ void main() {
       expect(result.telemetry.citationCount, 0);
       expect(result.telemetry.targetsWithCitations, 0);
       expect(result.telemetry.citationCoverage, 0);
+    },
+  );
+
+  test('dictionary fan-out merges per-dictionary analyses in order', () async {
+    final provider = FakeProvider(
+      responseSequence: <String>[_fanOutA, _fanOutB],
+    );
+
+    final result =
+        await _orchestrator(
+          provider: provider,
+          lookup: _MultiDictionaryLookup(),
+          limits: const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: false,
+            enableDictionaryFanOut: true,
+            dictionaryFanOutThreshold: 1,
+            dictionaryFanOutConcurrency: 1,
+          ),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.strict,
+            dictionaries: <DictionaryInfo>[_dictionary, _dictionaryB],
+            provider: _provider,
+            userText: '何卒',
+          ),
+        );
+
+    expect(provider.requests, hasLength(2));
+    expect(result.validation.valid, isTrue);
+    expect(result.analysis.translation.single.text, 'A译文');
+    expect(result.analysis.segments, hasLength(1));
+    expect(result.analysis.segments.single.id, 's1');
+    expect(result.analysis.segments.single.wordNotes, hasLength(2));
+    expect(
+      result.analysis.citationsUsed,
+      containsAll(<String>['source-1', 'source-2']),
+    );
+    expect(result.evidence.citations, hasLength(2));
+    expect(result.telemetry.llmCalls, 2);
+    expect(result.telemetry.analysisCalls, 2);
+    expect(result.telemetry.coverageCalls, 0);
+    expect(result.telemetry.repairCalls, 0);
+    expect(result.telemetry.targetCount, 1);
+    expect(result.telemetry.targetsWithCitations, 1);
+    expect(result.warnings, isNot(contains('部分词典分析失败，已保留其余结果')));
+  });
+
+  test(
+    'dictionary fan-out keeps the other result when one call fails',
+    () async {
+      final provider = FakeProvider(
+        responseSequence: <String>['not tagged', _fanOutB],
+      );
+
+      final result =
+          await _orchestrator(
+            provider: provider,
+            lookup: _MultiDictionaryLookup(),
+            limits: const AgentLimits(
+              maxCoverageFallback: 0,
+              enableRichTextPostProcess: false,
+              enableDictionaryFanOut: true,
+              dictionaryFanOutThreshold: 1,
+              dictionaryFanOutConcurrency: 1,
+            ),
+          ).run(
+            const AgentRunRequest(
+              sessionId: 's1',
+              mode: AgentMode.strict,
+              dictionaries: <DictionaryInfo>[_dictionary, _dictionaryB],
+              provider: _provider,
+              userText: '何卒',
+            ),
+          );
+
+      expect(provider.requests, hasLength(2));
+      expect(result.validation.valid, isTrue);
+      expect(result.analysis.translation.single.text, 'B译文');
+      expect(result.analysis.segments.single.wordNotes, hasLength(1));
+      expect(result.warnings, contains('部分词典分析失败，已保留其余结果'));
     },
   );
 

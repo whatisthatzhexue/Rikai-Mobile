@@ -12,8 +12,9 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > history/persistence and UniDic pitch are implemented (2026-11-03); annotation
 > DSL, provider test connection and release polish are still pending. P6.7
 > device/visual acceptance remains pending. Phase 1a (F7 compound expansion),
-> Phase 1b (profile compiler v2) and Phase 2 (request pipeline) of the Agent
-> refactor are implemented (2026-11-06); Phase 3–4 are not.**
+> Phase 1b (profile compiler v2), Phase 2 (request pipeline) and Phase 3
+> (conditional dictionary fan-out, default off) of the Agent refactor are
+> implemented (2026-11-06); Phase 4 is not.**
 
 > Follow `docs/agent_docs/device-feedback-2026-10-31.md` for the remaining
 > Wave 4 device checks. **Current test/device/build/environment numbers are
@@ -98,6 +99,22 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 - fake provider 新增“5 词典 + 10 句、无覆盖审查 → 1 次主分析调用”断言；
   flow C 同时校验 telemetry 的调用数和 citation 覆盖。
 - 真实 provider/设备仍未验证。
+
+## 2026-11-06 条件词典 fan-out（Phase 3，默认关闭）
+
+- `AgentLimits.enableDictionaryFanOut=false` 默认关闭；启用后按词典数
+  (`dictionaryFanOutThreshold=8`) 或 source+citation 字符估算
+  (`dictionaryFanOutEvidenceChars=16000`) 触发。
+- `evidence_partition.dart` 按词典过滤 citation 与 token/pattern citationIds，
+  保留 source/UniDic 结构；`Future.wait` + 有界 worker 并发（默认 2），每次
+  调用只带一个词典的 input/evidence。
+- `analysis_merge.dart` 按用户词典顺序合并：译文取第一个非空，quote+type 段
+  合并 word/grammar notes，OPTION 去重并重新编号；合并后在完整 evidence 上
+  重新 validator；segments/options 受 `AgentLimits` 上限约束。
+- 单个词典失败只丢弃该词典并显示 `fanOutPartial` warning；全部失败回退单次
+  主分析。fan-out 路径不做 per-dictionary 修复/语言修复/provisional 流式。
+- 测试：证据分区、analysis 合并、2 词典成功合并、单词典失败保留其余结果；
+  默认关闭。真实 provider/arm64 未验收。
 
 ## Implemented
 

@@ -19,6 +19,10 @@ class AgentLimits {
     this.maxCoverageFallback = 1,
     this.maxCoverageQueryChars = 100,
     this.maxCoverageCompoundTokens = 6,
+    this.enableDictionaryFanOut = false,
+    this.dictionaryFanOutThreshold = 8,
+    this.dictionaryFanOutEvidenceChars = 16000,
+    this.dictionaryFanOutConcurrency = 2,
     this.enableRichTextPostProcess = true,
     this.richTextConcurrency = 3,
     this.lookupBatchSize = 12,
@@ -52,6 +56,22 @@ class AgentLimits {
   /// language-specific character cap. When tokenization is unavailable, only
   /// known terms are accepted.
   final int maxCoverageCompoundTokens;
+
+  /// Phase 3 conditional dictionary fan-out. Disabled by default until real
+  /// provider/device acceptance; when enabled, a large dictionary set or large
+  /// evidence bundle is analyzed per dictionary and merged locally.
+  final bool enableDictionaryFanOut;
+
+  /// Fan out when more than this many dictionaries are selected.
+  final int dictionaryFanOutThreshold;
+
+  /// Fan out when source text plus citation snippets exceed this character
+  /// estimate, even if the dictionary count is small.
+  final int dictionaryFanOutEvidenceChars;
+
+  /// Bounded parallel fan-out calls. Independent dictionary analyses are
+  /// merged in user dictionary order.
+  final int dictionaryFanOutConcurrency;
 
   /// Hard caps for the tagged analysis output. The parser applies them after
   /// parsing and marks the analysis truncated; the prompt states the same

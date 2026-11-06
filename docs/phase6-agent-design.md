@@ -19,10 +19,11 @@
   核心已实现，P6.6 自动化收尾于 2026-11-03 完成；P6.7-1 历史/持久化与 P6.7-2
   UniDic 声调已于 2026-11-03 实现；P6.7 annotation DSL、provider 测试连接和发布
   打磨仍未完成；P6.6 真机验收与 Wave 4 设备验收仍由另一工作流处理。
-  Agent 重构 Phase 1a（F7 复合词补查）、Phase 1b（档案编译器 v2）与 Phase 2
-  （请求管线收敛）于 2026-11-06 实现，Phase 3–4 未实现**
+  Agent 重构 Phase 1a（F7 复合词补查）、Phase 1b（档案编译器 v2）、Phase 2
+  （请求管线收敛）与 Phase 3（条件 fan-out，默认关闭）于 2026-11-06 实现，
+  Phase 4 未实现**
 - 日期：2026-10-30（P6.6 核心实现更新：2026-11-02；自动化收尾：2026-11-03；
-  P6.7 设计决议与历史/声调实现：2026-11-03；Phase 1a–2：2026-11-06）
+  P6.7 设计决议与历史/声调实现：2026-11-03；Phase 1a–3：2026-11-06）
 - 前身：v1 只描述通用工具型 Agent；v2 加入用户确认的固定流水线、词典熟悉、
   OCR JSON 信封、逐词/语法证据、原文引用、会话级词典选择与按需多 OCR。
 - 依赖：Phase 4.5 的 arm64/真实页面验收、Phase 5 的完整历史/引导/发布打磨，以及
@@ -520,6 +521,15 @@ Stage 0 envelope + Stage 1 evidence + 已确认的 dictionary profiles。输出�
 回放。计数范围是分析管线核心调用（coverage/analysis/repair/language），不含
 档案生成和富文本后处理。覆盖合并/删重后重新计算 `targetsWithCitations`，避免
 telemetry 使用旧值。
+
+2026-11-06（Phase 3，默认关闭）：当 `AgentLimits.enableDictionaryFanOut=true`
+且词典数 > 8 或 source+citation 字符估算 > 16,000 时，按词典分区 citation
+（`evidence_partition.dart`）并有界并发分析（默认 2），再用
+`analysis_merge.dart` 按用户词典顺序合并：译文取第一个非空，quote+type 段合并
+word/grammar notes，OPTION 去重并重新编号；合并后在完整 evidence 上重新校验。
+单个词典失败只丢弃该词典并加 warning，全部失败回退单次主分析。该路径不做
+per-dictionary 修复、语言修复或 provisional 流式；语言偏离只记 warning。
+默认保持关闭，真实 provider/arm64 验收前不得默认开启。
 
 **2026-11-01 运行时格式**：模型不再输出 JSON，而是输出方括号标签的纯文本块
 （`[TRANSLATION]`、`[SEGMENT]`、`[MEANING]`、`[WORD]`、`[GRAMMAR]`、

@@ -11,9 +11,12 @@ import '../../core/models/agent/agent_ocr.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/agent/agent_quote.dart';
 import '../../core/models/agent/agent_tool.dart';
+import '../../core/models/dict_info.dart';
 import '../../core/utils/rich_text_tags.dart';
 import 'agent_coverage_parser.dart';
 import 'agent_intent.dart';
+import 'analysis_merge.dart';
+import 'evidence_partition.dart';
 import 'agent_language_validator.dart';
 import 'agent_messages.dart';
 import 'agent_prompts.dart';
@@ -376,6 +379,109 @@ class AgentOrchestrator {
         AgentStage.reasoning,
         agentStageMessage(AgentStage.reasoning, uiLanguage),
       );
+      final intentHint = detectAgentIntent(requestedUser);
+      if (_shouldFanOut(request, evidence)) {
+        final fanOut = await _runDictionaryFanOut(
+          llm: llm,
+          model: analysisModel,
+          request: request,
+          envelope: envelope,
+          evidence: evidence,
+          quotes: quotes,
+          profiles: profiles,
+          userRequest: requestedUser,
+          intentHint: intentHint,
+          expectedSourceId: primary?.id,
+          cancellation: cancellation,
+          uiLanguage: uiLanguage,
+          telemetry: telemetry,
+          checkCancelled: checkCancelled,
+        );
+        if (fanOut != null) {
+          var analysis = fanOut.analysis;
+          var validation = validator.validate(
+            analysis: analysis,
+            evidence: evidence,
+            quotes: quotes,
+            mode: request.mode,
+            expectedSourceId: primary?.id,
+          );
+          if (!validation.valid) {
+            final salvaged = salvageAnalysis(
+              analysis: analysis,
+              evidence: evidence,
+              quotes: quotes,
+              mode: request.mode,
+              expectedSourceId: primary?.id,
+            );
+            if (!salvaged.hasContent) {
+              throw AgentRunFailure(
+                stage: stage,
+                code: AgentToolErrorCode.validationFailed,
+                message: validation.errors.join('；'),
+              );
+            }
+            analysis = salvaged.analysis;
+            validation = validator.validate(
+              analysis: analysis,
+              evidence: evidence,
+              quotes: quotes,
+              mode: request.mode,
+              expectedSourceId: primary?.id,
+            );
+          }
+          if (fanOut.partial) {
+            warnings.add(agentFanOutPartialWarning(uiLanguage));
+          }
+          noteTruncation(analysis);
+          final languageCheck = languageValidator.check(
+            analysis,
+            request.responseLanguage,
+            allowedJapaneseTerms: _allowedJapaneseTerms(evidence, quotes),
+          );
+          if (languageCheck.isMismatch) {
+            warnings.add(agentLanguageWarning(uiLanguage));
+          }
+          var result = _buildResult(
+            envelope: envelope,
+            evidence: evidence,
+            quotes: quotes,
+            analysis: analysis,
+            validation: validation,
+            profiles: profiles,
+            profileWarnings: profileWarnings,
+            unavailableProfiles: unavailableProfiles,
+            warnings: warnings,
+            coverageFallbackUsed: coverageFallbackUsed,
+            telemetry: telemetry.build(
+              elapsedMs: runWatch.elapsedMilliseconds,
+              citationCount: evidence.citations.length,
+              adoptedCitationCount: validation.citationsUsed.length,
+              targetsWithCitations: evidence.budget.targetsWithCitations,
+              targetCount: evidence.budget.uniqueTargets,
+            ),
+          );
+          result = await _formatResultRichText(
+            result: result,
+            llm: llm,
+            model: smallModel,
+            cancellation: cancellation,
+            onRichTextReady: onRichTextReady,
+            onRichTextFormattingChanged: onRichTextFormattingChanged,
+            notify: notify,
+            uiLanguage: uiLanguage,
+          );
+          checkCancelled();
+          notify(
+            AgentStage.done,
+            agentStageMessage(AgentStage.done, uiLanguage),
+          );
+          _timing(
+            'result_ready fan_out=true elapsed=${runWatch.elapsedMilliseconds}ms',
+          );
+          return result;
+        }
+      }
       final analysisRequest = buildAnalysisRequest(
         model: analysisModel,
         mode: request.mode,
@@ -385,7 +491,7 @@ class AgentOrchestrator {
         quotes: quotes,
         dictionaryProfiles: profiles,
         userRequest: requestedUser,
-        intentHint: detectAgentIntent(requestedUser),
+        intentHint: intentHint,
       );
       var raw = await _collect(
         llm,
@@ -557,22 +663,7 @@ class AgentOrchestrator {
         );
       }
 
-      final allowedTerms = <String>{
-        for (final source in evidence.sources)
-          for (final token in source.tokens) ...<String>[
-            token.surface,
-            token.lemma,
-            token.reading,
-            ...token.lookupCandidates,
-          ],
-        for (final pattern in evidence.patterns) pattern.surface,
-        for (final citation in evidence.citations) ...<String>[
-          citation.headword,
-          citation.entryKey,
-          citation.matchedKey,
-        ],
-        for (final quote in quotes) quote.text,
-      };
+      final allowedTerms = _allowedJapaneseTerms(evidence, quotes);
 
       // F1b: check only human-readable fields. A single repair may translate
       // them; a failed or still-mismatched repair keeps the result and warns.
@@ -957,6 +1048,159 @@ class AgentOrchestrator {
       'reason=${rich.rejectionReason} '
       'sourceChars=${source.length}',
     );
+  }
+
+  Set<String> _allowedJapaneseTerms(
+    AgentEvidenceBundle evidence,
+    List<AgentQuoteRef> quotes,
+  ) {
+    return <String>{
+      for (final source in evidence.sources)
+        for (final token in source.tokens) ...<String>[
+          token.surface,
+          token.lemma,
+          token.reading,
+          ...token.lookupCandidates,
+        ],
+      for (final pattern in evidence.patterns) pattern.surface,
+      for (final citation in evidence.citations) ...<String>[
+        citation.headword,
+        citation.entryKey,
+        citation.matchedKey,
+      ],
+      for (final quote in quotes) quote.text,
+    };
+  }
+
+  bool _shouldFanOut(AgentRunRequest request, AgentEvidenceBundle evidence) {
+    if (!limits.enableDictionaryFanOut) return false;
+    if (request.dictionaries.length > limits.dictionaryFanOutThreshold) {
+      return true;
+    }
+    var chars = 0;
+    for (final source in evidence.sources) {
+      chars += source.text.length;
+    }
+    for (final citation in evidence.citations) {
+      chars += citation.snippet.length;
+    }
+    return chars > limits.dictionaryFanOutEvidenceChars;
+  }
+
+  Future<_DictionaryFanOut?> _runDictionaryFanOut({
+    required LlmPort llm,
+    required String model,
+    required AgentRunRequest request,
+    required AgentInputEnvelope envelope,
+    required AgentEvidenceBundle evidence,
+    required List<AgentQuoteRef> quotes,
+    required List<String> profiles,
+    required String userRequest,
+    required AgentIntentHint intentHint,
+    required String? expectedSourceId,
+    required AgentCancellation? cancellation,
+    required AgentUiLanguage uiLanguage,
+    required _RunTelemetryBuilder telemetry,
+    required void Function() checkCancelled,
+  }) async {
+    final subsets = <_DictionarySubset>[];
+    for (final dictionary in request.dictionaries) {
+      final subsetEvidence = evidenceForDictionary(evidence, dictionary.id);
+      if (subsetEvidence.citations.isEmpty) continue;
+      final dictionaryRefs = envelope.dictionaries
+          .where((item) => item.id == dictionary.id)
+          .toList(growable: false);
+      if (dictionaryRefs.isEmpty) continue;
+      subsets.add(
+        _DictionarySubset(
+          dictionary: dictionary,
+          evidence: subsetEvidence,
+          input: AgentInputEnvelope(
+            sessionId: envelope.sessionId,
+            mode: envelope.mode,
+            sources: envelope.sources,
+            userText: envelope.userText,
+            context: envelope.context,
+            dictionaries: dictionaryRefs,
+          ),
+        ),
+      );
+    }
+    if (subsets.length <= 1) return null;
+
+    final results = List<AgentAnalysis?>.filled(subsets.length, null);
+    final concurrency = limits.dictionaryFanOutConcurrency
+        .clamp(1, subsets.length)
+        .toInt();
+    var next = 0;
+    var partial = false;
+
+    Future<void> worker() async {
+      while (true) {
+        checkCancelled();
+        final index = next++;
+        if (index >= subsets.length) return;
+        final subset = subsets[index];
+        try {
+          final raw = await _collect(
+            llm,
+            buildAnalysisRequest(
+              model: model,
+              mode: request.mode,
+              responseLanguage: request.responseLanguage,
+              input: subset.input,
+              evidence: subset.evidence,
+              quotes: quotes,
+              dictionaryProfiles: profiles,
+              userRequest: userRequest,
+              intentHint: intentHint,
+            ),
+            cancellation,
+            onTelemetry: telemetry.record,
+            label: 'analysis:${subset.dictionary.id}',
+          );
+          final parsed = _parseAndNormalize(
+            raw,
+            quotes,
+            subset.evidence,
+            expectedSourceId: expectedSourceId,
+          );
+          final analysis = parsed.analysis;
+          if (analysis == null || !_hasAnalysisContent(analysis)) {
+            partial = true;
+            continue;
+          }
+          results[index] = analysis;
+        } on AgentRunFailure catch (error) {
+          if (cancellation?.isCancelled == true) rethrow;
+          _timing(
+            'fan_out_failed dictionary=${subset.dictionary.id} '
+            'code=${error.code.wireName}',
+          );
+          partial = true;
+        }
+      }
+    }
+
+    await Future.wait(<Future<void>>[
+      for (var index = 0; index < concurrency; index++) worker(),
+    ]);
+    final analyses = <AgentAnalysis>[for (final analysis in results) ?analysis];
+    if (analyses.isEmpty) return null;
+    final merged = mergeDictionaryAnalyses(analyses, limits: limits);
+    if (!_hasAnalysisContent(merged) && merged.noAnalysisReason.isEmpty) {
+      return null;
+    }
+    _timing('fan_out merged=${analyses.length} partial=$partial');
+    return _DictionaryFanOut(analysis: merged, partial: partial);
+  }
+
+  bool _hasAnalysisContent(AgentAnalysis analysis) {
+    return analysis.translation.isNotEmpty ||
+        analysis.segments.isNotEmpty ||
+        analysis.interpretations.isNotEmpty ||
+        analysis.unresolved.isNotEmpty ||
+        analysis.modelSupplements.isNotEmpty;
   }
 
   /// Coverage review is useful when at least one lookup target has no hit, or
@@ -1640,6 +1884,25 @@ class AgentOrchestrator {
   }
 }
 
+class _DictionarySubset {
+  const _DictionarySubset({
+    required this.dictionary,
+    required this.evidence,
+    required this.input,
+  });
+
+  final DictionaryInfo dictionary;
+  final AgentEvidenceBundle evidence;
+  final AgentInputEnvelope input;
+}
+
+class _DictionaryFanOut {
+  const _DictionaryFanOut({required this.analysis, required this.partial});
+
+  final AgentAnalysis analysis;
+  final bool partial;
+}
+
 class _RunTelemetryBuilder {
   int llmCalls = 0;
   int analysisCalls = 0;
@@ -1666,7 +1929,9 @@ class _RunTelemetryBuilder {
     this.outputChars += outputChars;
     this.reasoningChars += reasoningChars;
     llmElapsedMs += elapsedMs;
-    if (label == 'analysis') analysisCalls++;
+    if (label == 'analysis' || label.startsWith('analysis:')) {
+      analysisCalls++;
+    }
     if (label == 'coverage' || label == 'coverage_repair') coverageCalls++;
     if (label == 'analysis_repair') repairCalls++;
     if (label == 'language_repair') languageRepairCalls++;

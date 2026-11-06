@@ -5,10 +5,10 @@
 > 复制具体数值；历史记录可以保留“当时值”，但必须标注为历史快照。
 >
 > - last_verified: 2026-11-06
-> - last_verified_code_commit: `e1570ee`（Phase 1b 代码基线；Phase 2 增量在其后
+> - last_verified_code_commit: `5f8348c`（Phase 2 代码基线；Phase 3 增量在其后
 >   提交）
-> - last_doc_sync: 2026-11-06（Phase 2：本地意图提示与 run telemetry；测试基线
->   505/496）
+> - last_doc_sync: 2026-11-06（Phase 3：条件 fan-out 默认关闭/阈值/并发；测试
+>   基线 512/503）
 > - 设备基线: `Medium_Phone_API_36.1`（x86_64 模拟器，API 36）；无 arm64 真机
 > - 维护规则：数据变化时只改本文件，并同步更新 `last_verified`/
 >   `last_verified_code_commit`；其他文档的引用链接不需要改。不要把本文件自身的
@@ -40,15 +40,15 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **496** |
-| 当前测试文件数 | **86** |
+| 当前 test/testWidgets 声明数 | **503** |
+| 当前测试文件数 | **89** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | **505 passed**（声明 496；参数化/循环用例产生 505 个执行用例） |
+| 最近 `flutter test` | **512 passed**（声明 503；参数化/循环用例产生 512 个执行用例） |
 | 最近 `flutter build apk --debug` | success（2026-11-04 P6.6/P6.7 验证） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
-> 该数字对应 2026-11-06 Phase 2 请求管线收敛工作区（含 Wave 3、P6.6、P7.0
-> 富文本修正、Phase 1a–1b）。新增/删除测试后只更新本节。
+> 该数字对应 2026-11-06 Phase 3 条件 fan-out 工作区（含 Wave 3、P6.6、P7.0
+> 富文本修正、Phase 1a–2）。新增/删除测试后只更新本节。
 
 ### 2.2 历史测试基线（不要当作当前值）
 
@@ -78,7 +78,8 @@
 | Phase 1a F7 复合词补查 | 489（声明 480） | F7 复合词整体 MISSING、token 跨度校验、无 tokenizer 已知术语回退 |
 | Phase 1b 档案编译器 v2 | 499（声明 490） | intro/方向性语言对/覆盖指标、样本 20、batch 20,000、prompt v2 |
 | Phase 2 请求管线收敛 | 505（声明 496） | 本地意图提示、单次主分析断言、AgentRunTelemetry、coverage 计数重算 |
-| 当前 | **505（声明 496）** | 见 §2.1 |
+| Phase 3 条件 fan-out | 512（声明 503） | 证据分区、analysis 合并、2 词典成功/单词典失败、默认关闭 |
+| 当前 | **512（声明 503）** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
@@ -204,6 +205,9 @@ arm64 真机性能另需复测。
 | 复合词补查 token 跨度 | 6 | `AgentLimits.maxCoverageCompoundTokens`；未知 word query；无 tokenizer 时只接受已知术语 |
 | 覆盖审查自适应触发 | 默认开启 | `AgentLimits.adaptiveCoverageReview`；全部 target 已有 citation 且未达上限时跳过 |
 | 覆盖审查触发口径 | per-target | 2026-11-04：`targetsWithCitations < uniqueTargets`，不用 citation 总数代理 |
+| 词典 fan-out | 默认关闭 | `AgentLimits.enableDictionaryFanOut`；真实 provider/arm64 验收前不默认开启 |
+| fan-out 触发 | >8 词典或 >16,000 字符 | `dictionaryFanOutThreshold` / `dictionaryFanOutEvidenceChars`；source+citation 估算 |
+| fan-out 并发 | 2 | `AgentLimits.dictionaryFanOutConcurrency`；按用户词典顺序合并 |
 | 富文本格式化并发 | 3 | `AgentLimits.richTextConcurrency`；同文本只请求一次 |
 | 富文本批量请求 | 原文+逐句 1 次 | 词注/词典事实解释本地 RUBY；按 section 独立解析/降级 |
 | 富文本批量最大字符 | 20,000 | `AgentLimits.maxRichTextChars`；超限整批本地回退 |
