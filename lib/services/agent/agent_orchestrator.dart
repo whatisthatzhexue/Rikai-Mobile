@@ -1931,7 +1931,14 @@ class AgentOrchestrator {
         }
       } on AgentRunFailure catch (error) {
         if (cancellation?.isCancelled == true) rethrow;
-        if (!_isReconnectable(error) || attempt == maxAttempts - 1) rethrow;
+        if (!_isReconnectable(error)) rethrow;
+        if (attempt == maxAttempts - 1) {
+          // Reconnect is exhausted. A usable prefix is more valuable than a
+          // failed run: let the normal parser/salvage decide whether it can
+          // still show a partial result.
+          if (buffer.isNotEmpty) break;
+          rethrow;
+        }
         trimToContinuationBoundary();
         if (kDebugMode) {
           debugPrint(
@@ -1948,7 +1955,11 @@ class AgentOrchestrator {
             message: '已取消',
           );
         }
-        if (!_isReconnectable(error) || attempt == maxAttempts - 1) rethrow;
+        if (!_isReconnectable(error)) rethrow;
+        if (attempt == maxAttempts - 1) {
+          if (buffer.isNotEmpty) break;
+          rethrow;
+        }
         trimToContinuationBoundary();
         if (kDebugMode) {
           debugPrint(
@@ -2010,8 +2021,7 @@ class AgentOrchestrator {
     return switch (code) {
       AgentToolErrorCode.providerUnavailable ||
       AgentToolErrorCode.providerRateLimited ||
-      AgentToolErrorCode.toolTimeout ||
-      AgentToolErrorCode.providerEmptyOutput => true,
+      AgentToolErrorCode.toolTimeout => true,
       _ => false,
     };
   }

@@ -676,8 +676,9 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
   无法中断时用 generation token 丢弃结果；provider 用 `CancelToken` 取消。
 - **流式中断续传（2026-11-06）**：provider 断流且可重试时，以最后一次完整换行
   为界保留 partial，把安全前缀作为 assistant 消息并追加“从断点继续”的 user 指令，
-  最多续传 `AgentLimits.streamReconnectAttempts`（默认 2）次；取消/鉴权/参数错误
-  不重试。续传仍失败时保留 partial 走错误/重试，不把截断文本当完整结果。
+  最多续传 `AgentLimits.streamReconnectAttempts`（默认 2）次；取消/鉴权/参数错误/
+  空输出不重试。续传耗尽仍有可用 partial 时交给校验/抢救；不把截断文本静默当作
+  完整结果。
 - **后台持续（2026-11-06）**：run 运行期间 Android 使用 `dataSync` 前台服务 +
   partial wake lock，切后台/熄屏继续；done/error/cancel/newSession/dispose 停止
   服务与通知。进程被系统杀死后仍只显示 interrupted/重试，不承诺续跑。

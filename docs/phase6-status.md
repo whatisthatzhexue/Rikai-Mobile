@@ -61,12 +61,15 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
   wake lock），run 开始即启动，done/error/cancel/newSession/dispose 停止；
   通知渠道 LOW、常驻无声音。仅进程存活时有保证，进程被杀仍需 interrupted/重试。
 - **断流续传**：`_collect` 对 `PROVIDER_UNAVAILABLE`/`PROVIDER_RATE_LIMITED`/
-  `TOOL_TIMEOUT`/`PROVIDER_EMPTY_OUTPUT` 自动续传最多 2 次；有 partial 时从最后
-  完整换行前缀续写，空 partial 重发原请求；取消/鉴权/参数错误不重试。
+  `TOOL_TIMEOUT` 自动续传最多 2 次；有 partial 时从最后完整换行前缀续写，空
+  partial 重发原请求；取消/鉴权/参数错误/空输出不重试。续传耗尽仍有可用 partial
+  时交给校验/抢救，不直接丢掉已生成文本。
 - 自动化验证：`flutter analyze` 通过；完整 `flutter test` 通过（新增 ruby 宽度、
   下划线换行、音调 baseline/尾高、历史复制、档案锁定、provider 持久化、会话模式、
-  后台服务 start/stop、断流续传用例）。真实 provider 弱网/断网、arm64 后台服务、
-  通知权限与真机视觉验收仍未进行，不能写成已验证。
+  后台服务 start/stop、断流续传用例）；Android `:app:compileDebugKotlin --offline`
+  通过（AgentRunService/MainActivity）。未做 APK 构建（字体未放入工作区）。真实
+  provider 弱网/断网、arm64 后台服务、通知权限与真机视觉验收仍未进行，不能写成
+  已验证。
 
 ## 2026-11-04 输出上限 / NO_ANALYSIS / 批量降级
 

@@ -208,7 +208,7 @@ AgentRunSnapshot {
 #### 6.2.1 流式中断自动续传（2026-11-06）
 
 - `_collect` 在 `done` 之前遇到可重试错误（`PROVIDER_UNAVAILABLE`、
-  `PROVIDER_RATE_LIMITED`、`TOOL_TIMEOUT`、`PROVIDER_EMPTY_OUTPUT`）时，最多再发
+  `PROVIDER_RATE_LIMITED`、`TOOL_TIMEOUT`）时，最多再发
   `AgentLimits.streamReconnectAttempts`（默认 2）次请求；退避为
   `streamReconnectDelayMs × 尝试序号`。
 - 已有 partial 时，从最后一个完整换行处截断（丢弃未完成行），把该前缀作为

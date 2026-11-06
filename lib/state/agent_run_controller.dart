@@ -35,6 +35,15 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   AgentUiLanguage _uiLanguage = AgentUiLanguage.chinese;
   Future<void> Function()? _cancelOcr;
   AgentBackgroundPort? _backgroundPort;
+  AgentMode? _sessionMode;
+
+  /// Strict/loose selected for the current app session. It survives page
+  /// rebuilds, is snapshotted into each run, and resets with a new session.
+  AgentMode get sessionMode => _sessionMode ?? state.mode;
+
+  void setSessionMode(AgentMode mode) {
+    _sessionMode = mode;
+  }
 
   AgentBackgroundPort get _background {
     final existing = _backgroundPort;
@@ -103,6 +112,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     // Keep the request even when validation fails immediately: the page should
     // not lose the user's text/image and retry must be able to replay it.
     _lastInputs = inputs;
+    _sessionMode = mode;
     _uiLanguage = resolveAgentUiLanguage(responseLanguage);
     if (text.isEmpty && images.isEmpty) {
       _setImmediateError(
@@ -445,6 +455,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     _cancellation = null;
     _lastInputs = null;
     _sessionId = null;
+    _sessionMode = null;
     _cancelOcr = null;
     _textChars = 0;
     _reasoningChars = 0;

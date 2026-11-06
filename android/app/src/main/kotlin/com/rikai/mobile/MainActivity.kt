@@ -22,6 +22,7 @@ import io.flutter.plugin.common.MethodChannel
  */
 class MainActivity : FlutterActivity() {
     private val legacyStorageRequestCode = 4301
+    private val notificationPermissionRequestCode = 4302
     private var pendingLegacyResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -69,6 +70,35 @@ class MainActivity : FlutterActivity() {
                 when (call.method) {
                     "start" -> {
                         try {
+                            // Android 13+ hides a foreground-service notice
+                            // when notifications are denied. Ask once when the
+                            // first Agent run starts; the service still runs
+                            // if the user declines.
+                            if (
+                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                                    PackageManager.PERMISSION_GRANTED
+                            ) {
+                                val preferences =
+                                    getSharedPreferences("rikai_prefs", MODE_PRIVATE)
+                                if (!preferences.getBoolean(
+                                        "agent_notification_permission_requested",
+                                        false,
+                                    )
+                                ) {
+                                    preferences
+                                        .edit()
+                                        .putBoolean(
+                                            "agent_notification_permission_requested",
+                                            true,
+                                        )
+                                        .apply()
+                                    requestPermissions(
+                                        arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                                        notificationPermissionRequestCode,
+                                    )
+                                }
+                            }
                             startForegroundService(
                                 Intent(this, AgentRunService::class.java)
                                     .setAction(AgentRunService.ACTION_START),
@@ -157,6 +187,11 @@ class MainActivity : FlutterActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == notificationPermissionRequestCode) {
+            // Optional: a denied notification permission only hides the
+            // foreground-service notice; the run continues.
+            return
+        }
         if (requestCode != legacyStorageRequestCode) return
         val granted =
             grantResults.isNotEmpty() &&

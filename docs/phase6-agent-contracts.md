@@ -1041,8 +1041,8 @@ validate(analysis, evidence, quotes, mode):
   **不再重复一次非流式请求**；只有真正空流（无 reasoning、无正文）才回退到
   非流式。日志记录 SSE 事件数、text/reasoning 字符数和 `finish_reason`。
 - **流式中断续传（2026-11-06）**：`_collect` 在 `done` 前收到可重试错误
-  （`PROVIDER_UNAVAILABLE`/`PROVIDER_RATE_LIMITED`/`TOOL_TIMEOUT`/
-  `PROVIDER_EMPTY_OUTPUT`）时，最多追加 `AgentLimits.streamReconnectAttempts`
+  （`PROVIDER_UNAVAILABLE`/`PROVIDER_RATE_LIMITED`/`TOOL_TIMEOUT`）时，最多追加
+  `AgentLimits.streamReconnectAttempts`
   （默认 2）次请求。已有 partial 时取最后一个 `\n` 之前的安全前缀，作为
   `assistant` 消息附在原 `messages` 后，再追加固定 user 指令
   (`streamContinuationInstruction`) 要求从断点继续、不重复、保持标签格式；没有

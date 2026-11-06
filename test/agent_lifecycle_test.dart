@@ -74,6 +74,41 @@ const _analysisPart2 = '''
 [/SEGMENT]
 ''';
 
+const _analysisCompletePrefix = '''
+[TRANSLATION quote="q1"]请多关照。[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]正式请求[/MEANING]
+[WORD id="t1"]何卒||请务必|source-1[/WORD]
+[/SEGMENT]
+''';
+
+class _AlwaysInterruptedProvider implements LlmPort {
+  int calls = 0;
+
+  @override
+  Stream<LlmEvent> stream(
+    LlmRequest request, {
+    LlmCancelToken? cancellation,
+  }) async* {
+    calls++;
+    if (calls == 1) {
+      yield LlmEvent(type: LlmEventType.textDelta, text: _profileTagged);
+      yield LlmEvent.done();
+      return;
+    }
+    if (calls == 2) {
+      yield LlmEvent(
+        type: LlmEventType.textDelta,
+        text: _analysisCompletePrefix,
+      );
+    }
+    throw const AgentCapabilityException(
+      AgentToolErrorCode.providerUnavailable,
+      'still offline',
+    );
+  }
+}
+
 class _ReconnectProvider implements LlmPort {
   int calls = 0;
   final List<LlmRequest> requests = <LlmRequest>[];
@@ -430,6 +465,36 @@ void main() {
     expect(snapshot.status, AgentRunStatus.done);
     expect(snapshot.result, isNotNull);
     expect(provider.calls, 3);
+  });
+
+  test('exhausted reconnect keeps a usable partial analysis', () async {
+    final provider = _AlwaysInterruptedProvider();
+    final container = ProviderContainer(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(_preferences),
+        agentLimitsProvider.overrideWithValue(
+          const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: false,
+            streamReconnectAttempts: 1,
+            streamReconnectDelayMs: 1,
+          ),
+        ),
+        agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
+        agentRunServicesProvider.overrideWithValue(
+          ({required bool needsOcr, bool Function()? isCancelled}) async =>
+              _services(provider),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(agentRunControllerProvider.notifier);
+
+    final snapshot = await _runToCompletion(container, controller);
+
+    expect(provider.calls, 3);
+    expect(snapshot.status, AgentRunStatus.done);
+    expect(snapshot.result?.analysis.segments, isNotEmpty);
   });
 
   test('active run holds and releases the background service', () async {

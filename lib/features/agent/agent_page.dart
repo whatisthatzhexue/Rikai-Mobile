@@ -55,9 +55,9 @@ class _AgentPageState extends ConsumerState<AgentPage> {
     super.initState();
     _runController = ref.read(agentRunControllerProvider.notifier);
     // Strict/loose is a session-level snapshot: re-entering the page keeps the
-    // mode used by the current conversation, while a new session resets it.
-    final run = ref.read(agentRunControllerProvider);
-    _mode = run.hasConversation ? run.mode : AgentMode.strict;
+    // mode selected for this session (including an unused selection), while a
+    // new session resets it to strict.
+    _mode = _runController.sessionMode;
   }
 
   @override
@@ -241,6 +241,7 @@ class _AgentPageState extends ConsumerState<AgentPage> {
   }
 
   void _retryLoose() {
+    _runController.setSessionMode(AgentMode.loose);
     setState(() => _mode = AgentMode.loose);
     unawaited(_runController.retry(mode: AgentMode.loose));
   }
@@ -478,7 +479,10 @@ class _AgentPageState extends ConsumerState<AgentPage> {
                   onProviderChanged: (value) => ref
                       .read(selectedAgentProviderProvider.notifier)
                       .select(value),
-                  onModeChanged: (value) => setState(() => _mode = value),
+                  onModeChanged: (value) {
+                    _runController.setSessionMode(value);
+                    setState(() => _mode = value);
+                  },
                   onSelectionModeChanged: (value) => ref
                       .read(agentDictionaryPreferencesProvider.notifier)
                       .setMode(value),

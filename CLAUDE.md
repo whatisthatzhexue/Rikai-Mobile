@@ -499,7 +499,8 @@ packages/rikai_ocr/                                           # OCR 插件 + ORT
 assets/models/manifest.json                                   # 模型清单（不含模型本体）
 build/ocr-models/                                             # 本地模型测试下载（已忽略）
 integration_test/ocr_android_test.dart                        # 横向/倾斜/竖向/90°/270°/180° OCR 设备测试
-android/app/src/main/kotlin/com/rikai/mobile/MainActivity.kt  # 权限 MethodChannel 原生侧
+android/app/src/main/kotlin/com/rikai/mobile/MainActivity.kt  # 权限/后台服务 MethodChannel 原生侧
+android/app/src/main/kotlin/com/rikai/mobile/AgentRunService.kt # dataSync 前台服务 + wake lock
 android/app/src/main/AndroidManifest.xml                      # 文件权限
 android/app/build.gradle.kts                                  # SDK/NDK 见 project-data §1
 tool/spike_mdict.dart                                         # MDict 主机 spike
@@ -550,6 +551,7 @@ lib/features/agent/agent_pitch_accent.dart                    # P6.7 声调高�
 lib/core/models/agent/                                        # input/evidence/analysis/profile/quote/tool DTO
 lib/services/storage/agent_store.dart                         # 会话/消息/引用/OCR 版本/档案 SQLite
 lib/services/security/secret_store.dart                       # API Key 安全存储
+lib/services/agent/agent_background_service.dart              # 后台运行 MethodChannel 桥（dataSync 前台服务）
 lib/services/lookup/lookup_gateway.dart                       # 纯查词提取（UI/Agent 共用）
 assets/agent/grammar_patterns_ja.json                         # 语法模式白名单
 assets/agent/dictionary_probes.json                           # 词典熟悉有界探针

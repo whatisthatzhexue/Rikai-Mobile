@@ -40,11 +40,12 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **533** |
+| 当前 test/testWidgets 声明数 | **534** |
 | 当前测试文件数 | **95** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | **542 passed**（声明 533；参数化/循环用例产生 542 个执行用例） |
+| 最近 `flutter test` | **543 passed**（声明 534；参数化/循环用例产生 543 个执行用例） |
 | 最近 `flutter build apk --debug` | success（2026-11-04 P6.6/P6.7 验证；2026-11-06 后台服务改动未做 APK 构建） |
+| 最近 Android Kotlin 编译 | success（2026-11-06 `:app:compileDebugKotlin --offline`；含 AgentRunService/MainActivity） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
 > 该数字对应 2026-11-06 Agent UI/后台/续传修复工作区（含 Phase 4 安全子集、
@@ -81,8 +82,8 @@
 | Phase 3 条件 fan-out | 512（声明 503） | 证据分区、analysis 合并、2 词典成功/单词典失败、默认关闭 |
 | Phase 4 安全子集 | 519（声明 510） | 静态 ja/zh/en 词表包、覆盖评估、非日语脚本跳过 UniDic |
 | Phase 4 采样截断显式化 | 523（声明 514） | 词表语义边界测试、DictionarySample/coverage 截断字段、Markdown/卡片/warnings 警告、prompt 投影 |
-| Agent UI/后台/续传修复 | 542（声明 533） | ruby 宽度/音调 baseline/尾高、下划线换行、历史复制、档案锁定、provider 持久化、会话模式、后台服务、断流续传 |
-| 当前 | **542（声明 533）** | 见 §2.1 |
+| Agent UI/后台/续传修复 | 543（声明 534） | ruby 宽度/音调 baseline/尾高、下划线换行、历史复制、档案锁定、provider 持久化、会话模式、后台服务、断流续传（含续传耗尽保留 partial） |
+| 当前 | **543（声明 534）** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
@@ -231,9 +232,9 @@ arm64 真机性能另需复测。
 |---|---:|---|
 | Provider 默认超时 | 180 秒 | `AgentProviderConfig.timeoutSeconds` |
 | 429/5xx 最大尝试次数 | 3（即最多 2 次重试） | `provider_http.dart` |
-| 流式中断续传次数 | 2（即最多 3 次请求） | `AgentLimits.streamReconnectAttempts`；只对 providerUnavailable/rateLimited/timeout/emptyOutput 生效，用户取消/鉴权/参数错误不重试 |
+| 流式中断续传次数 | 2（即最多 3 次请求） | `AgentLimits.streamReconnectAttempts`；只对 providerUnavailable/rateLimited/timeout 生效，用户取消/鉴权/参数错误/空输出不重试 |
 | 流式续传退避 | 600ms × 尝试序号 | `AgentLimits.streamReconnectDelayMs`；续传从最后一个完整换行前缀开始 |
-| Agent 后台运行 | dataSync 前台服务 + partial wake lock | 运行期间常驻低优先级通知；结束/失败/取消停止；进程被杀不续跑 |
+| Agent 后台运行 | dataSync 前台服务 + partial wake lock | 运行期间常驻低优先级通知；Android 13+ 首次运行请求通知权限（拒绝不阻断服务）；结束/失败/取消停止；进程被杀不续跑 |
 | 401/403 | 不重试 | 当前 provider 映射 |
 | Anthropic API version | `2026-10-21` | 当前适配器 |
 | 文本-only | 是 | 无 tool/capability 请求面 |
