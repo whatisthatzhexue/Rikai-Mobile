@@ -12,6 +12,7 @@ import 'package:rikai_mobile/core/models/dictionary_sample.dart';
 import 'package:rikai_mobile/core/models/lookup_models.dart';
 import 'package:rikai_mobile/core/models/lookup_request.dart';
 import 'package:rikai_mobile/core/models/token.dart';
+import 'package:rikai_mobile/services/agent/agent_background_service.dart';
 import 'package:rikai_mobile/services/agent/agent_run.dart';
 import 'package:rikai_mobile/services/agent/familiarization/dictionary_familiarization_service.dart';
 import 'package:rikai_mobile/services/agent/familiarization/profile_fingerprint.dart';
@@ -64,6 +65,59 @@ const _profileTagged = '''
 [KIND]国語辞典[/KIND]
 [/PROFILE]
 ''';
+
+const _analysisPart1 = '[TRANSLATION quote="q1"]请多关照。[/TRANSLATION]\n';
+const _analysisPart2 = '''
+[SEGMENT type="fact" quote="q1"]
+[MEANING]正式请求[/MEANING]
+[WORD id="t1"]何卒||请务必|source-1[/WORD]
+[/SEGMENT]
+''';
+
+class _ReconnectProvider implements LlmPort {
+  int calls = 0;
+  final List<LlmRequest> requests = <LlmRequest>[];
+
+  @override
+  Stream<LlmEvent> stream(
+    LlmRequest request, {
+    LlmCancelToken? cancellation,
+  }) async* {
+    calls++;
+    requests.add(request);
+    if (calls == 1) {
+      yield LlmEvent(type: LlmEventType.textDelta, text: _profileTagged);
+      yield LlmEvent.done();
+      return;
+    }
+    if (calls == 2) {
+      yield LlmEvent(type: LlmEventType.textDelta, text: _analysisPart1);
+      throw const AgentCapabilityException(
+        AgentToolErrorCode.providerUnavailable,
+        'connection lost',
+      );
+    }
+    final continuation = request.messages[request.messages.length - 1];
+    final partial = request.messages[request.messages.length - 2];
+    expect(continuation.role, LlmRole.user);
+    expect(continuation.text, contains('interrupted'));
+    expect(partial.role, LlmRole.assistant);
+    expect(partial.text, _analysisPart1);
+    yield LlmEvent(type: LlmEventType.textDelta, text: _analysisPart2);
+    yield LlmEvent.done();
+  }
+}
+
+class _FakeBackground implements AgentBackgroundPort {
+  int starts = 0;
+  int stops = 0;
+
+  @override
+  Future<void> start() async => starts++;
+
+  @override
+  Future<void> stop() async => stops++;
+}
 
 class _FakeOcr implements OcrPort {
   @override
@@ -348,6 +402,66 @@ void main() {
     expect(provider.requests, hasLength(2));
   });
 
+  test('stream interruption resumes from the complete prefix', () async {
+    final provider = _ReconnectProvider();
+    final container = ProviderContainer(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(_preferences),
+        agentLimitsProvider.overrideWithValue(
+          const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: false,
+            streamReconnectAttempts: 2,
+            streamReconnectDelayMs: 1,
+          ),
+        ),
+        agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
+        agentRunServicesProvider.overrideWithValue(
+          ({required bool needsOcr, bool Function()? isCancelled}) async =>
+              _services(provider),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(agentRunControllerProvider.notifier);
+
+    final snapshot = await _runToCompletion(container, controller);
+
+    expect(snapshot.status, AgentRunStatus.done);
+    expect(snapshot.result, isNotNull);
+    expect(provider.calls, 3);
+  });
+
+  test('active run holds and releases the background service', () async {
+    final provider = FakeProvider(
+      responseSequence: <String>[_profileTagged, _analysisTagged],
+    );
+    final background = _FakeBackground();
+    final container = ProviderContainer(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(_preferences),
+        agentBackgroundServiceProvider.overrideWithValue(background),
+        agentLimitsProvider.overrideWithValue(
+          const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: false,
+          ),
+        ),
+        agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),
+        agentRunServicesProvider.overrideWithValue(
+          ({required bool needsOcr, bool Function()? isCancelled}) async =>
+              _services(provider),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(agentRunControllerProvider.notifier);
+
+    await _runToCompletion(container, controller);
+    expect(background.starts, 1);
+    expect(background.stops, 1);
+  });
+
   test('cancel stops the run and keeps the cancelled status', () async {
     final provider = _CancelAwareProvider();
     final container = ProviderContainer(
@@ -586,6 +700,9 @@ void main() {
             const AgentLimits(
               maxCoverageFallback: 0,
               enableRichTextPostProcess: false,
+              // This test asserts the failure path; automatic reconnect would
+              // legitimately turn the next attempt into a success.
+              streamReconnectAttempts: 0,
             ),
           ),
           agentProfileInboxProvider.overrideWith(_AutoSkipInbox.new),

@@ -15,12 +15,14 @@ class AgentEvidencePanel extends StatelessWidget {
     required this.onCitationTap,
     required this.onRetryProfile,
     required this.strings,
+    this.animate = true,
   });
 
   final AgentRunResult result;
   final ValueChanged<AgentCitation> onCitationTap;
   final Future<void> Function(DictionaryProfileIssue) onRetryProfile;
   final AgentUiStrings strings;
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +57,7 @@ class AgentEvidencePanel extends StatelessWidget {
               onCitationTap: onCitationTap,
               onRetryProfile: onRetryProfile,
               strings: strings,
+              animate: animate,
             ),
           ],
         ),

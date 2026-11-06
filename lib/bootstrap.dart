@@ -11,8 +11,10 @@ import 'state/agent_providers.dart';
 import 'state/agent_history_recorder.dart';
 import 'state/providers.dart';
 
-/// Shows the branded splash while preferences, installed dictionaries and the
-/// tokenizer are prepared, then hands a single ProviderContainer to the app.
+/// Shows the branded splash only while preferences are loaded, then hands a
+/// single ProviderContainer to the app. Dictionary and tokenizer warm-up run
+/// concurrently in the background so a large UniDic/MDict set cannot delay the
+/// first frame.
 class BootstrapApp extends StatefulWidget {
   const BootstrapApp({super.key});
 
@@ -60,25 +62,38 @@ class _BootstrapAppState extends State<BootstrapApp> {
 
       // Start the app-scoped history recorder before any Agent run can begin.
       container.read(agentHistoryRecorderProvider);
-      await _loadDictionaries(container);
-      await _loadTokenizer(container);
 
       if (!mounted) {
         container.dispose();
         _container = null;
         return;
       }
+      // Do not keep the splash on screen while large dictionaries and UniDic
+      // are warmed up. The worker/Mecab futures are app-scoped; the first
+      // lookup waits for the same warm-up if it arrives early. The two
+      // warm-ups run concurrently instead of one after the other.
       setState(() => _ready = true);
+      unawaited(_warmUpInBackground(container));
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error);
     }
   }
 
-  Future<void> _loadDictionaries(ProviderContainer container) async {
-    if (!mounted) return;
-    setState(() => _status = '正在加载已安装的词典…');
+  Future<void> _warmUpInBackground(ProviderContainer container) async {
+    try {
+      await Future.wait<void>([
+        _loadDictionaries(container),
+        _loadTokenizer(container),
+      ]);
+    } catch (error) {
+      // The app may be disposed while a warm-up is in flight. This is an
+      // optimization only; never surface it as a startup failure.
+      debugPrint('[Bootstrap] background warm-up skipped: $error');
+    }
+  }
 
+  Future<void> _loadDictionaries(ProviderContainer container) async {
     final dictionaries = container.read(enabledDictionariesProvider);
     if (dictionaries.isEmpty) return;
 
@@ -87,7 +102,8 @@ class _BootstrapAppState extends State<BootstrapApp> {
           .read(mdictServiceProvider.future)
           .timeout(const Duration(seconds: 20));
       // Opening all enabled dictionaries now removes the cold-start delay from
-      // the first entry navigation.
+      // the first entry navigation. It runs in the background so it cannot
+      // delay the first frame.
       await service.warmUp(dictionaries).timeout(const Duration(seconds: 20));
     } catch (error) {
       debugPrint('[Bootstrap] dictionary warm-up skipped: $error');
@@ -96,9 +112,8 @@ class _BootstrapAppState extends State<BootstrapApp> {
 
   Future<void> _loadTokenizer(ProviderContainer container) async {
     final path = container.read(appSettingsProvider).unidicPath;
-    if (path.isEmpty || !mounted) return;
+    if (path.isEmpty) return;
 
-    setState(() => _status = '正在加载分词功能…');
     try {
       await container
           .read(mecabServiceProvider.future)

@@ -69,25 +69,32 @@ List<InlineSpan> buildAgentRichTextSpans(
     if (value.isEmpty) return;
     final textStyle = effectiveStyle();
     if (underline) {
-      spans.add(
-        WidgetSpan(
-          alignment: PlaceholderAlignment.baseline,
-          baseline: TextBaseline.alphabetic,
-          child: _UnderlineSpanWidget(
-            color: AgentTokens.richTextUnderlineColor,
-            thickness: AgentTokens.richTextUnderlineThickness,
-            offset: textScaler.scale(AgentTokens.richTextUnderlineOffset),
-            child: Text(
-              value,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.visible,
-              textScaler: textScaler,
-              style: textStyle,
+      // A WidgetSpan is laid out as one inline object and cannot wrap inside
+      // itself. Long underlined phrases therefore used to overflow instead of
+      // breaking mid-line. Split long runs at character/word boundaries so the
+      // rich-text line breaker can wrap between the resulting inline spans,
+      // while keeping short runs atomic (one baseline-aligned underline).
+      for (final chunk in _underlineChunks(value)) {
+        spans.add(
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: _UnderlineSpanWidget(
+              color: AgentTokens.richTextUnderlineColor,
+              thickness: AgentTokens.richTextUnderlineThickness,
+              offset: textScaler.scale(AgentTokens.richTextUnderlineOffset),
+              child: Text(
+                chunk,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.visible,
+                textScaler: textScaler,
+                style: textStyle,
+              ),
             ),
           ),
-        ),
-      );
+        );
+      }
       return;
     }
     spans.add(TextSpan(text: value, style: textStyle));
@@ -157,6 +164,43 @@ List<InlineSpan> buildAgentRichTextSpans(
   return spans;
 }
 
+/// Splits an underlined run into chunks that the paragraph can wrap between.
+///
+/// Short runs stay as one chunk so a word like `重点` keeps a single
+/// underline widget (and one semantics node). Longer runs are split into CJK
+/// characters, Latin/digit words and whitespace so Japanese can wrap at any
+/// character without breaking an English word in the middle.
+List<String> _underlineChunks(String value) {
+  if (value.runes.length <= 4) return <String>[value];
+  final chunks = <String>[];
+  final buffer = StringBuffer();
+  var inLatinWord = false;
+
+  void flush() {
+    if (buffer.isEmpty) return;
+    chunks.add(buffer.toString());
+    buffer.clear();
+  }
+
+  for (final rune in value.runes) {
+    final char = String.fromCharCode(rune);
+    final isLatin = _underlineLatinWordPart.hasMatch(char);
+    if (isLatin) {
+      if (!inLatinWord) flush();
+      buffer.write(char);
+      inLatinWord = true;
+      continue;
+    }
+    flush();
+    inLatinWord = false;
+    chunks.add(char);
+  }
+  flush();
+  return chunks;
+}
+
+final RegExp _underlineLatinWordPart = RegExp(r"[A-Za-z0-9À-ÖØ-öø-ÿĀ-ž'’\-]");
+
 InlineSpan _rubySpan(
   String base,
   String reading,
@@ -218,11 +262,8 @@ class _UnderlineSpanWidget extends SingleChildRenderObjectWidget {
   final double offset;
 
   @override
-  RenderObject createRenderObject(BuildContext context) => _RenderUnderlineSpan(
-    color: color,
-    thickness: thickness,
-    offset: offset,
-  );
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderUnderlineSpan(color: color, thickness: thickness, offset: offset);
 
   @override
   void updateRenderObject(
@@ -372,8 +413,15 @@ class _RenderRubySpan extends RenderBox
     final childConstraints = constraints.loosen();
     base.layout(childConstraints, parentUsesSize: true);
     reading.layout(childConstraints, parentUsesSize: true);
+    // The reading may be wider than the base (for example 漢字 → かんじ).
+    // Sizing the ruby to the base alone makes the reading overflow into the
+    // next word, where it overlaps that word's ruby. Reserve the union width
+    // and centre both parts inside it.
+    final contentWidth = base.size.width > reading.size.width
+        ? base.size.width
+        : reading.size.width;
     size = constraints.constrain(
-      Size(base.size.width, base.size.height + reading.size.height),
+      Size(contentWidth, base.size.height + reading.size.height),
     );
     (base.parentData! as _RubySpanParentData).offset = Offset(
       (size.width - base.size.width) / 2,
@@ -393,8 +441,11 @@ class _RenderRubySpan extends RenderBox
     final childConstraints = constraints.loosen();
     final baseSize = base.getDryLayout(childConstraints);
     final readingSize = reading.getDryLayout(childConstraints);
+    final contentWidth = baseSize.width > readingSize.width
+        ? baseSize.width
+        : readingSize.width;
     return constraints.constrain(
-      Size(baseSize.width, baseSize.height + readingSize.height),
+      Size(contentWidth, baseSize.height + readingSize.height),
     );
   }
 
@@ -411,8 +462,11 @@ class _RenderRubySpan extends RenderBox
     if (baseBaseline == null) return null;
     final baseSize = base.getDryLayout(childConstraints);
     final readingSize = reading.getDryLayout(childConstraints);
+    final contentWidth = baseSize.width > readingSize.width
+        ? baseSize.width
+        : readingSize.width;
     final height = constraints
-        .constrain(Size(baseSize.width, baseSize.height + readingSize.height))
+        .constrain(Size(contentWidth, baseSize.height + readingSize.height))
         .height;
     return height - baseSize.height + baseBaseline;
   }

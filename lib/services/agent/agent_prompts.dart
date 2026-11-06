@@ -438,6 +438,38 @@ LlmRequest buildAnalysisRequest({
   );
 }
 
+/// User turn appended after a partial assistant response. The provider stream
+/// broke before `done`; the next request keeps the same conversation and asks
+/// only for the missing suffix. The prefix is cut at a complete line boundary
+/// by the orchestrator, so the model can resume without duplicating text.
+const String streamContinuationInstruction = '''
+The previous response was interrupted by a network error. Continue the same
+response from exactly where it stopped.
+- Do not repeat any text that is already present.
+- Do not add an introduction, explanation, Markdown fence or closing comment.
+- Keep the same bracketed tag format and close every block that is still open.
+Output only the remaining tagged content.
+''';
+
+LlmRequest buildStreamContinuationRequest(LlmRequest original, String prefix) {
+  return LlmRequest(
+    model: original.model,
+    messages: <LlmMessage>[
+      ...original.messages,
+      LlmMessage(
+        role: LlmRole.assistant,
+        parts: <LlmTextPart>[LlmTextPart(prefix)],
+      ),
+      LlmMessage(
+        role: LlmRole.user,
+        parts: <LlmTextPart>[const LlmTextPart(streamContinuationInstruction)],
+      ),
+    ],
+    maxTokens: original.maxTokens,
+    stream: original.stream,
+  );
+}
+
 String coverageSystemPrompt(AgentResponseLanguage language) {
   return '''
 You review whether the supplied dictionary evidence is sufficient for the

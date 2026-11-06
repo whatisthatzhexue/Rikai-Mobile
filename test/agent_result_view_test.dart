@@ -7,6 +7,7 @@ import 'package:rikai_mobile/core/models/agent/agent_pitch.dart';
 import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
 import 'package:rikai_mobile/features/agent/agent_evidence_panel.dart';
+import 'package:rikai_mobile/features/agent/agent_message_widgets.dart';
 import 'package:rikai_mobile/features/agent/agent_pitch_accent.dart';
 import 'package:rikai_mobile/features/agent/agent_rich_text.dart';
 import 'package:rikai_mobile/features/agent/agent_result_view.dart';
@@ -674,6 +675,80 @@ void main() {
     // One original-text box + one group header; the two segment cards must
     // not repeat the quote.
     expect(quoteWidgets, 2, reason: 'AgentRichText texts=$texts');
+  });
+
+  testWidgets('disabling result animation does not rebuild entrance fades', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentResultView(
+              result: _result,
+              onCitationTap: (_) {},
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+              animate: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(TweenAnimationBuilder<double>), findsNothing);
+  });
+
+  testWidgets('provisional to final keeps the same summary element', (
+    tester,
+  ) async {
+    final strings = AgentUiStrings.of(AgentUiLanguage.chinese);
+    Widget bubble({required bool provisional, required bool running}) {
+      return MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: AgentAssistantBubble(
+            theme: AppTheme.light(),
+            providerLabel: 'DeepSeek',
+            mode: AgentMode.strict,
+            running: running,
+            provisional: provisional,
+            cancelled: false,
+            error: null,
+            errorDetail: '',
+            stageMessage: '正在生成',
+            startedAt: DateTime(2026),
+            finishedAt: running ? null : DateTime(2026, 1, 1, 0, 0, 1),
+            progressStep: running ? 2 : 4,
+            evidenceCount: 0,
+            citationCount: 0,
+            uiLanguage: AgentUiLanguage.chinese,
+            strings: strings,
+            result: _result,
+            onRetry: () {},
+            onLooseRetry: null,
+            onSettings: () {},
+            onRegenerate: () {},
+            onCopy: () {},
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(bubble(provisional: true, running: true));
+    await tester.pump();
+    final before = tester.element(
+      find.byKey(const ValueKey<String>('agent-assistant-summary')),
+    );
+
+    await tester.pumpWidget(bubble(provisional: false, running: false));
+    await tester.pump();
+    final after = tester.element(
+      find.byKey(const ValueKey<String>('agent-assistant-summary')),
+    );
+
+    expect(identical(before, after), isTrue);
   });
 
   testWidgets('renders a standalone NO_ANALYSIS reason', (tester) async {

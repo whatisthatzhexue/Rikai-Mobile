@@ -1850,12 +1850,33 @@ class AgentOrchestrator {
     final reasoning = StringBuffer();
     final watch = Stopwatch()..start();
     var firstEventAt = -1;
-    var finished = false;
-    try {
-      await for (final event in llm.stream(
-        request,
-        cancellation: cancellation,
-      )) {
+    final reconnectAttempts = limits.streamReconnectAttempts < 0
+        ? 0
+        : limits.streamReconnectAttempts;
+    final maxAttempts = 1 + reconnectAttempts;
+
+    // The tagged protocol is line-oriented. Drop an incomplete trailing line
+    // before a continuation so the model re-emits it instead of duplicating
+    // it after the resumed prefix.
+    void trimToContinuationBoundary() {
+      final text = buffer.toString();
+      final newline = text.lastIndexOf('\n');
+      if (newline < 0) {
+        buffer.clear();
+      } else if (newline + 1 < text.length) {
+        final safe = text.substring(0, newline + 1);
+        buffer.clear();
+        buffer.write(safe);
+      }
+      onTextDelta?.call(buffer.length);
+    }
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0) {
+        final delayMs = limits.streamReconnectDelayMs * attempt;
+        if (delayMs > 0) {
+          await Future<void>.delayed(Duration(milliseconds: delayMs));
+        }
         if (cancellation?.isCancelled == true) {
           throw const AgentRunFailure(
             stage: AgentStage.reasoning,
@@ -1863,39 +1884,97 @@ class AgentOrchestrator {
             message: '已取消',
           );
         }
-        if (firstEventAt < 0) firstEventAt = watch.elapsedMilliseconds;
-        switch (event.type) {
-          case LlmEventType.textDelta:
-            buffer.write(event.text);
-            // Only the accumulated length is published. Converting the whole
-            // buffer to a String on every delta is O(n²) for reasoning models
-            // that emit thousands of tiny events, and the UI never renders
-            // the raw tagged stream.
-            onTextDelta?.call(buffer.length);
-          case LlmEventType.reasoningDelta:
-            reasoning.write(event.text);
-            onReasoningDelta?.call(reasoning.length);
-          case LlmEventType.error:
-            throw AgentRunFailure(
-              stage: AgentStage.reasoning,
-              code: AgentToolErrorCode.providerUnavailable,
-              message: '模型服务返回错误',
-              detail: _debugHead(reasoning.toString()),
-            );
-          case LlmEventType.done:
-            // `done` is terminal. Breaking here also cancels the provider's
-            // SSE subscription, so a keep-alive socket cannot hide the result.
-            finished = true;
-        }
-        if (finished) break;
       }
-    } finally {
+      final attemptRequest = attempt == 0 || buffer.isEmpty
+          ? request
+          : buildStreamContinuationRequest(request, buffer.toString());
+      var finished = false;
+      final attemptStartChars = buffer.length;
+      try {
+        await for (final event in llm.stream(
+          attemptRequest,
+          cancellation: cancellation,
+        )) {
+          if (cancellation?.isCancelled == true) {
+            throw const AgentRunFailure(
+              stage: AgentStage.reasoning,
+              code: AgentToolErrorCode.toolCancelled,
+              message: '已取消',
+            );
+          }
+          if (firstEventAt < 0) firstEventAt = watch.elapsedMilliseconds;
+          switch (event.type) {
+            case LlmEventType.textDelta:
+              buffer.write(event.text);
+              // Only the accumulated length is published. Converting the
+              // whole buffer to a String on every delta is O(n²) for
+              // reasoning models that emit thousands of tiny events, and the
+              // UI never renders the raw tagged stream.
+              onTextDelta?.call(buffer.length);
+            case LlmEventType.reasoningDelta:
+              reasoning.write(event.text);
+              onReasoningDelta?.call(reasoning.length);
+            case LlmEventType.error:
+              throw AgentRunFailure(
+                stage: AgentStage.reasoning,
+                code: AgentToolErrorCode.providerUnavailable,
+                message: '模型服务返回错误',
+                detail: _debugHead(reasoning.toString()),
+              );
+            case LlmEventType.done:
+              // `done` is terminal. Breaking here also cancels the provider's
+              // SSE subscription, so a keep-alive socket cannot hide the
+              // result.
+              finished = true;
+          }
+          if (finished) break;
+        }
+      } on AgentRunFailure catch (error) {
+        if (cancellation?.isCancelled == true) rethrow;
+        if (!_isReconnectable(error) || attempt == maxAttempts - 1) rethrow;
+        trimToContinuationBoundary();
+        if (kDebugMode) {
+          debugPrint(
+            '[AgentReconnect] label=$label attempt=$attempt '
+            'code=${error.code.wireName} chars=${buffer.length}',
+          );
+        }
+        continue;
+      } on AgentCapabilityException catch (error) {
+        if (cancellation?.isCancelled == true) {
+          throw const AgentRunFailure(
+            stage: AgentStage.reasoning,
+            code: AgentToolErrorCode.toolCancelled,
+            message: '已取消',
+          );
+        }
+        if (!_isReconnectable(error) || attempt == maxAttempts - 1) rethrow;
+        trimToContinuationBoundary();
+        if (kDebugMode) {
+          debugPrint(
+            '[AgentReconnect] label=$label attempt=$attempt '
+            'code=${error.code.wireName} chars=${buffer.length}',
+          );
+        }
+        continue;
+      }
       if (kDebugMode) {
         debugPrint(
-          '[AgentTiming] stream label=$label '
+          '[AgentTiming] stream label=$label attempt=$attempt '
           'first_event=${firstEventAt}ms end=${watch.elapsedMilliseconds}ms '
-          'chars=${buffer.length} reasoning=${reasoning.length} '
+          'chars=${buffer.length - attemptStartChars} '
+          'total_chars=${buffer.length} reasoning=${reasoning.length} '
           'done=$finished cancelled=${cancellation?.isCancelled == true}',
+        );
+      }
+      if (finished || buffer.isEmpty || attempt == maxAttempts - 1) break;
+      // The provider closed the stream without a terminal event. Keep the
+      // complete prefix and ask for the missing suffix once.
+      trimToContinuationBoundary();
+      if (kDebugMode) {
+        debugPrint(
+          '[AgentReconnect] label=$label attempt=$attempt '
+          'stream ended without done; chars=${buffer.length}',
         );
       }
     }
@@ -1920,6 +1999,21 @@ class AgentOrchestrator {
       watch.elapsedMilliseconds,
     );
     return buffer.toString();
+  }
+
+  bool _isReconnectable(Object error) {
+    final code = switch (error) {
+      AgentRunFailure failure => failure.code,
+      AgentCapabilityException failure => failure.code,
+      _ => null,
+    };
+    return switch (code) {
+      AgentToolErrorCode.providerUnavailable ||
+      AgentToolErrorCode.providerRateLimited ||
+      AgentToolErrorCode.toolTimeout ||
+      AgentToolErrorCode.providerEmptyOutput => true,
+      _ => false,
+    };
   }
 }
 

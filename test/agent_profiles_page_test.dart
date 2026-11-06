@@ -279,6 +279,8 @@ void main() {
             .every((button) => button.onPressed != null),
         isTrue,
       );
+      // A disabled red delete button looked enabled. The locked state is now
+      // a grey lock icon with an explanatory tooltip.
       expect(
         tester
             .widgetList<IconButton>(
@@ -287,15 +289,23 @@ void main() {
             .every((button) => button.onPressed == null),
         isTrue,
       );
+      expect(
+        find.widgetWithIcon(IconButton, Icons.lock_outline),
+        findsNWidgets(2),
+      );
 
       await tester.tap(find.byTooltip('多选'));
       await tester.pump();
       await tester.tap(find.byTooltip('全选'));
       await tester.pump();
       final deleteSelected = tester.widget<IconButton>(
-        find.widgetWithIcon(IconButton, Icons.delete_outline),
+        find.byKey(
+          const ValueKey<String>('agent-profile-action-delete-selected'),
+        ),
       );
       expect(deleteSelected.onPressed, isNull);
+      expect(deleteSelected.icon, isA<Icon>());
+      expect((deleteSelected.icon as Icon).icon, Icons.lock_outline);
     },
   );
 

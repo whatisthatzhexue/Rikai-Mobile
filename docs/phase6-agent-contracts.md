@@ -1040,6 +1040,15 @@ validate(analysis, evidence, quotes, mode):
 - 流式收到 reasoning_content 但没有任何正文时，抛 `PROVIDER_EMPTY_OUTPUT`，
   **不再重复一次非流式请求**；只有真正空流（无 reasoning、无正文）才回退到
   非流式。日志记录 SSE 事件数、text/reasoning 字符数和 `finish_reason`。
+- **流式中断续传（2026-11-06）**：`_collect` 在 `done` 前收到可重试错误
+  （`PROVIDER_UNAVAILABLE`/`PROVIDER_RATE_LIMITED`/`TOOL_TIMEOUT`/
+  `PROVIDER_EMPTY_OUTPUT`）时，最多追加 `AgentLimits.streamReconnectAttempts`
+  （默认 2）次请求。已有 partial 时取最后一个 `\n` 之前的安全前缀，作为
+  `assistant` 消息附在原 `messages` 后，再追加固定 user 指令
+  (`streamContinuationInstruction`) 要求从断点继续、不重复、保持标签格式；没有
+  安全前缀则重发原请求。取消、鉴权、参数/上下文错误不重试。最终输出 =
+  安全前缀 + 续写；仍失败时保留 partial 交给原错误/校验/抢救路径。续传请求仍受
+  同一 `assertNoImagePayload` 与消息校验约束，不新增图片/路径字段。
 - `LlmMessage.content` 只有 `LlmTextPart`；**没有 image/file 类型**。
 - 发送前 `assertNoImagePayload`：递归检查 JSON 键/值，禁止
   `image`、`image_url`、`input_image`、`base64`、`data:image`、`file://`、

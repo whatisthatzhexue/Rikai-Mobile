@@ -58,6 +58,16 @@ class _RecordingRunController extends AgentRunController {
   }
 }
 
+class _ModeSnapshotRunController extends AgentRunController {
+  @override
+  AgentRunSnapshot build() => const AgentRunSnapshot(
+    runId: 'run-mode',
+    status: AgentRunStatus.done,
+    sentText: '何卒',
+    mode: AgentMode.loose,
+  );
+}
+
 class _BeautifyRunController extends AgentRunController {
   @override
   AgentRunSnapshot build() => const AgentRunSnapshot(
@@ -221,4 +231,69 @@ void main() {
       expect(recording.sentImages.first.localPath, '/tmp/a.jpg');
     },
   );
+
+  testWidgets('reopening the page keeps the current session mode', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          agentProvidersProvider.overrideWith((ref) async => [_provider]),
+          enabledDictionariesProvider.overrideWithValue([_dictionary]),
+          agentRunControllerProvider.overrideWith(
+            _ModeSnapshotRunController.new,
+          ),
+        ],
+        child: MaterialApp(theme: AppTheme.light(), home: const AgentPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('宽松'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.add_comment_outlined));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('严格'), findsOneWidget);
+  });
+
+  testWidgets('selected provider survives a page rebuild', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final preferences = await SharedPreferences.getInstance();
+    const second = AgentProviderConfig(
+      id: 'p2',
+      kind: AgentProviderKind.openAiCompatible,
+      displayName: '第二模型',
+      baseUrl: 'https://example.com',
+      smallModel: 'small',
+      complexModel: 'complex',
+    );
+    Widget build() => ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(preferences),
+        agentProvidersProvider.overrideWith((ref) async => [_provider, second]),
+        enabledDictionariesProvider.overrideWithValue([_dictionary]),
+        agentRunControllerProvider.overrideWith(_RecordingRunController.new),
+      ],
+      child: MaterialApp(theme: AppTheme.light(), home: const AgentPage()),
+    );
+
+    await tester.pumpWidget(build());
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('本会话设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('第二模型').last);
+    await tester.pumpAndSettle();
+
+    // Recreate the page and the provider tree; the selection is persisted in
+    // SharedPreferences rather than kept in the page's local state.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(build());
+    await tester.pumpAndSettle();
+    expect(find.textContaining('第二模型'), findsWidgets);
+  });
 }

@@ -8,6 +8,7 @@ import '../core/models/agent/agent_profile.dart';
 import '../core/models/agent/agent_provider.dart';
 import '../core/models/agent/agent_tool.dart';
 import '../core/models/dict_info.dart';
+import '../services/agent/agent_background_service.dart';
 import '../services/agent/agent_messages.dart';
 import '../services/agent/agent_orchestrator.dart';
 import '../services/agent/agent_run.dart';
@@ -33,9 +34,22 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   AgentRichTextOutputs? _pendingRichText;
   AgentUiLanguage _uiLanguage = AgentUiLanguage.chinese;
   Future<void> Function()? _cancelOcr;
+  AgentBackgroundPort? _backgroundPort;
+
+  AgentBackgroundPort get _background {
+    final existing = _backgroundPort;
+    if (existing != null) return existing;
+    final created = ref.read(agentBackgroundServiceProvider);
+    _backgroundPort = created;
+    return created;
+  }
 
   @override
   AgentRunSnapshot build() {
+    ref.onDispose(() {
+      final port = _backgroundPort;
+      if (port != null) unawaited(port.stop());
+    });
     ref.listen(agentProfileInboxProvider, (previous, next) {
       if (state.isRunning && state.pendingProfileCount != next.pendingCount) {
         state = state.copyWith(pendingProfileCount: next.pendingCount);
@@ -156,13 +170,25 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       updatedAt: startedAt,
     );
 
+    // Keep the process (and therefore the HTTP stream) alive if the user
+    // switches apps or turns the screen off. This is best-effort: a platform
+    // failure must not block the analysis.
+    try {
+      await _background.start();
+    } catch (_) {
+      // Ignored; the run continues without the process-lifetime guarantee.
+    }
+
     try {
       final loadServices = ref.read(agentRunServicesProvider);
       final services = await loadServices(
         needsOcr: inputs.images.isNotEmpty,
         isCancelled: () => !_isActive(token),
       );
-      if (services == null) return;
+      if (services == null) {
+        unawaited(_background.stop());
+        return;
+      }
       _cancelOcr = services.cancelOcr;
 
       final smallModel = provider.smallModel.trim().isEmpty
@@ -297,6 +323,10 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         stageMessage: agentStageMessage(AgentStage.done, _uiLanguage),
         result: finalResult,
         provisionalResult: null,
+        // The user already saw the provisional answer; replaying the result
+        // block entrance animation on the final replacement looks like a
+        // page flash.
+        resultReplaced: state.provisionalResult != null,
         progressStep: 4,
         evidenceCount: result.evidence.citations.length,
         citationCount: result.validation.citationsUsed.length,
@@ -309,6 +339,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         finishedAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
+      unawaited(_background.stop());
       if (kDebugMode) {
         debugPrint(
           '[AgentTiming] controller done_state '
@@ -391,6 +422,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     }
     final cancelOcr = _cancelOcr;
     if (cancelOcr != null) unawaited(cancelOcr());
+    unawaited(_background.stop());
     _pendingRichText = null;
     state = state.copyWith(
       status: AgentRunStatus.cancelled,
@@ -398,6 +430,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       result: state.provisionalResult ?? state.retainedResult,
       provisionalResult: null,
       retainedResult: null,
+      resultReplaced: state.provisionalResult != null,
       pendingProfileCount: 0,
       richTextFormatting: false,
       finishedAt: DateTime.now(),
@@ -408,6 +441,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   void newSession() {
     if (state.isRunning) return;
     _cancellation?.cancel();
+    unawaited(_background.stop());
     _cancellation = null;
     _lastInputs = null;
     _sessionId = null;
@@ -441,8 +475,10 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   ]) {
     if (!_isActive(token)) return;
     _pendingRichText = null;
+    unawaited(_background.stop());
     // Prefer the current run's provisional answer over an older retained one;
     // the user has already seen it and a failed post-check must not erase it.
+    final hadProvisional = state.provisionalResult != null;
     final fallback = state.provisionalResult ?? state.retainedResult;
     state = state.copyWith(
       status: AgentRunStatus.error,
@@ -455,6 +491,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       provisionalResult: null,
       retainedResult: null,
       resultRetainedAfterFailure: fallback != null,
+      resultReplaced: hadProvisional,
       pendingProfileCount: 0,
       richTextFormatting: false,
       finishedAt: DateTime.now(),

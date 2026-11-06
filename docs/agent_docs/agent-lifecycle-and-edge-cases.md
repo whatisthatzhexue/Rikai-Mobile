@@ -44,9 +44,11 @@
    打开设置、应用切后台都不得等价于取消。
 7. **同一 session 同时最多一个 run。** 重复点“开始分析”、旧 run 未结束时新开
    run、旧回调覆盖新结果，都必须被 runId/generation token 阻止。
-8. **应用生命周期内有效，不等于进程死后还能继续。** Android 可能杀进程/限制
-   后台网络；应用内页面切换必须继续，切后台尽力继续，进程死亡后只能显示
-   “已中断/重试”，不得承诺自动续跑。
+8. **应用生命周期内有效，不等于进程死后还能继续。** 运行期间 Android 使用
+   `dataSync` 前台服务 + partial wake lock，切后台/熄屏后继续；run 结束、失败、
+   取消或新会话时立即停止服务和通知。进程被系统杀死/强制停止后只能显示
+   “已中断/重试”，不得承诺自动续跑。流式响应在 provider 断流时允许应用层自动
+   续传（见 §6.3），但用户取消/鉴权/参数错误不重试。
 9. **失败不吞内容。** 已生成的文本、证据和部分结果必须保留；错误以消息内卡片
    或状态条呈现，不整屏清空、不弹阻塞式全局对话框。
 10. **就地恢复，不重复扣费。** 返回页面只重新订阅当前 run；不得因为重建页面
@@ -58,7 +60,8 @@
 ## 2. 术语
 
 - **应用生命周期**：Flutter 进程/引擎存活期间，包括任意路由、页面重建、应用
-  切后台（受系统后台限制）。不包含强制停止、进程被杀、系统重启后的自动续跑。
+  切后台（前台服务 + wake lock 保持）。不包含强制停止、进程被杀、系统重启后的
+  自动续跑。
 - **页面生命周期**：`AgentPage` 的 mount/unmount、`initState`/`dispose`。
   页面生命周期不能决定 run 生命周期。
 - **思考/生成进展**：当前 stage、stage message、已用思考时长、证据/citation
@@ -126,14 +129,14 @@ AgentRunSnapshot {
 | 用户从 Agent 页返回主页/其他页 | run 继续；controller 保留 snapshot；返回时显示最新进展 | 在 `dispose` 里 cancel；清空 result/stage |
 | 用户打开设置/历史/模型页 | run 继续；返回后仍能看到阶段/已思考时长 | 重新开始 run；显示空会话 |
 | 用户打开熟悉期 sheet 后离开 | 档案留在应用级待确认队列；生成继续；run 停在 `awaitingProfile`，返回后继续逐个处理 | 自动记为“本次跳过”；丢失未保存档案；未处理完就进入查词 |
-| 应用切后台 | 进程存活时尽力继续；回前台刷新 snapshot | 主动取消；承诺后台一定完成 |
+| 应用切后台/熄屏 | 运行期间启动 dataSync 前台服务 + partial wake lock，继续请求；回前台刷新 snapshot | 主动取消；承诺进程被杀后仍完成 |
 | 应用回前台 | 显示当前 run 的最新状态；若已被系统中断则显示 interrupted | 自动从头重跑；重复请求 |
 | 进程被杀/重启 | 从持久化快照显示“已中断/重试”；不自动续跑 | 声称 run 还在继续；静默丢弃 |
 | 屏幕旋转/页面重建 | 从 controller 恢复；不重复请求 | 重新初始化 run |
 | 低内存/系统回收页面 | snapshot 不丢；返回可恢复 | 把状态存在页面 State 导致丢失 |
 | 用户点“停止” | 取消 provider/OCR/本地查词；保留可展示内容；status=cancelled | 只把 UI 标志设为 false，后台继续 |
 | 用户重复点“开始分析” | 忽略或提示先停止；同一 session 不并行 | 两个 provider 请求/两个 run 交错 |
-| 网络断开/超时 | 错误卡 + 保留 partial + 重试；可显示离线状态条 | 整屏清空；阻塞弹窗 |
+| 网络断开/超时 | 先自动续传（最多 2 次额外请求，partial 从最后完整行续写）；仍失败则错误卡 + 保留 partial + 重试 | 整屏清空；阻塞弹窗；重复追加已输出内容 |
 | provider 401/429/5xx | 稳定错误码 + 中文原因 + 重试/检查 Key | 丢内容；显示 Key/请求体 |
 | OCR 模型缺失/图片解码失败 | 明确错误 + 模型设置入口；无文本时不调用 LLM | 通用“运行失败”；继续发空请求 |
 | UniDic 未配置 | 按设计降级：仍可查词/翻译，标“结构分析不可用” | 整次 run 直接失败 |
@@ -202,6 +205,21 @@ AgentRunSnapshot {
 - 重试不得重复扣费：若失败发生在 provider 之前（OCR/分词/词典），不要调用
   provider；若 provider 已返回，按产品策略决定是否复用缓存。
 
+#### 6.2.1 流式中断自动续传（2026-11-06）
+
+- `_collect` 在 `done` 之前遇到可重试错误（`PROVIDER_UNAVAILABLE`、
+  `PROVIDER_RATE_LIMITED`、`TOOL_TIMEOUT`、`PROVIDER_EMPTY_OUTPUT`）时，最多再发
+  `AgentLimits.streamReconnectAttempts`（默认 2）次请求；退避为
+  `streamReconnectDelayMs × 尝试序号`。
+- 已有 partial 时，从最后一个完整换行处截断（丢弃未完成行），把该前缀作为
+  assistant 消息、再追加一条“从断点继续、不要重复、保持标签格式”的 user 消息；
+  没有完整行或没有文本时重发原请求。最终文本 = 安全前缀 + 续写内容。
+- 用户取消、401/403、参数/上下文错误、校验失败不自动重试；用户取消立即传播。
+- 续传仍失败时保留最后一次 partial，走原有错误卡/重试；不得把重复或截断文本
+  静默当作完整结果。
+- 流在没有 `done` 的情况下正常关闭也视为中断，按上述规则续写；最后一次尝试仍
+  无 `done` 时才接受 partial 交给校验/抢救。
+
 ### 6.3 并发
 
 - 同一 session 只允许一个 active run；开始新 run 时：
@@ -218,8 +236,10 @@ AgentRunSnapshot {
 
 - **应用内页面切换（必须）**：controller 活在应用级 provider/store 中；页面销毁
   不影响 run。
-- **应用切后台（尽力）**：Flutter 进程存活时继续；Android 可能暂停/限制网络或
-  杀进程，不能承诺“后台一定完成”。
+- **应用切后台/熄屏（尽力保持）**：run 开始时启动 Android `dataSync` 前台服务并
+  持有 partial wake lock，通知渠道 `rikai_agent_run`（IMPORTANCE_LOW，常驻无声音）；
+  done/error/cancel/newSession/controller dispose 时停止服务。进程被系统杀死后仍
+  不能承诺“后台一定完成”。
 - **进程死亡/重启（P6.7 可选）**：将 run snapshot（不含 Key/完整请求体）写入
   `AgentStore`；启动时若发现未完成 run，标记 `interrupted`，提供“重试”；不要
   自动续跑、不要假装完成。
@@ -271,8 +291,10 @@ AgentRunSnapshot {
   sessions/runs/messages/citations 表仍未写入（H8），进程被杀后无法恢复。
 - **provider 取消链**：OpenAI/Anthropic 已接 `LlmCancelToken` → Dio
   `CancelToken`，点“停止”会取消网络请求；familiarization 取消仍待补。
-- **后台限制**：controller 在应用进程存活时继续；切后台/系统杀进程不能承诺
-  完成，需在 UI 标 interrupted/重试。
+- **后台限制**：运行期间已接入 Android `dataSync` 前台服务 + partial wake lock，
+  切后台/熄屏继续；系统杀进程仍不能承诺完成，需在 UI 标 interrupted/重试。
+- **流式续传**：`_collect` 已实现 2 次自动续传；仍需真实 provider 断网/弱网设备
+  验收，不能把自动化 fake 测试当作真机已验证。
 - **生成进度**：`AgentRunSnapshot` 保存 `startedAt`/`progressStep`/
   `evidenceCount`/`citationCount`；页面显示四步进度、检索计数和“已思考 N 秒”。
   校验后的合法条目逐条淡入；不保存/展示原始流式 JSON，也不显示字数。失败/

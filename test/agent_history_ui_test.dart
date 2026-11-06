@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/app.dart';
@@ -381,5 +382,46 @@ void main() {
     expect(find.textContaining('manga_ocr/vertical'), findsOneWidget);
     expect(find.text('当时选中'), findsOneWidget);
     expect(find.textContaining('/private/'), findsNothing);
+  });
+
+  testWidgets('history detail copies the result as Markdown', (tester) async {
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map<Object?, Object?>)['text'] as String?;
+        }
+        return null;
+      },
+    );
+    addTearDown(() {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
+    });
+
+    final entry = _entry();
+    await tester.pumpWidget(
+      _app(
+        const AgentHistoryDetailPage(runId: 'run-1'),
+        _FakeHistoryRepository(
+          entries: <AgentHistoryEntry>[entry],
+          detail: AgentHistoryDetail(
+            entry: entry,
+            userText: '何卒宜しくお願い致します。',
+            result: _result(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('复制结果为 Markdown'));
+    await tester.pumpAndSettle();
+
+    expect(copied, isNotNull);
+    expect(copied, contains('何卒'));
+    await tester.pump(const Duration(seconds: 3));
   });
 }

@@ -674,6 +674,13 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
   零结果路径，不能与翻译/段落/选项共存。
 - 每个阶段可取消；取消 OCR 调用 `OcrService.cancel()`；已发出的 MDict/MeCab 请求
   无法中断时用 generation token 丢弃结果；provider 用 `CancelToken` 取消。
+- **流式中断续传（2026-11-06）**：provider 断流且可重试时，以最后一次完整换行
+  为界保留 partial，把安全前缀作为 assistant 消息并追加“从断点继续”的 user 指令，
+  最多续传 `AgentLimits.streamReconnectAttempts`（默认 2）次；取消/鉴权/参数错误
+  不重试。续传仍失败时保留 partial 走错误/重试，不把截断文本当完整结果。
+- **后台持续（2026-11-06）**：run 运行期间 Android 使用 `dataSync` 前台服务 +
+  partial wake lock，切后台/熄屏继续；done/error/cancel/newSession/dispose 停止
+  服务与通知。进程被系统杀死后仍只显示 interrupted/重试，不承诺续跑。
 - 阶段进度通过事件/状态流推给 UI，不在页面 State 里私存。
 
 ## 7. 输入、OCR 版本与词典辅助修复

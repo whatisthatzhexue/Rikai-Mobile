@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -10,6 +11,7 @@ import '../../core/models/agent/agent_profile.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/ui/rikai_toast.dart';
 import '../../core/utils/rich_text_tags.dart';
+import '../../services/agent/agent_result_markdown.dart';
 import '../../services/agent/agent_run.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../services/storage/agent_history_store.dart';
@@ -32,6 +34,7 @@ class AgentHistoryDetailPage extends ConsumerStatefulWidget {
 class _AgentHistoryDetailPageState
     extends ConsumerState<AgentHistoryDetailPage> {
   late Future<AgentHistoryDetail?> _detail;
+  AgentHistoryDetail? _loadedDetail;
 
   @override
   void initState() {
@@ -39,10 +42,26 @@ class _AgentHistoryDetailPageState
     _detail = _load();
   }
 
-  Future<AgentHistoryDetail?> _load() {
-    return ref
+  Future<AgentHistoryDetail?> _load() async {
+    final detail = await ref
         .read(agentHistoryRepositoryProvider)
         .loadHistoryDetail(widget.runId);
+    if (mounted && !identical(_loadedDetail, detail)) {
+      setState(() => _loadedDetail = detail);
+    }
+    return detail;
+  }
+
+  Future<void> _copyResult(
+    AgentUiStrings strings,
+    AgentHistoryDetail detail,
+  ) async {
+    final result = detail.result;
+    if (result == null) return;
+    await Clipboard.setData(
+      ClipboardData(text: buildAgentResultMarkdown(result, strings)),
+    );
+    if (mounted) RikaiToast.show(context, strings.copyDone);
   }
 
   AgentUiStrings _strings() {
@@ -93,6 +112,12 @@ class _AgentHistoryDetailPageState
       appBar: AppBar(
         title: Text(strings.historyTitle),
         actions: [
+          if (_loadedDetail?.result != null)
+            IconButton(
+              tooltip: strings.copyResultMarkdown,
+              onPressed: () => _copyResult(strings, _loadedDetail!),
+              icon: const Icon(Icons.copy_outlined),
+            ),
           IconButton(
             tooltip: strings.delete,
             onPressed: () => _delete(strings),
@@ -111,7 +136,10 @@ class _AgentHistoryDetailPageState
               icon: Icons.error_outline,
               title: strings.historyLoadFailed,
               actionLabel: strings.retry,
-              onAction: () => setState(() => _detail = _load()),
+              onAction: () => setState(() {
+                _loadedDetail = null;
+                _detail = _load();
+              }),
             );
           }
           final detail = snapshot.data;

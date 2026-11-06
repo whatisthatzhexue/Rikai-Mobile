@@ -4,8 +4,12 @@ import 'package:rikai_mobile/core/models/agent/agent_pitch.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
 import 'package:rikai_mobile/features/agent/agent_pitch_accent.dart';
 
+Finder _pitchLayout() => find.byWidgetPredicate(
+  (widget) => widget.runtimeType.toString() == '_PitchAccentLayout',
+);
+
 void main() {
-  testWidgets('pitch line stays above the ruby reading and base', (
+  testWidgets('pitch layout keeps ruby above base and reports a baseline', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -29,18 +33,55 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final pitchY = tester
-        .getTopLeft(
-          find.descendant(
-            of: find.byType(AgentPitchAccentText),
-            matching: find.byType(CustomPaint),
-          ),
-        )
-        .dy;
+    expect(_pitchLayout(), findsOneWidget);
     final rubyY = tester.getTopLeft(find.text('はし')).dy;
     final baseY = tester.getTopLeft(find.text('橋')).dy;
-    expect(pitchY, lessThan(rubyY));
     expect(rubyY, lessThan(baseY));
+  });
+
+  testWidgets('pitch word aligns to a neighbouring text baseline', (
+    tester,
+  ) async {
+    const style = TextStyle(fontSize: 16);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: const Scaffold(
+          body: Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: <Widget>[
+              Text('あ', style: style),
+              AgentPitchAccentText(
+                surface: '橋',
+                reading: 'はし',
+                accent: AgentPitchAccent(
+                  accentType: 2,
+                  moraCount: 2,
+                  moraPattern: 'LH',
+                ),
+                style: style,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final reference = tester.renderObject<RenderBox>(find.text('あ'));
+    final base = tester.renderObject<RenderBox>(find.text('橋'));
+    final referenceBaseline =
+        tester.getRect(find.text('あ')).top +
+        (reference.getDryBaseline(
+              reference.constraints,
+              TextBaseline.alphabetic,
+            ) ??
+            0);
+    final baseBaseline =
+        tester.getRect(find.text('橋')).top +
+        (base.getDryBaseline(base.constraints, TextBaseline.alphabetic) ?? 0);
+    expect(baseBaseline, closeTo(referenceBaseline, 0.01));
   });
 
   testWidgets('pitch overlay does not increase the inline word height', (
@@ -96,13 +137,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('橋'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byType(AgentPitchAccentText),
-        matching: find.byType(CustomPaint),
-      ),
-      findsNothing,
-    );
+    expect(_pitchLayout(), findsNothing);
   });
 
   testWidgets('kana without a reading may still show the pitch line', (
@@ -127,13 +162,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.descendant(
-        of: find.byType(AgentPitchAccentText),
-        matching: find.byType(CustomPaint),
-      ),
-      findsOneWidget,
-    );
+    expect(_pitchLayout(), findsOneWidget);
   });
 
   testWidgets('no pitch line is drawn without valid accent data', (
@@ -156,12 +185,48 @@ void main() {
 
     expect(find.text('橋'), findsOneWidget);
     expect(find.text('はし'), findsOneWidget);
+    expect(_pitchLayout(), findsNothing);
+  });
+
+  test('odaka draws the drop after the final mora', () {
+    const accent = AgentPitchAccent(
+      accentType: 3,
+      moraCount: 3,
+      moraPattern: 'LHH',
+    );
+    final segments = pitchAccentSegments(
+      accent: accent,
+      size: const Size(90, 8),
+      strokeWidth: 1.5,
+    );
     expect(
-      find.descendant(
-        of: find.byType(AgentPitchAccentText),
-        matching: find.byType(CustomPaint),
+      segments.any(
+        (segment) =>
+            segment.start.dx == segment.end.dx &&
+            segment.start.dx > 88 &&
+            segment.start.dy != segment.end.dy,
       ),
-      findsNothing,
+      isTrue,
+    );
+  });
+
+  test('heiban does not draw an end drop', () {
+    const accent = AgentPitchAccent(
+      accentType: 0,
+      moraCount: 3,
+      moraPattern: 'LHH',
+    );
+    final segments = pitchAccentSegments(
+      accent: accent,
+      size: const Size(90, 8),
+      strokeWidth: 1.5,
+    );
+    expect(
+      segments.any(
+        (segment) =>
+            segment.start.dx == segment.end.dx && segment.start.dx > 88,
+      ),
+      isFalse,
     );
   });
 }

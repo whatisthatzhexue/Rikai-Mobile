@@ -258,6 +258,11 @@ class AgentSettingsPage extends ConsumerWidget {
     await ref
         .read(secretStoreProvider)
         .delete(agentProviderSecretKey(provider.id));
+    if (ref.read(selectedAgentProviderProvider) == provider.id) {
+      // The persisted choice must not point at a deleted provider; the Agent
+      // page falls back to the first remaining entry until the user picks one.
+      ref.read(selectedAgentProviderProvider.notifier).select(null);
+    }
     ref.invalidate(agentProvidersProvider);
     if (context.mounted) RikaiToast.show(context, strings.providerDeleted);
   }

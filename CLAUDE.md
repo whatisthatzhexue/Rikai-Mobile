@@ -345,7 +345,11 @@ OCR 插件新增可选 `engine` 约束；版本 chip 左对齐/自动换行/固�
 `finish_reason`/`[DONE]`/`message_stop` 到达时立即停止读取。P6.6 真机验收仍待
 另一工作流；P6.7-1 历史/持久化、P6.7-2 UniDic 声调与 P6.6 失败态/逐版本预览
 已实现（design §17.2、contracts §14、design-tokens P6.7 行），annotation DSL、
-provider 测试连接与发布打磨未完成。
+provider 测试连接与发布打磨未完成。2026-11-06 另修复结果复核闪烁（稳定 summary
+槽位、final 不重播淡入）、ruby/音调 baseline 与读音重叠、尾高下降点、长下划线
+中途换行、历史详情复制、档案删除灰色锁定、provider 全局持久化、严格/宽松会话
+快照、启动后台预热（不阻塞主页）、Android 前台服务后台持续与流式中断自动续传；
+真实弱网 provider、arm64 后台/通知与真机视觉验收仍未进行。
 当前进度、验证记录与工作队列只维护在以下文档，本文件不再复述：
 
 - 实现进度与验证记录：`docs/phase6-status.md`

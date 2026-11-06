@@ -34,6 +34,40 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > copy. Wave 3 adds `AgentLanguageValidator` post-validation of human-readable
 > fields plus one language repair with a visible warning when it still differs.
 
+## 2026-11-06 Agent 结果稳定性 / 后台持续 / 断流续传
+
+- **结果复核闪烁**：AI 气泡摘要改为 provisional/final/error 共用同一个稳定
+  summary 槽位，不再在“结果已出，正在复核…”结束后替换整棵子树；被最终结果替换
+  的 provisional 通过 `AgentRunSnapshot.resultReplaced` 禁止结果块重播
+  `AgentFadeIn`。复核阶段仍可展开详细解析，最终结果只更新内容。
+- **Ruby/音调排版**：`_RenderRubySpan` 宽度改为 base/读音的较大值，读音更宽时
+  base 居中，后续文字从保留宽度之后开始，修复相邻词读音重叠；音调词使用自定义
+  RenderObject 上报词形 alphabetic baseline（不再用无 baseline 的 Stack），修复
+  词注行 baseline 不对齐；尾高（accent type = mora count）在词尾补画垂直下降点。
+- **下划线换行**：长 `[UNDERLINE]` 文本按汉字单字/拉丁词切分为相邻 WidgetSpan，
+  RichText 可在行中换行；短词保持单个自绘下划线 span，`；` 与汉字仍使用固定
+  baseline 偏移。
+- **历史详情复制**：历史详情 AppBar 在存在结果时显示“复制结果为 Markdown”，
+  与 AI 气泡复制内容一致；只读/无结果状态不显示。
+- **档案删除锁定**：run 进行中删除按钮改为 `textSecondary` 灰色锁图标并禁用，
+  tooltip 明确“分析进行中，暂不能删除档案”；run 结束后恢复删除图标。
+- **会话设置**：选中的 provider 持久化到 SharedPreferences（重启/重进页面保持，
+  删除后回退第一项）；严格/宽松按会话保存快照，新会话重置严格，返回页面沿用
+  当前 run/会话模式。
+- **启动加速**：`BootstrapApp` 只等待 SharedPreferences，随后立即进入主页；
+  MDict warm-up 与 UniDic 预热并发在后台执行，不再阻塞启动页。MDict worker 的
+  `warmup` 命令改为并发打开启用的词典。
+- **后台持续**：新增 Android `AgentRunService`（`dataSync` 前台服务 + partial
+  wake lock），run 开始即启动，done/error/cancel/newSession/dispose 停止；
+  通知渠道 LOW、常驻无声音。仅进程存活时有保证，进程被杀仍需 interrupted/重试。
+- **断流续传**：`_collect` 对 `PROVIDER_UNAVAILABLE`/`PROVIDER_RATE_LIMITED`/
+  `TOOL_TIMEOUT`/`PROVIDER_EMPTY_OUTPUT` 自动续传最多 2 次；有 partial 时从最后
+  完整换行前缀续写，空 partial 重发原请求；取消/鉴权/参数错误不重试。
+- 自动化验证：`flutter analyze` 通过；完整 `flutter test` 通过（新增 ruby 宽度、
+  下划线换行、音调 baseline/尾高、历史复制、档案锁定、provider 持久化、会话模式、
+  后台服务 start/stop、断流续传用例）。真实 provider 弱网/断网、arm64 后台服务、
+  通知权限与真机视觉验收仍未进行，不能写成已验证。
+
 ## 2026-11-04 输出上限 / NO_ANALYSIS / 批量降级
 
 - **有损上限原则**：解析器强制执行 SEGMENT 40、每 quote 每 type 1 段、OPTION 8、

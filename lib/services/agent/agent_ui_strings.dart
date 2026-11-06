@@ -539,6 +539,11 @@ class AgentUiStrings {
   String get profileEdit => _pick('修改', 'Edit', '編集');
   String get profileRegenerate => _pick('重新生成', 'Regenerate', '再生成');
   String get profileDelete => _pick('删除', 'Delete', '削除');
+  String get profileDeleteLocked => _pick(
+    '分析进行中，暂不能删除档案',
+    'Profiles cannot be deleted while an analysis is running',
+    '解析中はプロファイルを削除できません',
+  );
   String get profileSelectAll => _pick('全选', 'Select all', 'すべて選択');
   String get profileDeleteSelected => _pick('删除选中', 'Delete selected', '選択を削除');
   String get profileRegenerateSelected =>

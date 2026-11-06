@@ -195,10 +195,10 @@ class MdictService implements LookupBackend {
       ];
     }
 
-    final result = await _request(
-      <String, Object?>{'cmd': 'lookupMany', 'queries': payloads},
-      timeout: batchRequestTimeout,
-    );
+    final result = await _request(<String, Object?>{
+      'cmd': 'lookupMany',
+      'queries': payloads,
+    }, timeout: batchRequestTimeout);
     final rawResults = result['results'];
     if (rawResults is! List) {
       throw const MdictException(MdictErrorCode.lookupFailed, '词典返回格式异常');
@@ -218,10 +218,7 @@ class MdictService implements LookupBackend {
         continue;
       }
       if (payloadIndex >= rawResults.length) {
-        throw const MdictException(
-          MdictErrorCode.lookupFailed,
-          '词典返回结果数量不足',
-        );
+        throw const MdictException(MdictErrorCode.lookupFailed, '词典返回结果数量不足');
       }
       final raw = rawResults[payloadIndex++];
       results.add(
@@ -1052,15 +1049,22 @@ Future<Map<String, Object?>> _warmUp(
 
   var opened = 0;
   final errors = <String>[];
-  for (final rawDescriptor in rawDictionaries) {
-    if (rawDescriptor is! Map) continue;
-    try {
-      await _ensureOpen(rawDescriptor, openDictionaries);
-      opened++;
-    } catch (error) {
-      errors.add(error.toString());
-    }
-  }
+  // Open descriptors concurrently. The worker is still one isolate, but the
+  // reader construction performs file I/O that can overlap; this avoids
+  // paying the full open time of every enabled dictionary one after another
+  // on cold start.
+  await Future.wait<void>([
+    for (final rawDescriptor in rawDictionaries)
+      if (rawDescriptor is Map)
+        () async {
+          try {
+            await _ensureOpen(rawDescriptor, openDictionaries);
+            opened++;
+          } catch (error) {
+            errors.add(error.toString());
+          }
+        }(),
+  ]);
   return {'opened': opened, 'errors': errors};
 }
 

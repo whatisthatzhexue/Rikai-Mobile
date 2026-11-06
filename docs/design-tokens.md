@@ -274,17 +274,20 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 | 对话气泡圆角 | `agentBubbleRadius` | 16（`AppRadius.xl`）；指向发送者的一角 4（`agentBubbleTailRadius`） |
 | 消息最大宽度 | `agentMessageMaxWidth` | 80%（字号放大到 200% 时允许 90%，禁止满宽） |
 | 模型/模式标签 | `agentModelLabel` | 12sp，`textSecondary`，位于 AI 气泡顶部 |
-| 富文本读音/强调 | `rubyReadingSize`/`rubyReadingColor`/`richTextUnderlineColor`/`richTextUnderlineThickness`/`richTextUnderlineOffset` | RUBY 发音标注为主字号 55%、正文色 `textPrimary`；base 使用周围正文相同行高/metrics，以 alphabetic baseline 对齐，读音在上方，不把 base 下沉；BOLD `w600`，RUBY 在 BOLD 内时读音一起加粗；UNDERLINE 正文色 `textPrimary`、粗细 2、baseline 下方固定偏移 2 的自绘线（不用字体 decoration，保证 `；` 与汉字一致），RUBY 读音永不加下划线；只用于显示标签，不改变正文 |
-| 声调高低线 | `agentPitchAccentLine` | 1.5dp、`textSecondary`；高段上轨/低段下轨，アクセント核处垂直下降；线宽按词宽均分为 mora 段，不按汉字字数逐字对齐；有 RUBY/读音时纵向顺序为声调线→读音→词形；声调线是 Ruby 上方的覆盖层，不改变现有 Ruby 布局/行高；汉字词无独立读音/振假名时不画线；只在词注/词典事实行，200% 字号随文字缩放，空间不足时换行或省略，不覆盖文字 |
+| 富文本读音/强调 | `rubyReadingSize`/`rubyReadingColor`/`richTextUnderlineColor`/`richTextUnderlineThickness`/`richTextUnderlineOffset` | RUBY 发音标注为主字号 55%、正文色 `textPrimary`；base 使用周围正文相同行高/metrics，以 alphabetic baseline 对齐，读音在上方，不把 base 下沉；RUBY 预留 base 与读音的较大宽度（读音更宽时 base 居中，后续文字从读音右侧开始），相邻词的读音不得重叠；BOLD `w600`，RUBY 在 BOLD 内时读音一起加粗；UNDERLINE 正文色 `textPrimary`、粗细 2、baseline 下方固定偏移 2 的自绘线（不用字体 decoration，保证 `；` 与汉字一致），RUBY 读音永不加下划线；长 UNDERLINE 文本按汉字单字/拉丁词切分为相邻行内 span，允许在行中间换行，短词保持单个 span；只用于显示标签，不改变正文 |
+| 声调高低线 | `agentPitchAccentLine` | 1.5dp、`textSecondary`；高段上轨/低段下轨，アクセント核处垂直下降；线宽按词宽均分为 mora 段，不按汉字字数逐字对齐；尾高（accent type = mora count）在词尾右缘补一段垂直下降，显示末尾音调下降点；有 RUBY/读音时纵向顺序为声调线→读音→词形；声调线是 Ruby 上方的覆盖层，不改布局尺寸，但通过自定义 RenderObject 上报词形 alphabetic baseline，保证与相邻注释文字对齐；音调词换行时保留覆盖层间距，不覆盖上一行文字；汉字词无独立读音/振假名时不画线；只在词注/词典事实行，200% 字号随文字缩放，空间不足时换行或省略，不覆盖文字 |
 | 音调信息徽标 | `agentPitchInfoBadge` | 与 epistemic 徽标同尺寸：12sp、水平内边距 8、上下 2、圆角 6；`pitchInfoBadgeSurface` 浅红底 + `AppColors.error` 字；位于音调词行最前，后接现有音调词，不单独成行；仅本地显示，不进入 provider/导出 |
 | 界面美化横幅 | `agentBeautifyBanner` | 会话上方、浅绿底 + 深绿字/图标（`beautifyBannerSurface/Text`）；14sp、圆角 8、水平内边距 12；单行“界面美化正在进行中…”；右侧 40dp 关闭按钮；仅在富文本后处理运行时显示，完成/失败/取消自动消失；用户关闭只隐藏当前 run 的提示，不取消后处理 |
 | 历史列表行 | `agentHistoryRow` | 最小高 72、白底、1px `divider`；标题 16sp/600，时间/模式/状态 14sp，状态 chip 12sp；触控 ≥48；不显示缩略图/原图 |
 | 历史多选 | `agentHistorySelection` | 复用词典档案管理：AppBar 右侧“多选/退出多选”（`checklist`/`close`）；选择态左侧“全选”、右侧“删除选中”，行首 Checkbox、行尾单条删除隐藏；删除二次确认，完成后退出选择态；不提供独立一键清空 |
 | 历史只读提示 | `agentHistoryReadOnlyBanner` | `surfaceMuted` 底、14sp、`textSecondary`、内边距 12；“历史记录只读；原图未保存”；不遮挡内容 |
+| 历史详情复制 | `agentHistoryCopy` | 详情页 AppBar 右侧 `copy_outlined`，仅当该记录有可展示结果时显示；点击复制与 AI 气泡相同的 Markdown；“复制结果为 Markdown”tooltip + “已复制”toast；无结果时不显示 |
 | 历史空态 | `agentHistoryEmpty` | 图标 40、标题 16sp、说明 14sp、主按钮“返回助手”；居中，不整屏 loading |
+| 档案删除锁定 | `agentProfileDeleteLock` | run 进行中（`profilesInUse`）时，单条/批量删除按钮改为 `textSecondary` 灰色 `lock_outline`，禁用并显示“分析进行中，暂不能删除档案”；run 结束后恢复红色 `delete_outline`；不得保留红色可点外观 |
+| 结果复核过渡 | `agentResultReviewTransition` | provisional→final 时 AI 气泡摘要保持在同一个稳定位置/元素；最终结果替换已显示过的 provisional 时不重播结果块淡入，仅首次展示允许前 `AgentFadeIn.maxAnimatedItems` 块淡入 |
 | 档案 Markdown 预览 | `agentProfileMarkdownPreview` | 正文 16sp、行内代码 14sp；只渲染白名单语法；链接按纯文本，不加载图片/外链；未知语法原样显示 |
 | 系统/工具消息 | `agentSystemMessage` | 居中、14sp、`textSecondary`、无气泡 |
-| 会话设置条 | `agentSessionSettingsBar` | 可见高 32、触控 ≥40，`surfaceMuted`，14sp；展开面板复用现有筛选条 |
+| 会话设置条 | `agentSessionSettingsBar` | 可见高 32、触控 ≥40，`surfaceMuted`，14sp；展开面板复用现有筛选条；选中的 provider/model 服务全局持久化（重进页面/重启应用保持，删除后回退到第一项）；严格/宽松按会话快照，新会话重置严格，返回页面沿用当前 run/会话模式 |
 | 状态条 | `agentStatusBar` | 高 24–32，`surfaceMuted`，14sp，不遮挡消息 |
 | 错误卡 | `agentErrorCard` | `surface` 底 + `error` 图标/1px 边框，14sp 原因 + 一个主操作 |
 | 流式光标 | `agentStreamingCursor` | `primary`，1×16，闪烁；不使用整块“正在输入” |
@@ -375,6 +378,10 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
   或二级设置页。
 - 状态可见：等待、生成中、失败、降级、离线都有图标/颜色/动画/文字中的至少两种，
   不只靠文字。
+- 后台持续：运行期间 Android 使用 `dataSync` 前台服务 + partial wake lock，切后台/
+  熄屏后继续；通知渠道“词典助手”、优先级 LOW、常驻、无声音/震动，内容固定为
+  “词典助手正在分析 / 切换到后台后任务仍会继续”；run 结束/失败/取消立即停止服务，
+  不在 idle 状态常驻通知。进程被系统杀死后仍不承诺续跑。
 - 错误不吞内容：失败保留已生成文本与证据；错误以消息内卡片出现在下方，不弹全局
   对话框、不整屏 loading。
 - 可追溯：AI 消息底部折叠“依据 N 条 ▾”；展开后按词典顺序显示来源名/摘要/

@@ -27,6 +27,8 @@ class AgentLimits {
     this.richTextConcurrency = 3,
     this.lookupBatchSize = 12,
     this.adaptiveCoverageReview = true,
+    this.streamReconnectAttempts = 2,
+    this.streamReconnectDelayMs = 600,
     this.maxSegments = 40,
     this.maxSegmentsPerQuotePerType = 1,
     this.maxOptionsPerRun = 8,
@@ -110,6 +112,15 @@ class AgentLimits {
   /// cap. At the cap it still runs so verified duplicates can free slots.
   /// Set false in tests or integrations that need an unconditional review.
   final bool adaptiveCoverageReview;
+
+  /// Additional provider requests allowed when a stream breaks before
+  /// `done`. With a partial buffer the next request resumes from the last
+  /// complete line; with no text it repeats the original request.
+  final int streamReconnectAttempts;
+
+  /// Base backoff between stream reconnect attempts. The delay grows
+  /// linearly with the attempt number.
+  final int streamReconnectDelayMs;
 
   // Coverage output estimator inputs. These are public so contracts/tests can
   // point at one named constant instead of copying magic numbers.

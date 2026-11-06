@@ -45,7 +45,6 @@ class _AgentPageState extends ConsumerState<AgentPage> {
   final ScrollController _messagesScroll = ScrollController();
   late final AgentRunController _runController;
   AgentMode _mode = AgentMode.strict;
-  String? _selectedProviderId;
   List<_PickedImage> _images = <_PickedImage>[];
   bool _settingsExpanded = false;
   int _imageSerial = 0;
@@ -55,6 +54,10 @@ class _AgentPageState extends ConsumerState<AgentPage> {
   void initState() {
     super.initState();
     _runController = ref.read(agentRunControllerProvider.notifier);
+    // Strict/loose is a session-level snapshot: re-entering the page keeps the
+    // mode used by the current conversation, while a new session resets it.
+    final run = ref.read(agentRunControllerProvider);
+    _mode = run.hasConversation ? run.mode : AgentMode.strict;
   }
 
   @override
@@ -80,10 +83,13 @@ class _AgentPageState extends ConsumerState<AgentPage> {
     AgentDictionaryPreferences preferences,
   ) => preferences.selectedDictionaries(enabled);
 
-  AgentProviderConfig? _provider(List<AgentProviderConfig> providers) {
+  AgentProviderConfig? _provider(
+    List<AgentProviderConfig> providers,
+    String? selectedId,
+  ) {
     if (providers.isEmpty) return null;
     for (final provider in providers) {
-      if (provider.id == _selectedProviderId) return provider;
+      if (provider.id == selectedId) return provider;
     }
     return providers.first;
   }
@@ -190,7 +196,10 @@ class _AgentPageState extends ConsumerState<AgentPage> {
     final providers =
         ref.read(agentProvidersProvider).asData?.value ??
         const <AgentProviderConfig>[];
-    final provider = _provider(providers);
+    final provider = _provider(
+      providers,
+      ref.read(selectedAgentProviderProvider),
+    );
     if (provider == null) {
       RikaiToast.show(context, strings.modelRequired);
       return;
@@ -232,6 +241,7 @@ class _AgentPageState extends ConsumerState<AgentPage> {
   }
 
   void _retryLoose() {
+    setState(() => _mode = AgentMode.loose);
     unawaited(_runController.retry(mode: AgentMode.loose));
   }
 
@@ -366,6 +376,8 @@ class _AgentPageState extends ConsumerState<AgentPage> {
     setState(() {
       _input.clear();
       _images = <_PickedImage>[];
+      _mode = AgentMode.strict;
+      _settingsExpanded = false;
     });
   }
 
@@ -393,7 +405,10 @@ class _AgentPageState extends ConsumerState<AgentPage> {
     final providersAsync = ref.watch(agentProvidersProvider);
     final providers =
         providersAsync.asData?.value ?? const <AgentProviderConfig>[];
-    final provider = _provider(providers);
+    final provider = _provider(
+      providers,
+      ref.watch(selectedAgentProviderProvider),
+    );
     final preferences = ref.watch(agentDictionaryPreferencesProvider);
     final selectedIds = _selectedDictionaries(
       enabled,
@@ -460,8 +475,9 @@ class _AgentPageState extends ConsumerState<AgentPage> {
                   selectionMode: preferences.mode,
                   running: running,
                   strings: strings,
-                  onProviderChanged: (value) =>
-                      setState(() => _selectedProviderId = value),
+                  onProviderChanged: (value) => ref
+                      .read(selectedAgentProviderProvider.notifier)
+                      .select(value),
                   onModeChanged: (value) => setState(() => _mode = value),
                   onSelectionModeChanged: (value) => ref
                       .read(agentDictionaryPreferencesProvider.notifier)

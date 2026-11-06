@@ -21,12 +21,17 @@ class AgentResultView extends StatelessWidget {
     required this.onCitationTap,
     required this.strings,
     this.onRetryProfile,
+    this.animate = true,
   });
 
   final AgentRunResult result;
   final ValueChanged<AgentCitation> onCitationTap;
   final AgentUiStrings strings;
   final Future<void> Function(DictionaryProfileIssue)? onRetryProfile;
+
+  /// Whether newly built result blocks may fade in. The final replacement of
+  /// an already-visible provisional result must not replay the animation.
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
@@ -267,7 +272,7 @@ class AgentResultView extends StatelessWidget {
           blocks.add(
             AgentFadeIn(
               index: index,
-              enabled: index < AgentFadeIn.maxAnimatedItems,
+              enabled: animate && index < AgentFadeIn.maxAnimatedItems,
               child: _SegmentBlock(
                 segment: segment,
                 richInterpretation: index < result.richSegmentTexts.length
@@ -397,7 +402,7 @@ class AgentResultView extends StatelessWidget {
         blocks.add(
           AgentFadeIn(
             index: index,
-            enabled: index < AgentFadeIn.maxAnimatedItems,
+            enabled: animate && index < AgentFadeIn.maxAnimatedItems,
             child: _EvidenceGroup(
               citations: grouped[order]!,
               citationNumbers: citationNumbers,
@@ -826,7 +831,10 @@ class _PitchNotes extends StatelessWidget {
           Expanded(
             child: Wrap(
               spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.xs,
+              // Each item paints its pitch line above the word without
+              // increasing layout height. Leave the line's height between
+              // wrapped rows so the previous row's text cannot be covered.
+              runSpacing: AgentTokens.pitchAccentHeight + AppSpacing.xs,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: items,
             ),

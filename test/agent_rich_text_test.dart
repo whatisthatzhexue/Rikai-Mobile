@@ -241,6 +241,68 @@ void main() {
     expect(baseBaseline, closeTo(paragraphBaseline, 0.01));
   });
 
+  testWidgets('ruby reserves the wider reading so neighbours do not overlap', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Row(
+            children: <Widget>[
+              AgentRichText(
+                text: '[RUBY=かんじ]漢字[/RUBY]',
+                style: TextStyle(fontSize: 16),
+              ),
+              Text('次', style: TextStyle(fontSize: 16)),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final rubyFinder = find.byWidgetPredicate(
+      (widget) => widget.runtimeType.toString() == '_RubySpanWidget',
+    );
+    final rubyRect = tester.getRect(rubyFinder);
+    final readingRect = tester.getRect(find.text('かんじ'));
+    final nextRect = tester.getRect(find.text('次'));
+    expect(rubyRect.width, greaterThanOrEqualTo(readingRect.width));
+    expect(readingRect.left, greaterThanOrEqualTo(rubyRect.left));
+    expect(readingRect.right, lessThanOrEqualTo(rubyRect.right));
+    // The next inline run starts after the ruby's reserved reading width.
+    expect(nextRect.left, greaterThanOrEqualTo(rubyRect.right - 0.01));
+  });
+
+  testWidgets('long underlined text can wrap between characters', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 80,
+            child: AgentRichText(
+              text: '[UNDERLINE]这是一个很长的下划线句子应该能够换行[/UNDERLINE]',
+              style: TextStyle(fontSize: 16),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final underlineWidgets = find.byWidgetPredicate(
+      (widget) => widget.runtimeType.toString() == '_UnderlineSpanWidget',
+    );
+    expect(underlineWidgets, findsWidgets);
+    final tops = <double>{
+      for (var index = 0; index < underlineWidgets.evaluate().length; index++)
+        tester.getTopLeft(underlineWidgets.at(index)).dy,
+    };
+    // Distinct tops prove the paragraph wrapped inside the underlined run
+    // instead of overflowing as one atomic inline widget.
+    expect(tops.length, greaterThan(1));
+  });
+
   testWidgets('renders plain text unchanged', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

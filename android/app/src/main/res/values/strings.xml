@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="agent_run_channel_name">词典助手</string>
+    <string name="agent_run_notification_title">词典助手正在分析</string>
+    <string name="agent_run_notification_text">切换到后台后任务仍会继续</string>
+</resources>

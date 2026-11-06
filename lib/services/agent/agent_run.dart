@@ -546,6 +546,7 @@ class AgentRunSnapshot {
     this.provisionalResult,
     this.retainedResult,
     this.resultRetainedAfterFailure = false,
+    this.resultReplaced = false,
     this.errorMessage,
     this.errorCode,
     this.retryable = false,
@@ -598,6 +599,10 @@ class AgentRunSnapshot {
   /// to the provider again and is replaced only by a successful new run.
   final AgentRunResult? retainedResult;
   final bool resultRetainedAfterFailure;
+
+  /// True when [result] replaced an already-displayed provisional result.
+  /// Result blocks must not replay their entrance animation on that swap.
+  final bool resultReplaced;
   final String? errorMessage;
   final AgentToolErrorCode? errorCode;
   final bool retryable;
@@ -657,6 +662,7 @@ class AgentRunSnapshot {
     Object? provisionalResult = _unset,
     Object? retainedResult = _unset,
     bool? resultRetainedAfterFailure,
+    bool? resultReplaced,
     Object? errorMessage = _unset,
     Object? errorCode = _unset,
     bool? retryable,
@@ -696,6 +702,7 @@ class AgentRunSnapshot {
           : retainedResult as AgentRunResult?,
       resultRetainedAfterFailure:
           resultRetainedAfterFailure ?? this.resultRetainedAfterFailure,
+      resultReplaced: resultReplaced ?? this.resultReplaced,
       errorMessage: identical(errorMessage, _unset)
           ? this.errorMessage
           : errorMessage as String?,

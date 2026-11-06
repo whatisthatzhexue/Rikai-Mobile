@@ -116,11 +116,16 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
             ),
             IconButton(
               key: _deleteSelectedActionKey,
-              tooltip: strings.profileDeleteSelected,
+              tooltip: profilesInUse
+                  ? strings.profileDeleteLocked
+                  : strings.profileDeleteSelected,
               onPressed: profilesInUse || _selected.isEmpty
                   ? null
                   : () => _deleteSelected(strings),
-              icon: const Icon(Icons.delete_outline),
+              icon: Icon(
+                profilesInUse ? Icons.lock_outline : Icons.delete_outline,
+                color: profilesInUse ? AppColors.textSecondary : null,
+              ),
             ),
           ],
           // Keep the mode toggle as the rightmost action in both states. It
@@ -340,16 +345,20 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
                   icon: const Icon(Icons.refresh, size: AppSizes.icon),
                 ),
                 IconButton(
-                  tooltip: strings.profileDelete,
+                  tooltip: profilesInUse
+                      ? strings.profileDeleteLocked
+                      : strings.profileDelete,
                   onPressed: profilesInUse
                       ? null
                       : () => _deleteProfiles(<StoredDictionaryProfile>[
                           profile,
                         ], strings),
-                  icon: const Icon(
-                    Icons.delete_outline,
+                  icon: Icon(
+                    profilesInUse ? Icons.lock_outline : Icons.delete_outline,
                     size: AppSizes.icon,
-                    color: AppColors.error,
+                    color: profilesInUse
+                        ? AppColors.textSecondary
+                        : AppColors.error,
                   ),
                 ),
               ],

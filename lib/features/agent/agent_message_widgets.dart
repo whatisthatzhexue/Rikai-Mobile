@@ -286,117 +286,114 @@ class AgentAssistantBubble extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.xs),
-            if (error != null)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AgentErrorCard(
-                    message: error!,
-                    detail: errorDetail,
-                    onAction: onRetry ?? onSettings,
-                    actionLabel: onRetry == null
-                        ? strings.goSettings
-                        : strings.retry,
-                    onSecondary: onLooseRetry,
-                    secondaryLabel: strings.looseRetry,
-                    strings: strings,
-                  ),
-                  if (resultRetainedAfterFailure) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      strings.resultRetainedAfterFailure,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: AgentTokens.helper,
-                        color: AppColors.warning,
-                      ),
-                    ),
-                  ],
-                  if (result != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    AgentRichText(
-                      text: summary,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontSize: AgentTokens.body,
-                        height: 1.5,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ],
+            // One stable summary slot for provisional, final, retained and
+            // failed-result states. Replacing the result must not swap this
+            // subtree for a differently-structured one: doing so rebuilt the
+            // whole answer and read as a page flash when the "reviewing"
+            // phase ended.
+            if (result != null)
+              AgentRichText(
+                key: const ValueKey<String>('agent-assistant-summary'),
+                text: summary,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontSize: AgentTokens.body,
+                  height: 1.5,
+                  color: AppColors.textPrimary,
+                ),
               )
-            else if (running)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            else if (error == null && !running && !cancelled)
+              AgentRichText(
+                key: const ValueKey<String>('agent-assistant-summary'),
+                text: summary,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontSize: AgentTokens.body,
+                  height: 1.5,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            if (provisional && running) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                strings.resultReviewing,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: AgentTokens.helper,
+                  color: AppColors.warning,
+                ),
+              ),
+            ],
+            if (error != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              AgentErrorCard(
+                message: error!,
+                detail: errorDetail,
+                onAction: onRetry ?? onSettings,
+                actionLabel: onRetry == null
+                    ? strings.goSettings
+                    : strings.retry,
+                onSecondary: onLooseRetry,
+                secondaryLabel: strings.looseRetry,
+                strings: strings,
+              ),
+              if (resultRetainedAfterFailure) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  strings.resultRetainedAfterFailure,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: AgentTokens.helper,
+                    color: AppColors.warning,
+                  ),
+                ),
+              ],
+            ],
+            if (running) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Row(
                 children: [
-                  if (provisional) ...[
-                    AgentRichText(
-                      text: summary,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        fontSize: AgentTokens.body,
-                        height: 1.5,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      strings.resultReviewing,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontSize: AgentTokens.helper,
-                        color: AppColors.warning,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                  ],
-                  Row(
-                    children: [
-                      const SizedBox(
-                        width: AppSizes.iconSmall,
-                        height: AppSizes.iconSmall,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          stageMessage.isEmpty
-                              ? agentThinkingFallback(uiLanguage)
-                              : stageMessage,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontSize: AgentTokens.helper,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
+                  const SizedBox(
+                    width: AppSizes.iconSmall,
+                    height: AppSizes.iconSmall,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  AgentProgressView(
-                    running: true,
-                    step: progressStep,
-                    evidenceCount: evidenceCount,
-                    citationCount: citationCount,
-                    maxEvidenceEntries: maxEvidenceEntries,
-                    language: uiLanguage,
-                  ),
-                  if (startedAt != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    AgentElapsedLabel(
-                      startedAt: startedAt!,
-                      language: uiLanguage,
-                    ),
-                  ],
-                  if (!provisional && result != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      strings.retainedResult,
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      stageMessage.isEmpty
+                          ? agentThinkingFallback(uiLanguage)
+                          : stageMessage,
                       style: theme.textTheme.bodySmall?.copyWith(
                         fontSize: AgentTokens.helper,
                         color: AppColors.textSecondary,
                       ),
                     ),
-                  ],
+                  ),
                 ],
-              )
-            else if (cancelled)
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              AgentProgressView(
+                running: true,
+                step: progressStep,
+                evidenceCount: evidenceCount,
+                citationCount: citationCount,
+                maxEvidenceEntries: maxEvidenceEntries,
+                language: uiLanguage,
+              ),
+              if (startedAt != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                AgentElapsedLabel(startedAt: startedAt!, language: uiLanguage),
+              ],
+              if (!provisional && result != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  strings.retainedResult,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: AgentTokens.helper,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ],
+            if (cancelled) ...[
+              const SizedBox(height: AppSpacing.sm),
               Row(
                 children: [
                   Expanded(
@@ -413,16 +410,8 @@ class AgentAssistantBubble extends StatelessWidget {
                   if (onRetry != null)
                     TextButton(onPressed: onRetry, child: Text(strings.retry)),
                 ],
-              )
-            else
-              AgentRichText(
-                text: summary,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontSize: AgentTokens.body,
-                  height: 1.5,
-                  color: AppColors.textPrimary,
-                ),
               ),
+            ],
             if (!running && startedAt != null) ...[
               const SizedBox(height: AppSpacing.xs),
               if (evidenceCount > 0 || citationCount > 0)

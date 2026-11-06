@@ -63,6 +63,32 @@ class MainActivity : FlutterActivity() {
                     result.error("STAT_FAILED", error.message ?: "无法读取存储空间", null)
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rikai/agent_background")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "start" -> {
+                        try {
+                            startForegroundService(
+                                Intent(this, AgentRunService::class.java)
+                                    .setAction(AgentRunService.ACTION_START),
+                            )
+                            result.success(true)
+                        } catch (error: Exception) {
+                            result.error(
+                                "START_FAILED",
+                                error.message ?: "无法启动后台运行服务",
+                                null,
+                            )
+                        }
+                    }
+                    "stop" -> {
+                        stopService(Intent(this, AgentRunService::class.java))
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     private fun storageAccessStatus(): Map<String, Any> {

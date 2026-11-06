@@ -167,6 +167,7 @@ class AgentMessageList extends ConsumerWidget {
             AgentEvidencePanel(
               result: result,
               strings: strings,
+              animate: !run.resultReplaced,
               onCitationTap: (citation) =>
                   unawaited(openAgentCitation(context, ref, citation)),
               onRetryProfile: (issue) async {
