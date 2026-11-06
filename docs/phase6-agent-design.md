@@ -484,6 +484,13 @@ pattern id + 清洗 citation 摘要，保留 offset 与 entry_key/matched_key，
   也跳过。补充查词每个缺失 query 每本词典只取 1 条，避免 coverage 自己把
   citation 预算重新填满。只有 sense/usage/example 等“同一词但需要更多义项”的
   MISSING 才允许在已覆盖词上继续查。
+- 2026-11-06 复合词补查（Phase 1a）：允许对源文本中连续的复合词/固定搭配整体
+  发出 `MISSING`（例如 `ところが` 而不是 `ところ`+`が`）。未知 `kind=word`
+  query 除现有可追溯性外，还必须是源文本连续子串、不含换行，且至少一处匹配
+  覆盖 ≤ `AgentLimits.maxCoverageCompoundTokens`（默认 6）个 source token；
+  无 tokenizer 或该 source 无 tokens 时只接受已知 token/pattern/citation key。
+  校验按 token 跨度而不是字符数，避免多语言下出现语言相关的 magic number；
+  已有术语不受该限制。仍只做一次审查 + 一次补充检索，不构成工具循环。
 - 覆盖审查失败、标签无效/不完整或 query 不可追溯时只产生 warning，保留原证据
   继续；不得让整次 run 失败。
 

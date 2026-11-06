@@ -17,6 +17,8 @@ class AgentLimits {
     this.maxCoverageMissing = 20,
     this.maxCoverageDuplicateGroups = 10,
     this.maxCoverageFallback = 1,
+    this.maxCoverageQueryChars = 100,
+    this.maxCoverageCompoundTokens = 6,
     this.enableRichTextPostProcess = true,
     this.richTextConcurrency = 3,
     this.lookupBatchSize = 12,
@@ -39,6 +41,17 @@ class AgentLimits {
   final int maxCoverageMissing;
   final int maxCoverageDuplicateGroups;
   final int maxCoverageFallback;
+
+  /// Global safety cap for one coverage MISSING query. Compound validation is
+  /// token-based; this character cap only prevents pathological long strings.
+  final int maxCoverageQueryChars;
+
+  /// Maximum source-token span for a compound/fixed-collocation MISSING query
+  /// that is not already a known token/pattern/entry term. The span is
+  /// token-based so it transfers across writing systems; there is no
+  /// language-specific character cap. When tokenization is unavailable, only
+  /// known terms are accepted.
+  final int maxCoverageCompoundTokens;
 
   /// Hard caps for the tagged analysis output. The parser applies them after
   /// parsing and marks the analysis truncated; the prompt states the same

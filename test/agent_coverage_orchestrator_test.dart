@@ -55,6 +55,19 @@ const _coverageDuplicate = '''
 [/COVERAGE]
 ''';
 
+const _coverageCompound = '''
+[COVERAGE verdict="missing"]
+[MISSING kind="word" query="ところが" refs="t1,t2" priority="1"]整体词条[/MISSING]
+[/COVERAGE]
+''';
+
+const _compoundAnalysis = '''
+[TRANSLATION quote="q1"]然而[/TRANSLATION]
+[SEGMENT type="inference" quote="q1"]
+[MEANING]转折关系[/MEANING]
+[/SEGMENT]
+''';
+
 class _FakeOcr implements OcrPort {
   @override
   bool get horizontalAvailable => true;
@@ -113,10 +126,35 @@ class _TwoTokenize implements TokenizePort {
   }
 }
 
+class _CompoundTokenize implements TokenizePort {
+  @override
+  Future<List<Token>> analyze(String text) async {
+    Token make(String surface, String pos, int start, int end) {
+      final features = List<String>.filled(Token.expectedFeatureCount, '*');
+      features[0] = pos;
+      features[7] = surface;
+      features[8] = surface;
+      features[20] = surface;
+      return Token.fromFeatures(
+        surface: surface,
+        features: features,
+        start: start,
+        end: end,
+      );
+    }
+
+    return <Token>[
+      make('ところ', '名詞', 0, 3),
+      make('が', '助詞', 3, 4),
+    ];
+  }
+}
+
 class _LookupScript implements LookupPort {
   _LookupScript(this.exactResponses);
 
   final List<List<LookupEntry>> exactResponses;
+  final List<String> exactQueries = <String>[];
   var _exactCalls = 0;
 
   @override
@@ -128,6 +166,7 @@ class _LookupScript implements LookupPort {
         groups: const <DictionaryLookupGroup>[],
       );
     }
+    exactQueries.add(request.query);
     final index = _exactCalls;
     _exactCalls++;
     final entries = exactResponses[index.clamp(0, exactResponses.length - 1)];
@@ -212,6 +251,51 @@ void main() {
       hasLength(2),
     );
     expect(result.warnings, isNot(contains('覆盖审查不可用，已保留现有资料')));
+    expect(provider.requests, hasLength(2));
+  });
+
+  test('flow C supplements a traceable compound query once', () async {
+    final lookup = _LookupScript(<List<LookupEntry>>[
+      <LookupEntry>[],
+      <LookupEntry>[],
+      <LookupEntry>[_entry('ところが', 'しかし。ところが。')],
+    ]);
+    final provider = FakeProvider(
+      responseSequence: <String>[_coverageCompound, _compoundAnalysis],
+    );
+
+    final result =
+        await _orchestrator(
+          provider: provider,
+          lookup: lookup,
+          tokenize: _CompoundTokenize(),
+          limits: const AgentLimits(
+            maxCoverageFallback: 1,
+            adaptiveCoverageReview: false,
+            enableRichTextPostProcess: false,
+          ),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.loose,
+            dictionaries: <DictionaryInfo>[_dictionary],
+            provider: _provider,
+            userText: 'ところが',
+          ),
+        );
+
+    expect(lookup.exactQueries.where((query) => query == 'ところが'), hasLength(1));
+    expect(result.coverageFallbackUsed, isTrue);
+    expect(result.evidence.citations, hasLength(1));
+    expect(result.evidence.citations.single.entryKey, 'ところが');
+    expect(
+      result.evidence.sources.single.tokens[0].citationIds,
+      contains('source-1'),
+    );
+    expect(
+      result.evidence.sources.single.tokens[1].citationIds,
+      contains('source-1'),
+    );
     expect(provider.requests, hasLength(2));
   });
 

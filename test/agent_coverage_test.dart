@@ -95,6 +95,45 @@ AgentCoverageReview _review({
   );
 }
 
+AgentTokenEvidence _token(String id, String surface, int start, int end) {
+  return AgentTokenEvidence(
+    id: id,
+    surface: surface,
+    start: start,
+    end: end,
+    content: true,
+  );
+}
+
+AgentEvidenceBundle _evidenceFor(
+  String text,
+  List<AgentTokenEvidence> tokens, {
+  List<AgentCitation> citations = const <AgentCitation>[],
+  List<AgentGrammarPatternEvidence> patterns =
+      const <AgentGrammarPatternEvidence>[],
+  bool structureUnavailable = false,
+}) {
+  return AgentEvidenceBundle(
+    sources: <AgentSourceEvidence>[
+      AgentSourceEvidence(
+        id: 'src-1',
+        kind: 'user_text',
+        text: text,
+        tokens: tokens,
+      ),
+    ],
+    patterns: patterns,
+    citations: citations,
+    structureUnavailable: structureUnavailable,
+    budget: AgentEvidenceBudget(
+      uniqueTargets: tokens.length + patterns.length,
+      citations: citations.length,
+      maxTargets: 120,
+      maxCitations: 60,
+    ),
+  );
+}
+
 void main() {
   test('coverage budget is derived from its own MISSING/duplicate limits', () {
     const limits = AgentLimits.standard;
@@ -154,6 +193,14 @@ void main() {
     expect(text, contains('"matched_key":"何卒・一致"'));
     expect(text, isNot(contains('"variants"')));
     expect(text, isNot(contains('"lookup_candidates"')));
+  });
+
+  test('coverage prompt documents compound MISSING expansion', () {
+    final prompt = coverageSystemPrompt(AgentResponseLanguage.chinese);
+    expect(prompt, contains('contiguous compound or fixed collocation'));
+    expect(prompt, contains('ところが'));
+    expect(prompt, contains('never request a whole'));
+    expect(prompt, contains('sentence or a paraphrase'));
   });
 
   test('parses a valid coverage review', () {
@@ -304,6 +351,235 @@ void main() {
     expect(validated.missing, hasLength(1));
     expect(validated.missing.single.query, '何卒');
     expect(validated.droppedMissing, 2);
+  });
+
+  test('accepts a compound query spanning a small token window', () {
+    final evidence = _evidenceFor('ところが', <AgentTokenEvidence>[
+      _token('t1', 'ところ', 0, 3),
+      _token('t2', 'が', 3, 4),
+    ]);
+    final validated = validateCoverageReview(
+      review: _review(
+        missing: const <AgentCoverageMissing>[
+          AgentCoverageMissing(
+            kind: AgentCoverageKind.word,
+            query: 'ところが',
+            sourceRefs: <String>['t1', 't2'],
+            reason: 'compound',
+          ),
+        ],
+      ),
+      input: _input,
+      evidence: evidence,
+      limits: AgentLimits.standard,
+    );
+
+    expect(validated.missing.map((item) => item.query), <String>['ところが']);
+    expect(validated.droppedMissing, 0);
+  });
+
+  test('bounds unknown compound queries by token span, not characters', () {
+    const text = 'あいうえおかき';
+    final tokens = <AgentTokenEvidence>[
+      for (var index = 0; index < text.length; index++)
+        _token(
+          't${index + 1}',
+          text.substring(index, index + 1),
+          index,
+          index + 1,
+        ),
+    ];
+    final validated = validateCoverageReview(
+      review: _review(
+        missing: <AgentCoverageMissing>[
+          AgentCoverageMissing(
+            kind: AgentCoverageKind.word,
+            query: 'あいうえおか',
+            sourceRefs: const <String>['t1', 't2', 't3', 't4', 't5', 't6'],
+            reason: 'six tokens',
+          ),
+          AgentCoverageMissing(
+            kind: AgentCoverageKind.word,
+            query: text,
+            sourceRefs: const <String>[
+              't1',
+              't2',
+              't3',
+              't4',
+              't5',
+              't6',
+              't7',
+            ],
+            reason: 'seven tokens',
+          ),
+        ],
+      ),
+      input: _input,
+      evidence: _evidenceFor(text, tokens),
+      limits: AgentLimits.standard,
+    );
+
+    expect(validated.missing.map((item) => item.query), <String>['あいうえおか']);
+    expect(validated.droppedMissing, 1);
+  });
+
+  test('accepts a long query inside a single token', () {
+    const text = 'あいうえおかきくけこさしすせそたちつてと';
+    const query = 'あいうえおかきくけこさしすせそ';
+    final validated = validateCoverageReview(
+      review: _review(
+        missing: const <AgentCoverageMissing>[
+          AgentCoverageMissing(
+            kind: AgentCoverageKind.word,
+            query: query,
+            sourceRefs: <String>['t1'],
+            reason: 'long single token',
+          ),
+        ],
+      ),
+      input: _input,
+      evidence: _evidenceFor(text, <AgentTokenEvidence>[
+        _token('t1', text, 0, text.length),
+      ]),
+      limits: AgentLimits.standard,
+    );
+
+    expect(validated.missing.map((item) => item.query), <String>[query]);
+    expect(validated.droppedMissing, 0);
+  });
+
+  test('accepts a multiword phrase when it spans few tokens', () {
+    const text = 'take care of it';
+    final validated = validateCoverageReview(
+      review: _review(
+        missing: const <AgentCoverageMissing>[
+          AgentCoverageMissing(
+            kind: AgentCoverageKind.word,
+            query: 'take care of',
+            sourceRefs: <String>['t1', 't2', 't3'],
+            reason: 'multiword',
+          ),
+        ],
+      ),
+      input: _input,
+      evidence: _evidenceFor(text, <AgentTokenEvidence>[
+        _token('t1', 'take', 0, 4),
+        _token('t2', 'care', 5, 9),
+        _token('t3', 'of', 10, 12),
+        _token('t4', 'it', 13, 15),
+      ]),
+      limits: AgentLimits.standard,
+    );
+
+    expect(validated.missing.map((item) => item.query), <String>['take care of']);
+    expect(validated.droppedMissing, 0);
+  });
+
+  test('drops a compound query containing a line break', () {
+    const text = 'ところ\nが';
+    final validated = validateCoverageReview(
+      review: _review(
+        missing: const <AgentCoverageMissing>[
+          AgentCoverageMissing(
+            kind: AgentCoverageKind.word,
+            query: 'ところ\nが',
+            sourceRefs: <String>['t1', 't2'],
+            reason: 'line break',
+          ),
+        ],
+      ),
+      input: _input,
+      evidence: _evidenceFor(text, <AgentTokenEvidence>[
+        _token('t1', 'ところ', 0, 3),
+        _token('t2', 'が', 4, 5),
+      ]),
+      limits: AgentLimits.standard,
+    );
+
+    expect(validated.missing, isEmpty);
+    expect(validated.droppedMissing, 1);
+  });
+
+  test('without tokens only known terms bypass compound validation', () {
+    final evidence = _evidenceFor(
+      'ところが',
+      const <AgentTokenEvidence>[],
+      patterns: const <AgentGrammarPatternEvidence>[
+        AgentGrammarPatternEvidence(
+          id: 'p1',
+          surface: '何卒',
+          tokenIds: <String>[],
+          start: 0,
+          end: 2,
+        ),
+      ],
+    );
+    final validated = validateCoverageReview(
+      review: _review(
+        missing: const <AgentCoverageMissing>[
+          AgentCoverageMissing(
+            kind: AgentCoverageKind.word,
+            query: 'ところが',
+            sourceRefs: <String>['src-1'],
+            reason: 'unknown without tokens',
+          ),
+          AgentCoverageMissing(
+            kind: AgentCoverageKind.word,
+            query: '何卒',
+            sourceRefs: <String>['p1'],
+            reason: 'known pattern',
+          ),
+        ],
+      ),
+      input: _input,
+      evidence: evidence,
+      limits: AgentLimits.standard,
+    );
+
+    expect(validated.missing.map((item) => item.query), <String>['何卒']);
+    expect(validated.droppedMissing, 1);
+  });
+
+  test('grammar queries are not limited by the compound token span', () {
+    const text = 'あいうえおかきくけこ';
+    final tokens = <AgentTokenEvidence>[
+      for (var index = 0; index < text.length; index++)
+        _token(
+          't${index + 1}',
+          text.substring(index, index + 1),
+          index,
+          index + 1,
+        ),
+    ];
+    final validated = validateCoverageReview(
+      review: _review(
+        missing: const <AgentCoverageMissing>[
+          AgentCoverageMissing(
+            kind: AgentCoverageKind.grammar,
+            query: text,
+            sourceRefs: <String>[
+              't1',
+              't2',
+              't3',
+              't4',
+              't5',
+              't6',
+              't7',
+              't8',
+              't9',
+              't10',
+            ],
+            reason: 'grammar pattern',
+          ),
+        ],
+      ),
+      input: _input,
+      evidence: _evidenceFor(text, tokens),
+      limits: AgentLimits.standard,
+    );
+
+    expect(validated.missing.map((item) => item.query), <String>[text]);
+    expect(validated.droppedMissing, 0);
   });
 
   test('skips coverage queries already covered by a citation', () {

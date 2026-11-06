@@ -1,23 +1,25 @@
-# Agent-Refactor-Idea Phase 0 设计增量
+# Agent 重构实施计划（Agent-Refactor-Idea）
 
-- 状态：Phase 0 提案，2026-11-04；**未实现，不改变当前行为**。
-- 关联：[ADR 0005](../adr/0005-agent-profile-compiler.md)、
-  `docs/phase6-agent-design.md` §6.1/§6.3.1、
-  `docs/phase6-agent-contracts.md` §5.1。
-- 本文只记录目标架构、Phase 1 计划和验收标准；不复制规则正文、当前测试/
-  设备/性能数据或契约字段表。字段名、序列化和错误码在 Phase 1 按
-  contracts/schemas 流程定义。
+- 状态：Phase 0 提案，2026-11-04（2026-11-06 修订 F7 约束为 token 跨度）；
+  **未实现，不改变当前行为**。
+- 文档角色：
+  - 原始提案：`Agent-Refactor-Idea.txt`（项目根目录；产品逻辑锚点，不是当前规则）。
+  - 决策：[ADR 0005](../adr/0005-agent-profile-compiler.md)（why/what；被拒方案）。
+  - 实施计划：本文（how/when；Phase 1a–4、F7 细节、验收）。
+  - 索引：[README.md](README.md)；交接摘要：`CLAUDE.md`。
+- 本文不复制规则正文、当前测试/设备/性能数据或契约字段表；字段名、序列化和
+  错误码在 Phase 1 按 contracts/schemas 流程定义。
 
-## 1. 结论
+## 1. 范围
 
-保留 `Agent-Refactor-Idea.txt` 的产品目标，不采用它的多 Agent 拓扑：
+本文只覆盖实施；决策理由和被拒方案见 ADR 0005，不在这里重复。
 
 - **保留**：机械查找先行、LLM 只做证据后过滤、词典档案缓存、语言对裁剪、
   实词/虚词本地分流、失败隔离、用户选典。
-- **删除**：每句 `meaning_agent`、LLM 自主搜索循环、逐标签 `struct_agent`
+- **不采用**：每句 `meaning_agent`、LLM 自主搜索循环、逐标签 `struct_agent`
   迭代、每 explore_task 的 `language_agent`、`search_agent`、每词典两次
   `summary_agent`、`supervise_agent` 选典。
-- **替代**：档案编译器（一次编译、指纹缓存）+ 单次主分析 + F7 有界补查 +
+- **目标**：档案编译器（一次编译、指纹缓存）+ 单次主分析 + F7 有界补查 +
   条件性按词典 fan-out。
 
 一句话：**档案是编译产物，分析是单次查询，词表是可选覆盖包。**
@@ -75,33 +77,47 @@
 
 1. 如果查询已精确等于任一 token surface/lemma/reading/lookup candidate、
    pattern surface，或已有 citation 的 entryKey/headword/matchedKey，则视为
-   已知术语，跳过下面的复合词长度/ token 限制（避免误杀长词条）。
+   已知术语，跳过下面的 token 跨度限制（避免误杀长词条）。
 2. 否则必须同时满足：
    - 是某个 source text 的精确连续子串（现有规则）；
-   - Unicode code point 数 ≤ 12；
-   - 不含空白或句读标点（`、。，．！？!?`）；允许 `・`、`〜` 等词内符号，
-     但整体仍受长度/token 限制；
-   - 在 source 中至少存在一个匹配位置，覆盖的 token 数 ≤ 4。
+   - 不含换行；
+   - **若 tokenization 可用**（`structureUnavailable == false` 且该 source
+     有 tokens）：在 source 的匹配位置中，至少有一处覆盖的 token 数 ≤ 6。
+     6 是 `AgentLimits` 的可配置预算，不是硬编码字符数；
+   - **若 tokenization 不可用或该 source 无 tokens**：只接受精确已知术语
+     （token/pattern/citation key），任意子串丢弃；不做字符数兜底。
 3. 不满足时丢弃该 MISSING，计入 `droppedMissing`，debug 日志记录
    `dropped MISSING[i] compound query=...`；沿用现有“有丢弃时提示可验证性
    警告”的行为，不新增 UI 文案。
-4. `grammar`/`usage`/`context` 查询不套用 12 字符/4 token 限制；仍受现有
-   100 字符全局上限、traceable 和 refs 校验约束。
+4. `grammar`/`usage`/`context` 查询不套用 6-token 限制；仍受现有 100 字符
+   全局上限、traceable 和 refs 校验约束。
 
-**为什么是 12 字符/4 token**：`ところが` 是 4 字符、2 token；常见固定搭配
-（`〜てしまう`、`〜ことがある`）也在 12 字符/4 token 内。整句通常远超这个
-范围。12/4 是防滥用阈值，不是语言学结论；Phase 1 用真实样本回归后可调整，
-但必须先改测试和文档。
+**为什么用 token 跨度而不是 12 字符**：字符数依赖书写系统和分词器，无法跨语言
+复用：
+
+- `ところが` 是 2 个 token；
+- 长德语复合词是 1 个 token（字符数可能超过 12，但仍是单词）；
+- 英文 `take care of` 是 3 个 token；
+- 10 词句子是 10+ 个 token。
+
+6 是防整句的初始阈值，不是语言学结论；它放在 `AgentLimits`，多语言接入后可按
+tokenizer 调整，不需要改校验迁移逻辑。Phase 1 用真实样本回归后可调整，但必须
+先改测试和文档。没有 tokenizer 时不做字符数猜测，直接退化为“只接受已知术语”，
+避免多语言后期出现语言相关 magic number。
 
 ### 3.4 测试
 
 - `test/agent_coverage_test.dart`：
-  - `ところが`（源文本子串，覆盖 2 个 token，4 字符）通过校验；
-  - 超过 12 字符或覆盖 >4 token 的 `kind=word` 查询被丢弃，
+  - `ところが`（源文本子串，覆盖 2 个 token）通过校验；
+  - 覆盖 ≤6 个 token 的短语通过；覆盖 7+ 个 token 的查询被丢弃，
     `droppedMissing` 增加；
-  - 含空白/句读的查询被丢弃；
-  - 精确匹配长词条/已有 citation key 时绕过复合词限制；
-  - `grammar` 查询不受 12 字符限制。
+  - 长单 token（例如 20 字符片假名词）通过，证明不按字符数误杀；
+  - 含空格的 3-token 英文短语通过；
+  - 含换行的查询被丢弃；
+  - tokenization 不可用或 source 无 tokens 时，任意子串被丢弃，精确已知
+    术语通过；
+  - 精确匹配长词条/已有 citation key 时绕过 token 限制；
+  - `grammar` 查询不受 6-token 限制。
 - `test/agent_coverage_orchestrator_test.dart`：
   - fake coverage 返回 `[MISSING kind="word" query="ところが" refs="t1,t2"]`；
   - fake lookup 记录到一次 `ところが` 补查；
@@ -114,7 +130,7 @@
 ### 3.5 文档更新（Phase 1 实现后）
 
 - `docs/phase6-agent-design.md` §6.3.1：补一句“F7 允许有界的复合词/固定搭配
-  整体补查；本地限制 12 字符/4 token；不构成工具循环”。
+  整体补查；本地限制为可配置的 token 跨度（默认 6）；不构成工具循环”。
 - `docs/phase6-agent-contracts.md` §5.1：补 MISSING 校验规则和丢弃行为。
 - `docs/project_tips.md`：只有出现真实失败模式时才新增 T-138，不预先写。
 - 不在 Phase 0 修改现有设计/契约正文；本文件先作为提案。
@@ -189,7 +205,7 @@ citation/quote/词典顺序不回归。
 
 ## 10. Phase 0 完成定义
 
-- ADR 0005 和本设计增量已落盘；
+- ADR 0005 和本实施计划已落盘；
 - 明确 F7 复合词能力“未实现”，不写进 UI/状态文档；
 - 不修改现有规则、契约正文或 `project-data.md`；
 - Phase 1a 的 prompt/guard/test 清单可直接执行。

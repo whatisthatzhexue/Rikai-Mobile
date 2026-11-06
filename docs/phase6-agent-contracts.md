@@ -574,6 +574,12 @@ COVERAGE 根块唯一、MISSING/DUPLICATE/NOTES 必须位于 COVERAGE 内、同�
 - `query` 必须可追溯到源文本/token surface/lemma/reading/lookupCandidates/
   语法模式/已有 citation key；不可追溯项由 orchestrator 丢弃，不能让模型任意
   浏览词典。当前 Agent 管线不使用 `suggest` 作为补查来源。
+- 2026-11-06 复合词补查：未知 `kind=word` query 还必须满足——源文本连续子串、
+  不含换行，且至少一处匹配覆盖 ≤ `AgentLimits.maxCoverageCompoundTokens`
+  （默认 6）个 source token；无 tokenizer 或该 source 无 tokens 时只接受已知
+  token/pattern/citation key。校验按 token 跨度，不设字符数上限；
+  `AgentLimits.maxCoverageQueryChars` 仅作为超长字符串的全局安全上限。丢弃
+  计入 `droppedMissing`。
 - `DUPLICATE` 仅是建议；orchestrator 必须本地验证同词典、摘要大部分重合后才可
   删除，且保留信息密度较高（摘要更长）的条目。`keep`/`remove` entry key 只用于
   定位候选，不要求彼此完全相同（例如 `何卒` 与 `何卒（副）` 可因摘要高度重合成组）。

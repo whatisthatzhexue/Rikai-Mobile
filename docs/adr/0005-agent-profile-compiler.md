@@ -2,7 +2,10 @@
 
 - Status: proposed; Phase 0 decision record, not implemented
 - Date: 2026-11-04
-- Related: ADR 0004 (accepted), `docs/agent_docs/agent-refactor-idea-design-delta.md`
+- Update 2026-11-06: the F7 compound guard is token-based (default 6
+  overlapping tokens), not a 12-character cap; character counts do not
+  transfer across writing systems.
+- Related: ADR 0004 (accepted), `docs/agent_docs/agent-refactor-idea-plan.md`
 
 ## Context
 
@@ -91,22 +94,17 @@ decision below keeps those parts without adopting the multi-agent topology.
 10. **Do not add an orchestration dependency.** Dart `Future.wait` and a
     bounded queue are sufficient. No LangChain/LangGraph-style runtime.
 
-## Planned F7 compound expansion (Phase 1, not implemented)
+## F7 compound expansion (Phase 1, not implemented)
 
-The coverage prompt will gain a rule allowing a whole contiguous compound or
-fixed collocation as one MISSING query (for example `ところが` instead of
-`ところ` + `が`), only when the pieces are unresolved or the whole form is a
-known fixed expression. The local validator will enforce, for `kind="word"`
-queries that are not already known token/pattern/entry terms:
-
-- exact source substring;
-- at most 12 Unicode code points;
-- at most 4 overlapping source tokens;
-- no whitespace or sentence punctuation.
-
-Queries outside these bounds are dropped and counted, not sent to the lookup
-worker. Grammar/usage/context queries remain bounded by the existing coverage
-limits. No prompt, validator or test change is part of Phase 0.
+The F7 coverage review remains the only bounded expansion path. It may request
+one contiguous compound or fixed collocation as a MISSING query (for example
+`ところが` instead of `ところ` + `が`). The guard is token-based, not
+character-based: exact source substring, no line break, at most 6 overlapping
+source tokens (a configurable `AgentLimits` budget); without tokenization only
+known token/pattern/entry terms are accepted. There is no hard-coded character
+cap, so long single-token words and multiword phrases survive multilingual
+support. Implementation, prompt text and tests are in the plan §3; no prompt,
+validator or test change is part of Phase 0.
 
 ## Alternatives considered
 
@@ -141,10 +139,6 @@ limits. No prompt, validator or test change is part of Phase 0.
 
 ## References
 
-- [Agent-Refactor-Idea Phase 0 design delta](../agent_docs/agent-refactor-idea-design-delta.md)
+- [Agent 重构实施计划](../agent_docs/agent-refactor-idea-plan.md)
 - [ADR 0004](0004-agent-capability-boundary.md)
-- `docs/phase6-agent-design.md` §6.1, §6.3.1
-- `docs/phase6-agent-contracts.md` §5.1
 - `docs/project-rules.md` R-AGENT-01/02/04/09/10/11/12/13/22
-- Current code: `agent_orchestrator.dart`, `evidence_builder.dart`,
-  `dictionary_familiarization_service.dart`, `coverage_support.dart`

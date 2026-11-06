@@ -100,7 +100,7 @@ AgentCoverageValidation validateCoverageReview({
       continue;
     }
     final query = item.query.trim();
-    if (query.isEmpty || query.length > 100) {
+    if (query.isEmpty || query.length > limits.maxCoverageQueryChars) {
       dropped++;
       continue;
     }
@@ -116,10 +116,25 @@ AgentCoverageValidation validateCoverageReview({
       dropped++;
       continue;
     }
+    final knownTerm = exactTerms.contains(query);
     final traceable =
-        exactTerms.contains(query) ||
-        sourceTexts.any((text) => text.contains(query));
+        knownTerm || sourceTexts.any((text) => text.contains(query));
     if (!traceable) {
+      dropped++;
+      continue;
+    }
+    // Compound/fixed-collocation expansion is word-only. A known term is
+    // already bounded by the normal lookup path. An unknown form must be a
+    // contiguous source span covering a small number of tokens; this is
+    // language-agnostic (a long German compound is one token, while a whole
+    // sentence is many) and avoids a hard-coded character count.
+    if (item.kind == AgentCoverageKind.word &&
+        !knownTerm &&
+        !_hasBoundedCompoundSpan(
+          query: query,
+          evidence: evidence,
+          maxTokens: limits.maxCoverageCompoundTokens,
+        )) {
       dropped++;
       continue;
     }
@@ -359,6 +374,39 @@ Set<String> _citationKeys(AgentCitation citation) => <String>{
   citation.headword,
   citation.matchedKey,
 };
+
+/// Whether [query] occurs as a contiguous source span covering at most
+/// [maxTokens] tokens.
+///
+/// Returns false when the source has no tokens: without a tokenizer there is no
+/// language-neutral way to distinguish a compound from a sentence, so callers
+/// must fall back to known token/pattern/entry terms.
+bool _hasBoundedCompoundSpan({
+  required String query,
+  required AgentEvidenceBundle evidence,
+  required int maxTokens,
+}) {
+  if (maxTokens <= 0) return false;
+  if (query.contains('\n') || query.contains('\r')) return false;
+  for (final source in evidence.sources) {
+    if (source.tokens.isEmpty) continue;
+    final text = source.text;
+    var start = text.indexOf(query);
+    while (start >= 0) {
+      final end = start + query.length;
+      var overlapping = 0;
+      for (final token in source.tokens) {
+        if (token.start < end && token.end > start) {
+          overlapping++;
+          if (overlapping > maxTokens) break;
+        }
+      }
+      if (overlapping > 0 && overlapping <= maxTokens) return true;
+      start = text.indexOf(query, start + 1);
+    }
+  }
+  return false;
+}
 
 bool _mostlyOverlapping(String a, String b) {
   final left = stripLookupKey(a);

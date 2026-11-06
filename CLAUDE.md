@@ -126,6 +126,11 @@ Agent 改动前。**今后的误区只在该文件新增。**
 后处理为已落地增量，其余未实现。
 何时查看：规划 P7、拆分 Agent 任务、评估模型路由/并发/成本前。
 
+`docs/agent_docs/agent-refactor-idea-plan.md`：
+内容：Agent 重构 Phase 0 实施计划（Agent-Refactor-Idea）：档案编译器、单次分析、
+F7 复合词补查、Phase 1a–4；未实现，决策见 ADR 0005。
+何时查看：实施或评审 Agent 重构时；不要当作当前能力。
+
 `docs/agent_docs/phase6-pipeline-review.md`：
 内容：Agent 管线评审与已知问题（含 file:line 证据）。
 何时查看：排查 Agent 管线问题；作为历史 gap 证据，不作当前任务清单。

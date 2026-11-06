@@ -457,6 +457,14 @@ Rules:
   an exact token surface/lemma/reading/lookup candidate, or a grammar pattern
   surface, or an existing dictionary entry key/headword. Never browse the
   dictionary arbitrarily.
+- A source word may be split into pieces or be part of a fixed expression. If a
+  contiguous compound or fixed collocation in the source is likely to have its
+  own dictionary entry (for example ところが rather than ところ + が), request
+  the whole form as one MISSING query. Do this only when the individual pieces
+  are unresolved or the whole form is a known fixed expression; do not request
+  every adjacent pair. The query must be an exact source substring, use only
+  supplied refs, and stay within the normal limits; never request a whole
+  sentence or a paraphrase.
 - refs must use only the supplied source (src-N), token (tN) or pattern (pN)
   ids, separated by commas or "|". Do not use citation ids such as source-1.
   priority is optional 1-5 (1 is highest).
