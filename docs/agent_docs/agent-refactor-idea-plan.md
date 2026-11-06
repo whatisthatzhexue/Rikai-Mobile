@@ -1,7 +1,7 @@
 # Agent 重构实施计划（Agent-Refactor-Idea）
 
-- 状态：Phase 1a（F7 复合词补查）与 Phase 1b（档案编译器 v2）已实现
-  （2026-11-06）；Phase 2–4 未实现。
+- 状态：Phase 1a（F7 复合词补查）、Phase 1b（档案编译器 v2）与 Phase 2
+  （请求管线收敛）已实现（2026-11-06）；Phase 3–4 未实现。
 - 文档角色：
   - 原始提案：`Agent-Refactor-Idea.txt`（项目根目录；产品逻辑锚点，不是当前规则）。
   - 决策：[ADR 0005](../adr/0005-agent-profile-compiler.md)（why/what；被拒方案）。
@@ -162,20 +162,26 @@ tokenizer 调整，不需要改校验迁移逻辑。Phase 1 用真实样本回�
 `dictionary_profile_tag_parser_test.dart`、`agent_models_test.dart`、
 `agent_profiles_page_test.dart`。
 
-## 5. Phase 2：请求管线收敛
+## 5. Phase 2：请求管线收敛（已实现，2026-11-06）
 
 1. 保留 `EvidenceBuilder` 的 4 模式预取和批量查词；不新增逐句 agent。
-2. 增加本地意图提示（翻译/语法/解释、输出语言、是否多问），作为主 prompt
-   的短段落；不单独发 intent 调用。
+2. 新增 `agent_intent.dart`：本地关键词检测翻译/语法/解释/读音/校对和多问题，
+   作为主 prompt 的短 `Local request hint` 段落；不单独发 intent 调用，用户
+   请求仍是权威。
 3. 主分析保持一次 `buildAnalysisRequest`；实词/虚词只在证据层用 `content`
    标记，不在任务层拆分。
-4. 记录 calls/tokens/latency/citation coverage/repair rate；fake provider
-   测试断言“5 词典 10 句只有 1 次主分析调用”。
+4. 新增 `AgentRunTelemetry`：记录 `llmCalls`/`analysisCalls`/`coverageCalls`/
+   `repairCalls`/`languageRepairCalls`/输入输出字符/推理字符/LLM 与总耗时/
+   citation 数与 target 覆盖；不记录正文、路径或 Key。结果 JSON/history 可回放。
+   覆盖合并/删重时重新计算 `targetsWithCitations`，避免 telemetry 和后续
+   coverage 判断使用旧值。
 5. 条件调用仍受 `AgentLimits` 约束；长文本继续 `maxSourceChars`/
    `maxTargets`/`maxCitations` 硬上限。
+6. fake provider 测试断言：5 词典、10 句、无覆盖审查时只有 1 次主分析调用，
+   并校验 telemetry 计数。
 
 **验收**：一次请求核心调用 ≤4 次（主分析 + 至多 3 次条件调用）；
-citation/quote/词典顺序不回归。
+citation/quote/词典顺序不回归；telemetry 不含正文/路径/Key。
 
 ## 6. Phase 3：条件性 fan-out
 
@@ -213,12 +219,14 @@ citation/quote/词典顺序不回归。
 | F7 复合词查询通过率/丢弃率 | 持续跟踪，异常升高说明阈值或 prompt 退化 |
 | 格式/语言修复触发率 | 持续跟踪，异常升高说明 prompt 退化 |
 
-## 10. Phase 0 / 1a / 1b 完成定义
+## 10. Phase 0 / 1a / 1b / 2 完成定义
 
 - ADR 0005 和本实施计划已落盘；
 - Phase 1a 的 prompt、token 跨度校验和测试已实现；F7 复合词能力已在 design/
   contracts/status 中记录为已实现；
 - Phase 1b 的 intro、方向性语言对、覆盖指标、探针/批量调整、Markdown/卡片
   显示和测试已实现；未新增自动后台联网预热；
+- Phase 2 的本地意图提示、单次主分析断言、`AgentRunTelemetry` 和覆盖计数
+  重算已实现；
 - 未修改现有规则正文；`project-data.md` 的预算/测试基线更新需用户同意；
-- Phase 2–4 仍为未实现，不能写成已支持。
+- Phase 3–4 仍为未实现，不能写成已支持。

@@ -1133,7 +1133,8 @@ validate(analysis, evidence, quotes, mode):
 - `result` 必须包含 `AgentRunResult` 的全部字段：input/evidence/quotes/analysis/
   validation/sources/dictionaryProfiles/profileWarnings/unavailableProfiles/
   warnings/coverageFallbackUsed/ocrQuality/richOriginalText/richSegmentTexts/
-  richSegmentNotes。
+  richSegmentNotes/telemetry。`telemetry` 只含调用数、字符数、耗时和 citation
+  计数，不含正文、路径、Key 或 provider body。
 - `AgentRunSnapshot` **不整对象入库**；只持久化安全的 run 元数据（status/mode/
   provider label/models/timestamps/error_code）。`sentImagePaths`、页面状态、
   取消 token、profile 回调、provider 原始 body 一律不存。

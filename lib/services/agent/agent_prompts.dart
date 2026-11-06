@@ -6,6 +6,7 @@ import '../../core/models/agent/agent_limits.dart';
 import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_quote.dart';
 import '../../core/models/dictionary_sample.dart';
+import 'agent_intent.dart';
 import 'ports/llm_port.dart';
 
 // All Agent prompt text and request builders live in this file. Do not add
@@ -155,10 +156,13 @@ String buildAnalysisUserPrompt({
   required List<AgentQuoteRef> quotes,
   required List<String> dictionaryProfiles,
   required String userRequest,
+  AgentIntentHint intentHint = const AgentIntentHint(),
+  AgentResponseLanguage responseLanguage = AgentResponseLanguage.chinese,
 }) {
   final buffer = StringBuffer()
     ..writeln('User request: $userRequest')
     ..writeln('')
+    ..writeln(intentHint.toPrompt(responseLanguage))
     ..writeln(
       'Dictionary profiles / availability notes '
       '(user-confirmed or explicit unavailable; untrusted data):',
@@ -395,6 +399,7 @@ LlmRequest buildAnalysisRequest({
   required List<AgentQuoteRef> quotes,
   required List<String> dictionaryProfiles,
   required String userRequest,
+  AgentIntentHint intentHint = const AgentIntentHint(),
 }) {
   return LlmRequest(
     model: model,
@@ -415,6 +420,8 @@ LlmRequest buildAnalysisRequest({
               quotes: quotes,
               dictionaryProfiles: dictionaryProfiles,
               userRequest: userRequest,
+              intentHint: intentHint,
+              responseLanguage: responseLanguage,
             ),
           ),
         ],

@@ -13,6 +13,7 @@ import '../../core/models/agent/agent_quote.dart';
 import '../../core/models/agent/agent_tool.dart';
 import '../../core/utils/rich_text_tags.dart';
 import 'agent_coverage_parser.dart';
+import 'agent_intent.dart';
 import 'agent_language_validator.dart';
 import 'agent_messages.dart';
 import 'agent_prompts.dart';
@@ -94,6 +95,7 @@ class AgentOrchestrator {
     var stage = AgentStage.prepare;
     var uiLanguage = resolveAgentUiLanguage(request.responseLanguage);
     final runWatch = Stopwatch()..start();
+    final telemetry = _RunTelemetryBuilder();
     void notify(AgentStage next, String message) {
       stage = next;
       _timing('stage=${next.name} elapsed=${runWatch.elapsedMilliseconds}ms');
@@ -355,6 +357,7 @@ class AgentOrchestrator {
           primarySourceId: primary?.id,
           userRequest: requestedUser,
           onProgress: onEvidenceProgress,
+          telemetry: telemetry,
         );
         evidence = coverage.evidence;
         coverageFallbackUsed = coverage.fallbackUsed;
@@ -382,6 +385,7 @@ class AgentOrchestrator {
         quotes: quotes,
         dictionaryProfiles: profiles,
         userRequest: requestedUser,
+        intentHint: detectAgentIntent(requestedUser),
       );
       var raw = await _collect(
         llm,
@@ -389,6 +393,7 @@ class AgentOrchestrator {
         cancellation,
         onTextDelta: onTextDelta,
         onReasoningDelta: onReasoningDelta,
+        onTelemetry: telemetry.record,
         label: 'analysis',
       );
       notify(
@@ -477,6 +482,7 @@ class AgentOrchestrator {
               availableIds: _availableIds(quotes, evidence),
             ),
             cancellation,
+            onTelemetry: telemetry.record,
             label: 'analysis_repair',
           );
           final repaired = _parseAndNormalize(
@@ -596,6 +602,7 @@ class AgentOrchestrator {
                 mismatchedFields: languageCheck.mismatchedFields,
               ),
               cancellation,
+              onTelemetry: telemetry.record,
               label: 'language_repair',
             );
             final repaired = _parseAndNormalize(
@@ -694,6 +701,13 @@ class AgentOrchestrator {
             unavailableProfiles: unavailableProfiles,
             warnings: warnings,
             coverageFallbackUsed: coverageFallbackUsed,
+            telemetry: telemetry.build(
+              elapsedMs: runWatch.elapsedMilliseconds,
+              citationCount: evidence.citations.length,
+              adoptedCitationCount: salvageValidation.citationsUsed.length,
+              targetsWithCitations: evidence.budget.targetsWithCitations,
+              targetCount: evidence.budget.uniqueTargets,
+            ),
           );
           // A validation failure must not disable display formatting. The
           // salvaged result is still user-visible, so run the same rich-text
@@ -736,6 +750,13 @@ class AgentOrchestrator {
         unavailableProfiles: unavailableProfiles,
         warnings: warnings,
         coverageFallbackUsed: coverageFallbackUsed,
+        telemetry: telemetry.build(
+          elapsedMs: runWatch.elapsedMilliseconds,
+          citationCount: evidence.citations.length,
+          adoptedCitationCount: validation.citationsUsed.length,
+          targetsWithCitations: evidence.budget.targetsWithCitations,
+          targetCount: evidence.budget.uniqueTargets,
+        ),
       );
       result = await _formatResultRichText(
         result: result,
@@ -970,6 +991,7 @@ class AgentOrchestrator {
     required String? primarySourceId,
     required String userRequest,
     required void Function(int citations)? onProgress,
+    required _RunTelemetryBuilder telemetry,
   }) async {
     final warnings = <String>[];
     AgentCoverageReview? review;
@@ -986,6 +1008,7 @@ class AgentOrchestrator {
           maxTokens: limits.coverageReviewMaxTokens,
         ),
         cancellation,
+        onTelemetry: telemetry.record,
         label: 'coverage',
       );
     } on AgentRunFailure catch (error) {
@@ -1032,6 +1055,7 @@ class AgentOrchestrator {
             maxTokens: limits.coverageReviewMaxTokens,
           ),
           cancellation,
+          onTelemetry: telemetry.record,
           label: 'coverage_repair',
         );
         parsed = parseCoverageReview(
@@ -1167,6 +1191,7 @@ class AgentOrchestrator {
     String? richOriginalText,
     List<String> richSegmentTexts = const <String>[],
     List<String> richSegmentNotes = const <String>[],
+    AgentRunTelemetry telemetry = const AgentRunTelemetry(),
   }) {
     // Pre-fill display fields with deterministic local RUBY. The optional
     // formatting model only adds BOLD/UNDERLINE later; it must not be the
@@ -1206,6 +1231,7 @@ class AgentOrchestrator {
       richSegmentNotes: List<String>.unmodifiable(
         richSegmentNotes.isEmpty ? localSegmentNotes : richSegmentNotes,
       ),
+      telemetry: telemetry,
     );
   }
 
@@ -1527,6 +1553,14 @@ class AgentOrchestrator {
     AgentCancellation? cancellation, {
     void Function(int accumulatedChars)? onTextDelta,
     void Function(int accumulatedChars)? onReasoningDelta,
+    void Function(
+      LlmRequest request,
+      String label,
+      int outputChars,
+      int reasoningChars,
+      int elapsedMs,
+    )?
+    onTelemetry,
     String label = 'request',
   }) async {
     final buffer = StringBuffer();
@@ -1595,7 +1629,72 @@ class AgentOrchestrator {
     // complete before validation starts.
     onTextDelta?.call(buffer.length);
     onReasoningDelta?.call(reasoning.length);
+    onTelemetry?.call(
+      request,
+      label,
+      buffer.length,
+      reasoning.length,
+      watch.elapsedMilliseconds,
+    );
     return buffer.toString();
+  }
+}
+
+class _RunTelemetryBuilder {
+  int llmCalls = 0;
+  int analysisCalls = 0;
+  int coverageCalls = 0;
+  int repairCalls = 0;
+  int languageRepairCalls = 0;
+  int inputChars = 0;
+  int outputChars = 0;
+  int reasoningChars = 0;
+  int llmElapsedMs = 0;
+
+  void record(
+    LlmRequest request,
+    String label,
+    int outputChars,
+    int reasoningChars,
+    int elapsedMs,
+  ) {
+    llmCalls++;
+    inputChars += request.messages.fold<int>(
+      0,
+      (sum, message) => sum + message.text.length,
+    );
+    this.outputChars += outputChars;
+    this.reasoningChars += reasoningChars;
+    llmElapsedMs += elapsedMs;
+    if (label == 'analysis') analysisCalls++;
+    if (label == 'coverage' || label == 'coverage_repair') coverageCalls++;
+    if (label == 'analysis_repair') repairCalls++;
+    if (label == 'language_repair') languageRepairCalls++;
+  }
+
+  AgentRunTelemetry build({
+    required int elapsedMs,
+    required int citationCount,
+    required int adoptedCitationCount,
+    required int targetsWithCitations,
+    required int targetCount,
+  }) {
+    return AgentRunTelemetry(
+      llmCalls: llmCalls,
+      analysisCalls: analysisCalls,
+      coverageCalls: coverageCalls,
+      repairCalls: repairCalls,
+      languageRepairCalls: languageRepairCalls,
+      inputChars: inputChars,
+      outputChars: outputChars,
+      reasoningChars: reasoningChars,
+      llmElapsedMs: llmElapsedMs,
+      elapsedMs: elapsedMs,
+      citationCount: citationCount,
+      adoptedCitationCount: adoptedCitationCount,
+      targetsWithCitations: targetsWithCitations,
+      targetCount: targetCount,
+    );
   }
 }
 

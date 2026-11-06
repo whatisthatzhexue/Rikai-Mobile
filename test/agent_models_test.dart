@@ -242,6 +242,35 @@ void main() {
     expect(AgentQuoteRef.fromJson(quote.toJson()).text, '何卒');
   });
 
+  test('run telemetry round-trips content-free counters', () {
+    const telemetry = AgentRunTelemetry(
+      llmCalls: 2,
+      analysisCalls: 1,
+      coverageCalls: 1,
+      repairCalls: 1,
+      languageRepairCalls: 0,
+      inputChars: 100,
+      outputChars: 40,
+      reasoningChars: 5,
+      llmElapsedMs: 30,
+      elapsedMs: 50,
+      citationCount: 3,
+      adoptedCitationCount: 2,
+      targetsWithCitations: 2,
+      targetCount: 4,
+    );
+
+    final restored = AgentRunTelemetry.fromJson(telemetry.toJson());
+    expect(restored.llmCalls, 2);
+    expect(restored.analysisCalls, 1);
+    expect(restored.coverageCalls, 1);
+    expect(restored.repairCalls, 1);
+    expect(restored.inputChars, 100);
+    expect(restored.outputChars, 40);
+    expect(restored.citationCoverage, 0.5);
+    expect(restored.repairRate, 1);
+  });
+
   test('dictionary sample round-trips plain-text features', () {
     const sample = DictionarySample(
       dictionaryId: 'dict_a',

@@ -225,35 +225,37 @@ AgentEvidenceBundle pruneCoverageCitations({
   final citations = evidence.citations
       .where((citation) => !removeIds.contains(citation.id))
       .toList(growable: false);
+  final sources = <AgentSourceEvidence>[
+    for (final source in evidence.sources)
+      AgentSourceEvidence(
+        id: source.id,
+        kind: source.kind,
+        text: source.text,
+        tokens: <AgentTokenEvidence>[
+          for (final token in source.tokens)
+            _tokenWithCitations(
+              token,
+              token.citationIds.where((id) => !removeIds.contains(id)),
+            ),
+        ],
+      ),
+  ];
+  final patterns = <AgentGrammarPatternEvidence>[
+    for (final pattern in evidence.patterns)
+      AgentGrammarPatternEvidence(
+        id: pattern.id,
+        surface: pattern.surface,
+        tokenIds: pattern.tokenIds,
+        start: pattern.start,
+        end: pattern.end,
+        citationIds: pattern.citationIds
+            .where((id) => !removeIds.contains(id))
+            .toList(growable: false),
+      ),
+  ];
   return AgentEvidenceBundle(
-    sources: <AgentSourceEvidence>[
-      for (final source in evidence.sources)
-        AgentSourceEvidence(
-          id: source.id,
-          kind: source.kind,
-          text: source.text,
-          tokens: <AgentTokenEvidence>[
-            for (final token in source.tokens)
-              _tokenWithCitations(
-                token,
-                token.citationIds.where((id) => !removeIds.contains(id)),
-              ),
-          ],
-        ),
-    ],
-    patterns: <AgentGrammarPatternEvidence>[
-      for (final pattern in evidence.patterns)
-        AgentGrammarPatternEvidence(
-          id: pattern.id,
-          surface: pattern.surface,
-          tokenIds: pattern.tokenIds,
-          start: pattern.start,
-          end: pattern.end,
-          citationIds: pattern.citationIds
-              .where((id) => !removeIds.contains(id))
-              .toList(growable: false),
-        ),
-    ],
+    sources: sources,
+    patterns: patterns,
     citations: _sortedCitations(citations),
     truncated: evidence.truncated,
     structureUnavailable: evidence.structureUnavailable,
@@ -261,7 +263,12 @@ AgentEvidenceBundle pruneCoverageCitations({
     budget: AgentEvidenceBudget(
       sourceChars: evidence.budget.sourceChars,
       uniqueTargets: evidence.budget.uniqueTargets,
-      targetsWithCitations: evidence.budget.targetsWithCitations,
+      targetsWithCitations: _countCitedTargets(
+        sources: sources,
+        patterns: patterns,
+        citationIds: <String>{for (final citation in citations) citation.id},
+        maxTargets: evidence.budget.uniqueTargets,
+      ),
       citations: citations.length,
       maxTargets: limits.maxTargets,
       maxCitations: limits.maxEvidenceEntries,
@@ -296,36 +303,37 @@ AgentEvidenceBundle mergeCoverageEvidence({
     }
   }
   final mergedCitations = _sortedCitations(byId.values.toList(growable: false));
-
+  final sources = <AgentSourceEvidence>[
+    for (final source in evidence.sources)
+      AgentSourceEvidence(
+        id: source.id,
+        kind: source.kind,
+        text: source.text,
+        tokens: <AgentTokenEvidence>[
+          for (final token in source.tokens)
+            _tokenWithCitations(token, <String>{
+              ...token.citationIds,
+              ...?additions[token.id],
+            }),
+        ],
+      ),
+  ];
+  final patterns = <AgentGrammarPatternEvidence>[
+    for (final pattern in evidence.patterns)
+      AgentGrammarPatternEvidence(
+        id: pattern.id,
+        surface: pattern.surface,
+        tokenIds: pattern.tokenIds,
+        start: pattern.start,
+        end: pattern.end,
+        citationIds: <String>[
+          ...{...pattern.citationIds, ...?additions[pattern.id]},
+        ],
+      ),
+  ];
   return AgentEvidenceBundle(
-    sources: <AgentSourceEvidence>[
-      for (final source in evidence.sources)
-        AgentSourceEvidence(
-          id: source.id,
-          kind: source.kind,
-          text: source.text,
-          tokens: <AgentTokenEvidence>[
-            for (final token in source.tokens)
-              _tokenWithCitations(token, <String>{
-                ...token.citationIds,
-                ...?additions[token.id],
-              }),
-          ],
-        ),
-    ],
-    patterns: <AgentGrammarPatternEvidence>[
-      for (final pattern in evidence.patterns)
-        AgentGrammarPatternEvidence(
-          id: pattern.id,
-          surface: pattern.surface,
-          tokenIds: pattern.tokenIds,
-          start: pattern.start,
-          end: pattern.end,
-          citationIds: <String>[
-            ...{...pattern.citationIds, ...?additions[pattern.id]},
-          ],
-        ),
-    ],
+    sources: sources,
+    patterns: patterns,
     citations: mergedCitations,
     truncated: evidence.truncated,
     structureUnavailable: evidence.structureUnavailable,
@@ -333,12 +341,38 @@ AgentEvidenceBundle mergeCoverageEvidence({
     budget: AgentEvidenceBudget(
       sourceChars: evidence.budget.sourceChars,
       uniqueTargets: evidence.budget.uniqueTargets,
-      targetsWithCitations: evidence.budget.targetsWithCitations,
+      targetsWithCitations: _countCitedTargets(
+        sources: sources,
+        patterns: patterns,
+        citationIds: <String>{
+          for (final citation in mergedCitations) citation.id,
+        },
+        maxTargets: evidence.budget.uniqueTargets,
+      ),
       citations: mergedCitations.length,
       maxTargets: limits.maxTargets,
       maxCitations: limits.maxEvidenceEntries,
     ),
   );
+}
+
+int _countCitedTargets({
+  required List<AgentSourceEvidence> sources,
+  required List<AgentGrammarPatternEvidence> patterns,
+  required Set<String> citationIds,
+  required int maxTargets,
+}) {
+  if (citationIds.isEmpty || maxTargets <= 0) return 0;
+  var count = 0;
+  for (final source in sources) {
+    for (final token in source.tokens) {
+      if (token.citationIds.any(citationIds.contains)) count++;
+    }
+  }
+  for (final pattern in patterns) {
+    if (pattern.citationIds.any(citationIds.contains)) count++;
+  }
+  return count > maxTargets ? maxTargets : count;
 }
 
 AgentTokenEvidence _tokenWithCitations(

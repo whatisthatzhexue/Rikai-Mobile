@@ -19,10 +19,10 @@
   核心已实现，P6.6 自动化收尾于 2026-11-03 完成；P6.7-1 历史/持久化与 P6.7-2
   UniDic 声调已于 2026-11-03 实现；P6.7 annotation DSL、provider 测试连接和发布
   打磨仍未完成；P6.6 真机验收与 Wave 4 设备验收仍由另一工作流处理。
-  Agent 重构 Phase 1a（F7 复合词补查）与 Phase 1b（档案编译器 v2）于
-  2026-11-06 实现，Phase 2–4 未实现**
+  Agent 重构 Phase 1a（F7 复合词补查）、Phase 1b（档案编译器 v2）与 Phase 2
+  （请求管线收敛）于 2026-11-06 实现，Phase 3–4 未实现**
 - 日期：2026-10-30（P6.6 核心实现更新：2026-11-02；自动化收尾：2026-11-03；
-  P6.7 设计决议与历史/声调实现：2026-11-03；Phase 1a–1b：2026-11-06）
+  P6.7 设计决议与历史/声调实现：2026-11-03；Phase 1a–2：2026-11-06）
 - 前身：v1 只描述通用工具型 Agent；v2 加入用户确认的固定流水线、词典熟悉、
   OCR JSON 信封、逐词/语法证据、原文引用、会话级词典选择与按需多 OCR。
 - 依赖：Phase 4.5 的 arm64/真实页面验收、Phase 5 的完整历史/引导/发布打磨，以及
@@ -511,6 +511,15 @@ Stage 0 envelope + Stage 1 evidence + 已确认的 dictionary profiles。输出�
 决策；F1a/F17 已在 Wave 2 实现）。模型返回后的人类可读字段需做一次语言校验，
 偏离目标语言时允许一次语言修复；仍偏离则保留结果并显示警告，不得丢弃已生成内容
 （F1b，Wave 3 已实现）。
+
+2026-11-06（Phase 2）：主 prompt 前增加一段本地 `Local request hint`
+（`agent_intent.dart` 关键词检测翻译/语法/解释/读音/校对和多问题），只用于
+提示模型排列输出区块，不单独发 intent 调用，用户请求仍是权威。每次 run 返回
+`AgentRunTelemetry`（调用数、输入/输出/推理字符、LLM/总耗时、citation target
+覆盖、repair 次数）；它只含计数，不含正文/路径/Key，并随 history result JSON
+回放。计数范围是分析管线核心调用（coverage/analysis/repair/language），不含
+档案生成和富文本后处理。覆盖合并/删重后重新计算 `targetsWithCitations`，避免
+telemetry 使用旧值。
 
 **2026-11-01 运行时格式**：模型不再输出 JSON，而是输出方括号标签的纯文本块
 （`[TRANSLATION]`、`[SEGMENT]`、`[MEANING]`、`[WORD]`、`[GRAMMAR]`、

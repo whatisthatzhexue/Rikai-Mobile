@@ -1,14 +1,15 @@
 # ADR 0005: Agent profile compiler and single-query analysis
 
-- Status: proposed; Phase 0 decision record. Phase 1a (F7 compound expansion)
-  and Phase 1b (profile compiler v2) implemented 2026-11-06; Phase 2–4 not
-  implemented.
+- Status: proposed; Phase 0 decision record. Phase 1a (F7 compound expansion),
+  Phase 1b (profile compiler v2) and Phase 2 (request pipeline) implemented
+  2026-11-06; Phase 3–4 not implemented.
 - Date: 2026-11-04
 - Update 2026-11-06: Phase 1a implemented. The F7 compound guard is
   token-based (default 6 overlapping tokens), not a 12-character cap;
   character counts do not transfer across writing systems. Phase 1b adds
   directional language pairs, intro and local coverage metrics to profiles;
-  no automatic network prewarm was added.
+  no automatic network prewarm was added. Phase 2 adds a local intent hint
+  and content-free `AgentRunTelemetry`; it still uses one main analysis call.
 - Related: ADR 0004 (accepted), `docs/agent_docs/agent-refactor-idea-plan.md`
 
 ## Context

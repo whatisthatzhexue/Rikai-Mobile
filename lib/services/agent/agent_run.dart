@@ -101,6 +101,88 @@ class AgentRichTextOutputs {
   final List<String> segmentNotes;
 }
 
+/// Per-run, content-free execution telemetry.
+///
+/// Provider usage is not exposed by every provider, so character counts are
+/// recorded as the budget proxy; no prompt text, citation snippet, path or key
+/// enters this object.
+class AgentRunTelemetry {
+  const AgentRunTelemetry({
+    this.llmCalls = 0,
+    this.analysisCalls = 0,
+    this.coverageCalls = 0,
+    this.repairCalls = 0,
+    this.languageRepairCalls = 0,
+    this.inputChars = 0,
+    this.outputChars = 0,
+    this.reasoningChars = 0,
+    this.llmElapsedMs = 0,
+    this.elapsedMs = 0,
+    this.citationCount = 0,
+    this.adoptedCitationCount = 0,
+    this.targetsWithCitations = 0,
+    this.targetCount = 0,
+  });
+
+  final int llmCalls;
+  final int analysisCalls;
+  final int coverageCalls;
+  final int repairCalls;
+  final int languageRepairCalls;
+  final int inputChars;
+  final int outputChars;
+  final int reasoningChars;
+  final int llmElapsedMs;
+  final int elapsedMs;
+  final int citationCount;
+  final int adoptedCitationCount;
+  final int targetsWithCitations;
+  final int targetCount;
+
+  /// Targets that received at least one citation, divided by lookup targets.
+  double get citationCoverage =>
+      targetCount == 0 ? 0 : targetsWithCitations / targetCount;
+
+  /// Format-repair calls divided by main analysis calls.
+  double get repairRate => analysisCalls == 0 ? 0 : repairCalls / analysisCalls;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'llm_calls': llmCalls,
+    'analysis_calls': analysisCalls,
+    'coverage_calls': coverageCalls,
+    'repair_calls': repairCalls,
+    'language_repair_calls': languageRepairCalls,
+    'input_chars': inputChars,
+    'output_chars': outputChars,
+    'reasoning_chars': reasoningChars,
+    'llm_elapsed_ms': llmElapsedMs,
+    'elapsed_ms': elapsedMs,
+    'citation_count': citationCount,
+    'adopted_citation_count': adoptedCitationCount,
+    'targets_with_citations': targetsWithCitations,
+    'target_count': targetCount,
+  };
+
+  factory AgentRunTelemetry.fromJson(Map<String, Object?> json) {
+    return AgentRunTelemetry(
+      llmCalls: agentInt(json['llm_calls']),
+      analysisCalls: agentInt(json['analysis_calls']),
+      coverageCalls: agentInt(json['coverage_calls']),
+      repairCalls: agentInt(json['repair_calls']),
+      languageRepairCalls: agentInt(json['language_repair_calls']),
+      inputChars: agentInt(json['input_chars']),
+      outputChars: agentInt(json['output_chars']),
+      reasoningChars: agentInt(json['reasoning_chars']),
+      llmElapsedMs: agentInt(json['llm_elapsed_ms']),
+      elapsedMs: agentInt(json['elapsed_ms']),
+      citationCount: agentInt(json['citation_count']),
+      adoptedCitationCount: agentInt(json['adopted_citation_count']),
+      targetsWithCitations: agentInt(json['targets_with_citations']),
+      targetCount: agentInt(json['target_count']),
+    );
+  }
+}
+
 class AgentRunResult {
   const AgentRunResult({
     required this.input,
@@ -119,6 +201,7 @@ class AgentRunResult {
     this.richOriginalText,
     this.richSegmentTexts = const <String>[],
     this.richSegmentNotes = const <String>[],
+    this.telemetry = const AgentRunTelemetry(),
   });
 
   final AgentInputEnvelope input;
@@ -158,6 +241,9 @@ class AgentRunResult {
   /// explanations), aligned with [analysis.segments]. Empty entries mean
   /// “render the plain note lines”.
   final List<String> richSegmentNotes;
+
+  /// Content-free call/latency/citation stats for this run.
+  final AgentRunTelemetry telemetry;
 
   List<AgentCitation> get citations => evidence.citations;
 
@@ -204,6 +290,7 @@ class AgentRunResult {
         richSegmentNotes,
         rich.segmentNotes,
       ),
+      telemetry: telemetry,
     );
   }
 
@@ -255,6 +342,7 @@ class AgentRunResult {
     if (richOriginalText != null) 'rich_original_text': richOriginalText,
     'rich_segment_texts': richSegmentTexts,
     'rich_segment_notes': richSegmentNotes,
+    'telemetry': telemetry.toJson(),
   };
 
   factory AgentRunResult.fromJson(Map<String, Object?> json) {
@@ -318,6 +406,7 @@ class AgentRunResult {
           : null,
       richSegmentTexts: agentStringList(json['rich_segment_texts']),
       richSegmentNotes: agentStringList(json['rich_segment_notes']),
+      telemetry: AgentRunTelemetry.fromJson(agentMap(json['telemetry'])),
     );
   }
 }

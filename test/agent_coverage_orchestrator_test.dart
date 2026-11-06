@@ -42,6 +42,13 @@ const _analysisTagged = '''
 [/SEGMENT]
 ''';
 
+const _plainAnalysis = '''
+[TRANSLATION quote="q1"]请多关照。[/TRANSLATION]
+[SEGMENT type="inference" quote="q1"]
+[MEANING]语境推断[/MEANING]
+[/SEGMENT]
+''';
+
 const _coverageMissing = '''
 [COVERAGE verdict="missing"]
 [MISSING kind="usage" query="何卒" refs="t1" priority="1"]缺少用法[/MISSING]
@@ -294,7 +301,67 @@ void main() {
       contains('source-1'),
     );
     expect(provider.requests, hasLength(2));
+    expect(result.telemetry.llmCalls, 2);
+    expect(result.telemetry.analysisCalls, 1);
+    expect(result.telemetry.coverageCalls, 1);
+    expect(result.telemetry.targetCount, 2);
+    expect(result.telemetry.targetsWithCitations, 2);
+    expect(result.telemetry.citationCoverage, 1);
   });
+
+  test(
+    'five dictionaries and ten sentences still use one analysis call',
+    () async {
+      final lookup = _LookupScript(<List<LookupEntry>>[<LookupEntry>[]]);
+      final provider = FakeProvider(responseSequence: <String>[_plainAnalysis]);
+      const dictionaries = <DictionaryInfo>[
+        DictionaryInfo(id: 'd1', title: 'D1', mdxPath: '/d1.mdx', order: 0),
+        DictionaryInfo(id: 'd2', title: 'D2', mdxPath: '/d2.mdx', order: 1),
+        DictionaryInfo(id: 'd3', title: 'D3', mdxPath: '/d3.mdx', order: 2),
+        DictionaryInfo(id: 'd4', title: 'D4', mdxPath: '/d4.mdx', order: 3),
+        DictionaryInfo(id: 'd5', title: 'D5', mdxPath: '/d5.mdx', order: 4),
+      ];
+      final userText = '何卒宜しく。${List<String>.filled(9, 'これはテストです。').join()}';
+
+      final result =
+          await _orchestrator(
+            provider: provider,
+            lookup: lookup,
+            limits: const AgentLimits(
+              maxCoverageFallback: 0,
+              enableRichTextPostProcess: false,
+            ),
+          ).run(
+            AgentRunRequest(
+              sessionId: 's1',
+              mode: AgentMode.loose,
+              dictionaries: dictionaries,
+              provider: _provider,
+              userText: userText,
+            ),
+          );
+
+      // Ten sentences and five dictionaries must not fan out into per-sentence
+      // or per-dictionary analysis calls.
+      expect(provider.requests, hasLength(1));
+      final prompt = provider.requests.single.messages
+          .map((message) => message.text)
+          .join('\n');
+      expect(prompt, contains('Local request hint'));
+      expect(prompt, contains('likely tasks: explanation'));
+      expect(result.telemetry.llmCalls, 1);
+      expect(result.telemetry.analysisCalls, 1);
+      expect(result.telemetry.coverageCalls, 0);
+      expect(result.telemetry.repairCalls, 0);
+      expect(result.telemetry.languageRepairCalls, 0);
+      expect(result.telemetry.inputChars, greaterThan(0));
+      expect(result.telemetry.outputChars, greaterThan(0));
+      expect(result.telemetry.targetCount, greaterThan(0));
+      expect(result.telemetry.citationCount, 0);
+      expect(result.telemetry.targetsWithCitations, 0);
+      expect(result.telemetry.citationCoverage, 0);
+    },
+  );
 
   test('coverage tag integrity failure gets one format repair', () async {
     final lookup = _LookupScript(<List<LookupEntry>>[

@@ -11,9 +11,9 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > completed on 2026-11-03; P6.6 device acceptance remains pending. P6.7
 > history/persistence and UniDic pitch are implemented (2026-11-03); annotation
 > DSL, provider test connection and release polish are still pending. P6.7
-> device/visual acceptance remains pending. Phase 1a (F7 compound expansion)
-> and Phase 1b (profile compiler v2) of the Agent refactor are implemented
-> (2026-11-06); Phase 2–4 are not.**
+> device/visual acceptance remains pending. Phase 1a (F7 compound expansion),
+> Phase 1b (profile compiler v2) and Phase 2 (request pipeline) of the Agent
+> refactor are implemented (2026-11-06); Phase 3–4 are not.**
 
 > Follow `docs/agent_docs/device-feedback-2026-10-31.md` for the remaining
 > Wave 4 device checks. **Current test/device/build/environment numbers are
@@ -85,6 +85,19 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
   档案管理页显式生成，失败/待确认时保留 `noProfileInstruction` 降级。
 - 自动化验证：新增/更新 profile parser、sample analysis、service、model、
   profile page 用例；真实 provider/设备仍未验证。
+
+## 2026-11-06 请求管线收敛（Phase 2）
+
+- 新增 `agent_intent.dart`：本地检测翻译/语法/解释/读音/校对和多问题，主 prompt
+  增加 `Local request hint`；不单独发 intent 调用，用户请求仍是权威。
+- 新增 `AgentRunTelemetry`：`llmCalls`/`analysisCalls`/`coverageCalls`/
+  `repairCalls`/`languageRepairCalls`、输入/输出/推理字符、LLM/总耗时、
+  citation/target 覆盖；随 run result JSON/history 回放，不含正文/路径/Key。
+- 覆盖合并/删重后重新计算 `targetsWithCitations`，避免 telemetry 和后续
+  coverage 判断使用旧值。
+- fake provider 新增“5 词典 + 10 句、无覆盖审查 → 1 次主分析调用”断言；
+  flow C 同时校验 telemetry 的调用数和 citation 覆盖。
+- 真实 provider/设备仍未验证。
 
 ## Implemented
 
