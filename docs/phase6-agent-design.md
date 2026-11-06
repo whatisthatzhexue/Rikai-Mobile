@@ -19,11 +19,11 @@
   核心已实现，P6.6 自动化收尾于 2026-11-03 完成；P6.7-1 历史/持久化与 P6.7-2
   UniDic 声调已于 2026-11-03 实现；P6.7 annotation DSL、provider 测试连接和发布
   打磨仍未完成；P6.6 真机验收与 Wave 4 设备验收仍由另一工作流处理。
-  Agent 重构 Phase 1a（F7 复合词补查）、Phase 1b（档案编译器 v2）、Phase 2
-  （请求管线收敛）与 Phase 3（条件 fan-out，默认关闭）于 2026-11-06 实现，
-  Phase 4 未实现**
+  Agent 重构 Phase 1a–3 于 2026-11-06 实现；Phase 4 的安全子集（静态词表包、
+  非日语脚本降级）已实现，词表 UI/导入/生成与非日语 tokenizer 未实现**
 - 日期：2026-10-30（P6.6 核心实现更新：2026-11-02；自动化收尾：2026-11-03；
-  P6.7 设计决议与历史/声调实现：2026-11-03；Phase 1a–3：2026-11-06）
+  P6.7 设计决议与历史/声调实现：2026-11-03；Phase 1a–3 与 Phase 4 子集：
+  2026-11-06）
 - 前身：v1 只描述通用工具型 Agent；v2 加入用户确认的固定流水线、词典熟悉、
   OCR JSON 信封、逐词/语法证据、原文引用、会话级词典选择与按需多 OCR。
 - 依赖：Phase 4.5 的 arm64/真实页面验收、Phase 5 的完整历史/引导/发布打磨，以及
@@ -329,6 +329,12 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   `[LANGUAGES]` 仅作低置信度回退，不额外发请求）和 `coverage`（样本条数/词条数/
   词头与释义文字/结构特征数）。这些字段不由模型输出；无法判断时语言对为空。
   Profile prompt 版本升级会通过指纹使旧档案失效并重新生成。
+- 2026-11-06（Phase 4）：静态覆盖词表包
+  `assets/agent/word_lists/{ja,zh,en}.json`（每包 21 项，内部 tag 为
+  greeting/family/food/person_name/place_name）。`WordListPack` 本地校验数量/
+  标签/重复；`evaluateWordListCoverage` 只用 exact→prefix→suffix 本地查词计算
+  命中率。词表不参与 profile 格式推断，也不进入档案指纹；当前没有词表 UI、
+  用户导入或模型生成入口。
 - 用户确认：sheet 预览，可编辑 Markdown；按钮“保存并信任 / 本次跳过 / 不再询问”。
   “不再询问”= 保存当前档案并开启 `agent_profiles_auto_accept`；用户也可在 Agent
   设置中随时关闭/开启该选项（默认关闭）。档案确认由共享
@@ -451,6 +457,12 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   不完整；宽松模式可继续，但 `structural_analysis` 必须标为未验证。raw fallback
   是 best-effort，不得声称分词或结构分析；分词失败不阻断纯翻译，但不得声称有
   语法依据。
+- 2026-11-06（Phase 4）：`EvidenceBuilder` 先用 `script_language.dart` 检测
+  源文本脚本。假名按日语处理；拉丁/韩文/西里尔/泰文/阿拉伯文/希腊文等明确
+  非日语脚本跳过 UniDic，设置 `structureUnavailable=true`，只保留有界
+  raw-surface 查词，分析 prompt 禁止 WORD/GRAMMAR/structure 声明。Han-only
+  文本在中文与日语汉字之间歧义，暂按日语处理；没有非日语 tokenizer 前不能
+  声称支持这些语言的分词/语法分析。
 
 ### 6.3.1 覆盖审查（2026-10-31 反馈 F7，Wave 3 已实现）
 

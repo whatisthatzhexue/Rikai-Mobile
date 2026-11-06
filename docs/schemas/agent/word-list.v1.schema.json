@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rikai.mobile/schemas/agent/word-list.v1.schema.json",
+  "title": "Rikai Agent Word List v1",
+  "description": "Static or user-imported coverage pack. It is not a model response format and never enters the dictionary profile fingerprint.",
+  "type": "object",
+  "required": ["id", "language", "version", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "language": {"type": "string", "pattern": "^[a-z]{2,3}$"},
+    "version": {"type": "integer", "minimum": 1},
+    "tags": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "enum": ["greeting", "family", "food", "person_name", "place_name"]
+      }
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 21,
+      "maxItems": 21,
+      "items": {
+        "type": "object",
+        "required": ["term", "tag"],
+        "additionalProperties": false,
+        "properties": {
+          "term": {"type": "string", "minLength": 1, "maxLength": 40},
+          "tag": {
+            "enum": ["greeting", "family", "food", "person_name", "place_name"]
+          }
+        }
+      }
+    }
+  }
+}

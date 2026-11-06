@@ -1,0 +1,29 @@
+{
+  "id": "ja-default",
+  "language": "ja",
+  "version": 1,
+  "tags": ["greeting", "family", "food", "person_name", "place_name"],
+  "entries": [
+    {"term": "こんにちは", "tag": "greeting"},
+    {"term": "ありがとう", "tag": "greeting"},
+    {"term": "すみません", "tag": "greeting"},
+    {"term": "おはよう", "tag": "greeting"},
+    {"term": "さようなら", "tag": "greeting"},
+    {"term": "家族", "tag": "family"},
+    {"term": "母", "tag": "family"},
+    {"term": "父", "tag": "family"},
+    {"term": "兄", "tag": "family"},
+    {"term": "姉", "tag": "family"},
+    {"term": "ご飯", "tag": "food"},
+    {"term": "水", "tag": "food"},
+    {"term": "肉", "tag": "food"},
+    {"term": "魚", "tag": "food"},
+    {"term": "野菜", "tag": "food"},
+    {"term": "太郎", "tag": "person_name"},
+    {"term": "花子", "tag": "person_name"},
+    {"term": "田中", "tag": "person_name"},
+    {"term": "東京", "tag": "place_name"},
+    {"term": "大阪", "tag": "place_name"},
+    {"term": "日本", "tag": "place_name"}
+  ]
+}

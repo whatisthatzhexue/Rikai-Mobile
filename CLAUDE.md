@@ -128,8 +128,8 @@ Agent 改动前。**今后的误区只在该文件新增。**
 
 `docs/agent_docs/agent-refactor-idea-plan.md`：
 内容：Agent 重构实施计划（Agent-Refactor-Idea）：档案编译器、单次分析、
-F7 复合词补查、Phase 1a–4；Phase 1a–3 已实现，Phase 4 未实现，决策见
-ADR 0005。
+F7 复合词补查、Phase 1a–4；Phase 1a–3 与 Phase 4 安全子集已实现，词表 UI/
+导入/非日语 tokenizer 未实现，决策见 ADR 0005。
 何时查看：实施或评审 Agent 重构时；不要当作当前能力。
 
 `docs/agent_docs/phase6-pipeline-review.md`：
@@ -156,8 +156,8 @@ annotation-rules）；模型响应用方括号标签协议，不是 JSON 响应 
 
 `docs/adr/`：
 内容：五个架构决策（ONNX OCR、UniDic 原地读取、MDict `dict_reader`、Agent
-能力边界、Agent 档案编译器/单次分析；0005 为 Phase 0 提案，Phase 1a–3 已实现，
-Phase 4 未实现）。
+能力边界、Agent 档案编译器/单次分析；0005 为 Phase 0 提案，Phase 1a–3 与
+Phase 4 安全子集已实现）。
 何时查看：质疑/修改核心架构前；需要决策理由时。
 
 `docs/dev-setup.md`：

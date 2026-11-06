@@ -1,8 +1,7 @@
 # Agent 重构实施计划（Agent-Refactor-Idea）
 
-- 状态：Phase 1a（F7 复合词补查）、Phase 1b（档案编译器 v2）、Phase 2
-  （请求管线收敛）与 Phase 3（条件 fan-out，默认关闭）已实现（2026-11-06）；
-  Phase 4 未实现。
+- 状态：Phase 1a–3 已实现（2026-11-06）；Phase 4 的安全子集（静态词表包 +
+  非日语源降级）已实现，用户导入/词表 UI/非日语 tokenizer 仍未实现。
 - 文档角色：
   - 原始提案：`Agent-Refactor-Idea.txt`（项目根目录；产品逻辑锚点，不是当前规则）。
   - 决策：[ADR 0005](../adr/0005-agent-profile-compiler.md)（why/what；被拒方案）。
@@ -206,13 +205,20 @@ citation/quote/词典顺序不回归；telemetry 不含正文/路径/Key。
   调用；仍然总调用数受控、无无界并发。
 - **默认关闭**；真实 provider/arm64 验收通过前不得默认开启。
 
-## 7. Phase 4：词表与多语言（延后，独立立项）
+## 7. Phase 4：词表与多语言（已实现安全子集，2026-11-06）
 
-- 若产品需要词表：做成静态资产/用户导入的覆盖包，本地校验 21 项、标签
-  映射、去重；不默认调用模型生成。
-- 词表只用于覆盖指标，不参与格式推断，不进入档案指纹。
-- 非日语源文本先实现 `TokenizerPort`，再谈 `WORD`/`GRAMMAR`；没有
-  tokenizer 时明确降级，不伪装支持。
+- 静态词表包：`assets/agent/word_lists/{ja,zh,en}.json`，每包 21 项
+  （5/5/5/3/3 的 greeting/family/food/person_name/place_name 内部 tag）。
+  `WordListPack` 本地校验数量/标签/重复/语言代码；不默认调用模型生成。
+- 覆盖评估：`evaluateWordListCoverage` 只用本地 exact→prefix→suffix 查词计算
+  命中率和分标签命中；不进入 profile 格式推断，也不进入档案指纹。
+- 非日语源：`script_language.dart` 检测脚本。假名→日语 tokenizer；拉丁/韩文/
+  西里尔/泰文/阿拉伯文/希腊文等明确非日语脚本跳过 UniDic，设置
+  `structureUnavailable`，只保留有界 raw-surface 查词；分析 prompt 不再允许
+  `WORD`/`GRAMMAR`/`structure` 声明。Han-only 暂按日语处理（中文/韩文汉字
+  歧义；需要显式 source language 或新 tokenizer 才能完整支持）。
+- **未实现**：词表管理 UI、用户导入、模型生成词表、非日语 `TokenizerPort`。
+  不得把这些写成已支持。
 
 ## 8. 不做什么
 
@@ -246,5 +252,7 @@ citation/quote/词典顺序不回归；telemetry 不含正文/路径/Key。
   重算已实现；
 - Phase 3 的默认关闭 fan-out、证据分区、并发调度、合并/失败隔离和默认关闭
   验收已实现；真实 provider/arm64 验收前不默认开启；
+- Phase 4 安全子集：静态 21 项词表包/校验/本地覆盖评估、非日语脚本降级已实现；
+  词表 UI/导入/生成、非日语 tokenizer 仍未实现；
 - 未修改现有规则正文；`project-data.md` 的预算/测试基线更新需用户同意；
-- Phase 4 仍为未实现，不能写成已支持。
+- 任何 Phase 4 未实现能力不能写成已支持。

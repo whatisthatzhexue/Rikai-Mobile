@@ -107,9 +107,10 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
 - 原始提案：[Agent-Refactor-Idea.txt](../../Agent-Refactor-Idea.txt)（项目根目录；
   产品逻辑锚点，不是当前规则）。
 - 决策：[ADR 0005](../adr/0005-agent-profile-compiler.md)（proposed；档案编译器/
-  单次分析；Phase 1a–3 已实现，Phase 4 未实现）。
+  单次分析；Phase 1a–3 与 Phase 4 安全子集已实现）。
 - 实施计划：[agent-refactor-idea-plan.md](agent-refactor-idea-plan.md)
-  （Phase 1a–3 已实现；Phase 4 与真机验收待做）。
+  （Phase 1a–3 已实现；Phase 4 静态词表/脚本降级已实现，UI/导入/非日语
+  tokenizer 与真机验收待做）。
 
 ## 回归与维护性评审
 

@@ -2,8 +2,10 @@
 
 - Status: proposed; Phase 0 decision record. Phase 1a (F7 compound expansion),
   Phase 1b (profile compiler v2), Phase 2 (request pipeline) and Phase 3
-  (conditional dictionary fan-out, default off) implemented 2026-11-06;
-  Phase 4 not implemented.
+  (conditional dictionary fan-out, default off) implemented 2026-11-06.
+  Phase 4 safe subset (static coverage packs and non-Japanese script
+  degradation) implemented; word-list UI/import/generation and non-Japanese
+  tokenizers are not implemented.
 - Date: 2026-11-04
 - Update 2026-11-06: Phase 1a implemented. The F7 compound guard is
   token-based (default 6 overlapping tokens), not a 12-character cap;

@@ -9,6 +9,7 @@ import '../../core/models/lookup_models.dart';
 import '../../core/models/lookup_request.dart';
 import '../../core/models/token.dart';
 import '../../core/utils/html_text.dart';
+import '../../core/utils/script_language.dart';
 import '../../core/utils/text_normalizer.dart';
 import '../mecab/unidic_accent_parser.dart';
 import 'citation_registry.dart';
@@ -71,11 +72,17 @@ class EvidenceBuilder {
       final text = _sourceText(source);
       final origin = source.isImage ? 'image_ocr' : 'user_text';
       sourceChars += text.length;
+      final useJapaneseTokenizer = shouldUseJapaneseTokenizer(text);
       List<Token> tokens;
       try {
-        tokens = text.isEmpty
+        tokens = text.isEmpty || !useJapaneseTokenizer
             ? const <Token>[]
             : await tokenizePort.analyze(text);
+        if (!useJapaneseTokenizer && text.trim().isNotEmpty) {
+          // Clearly non-Japanese source: keep bounded raw-surface lookup, but
+          // never claim UniDic token/grammar structure for it.
+          structureUnavailable = true;
+        }
       } on AgentCapabilityException catch (error) {
         if (error.code == AgentToolErrorCode.toolCancelled) rethrow;
         // UniDic is optional: keep looking words up / translating, but never

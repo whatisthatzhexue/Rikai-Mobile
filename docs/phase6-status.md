@@ -11,10 +11,10 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > completed on 2026-11-03; P6.6 device acceptance remains pending. P6.7
 > history/persistence and UniDic pitch are implemented (2026-11-03); annotation
 > DSL, provider test connection and release polish are still pending. P6.7
-> device/visual acceptance remains pending. Phase 1a (F7 compound expansion),
-> Phase 1b (profile compiler v2), Phase 2 (request pipeline) and Phase 3
-> (conditional dictionary fan-out, default off) of the Agent refactor are
-> implemented (2026-11-06); Phase 4 is not.**
+> device/visual acceptance remains pending. Phase 1a–3 of the Agent refactor
+> and the Phase 4 safe subset (static coverage packs + non-Japanese script
+> degradation) are implemented (2026-11-06); word-list UI/import/generation
+> and non-Japanese tokenizers are not.**
 
 > Follow `docs/agent_docs/device-feedback-2026-10-31.md` for the remaining
 > Wave 4 device checks. **Current test/device/build/environment numbers are
@@ -115,6 +115,19 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
   主分析。fan-out 路径不做 per-dictionary 修复/语言修复/provisional 流式。
 - 测试：证据分区、analysis 合并、2 词典成功合并、单词典失败保留其余结果；
   默认关闭。真实 provider/arm64 未验收。
+
+## 2026-11-06 Phase 4 安全子集（静态词表 + 非日语降级）
+
+- 新增静态词表包 `assets/agent/word_lists/{ja,zh,en}.json`，每包 21 项，内部
+  tag 为 greeting/family/food/person_name/place_name（5/5/5/3/3）；
+  `WordListPack` 本地校验数量/标签/重复/语言代码；不调用模型生成。
+- 新增 `evaluateWordListCoverage`：只做本地 exact→prefix→suffix 查词，计算
+  总命中率与分标签命中；词表不参与 profile 格式推断，也不进入档案指纹。
+- 新增 `script_language.dart`：假名→日语 tokenizer；拉丁/韩文/西里尔/泰文/
+  阿拉伯文/希腊文等明确非日语脚本跳过 UniDic，设置 `structureUnavailable`，
+  只保留有界 raw-surface 查词；Han-only 暂按日语处理（歧义）。
+- **未实现**：词表管理 UI、用户导入、模型生成词表、非日语 `TokenizerPort`；
+  不能写成已支持。真实 provider/设备未验收。
 
 ## Implemented
 
