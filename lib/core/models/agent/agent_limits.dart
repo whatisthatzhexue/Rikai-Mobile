@@ -19,6 +19,10 @@ class AgentLimits {
     this.maxCoverageFallback = 1,
     this.maxCoverageQueryChars = 100,
     this.maxCoverageCompoundTokens = 6,
+    this.shortTextTargetThreshold = 15,
+    this.coverageContentHitRateThreshold = 0.8,
+    this.enableDepthPass = false,
+    this.runDeadlineSeconds = 30,
     this.enableDictionaryFanOut = false,
     this.dictionaryFanOutThreshold = 8,
     this.dictionaryFanOutEvidenceChars = 16000,
@@ -58,6 +62,29 @@ class AgentLimits {
   /// language-specific character cap. When tokenization is unavailable, only
   /// known terms are accepted.
   final int maxCoverageCompoundTokens;
+
+  /// Below this selected-target count the breadth pass uses
+  /// `contentTargets × dictionaryCount` as the citation cap instead of the
+  /// global [maxEvidenceEntries]. This prevents a one-sentence input with two
+  /// dictionaries from prefetching the full 60-entry budget.
+  final int shortTextTargetThreshold;
+
+  /// Coverage is skipped when the content-word citation hit rate is at least
+  /// this value (0..1). Non-content tokens, punctuation and particles are not
+  /// counted. The default skips coverage when at least 80% of content words
+  /// already have a citation.
+  final double coverageContentHitRateThreshold;
+
+  /// Enables the second/third-entry depth pass after breadth. The default
+  /// pipeline keeps this off: breadth grants one entry per target per
+  /// dictionary, and depth is only appropriate for an explicit multi-sense
+  /// follow-up. Tests or future coverage-driven lookups can opt in.
+  final bool enableDepthPass;
+
+  /// Wall-clock deadline for one Agent run. Zero/negative disables the
+  /// deadline. On expiry the controller cancels the provider request and
+  /// shows a retryable timeout with any provisional/retained result.
+  final int runDeadlineSeconds;
 
   /// Phase 3 conditional dictionary fan-out. Disabled by default until real
   /// provider/device acceptance; when enabled, a large dictionary set or large

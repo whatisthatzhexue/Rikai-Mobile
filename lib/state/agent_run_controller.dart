@@ -36,6 +36,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   Future<void> Function()? _cancelOcr;
   AgentBackgroundPort? _backgroundPort;
   AgentMode? _sessionMode;
+  Timer? _deadlineTimer;
 
   /// Strict/loose selected for the current app session. It survives page
   /// rebuilds, is snapshotted into each run, and resets with a new session.
@@ -56,11 +57,14 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   @override
   AgentRunSnapshot build() {
     ref.onDispose(() {
+      _deadlineTimer?.cancel();
       final port = _backgroundPort;
       if (port != null) unawaited(port.stop());
     });
     ref.listen(agentProfileInboxProvider, (previous, next) {
-      if (state.isRunning && state.pendingProfileCount != next.pendingCount) {
+      // Pending profiles may be resolved after this run is done. Keep the
+      // visible count in sync instead of only updating while running.
+      if (state.pendingProfileCount != next.pendingCount) {
         state = state.copyWith(pendingProfileCount: next.pendingCount);
       }
     });
@@ -179,6 +183,13 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       startedAt: startedAt,
       updatedAt: startedAt,
     );
+    _deadlineTimer?.cancel();
+    if (limits.runDeadlineSeconds > 0) {
+      _deadlineTimer = Timer(
+        Duration(seconds: limits.runDeadlineSeconds),
+        () => _onDeadline(token, limits.runDeadlineSeconds),
+      );
+    }
 
     // Keep the process (and therefore the HTTP stream) alive if the user
     // switches apps or turns the screen off. This is best-effort: a platform
@@ -196,6 +207,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         isCancelled: () => !_isActive(token),
       );
       if (services == null) {
+        _deadlineTimer?.cancel();
+        _deadlineTimer = null;
         unawaited(_background.stop());
         return;
       }
@@ -227,6 +240,11 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         limits: limits,
       );
 
+      final pendingProfileIds = ref
+          .read(agentProfileInboxProvider)
+          .pending
+          .map((proposal) => proposal.dictionaryId)
+          .toSet();
       final result = await orchestrator.run(
         AgentRunRequest(
           sessionId: sessionId,
@@ -236,6 +254,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
           provider: provider,
           userText: text,
           images: inputs.images,
+          pendingProfileDictionaryIds: pendingProfileIds,
           unidicPath: unidicPath,
           responseLanguage: responseLanguage,
         ),
@@ -323,6 +342,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
           'elapsed=${runWatch.elapsedMilliseconds}ms',
         );
       }
+      _deadlineTimer?.cancel();
+      _deadlineTimer = null;
       final pendingRichText = _pendingRichText;
       _pendingRichText = null;
       final finalResult = pendingRichText == null
@@ -340,7 +361,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         progressStep: 4,
         evidenceCount: result.evidence.citations.length,
         citationCount: result.validation.citationsUsed.length,
-        pendingProfileCount: 0,
+        pendingProfileCount: ref.read(agentProfileInboxProvider).pendingCount,
         receivedChars: 0,
         errorMessage: null,
         errorDetail: '',
@@ -425,6 +446,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   void cancel() {
     final token = _cancellation;
     if (token == null || token.isCancelled || !state.isRunning) return;
+    _deadlineTimer?.cancel();
+    _deadlineTimer = null;
     token.cancel();
     final runId = state.runId;
     if (runId != null) {
@@ -441,7 +464,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       provisionalResult: null,
       retainedResult: null,
       resultReplaced: state.provisionalResult != null,
-      pendingProfileCount: 0,
+      pendingProfileCount: ref.read(agentProfileInboxProvider).pendingCount,
       richTextFormatting: false,
       finishedAt: DateTime.now(),
       updatedAt: DateTime.now(),
@@ -450,6 +473,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
 
   void newSession() {
     if (state.isRunning) return;
+    _deadlineTimer?.cancel();
+    _deadlineTimer = null;
     _cancellation?.cancel();
     unawaited(_background.stop());
     _cancellation = null;
@@ -478,6 +503,39 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     state = update(state).copyWith(updatedAt: DateTime.now());
   }
 
+  /// Global run deadline. Cancels the in-flight provider request immediately
+  /// and keeps any provisional/retained result visible with a retryable
+  /// TOOL_TIMEOUT error instead of letting the user wait indefinitely.
+  void _onDeadline(AgentCancellation token, int seconds) {
+    if (!_isActive(token)) return;
+    _deadlineTimer = null;
+    token.cancel();
+    final cancelOcr = _cancelOcr;
+    if (cancelOcr != null) unawaited(cancelOcr());
+    unawaited(_background.stop());
+    _pendingRichText = null;
+    final hadProvisional = state.provisionalResult != null;
+    final fallback = state.provisionalResult ?? state.retainedResult;
+    final message = agentRunTimeoutMessage(_uiLanguage, seconds);
+    state = state.copyWith(
+      status: AgentRunStatus.error,
+      stageMessage: message,
+      errorMessage: message,
+      errorCode: AgentToolErrorCode.toolTimeout,
+      retryable: true,
+      errorDetail: '',
+      result: fallback,
+      provisionalResult: null,
+      retainedResult: null,
+      resultRetainedAfterFailure: fallback != null,
+      resultReplaced: hadProvisional,
+      pendingProfileCount: ref.read(agentProfileInboxProvider).pendingCount,
+      richTextFormatting: false,
+      finishedAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+  }
+
   void _fail(
     AgentCancellation token,
     String message,
@@ -485,6 +543,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     AgentToolErrorCode? code,
   ]) {
     if (!_isActive(token)) return;
+    _deadlineTimer?.cancel();
+    _deadlineTimer = null;
     _pendingRichText = null;
     unawaited(_background.stop());
     // Prefer the current run's provisional answer over an older retained one;
@@ -503,7 +563,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       retainedResult: null,
       resultRetainedAfterFailure: fallback != null,
       resultReplaced: hadProvisional,
-      pendingProfileCount: 0,
+      pendingProfileCount: ref.read(agentProfileInboxProvider).pendingCount,
       richTextFormatting: false,
       finishedAt: DateTime.now(),
       updatedAt: DateTime.now(),

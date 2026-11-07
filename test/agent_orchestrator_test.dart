@@ -157,6 +157,40 @@ class _FakeTokenize implements TokenizePort {
   }
 }
 
+/// Every selected dictionary returns one entry, mirroring the short-text
+/// breadth behavior used by the real pipeline.
+class _AllDictionariesLookup implements LookupPort {
+  @override
+  Future<LookupResult> lookup(LookupRequest request) async {
+    final key = request.rawCandidates.firstWhere(
+      (value) => value != '*' && value.trim().isNotEmpty,
+      orElse: () => request.query,
+    );
+    return LookupResult(
+      query: request.query,
+      candidates: request.rawCandidates,
+      groups: <DictionaryLookupGroup>[
+        for (final dictionary in request.dictionaries)
+          DictionaryLookupGroup(
+            dictionary: dictionary,
+            entries: <LookupEntry>[
+              LookupEntry(matchedKey: key, headword: key, html: '<b>$key</b>'),
+            ],
+          ),
+      ],
+    );
+  }
+
+  @override
+  Future<List<String>> suggest({
+    required String prefix,
+    required List<DictionaryInfo> dictionaries,
+    int limit = 10,
+  }) async {
+    return const <String>[];
+  }
+}
+
 /// Only [dictionary] returns entries; another selected dictionary is queried
 /// but produces no citations (not an error).
 class _OneDictionaryLookup implements LookupPort {
@@ -319,6 +353,35 @@ void main() {
       isTrue,
     );
   });
+
+  test(
+    'short two-dictionary run keeps citations and prefill bounded',
+    () async {
+      final provider = FakeProvider(responseText: _analysisTagged);
+      final result =
+          await _orchestrator(
+            provider: provider,
+            lookup: _AllDictionariesLookup(),
+          ).run(
+            const AgentRunRequest(
+              sessionId: 's1',
+              mode: AgentMode.strict,
+              dictionaries: <DictionaryInfo>[_dictionary, _dictionaryB],
+              provider: _provider,
+              userText: '何卒',
+            ),
+          );
+
+      expect(result.evidence.citations.length, lessThanOrEqualTo(15));
+      expect(result.evidence.citations, hasLength(2));
+      expect(result.telemetry.httpAttempts, greaterThanOrEqualTo(1));
+      expect(result.telemetry.analysisPrefillChars, greaterThan(0));
+      expect(result.telemetry.analysisPrefillChars, lessThan(12000));
+      expect(result.telemetry.analysisTtftMs, greaterThanOrEqualTo(0));
+      expect(result.telemetry.targetCount, 1);
+      expect(result.telemetry.targetsWithCitations, 1);
+    },
+  );
 
   test('OCR image paths are never placed in the provider request', () async {
     final provider = FakeProvider(responseText: _analysisTagged);

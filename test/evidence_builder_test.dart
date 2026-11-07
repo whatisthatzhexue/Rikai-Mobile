@@ -107,11 +107,15 @@ class _AllHitsLookup implements LookupPort {
   _AllHitsLookup(this.entriesPerDictionary);
 
   final int entriesPerDictionary;
+  final List<LookupMatchMode> modes = <LookupMatchMode>[];
+  final List<String> queries = <String>[];
 
   @override
   Future<LookupResult> lookup(LookupRequest request) async {
+    modes.add(request.matchMode);
+    queries.add(request.query);
     final base = request.rawCandidates.firstWhere(
-      (value) => value.startsWith('語'),
+      (value) => value != '*' && value.trim().isNotEmpty,
       orElse: () => request.query,
     );
     return LookupResult(
@@ -187,6 +191,21 @@ Token _token(String surface, int start) {
   features[7] = surface;
   features[8] = surface;
   features[20] = 'ナニトゾ';
+  return Token.fromFeatures(
+    surface: surface,
+    features: features,
+    start: start,
+    end: start + surface.length,
+  );
+}
+
+Token _tokenWithPos(String surface, String pos, int start) {
+  final features = List<String>.filled(Token.expectedFeatureCount, '*');
+  features[0] = pos;
+  features[7] = surface;
+  features[8] = surface;
+  features[10] = surface;
+  features[20] = surface;
   return Token.fromFeatures(
     surface: surface,
     features: features,
@@ -378,37 +397,39 @@ void main() {
     expect(bundle.truncated, isTrue);
   });
 
-  test(
-    'continues past empty modes and still collects later-mode depth',
-    () async {
-      final lookup = _ModeLookup(<LookupMatchMode, List<String>>{
-        LookupMatchMode.exact: <String>[],
-        LookupMatchMode.prefix: <String>[],
-        LookupMatchMode.suffix: <String>['suffix'],
-        LookupMatchMode.incremental: <String>['incremental'],
-      });
-      final builder = EvidenceBuilder(
-        tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
-        lookupPort: lookup,
-        grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
-        citations: CitationRegistry(),
-        limits: const AgentLimits(maxEntriesPerDictionary: 10),
-      );
+  test('stops later modes once a target has a citation', () async {
+    final lookup = _ModeLookup(<LookupMatchMode, List<String>>{
+      LookupMatchMode.exact: <String>[],
+      LookupMatchMode.prefix: <String>[],
+      LookupMatchMode.suffix: <String>['suffix'],
+      LookupMatchMode.incremental: <String>['incremental'],
+    });
+    final builder = EvidenceBuilder(
+      tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
+      lookupPort: lookup,
+      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+      citations: CitationRegistry(),
+      limits: const AgentLimits(
+        maxEntriesPerDictionary: 10,
+        enableDepthPass: true,
+      ),
+    );
 
-      final bundle = await builder.build(
-        sources: <AgentSourceInput>[_source('何卒')],
-        dictionaries: const <DictionaryInfo>[_dictionaryA],
-      );
+    final bundle = await builder.build(
+      sources: <AgentSourceInput>[_source('何卒')],
+      dictionaries: const <DictionaryInfo>[_dictionaryA],
+    );
 
-      expect(lookup.modes, <LookupMatchMode>[
-        LookupMatchMode.exact,
-        LookupMatchMode.prefix,
-        LookupMatchMode.suffix,
-        LookupMatchMode.incremental,
-      ]);
-      expect(bundle.citations, hasLength(2));
-    },
-  );
+    // suffix found the first hit; incremental must not run for this target.
+    expect(lookup.modes, <LookupMatchMode>[
+      LookupMatchMode.exact,
+      LookupMatchMode.prefix,
+      LookupMatchMode.suffix,
+    ]);
+    // One breadth entry per dictionary; depth is not reached because the
+    // dynamic short-text limit is already satisfied.
+    expect(bundle.citations, hasLength(1));
+  });
 
   test('coverage extra lookup continues past an empty mode', () async {
     final lookup = _ModeLookup(<LookupMatchMode, List<String>>{
@@ -438,32 +459,28 @@ void main() {
     expect(result['何卒'], hasLength(1));
   });
 
-  test('honours the per-target per-dictionary cap across modes', () async {
-    final lookup = _ModeLookup(<LookupMatchMode, List<String>>{
-      LookupMatchMode.exact: <String>['a', 'b', 'c'],
-      LookupMatchMode.prefix: <String>['d'],
-    });
-    final builder = EvidenceBuilder(
-      tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
-      lookupPort: lookup,
-      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
-      citations: CitationRegistry(),
-      limits: const AgentLimits(maxEntriesPerDictionary: 3),
-    );
+  test(
+    'breadth grants one entry per dictionary and skips later modes',
+    () async {
+      final lookup = _AllHitsLookup(3);
+      final builder = EvidenceBuilder(
+        tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
+        lookupPort: lookup,
+        grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+        citations: CitationRegistry(),
+        limits: const AgentLimits(maxEntriesPerDictionary: 3),
+      );
 
-    final bundle = await builder.build(
-      sources: <AgentSourceInput>[_source('何卒')],
-      dictionaries: const <DictionaryInfo>[_dictionaryA],
-    );
+      final bundle = await builder.build(
+        sources: <AgentSourceInput>[_source('何卒')],
+        dictionaries: const <DictionaryInfo>[_dictionaryA, _dictionaryB],
+      );
 
-    expect(lookup.modes, <LookupMatchMode>[
-      LookupMatchMode.exact,
-      LookupMatchMode.prefix,
-      LookupMatchMode.suffix,
-      LookupMatchMode.incremental,
-    ]);
-    expect(bundle.citations, hasLength(3));
-  });
+      expect(lookup.modes, <LookupMatchMode>[LookupMatchMode.exact]);
+      expect(bundle.citations, hasLength(2));
+      expect(bundle.budget.maxCitations, 2);
+    },
+  );
 
   test('cancellation stops between lookup modes', () async {
     var cancelled = false;
@@ -481,7 +498,12 @@ void main() {
       lookupPort: lookup,
       grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
       citations: CitationRegistry(),
-      limits: const AgentLimits(maxEntriesPerDictionary: 10),
+      limits: const AgentLimits(
+        maxEntriesPerDictionary: 10,
+        // Keep the global cap so the run reaches the next mode and checks
+        // cancellation instead of stopping at the short-text cap.
+        shortTextTargetThreshold: 0,
+      ),
     );
 
     await expectLater(
@@ -502,6 +524,61 @@ void main() {
   });
 
   test(
+    'sample-like short text stays under 15 citations and runs exact only',
+    () async {
+      const source = 'それは人のくべたのろいだとしても。';
+      final tokens = <Token>[
+        _tokenWithPos('それ', '代名詞', 0),
+        _tokenWithPos('は', '助詞', 2),
+        _tokenWithPos('人', '名詞', 3),
+        _tokenWithPos('の', '助詞', 4),
+        _tokenWithPos('くべ', '動詞', 5),
+        _tokenWithPos('た', '助動詞', 7),
+        _tokenWithPos('のろい', '名詞', 8),
+        _tokenWithPos('だ', '助動詞', 11),
+        _tokenWithPos('として', '助詞', 12),
+        _tokenWithPos('も', '助詞', 15),
+        _tokenWithPos('。', '補助記号', 16),
+      ];
+      final lookup = _AllHitsLookup(3);
+      final builder = EvidenceBuilder(
+        tokenizePort: _FakeTokenize(tokens),
+        lookupPort: lookup,
+        grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+        citations: CitationRegistry(),
+      );
+
+      final bundle = await builder.build(
+        sources: <AgentSourceInput>[_source(source)],
+        dictionaries: const <DictionaryInfo>[_dictionaryA, _dictionaryB],
+      );
+
+      // 3 content targets × 2 dictionaries × one breadth entry = 6.
+      expect(bundle.citations.length, lessThanOrEqualTo(15));
+      expect(bundle.citations, hasLength(6));
+      expect(bundle.budget.maxCitations, 6);
+      expect(bundle.truncated, isFalse);
+      // Exact found the content words, so no prefix/suffix/incremental scans.
+      expect(
+        lookup.modes.every((mode) => mode == LookupMatchMode.exact),
+        isTrue,
+      );
+      // Punctuation is context only and never enters the lookup list.
+      expect(lookup.queries, isNot(contains('。')));
+      final punctuation = bundle.sources.single.tokens.firstWhere(
+        (token) => token.surface == '。',
+      );
+      expect(punctuation.citationIds, isEmpty);
+      for (final surface in const <String>['人', 'くべ', 'のろい']) {
+        final token = bundle.sources.single.tokens.firstWhere(
+          (token) => token.surface == surface,
+        );
+        expect(token.citationIds, hasLength(2));
+      }
+    },
+  );
+
+  test(
     'rotates the first dictionary per target so the citation budget is shared',
     () async {
       final dictionaries = <DictionaryInfo>[
@@ -514,7 +591,7 @@ void main() {
           ),
       ];
       final tokens = <Token>[
-        for (var index = 0; index < 20; index++) _token('語$index', index * 3),
+        for (var index = 0; index < 10; index++) _token('語$index', index * 3),
       ];
       final citations = CitationRegistry();
       final builder = EvidenceBuilder(
@@ -526,7 +603,7 @@ void main() {
 
       final bundle = await builder.build(
         sources: <AgentSourceInput>[
-          _source(List<String>.generate(20, (index) => '語$index').join()),
+          _source(List<String>.generate(10, (index) => '語$index').join()),
         ],
         dictionaries: dictionaries,
       );
@@ -539,11 +616,11 @@ void main() {
           ifAbsent: () => 1,
         );
       }
-      expect(bundle.citations, hasLength(60));
+      expect(bundle.citations, hasLength(50));
       for (final dictionary in dictionaries) {
         expect(
           counts[dictionary.id],
-          12,
+          10,
           reason: '${dictionary.id} should receive a fair share of citations',
         );
       }
@@ -553,9 +630,30 @@ void main() {
         ),
         isTrue,
       );
-      expect(bundle.truncated, isTrue);
+      expect(bundle.truncated, isFalse);
     },
   );
+
+  test('depth pass is opt-in and can add extra senses', () async {
+    final builder = EvidenceBuilder(
+      tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
+      lookupPort: _AllHitsLookup(3),
+      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+      citations: CitationRegistry(),
+      limits: const AgentLimits(
+        maxEntriesPerDictionary: 3,
+        shortTextTargetThreshold: 0,
+        enableDepthPass: true,
+      ),
+    );
+
+    final bundle = await builder.build(
+      sources: <AgentSourceInput>[_source('何卒')],
+      dictionaries: const <DictionaryInfo>[_dictionaryA],
+    );
+
+    expect(bundle.citations, hasLength(3));
+  });
 
   test('coverage supplements rotate the starting dictionary too', () async {
     final dictionaries = <DictionaryInfo>[

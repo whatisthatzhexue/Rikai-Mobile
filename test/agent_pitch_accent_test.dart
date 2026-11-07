@@ -203,7 +203,7 @@ void main() {
       segments.any(
         (segment) =>
             segment.start.dx == segment.end.dx &&
-            segment.start.dx > 88 &&
+            segment.start.dx == 90 &&
             segment.start.dy != segment.end.dy,
       ),
       isTrue,

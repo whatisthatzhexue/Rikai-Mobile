@@ -111,8 +111,8 @@ AgentRunSnapshot {
   lookup）必须携带 runId，controller 丢弃非当前 run 的事件。
 - 生成中的可见进度是 `startedAt` 推导的**已思考时长**，由页面每秒刷新；页面
   重建/返回时从 snapshot 的 `startedAt` 继续计时，不得从 0 重新开始。离开
-  Agent 页、应用切后台的时间也计入 wall-clock；`awaitingProfile` 等待用户处理
-  的时间同样计入（UI 同时显示等待状态，不重置时钟）。
+  Agent 页、应用切后台的时间也计入 wall-clock。2026-11-06 P0 起首跑不再等待
+  档案确认；后台档案生成发生在结果之后，不计入当前 run 的答案等待时间。
 - `internalChars`（若实现）只在 controller 内部记录，用于诊断/失败详情；UI
   **不得显示字数**，也不得显示原始流式 JSON。
 - `partialResult` 只在安全时写入；校验失败/中断时保留可展示的部分，不整块清除。
@@ -128,7 +128,7 @@ AgentRunSnapshot {
 |---|---|---|
 | 用户从 Agent 页返回主页/其他页 | run 继续；controller 保留 snapshot；返回时显示最新进展 | 在 `dispose` 里 cancel；清空 result/stage |
 | 用户打开设置/历史/模型页 | run 继续；返回后仍能看到阶段/已思考时长 | 重新开始 run；显示空会话 |
-| 用户打开熟悉期 sheet 后离开 | 档案留在应用级待确认队列；生成继续；run 停在 `awaitingProfile`，返回后继续逐个处理 | 自动记为“本次跳过”；丢失未保存档案；未处理完就进入查词 |
+| 用户打开档案管理页后离开 | 档案留在应用级待确认队列；后台生成继续；当前 run 已完成，不等待确认 | 自动记为“本次跳过”；丢失未保存档案；阻塞首跑 |
 | 应用切后台/熄屏 | 运行期间启动 dataSync 前台服务 + partial wake lock，继续请求；回前台刷新 snapshot | 主动取消；承诺进程被杀后仍完成 |
 | 应用回前台 | 显示当前 run 的最新状态；若已被系统中断则显示 interrupted | 自动从头重跑；重复请求 |
 | 进程被杀/重启 | 从持久化快照显示“已中断/重试”；不自动续跑 | 声称 run 还在继续；静默丢弃 |
@@ -256,13 +256,15 @@ AgentRunSnapshot {
 输入/焦点/滚动控制器，不再取消 run。因此“离开页面继续生成、返回恢复最新进展”的
 主体结构已经具备，**不要再按旧版页面 State 实现回退**。
 
-档案确认（F2，Wave 2 已实现）：
+档案确认（F2，Wave 2 已实现；2026-11-06 P0 改为非阻塞）：
 
-- `DictionaryFamiliarizationService.generateMany()` 只生成 proposal，不写档案、
-  不调用 UI；`AgentProfileInboxController` 持有应用级 pending 队列。
-- run 通过 `AgentRunStatus.awaitingProfile` / `AgentStage.awaitingProfile` 等待
-  所有 proposal 的显式决定；页面不在前台时不会自动 `skipOnce`。
-- 返回页面后按队列顺序显示熟悉期 sheet；关闭 sheet 保持 pending；取消 run 时
+- `DictionaryFamiliarizationService.loadCached()` 只读本地已确认/已拒绝档案；
+  缺失档案使用 `noProfileInstruction` 完成当前 run，不阻塞 tokenizing。
+- 分析结束后 `generateMany()` 在后台只生成 proposal、不写档案；`AgentProfileInboxController`
+  持有应用级 pending 队列。Agent 页 `AgentProfileInboxHost(autoPresent:false)`
+  不自动弹 sheet，档案管理页显示并处理 pending。
+- 确认/“不再询问”后才写档案，下次 run 生效；未确认的同一档案不会重复生成。
+  页面不在前台时不会自动 `skipOnce`；关闭 sheet 保持 pending；取消 run 时
   队列以 skip 释放，不写档案。
 - 决策由 inbox 统一持久化（`persistAgentProfileDecision`），因此 Agent run 与
   档案管理页的重新生成共用同一路径。

@@ -54,6 +54,10 @@ LookupRequest entryLinkLookupRequest({
   );
 }
 
+/// User-facing bubble when an entry:// target is absent from the dictionary
+/// currently being read. Tests assert this instead of the widget overlay.
+String entryLinkMissMessage(String word) => '当前词典中没有「$word」';
+
 /// Looks up [word] (for example an `entry://` link) and pushes an entry page.
 Future<void> lookupAndOpenEntry(
   BuildContext context,
@@ -104,7 +108,9 @@ Future<void> lookupAndOpenEntry(
   }
   final hitGroups = result?.hitGroups ?? const [];
   if (hitGroups.isEmpty) {
-    RikaiToast.show(navigator.context, '未找到「$word」');
+    // An entry:// link stays inside the dictionary being read. Make the
+    // per-dictionary miss explicit instead of leaving the user on a blank page.
+    RikaiToast.show(navigator.context, entryLinkMissMessage(word));
     return;
   }
 

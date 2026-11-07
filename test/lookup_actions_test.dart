@@ -18,4 +18,8 @@ void main() {
     expect(request.matchMode, LookupMatchMode.exact);
     expect(request.maxEntriesPerDictionary, 1);
   });
+
+  test('entry link misses show a current-dictionary bubble', () {
+    expect(entryLinkMissMessage('東京'), '当前词典中没有「東京」');
+  });
 }

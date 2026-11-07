@@ -235,7 +235,7 @@ class _HistoryDetailBody extends StatelessWidget {
         if (entry.errorCode.isNotEmpty && result == null) ...[
           const SizedBox(height: AppSpacing.sm),
           Text(
-            entry.errorCode,
+            strings.historyErrorMessageFor(entry.errorCode),
             style: theme.textTheme.bodySmall?.copyWith(
               fontSize: AgentTokens.helper,
               color: AppColors.error,

@@ -130,15 +130,24 @@ List<InlineSpan> buildAgentRichTextSpans(
           rawBase.isEmpty ? text.substring(match.start, close.end) : rawBase,
         );
       } else {
-        spans.add(
-          _rubySpan(
-            base,
-            reading,
-            effectiveStyle(),
-            textScaler: textScaler,
-            underline: underline,
-          ),
-        );
+        // Annotate only the unknown part. Okurigana is already readable from
+        // the base text, so `悩んでも` must not repeat `なやんでも` above the
+        // whole word; it becomes RUBY(悩, なや) + んでも.
+        for (final segment in minimalRubySegments(base, reading)) {
+          if (segment.reading == null) {
+            addText(segment.base);
+          } else {
+            spans.add(
+              _rubySpan(
+                segment.base,
+                segment.reading!,
+                effectiveStyle(),
+                textScaler: textScaler,
+                underline: underline,
+              ),
+            );
+          }
+        }
       }
       // The formatter may leave the original bracket reading after a RUBY pair
       // when it wraps only the base word. Hide that duplicate annotation.

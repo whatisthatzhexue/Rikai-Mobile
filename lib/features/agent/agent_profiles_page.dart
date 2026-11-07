@@ -469,9 +469,25 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
       editOnly: true,
     );
     if (!mounted || decision == null) return;
+    final updatedProfile = decision.profile ?? profile.profile;
     await ref
-        .read(agentStoreProvider)
-        .updateProfileMarkdown(profile.dictionaryId, decision.markdown);
+        .read(agentProfileRepositoryProvider)
+        .save(
+          StoredDictionaryProfile(
+            dictionaryId: profile.dictionaryId,
+            title: profile.title,
+            fingerprint: profile.fingerprint,
+            markdown: decision.markdown.trim().isEmpty
+                ? profile.markdown
+                : decision.markdown,
+            status: profile.status,
+            profile: updatedProfile,
+            confirmedAt: DateTime.now(),
+            modelId: profile.modelId,
+            promptVersion: profile.promptVersion,
+            schemaVersion: profile.schemaVersion,
+          ),
+        );
     _staleFutures.clear();
     ref.invalidate(agentProfilesProvider);
     if (mounted) RikaiToast.show(context, strings.profileUpdated);

@@ -38,6 +38,9 @@ String agentDictionaryNoEvidence(
   List<String> names,
 ) => AgentUiStrings.of(language).dictionaryNoEvidence(names);
 
+String agentRunTimeoutMessage(AgentUiLanguage language, int seconds) =>
+    AgentUiStrings.of(language).runTimeout(seconds);
+
 String agentInputRequiredMessage(AgentUiLanguage language) =>
     AgentUiStrings.of(language).inputRequired;
 

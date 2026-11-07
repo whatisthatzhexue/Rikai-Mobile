@@ -269,13 +269,17 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 | 宽松徽标 | `agentLooseBadge` | `surfaceMuted` 底 + `textPrimary`，12sp |
 | 阶段文字 | `agentStageText` | 14sp，`primary`；spinner 16dp |
 | 输入区 | `agentComposer` | 白底、`filled: false`、顶部 1px `divider`，16sp |
-| 档案 sheet | `agentProfileSheet` | 白底、18sp 标题、14sp 说明、16sp 编辑正文 |
+| 档案 sheet | `agentProfileSheet` | 白底、18sp 标题、14sp 说明、16sp 编辑正文；语言对区：16sp/600 标题、14sp 说明、chip 显示“源语言 → 目标语言”，源/目标 Dropdown 紧凑、添加按钮 40dp；删除 chip 即移除该方向；保存后同步更新 Markdown“语言”行和 `profile_json` |
+| 最小 Ruby | `agentMinimalRuby` | 只标注未知部分：common kana 前后缀不注音，内部 kana 作为 plain anchor；`悩んでも/なやんでも` → `悩（なや）んでも`；无法对齐时整词 Ruby；base 字符不变，行内换行/加粗/下划线规则不变 |
+| 历史滚动保持 | `agentHistoryScrollRetention` | 从历史详情返回时保留列表挂载和滚动位置；刷新使用 `initialData` 缓存，不用整屏 spinner 替换列表；列表使用固定 `PageStorageKey` 兜底 |
+| 导入词典名 | `mdictImportTitle` | 批量导入列表的词典名统一取 MDX 头的 `Title`（经 `displayDictionaryTitle`）；已存在词典复用注册表标题；探测前显示“正在读取词典信息…”，副标题显示 MDX 文件名，不显示文件夹名 |
+| 词典内跳转失败 | `mdictEntryLinkMiss` | `entry://` 仅查当前词典 exact；无命中时用底部气泡“当前词典中没有「word」”，不打开空白词条页 |
 | 模型补充 | `agentSupplement` | `surfaceMuted` 底、14sp、独立“模型补充”标签 |
 | 对话气泡圆角 | `agentBubbleRadius` | 16（`AppRadius.xl`）；指向发送者的一角 4（`agentBubbleTailRadius`） |
 | 消息最大宽度 | `agentMessageMaxWidth` | 80%（字号放大到 200% 时允许 90%，禁止满宽） |
 | 模型/模式标签 | `agentModelLabel` | 12sp，`textSecondary`，位于 AI 气泡顶部 |
-| 富文本读音/强调 | `rubyReadingSize`/`rubyReadingColor`/`richTextUnderlineColor`/`richTextUnderlineThickness`/`richTextUnderlineOffset` | RUBY 发音标注为主字号 55%、正文色 `textPrimary`；base 使用周围正文相同行高/metrics，以 alphabetic baseline 对齐，读音在上方，不把 base 下沉；RUBY 预留 base 与读音的较大宽度（读音更宽时 base 居中，后续文字从读音右侧开始），相邻词的读音不得重叠；BOLD `w600`，RUBY 在 BOLD 内时读音一起加粗；UNDERLINE 正文色 `textPrimary`、粗细 2、baseline 下方固定偏移 2 的自绘线（不用字体 decoration，保证 `；` 与汉字一致），RUBY 读音永不加下划线；长 UNDERLINE 文本按汉字单字/拉丁词切分为相邻行内 span，允许在行中间换行，短词保持单个 span；只用于显示标签，不改变正文 |
-| 声调高低线 | `agentPitchAccentLine` | 1.5dp、`textSecondary`；高段上轨/低段下轨，アクセント核处垂直下降；线宽按词宽均分为 mora 段，不按汉字字数逐字对齐；尾高（accent type = mora count）在词尾右缘补一段垂直下降，显示末尾音调下降点；有 RUBY/读音时纵向顺序为声调线→读音→词形；声调线是 Ruby 上方的覆盖层，不改布局尺寸，但通过自定义 RenderObject 上报词形 alphabetic baseline，保证与相邻注释文字对齐；音调词换行时保留覆盖层间距，不覆盖上一行文字；汉字词无独立读音/振假名时不画线；只在词注/词典事实行，200% 字号随文字缩放，空间不足时换行或省略，不覆盖文字 |
+| 富文本读音/强调 | `rubyReadingSize`/`rubyReadingColor`/`richTextUnderlineColor`/`richTextUnderlineThickness`/`richTextUnderlineOffset` | RUBY 发音标注为主字号 55%、正文色 `textPrimary`；base 使用周围正文相同行高/metrics，以 alphabetic baseline 对齐，读音在上方，不把 base 下沉；RUBY 预留 base 与读音的较大宽度（读音更宽时 base 居中，后续文字从读音右侧开始），相邻词的读音不得重叠；**最小 Ruby**：只标注未知部分，`悩んでも/なやんでも` → `悩（なや）んでも`，`申し込み/もうしこみ` → `申（もう）し込（こ）み`，okurigana/前缀 kana 不重复注音，无法对齐时保留整词；BOLD `w600`，RUBY 在 BOLD 内时读音一起加粗；UNDERLINE 正文色 `textPrimary`、粗细 2、baseline 下方固定偏移 2 的自绘线（不用字体 decoration，保证 `；` 与汉字一致），RUBY 读音永不加下划线；长 UNDERLINE 文本按汉字单字/拉丁词切分为相邻行内 span，允许在行中间换行，短词保持单个 span；只用于显示标签，不改变正文 |
+| 声调高低线 | `agentPitchAccentLine` | 1.5dp、`textSecondary`；高段上轨/低段下轨，アクセント核处垂直下降；线宽按词宽均分为 mora 段，不按汉字字数逐字对齐；尾高（accent type = mora count）在词尾右缘补一段垂直下降，显示末尾音调下降点，端点与最后一个 mora 水平段的右端 x 相同，不再左移 strokeWidth/2；有 RUBY/读音时纵向顺序为声调线→读音→词形；声调线是 Ruby 上方的覆盖层，不改布局尺寸，但通过自定义 RenderObject 上报词形 alphabetic baseline，保证与相邻注释文字对齐；音调词换行时保留覆盖层间距，不覆盖上一行文字；汉字词无独立读音/振假名时不画线；只在词注/词典事实行，200% 字号随文字缩放，空间不足时换行或省略，不覆盖文字 |
 | 音调信息徽标 | `agentPitchInfoBadge` | 与 epistemic 徽标同尺寸：12sp、水平内边距 8、上下 2、圆角 6；`pitchInfoBadgeSurface` 浅红底 + `AppColors.error` 字；位于音调词行最前，后接现有音调词，不单独成行；仅本地显示，不进入 provider/导出 |
 | 界面美化横幅 | `agentBeautifyBanner` | 会话上方、浅绿底 + 深绿字/图标（`beautifyBannerSurface/Text`）；14sp、圆角 8、水平内边距 12；单行“界面美化正在进行中…”；右侧 40dp 关闭按钮；仅在富文本后处理运行时显示，完成/失败/取消自动消失；用户关闭只隐藏当前 run 的提示，不取消后处理 |
 | 历史列表行 | `agentHistoryRow` | 最小高 72、白底、1px `divider`；标题 16sp/600，时间/模式/状态 14sp，状态 chip 12sp；触控 ≥48；不显示缩略图/原图 |
@@ -696,6 +700,11 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
 - 功能词：透明背景、`textPrimary`（近黑），**不得使用灰色**。
 - 标点/空白：无背景、无点击、无注音、`textPrimary`。
 - 振假名：主字号的 55%，品牌蓝 `primary`，**不得使用灰色**。
+- **最小振假名**：只标注未知部分，已知 okurigana 不再重复注音。例如
+  `悩んでも/なやんでも` 只显示 `悩（なや）んでも`；`申し込み/もうしこみ`
+  显示 `申（もう）し込（こ）み`。实现用最长公共 kana 前后缀 + 内部 kana LCS
+  锚点；无法可靠对齐时保留整词读音。每个分段仍预留同样的振假名高度，base
+  不上下位移。
 - 阅读器内不使用 `textSecondary`/`textTertiary` 渲染分词结果；用品牌蓝、
   近黑与字重区分层级，减少灰色与色块带来的视觉刺激。
 - 点击目标至少 40 高；Wrap 间距 2/8。

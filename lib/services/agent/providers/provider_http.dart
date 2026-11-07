@@ -66,10 +66,12 @@ Future<Response<Object?>> postProviderRequest(
   required Options options,
   CancelToken? cancelToken,
   int maxAttempts = 3,
+  void Function(int attempt, bool retry)? onAttempt,
 }) async {
   var delay = const Duration(milliseconds: 400);
   DioException? lastError;
   for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    onAttempt?.call(attempt, attempt > 1);
     try {
       return await dio.post<Object?>(
         url,

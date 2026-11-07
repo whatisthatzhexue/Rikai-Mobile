@@ -451,6 +451,10 @@ class _AgentPageState extends ConsumerState<AgentPage> {
       ),
       body: AgentProfileInboxHost(
         strings: strings,
+        // First-run profiles are generated in the background. Never interrupt
+        // the analysis with a confirmation sheet; the user can review pending
+        // profiles from the profile-manager icon.
+        autoPresent: false,
         child: SafeArea(
           top: false,
           child: Column(

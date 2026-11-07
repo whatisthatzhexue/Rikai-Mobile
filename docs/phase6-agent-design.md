@@ -300,11 +300,17 @@ lookupCandidates、已匹配语法模式、或 `mdict.suggest` 返回项；否�
 
 ## 6. Agent 流水线
 
-状态机：`idle → prepare → ocr → familiarizing → awaitingProfile → tokenizing →
-evidence → coverage → reasoning → validating → done | error | cancelled`。
-`awaitingProfile` 必须等全部已生成档案被用户处理后才离开（见 §6.1）；`coverage`
-是 2026-10-31 反馈新增的一次性覆盖审查（见 §6.3.1），最多触发一次补充检索。
-每个阶段可取消，UI 显示本地化阶段名；运行记录写入 `agent_runs`。
+状态机：`idle → prepare → ocr → familiarizing → tokenizing → evidence →
+coverage → reasoning → validating → done | error | cancelled`。
+2026-11-06 P0 起 `familiarizing` **不再等待用户确认**：已确认/已拒绝的本地档案
+直接读取；缺失档案使用 `noProfileInstruction` 兜底，档案生成在分析结束后后台
+进行，确认后下次 run 生效（见 §6.1）。旧的 `awaitingProfile` 状态保留给历史/
+兼容，不再出现在正常首跑路径。`coverage` 是 2026-10-31 反馈新增的一次性覆盖
+审查（见 §6.3.1），最多触发一次补充检索。每个阶段可取消，UI 显示本地化阶段名；
+运行记录写入 `agent_runs`。2026-11-06 P0 增加 controller 级全局 Run Deadline
+（`AgentLimits.runDeadlineSeconds`，默认 30 秒，0/负数禁用）：超时取消
+provider/OCR，状态为可恢复的 `TOOL_TIMEOUT`，保留 provisional/retained result，
+绝不让用户无限等待。直接调用 orchestrator 的测试/集成不经过该计时器。
 
 ### 6.1 Stage -1：词典熟悉（Step -1）
 
@@ -348,13 +354,16 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   `AgentProfileInboxHost` 在 Agent 页、档案管理页和 Agent 设置页统一呈现；同一
   proposal 只弹一次。手动或自动保存成功且用户仍停留在任一 Agent 界面时，由宿主
   统一提示一次底部 toast（同一批只提示一次）。
-  生成与确认分离：每个已生成档案先进入**应用级待确认队列**；用户离开 Agent 页
-  时队列保留、生成继续，返回后逐个处理。**所有已生成档案都得到显式处理
-  （信任 / 本次跳过 / 不再询问）后，才进入 tokenizing/查词阶段**；页面离开、
-  重建或 dismiss sheet 不得自动 skip。“保存并信任”和“不再询问”都写
-  `dictionary_profiles`（后者同时开启自动保存）；“本次跳过”不写。采样/模型失败
-  产生的 `unavailable` 没有可确认内容，记录 warning 后不阻塞。用户编辑后的
-  Markdown 是 prompt 中的权威摘要；`profile_json` 保留生成结构供 UI/校验，
+  生成与确认分离（2026-11-06 P0）：已确认且指纹有效的档案在 `familiarizing`
+  阶段本地读取并进入当前 prompt；缺失档案**不阻塞当前 run**，直接使用
+  `noProfileInstruction` 兜底。分析结束后后台调用小模型生成档案，生成结果进入
+  **应用级待确认队列**；Agent 页不再自动弹确认 sheet（`autoPresent=false`），
+  只显示待处理数量，用户从档案管理页显式确认。确认/“不再询问”后才写入
+  `dictionary_profiles`，**下次 run 生效**；未确认时下次 run 继续使用
+  `noProfileInstruction`，且不会重复生成已在队列中的同一档案。页面离开、
+  重建或 dismiss sheet 不得自动 skip。“本次跳过”不写。采样/模型失败产生的
+  `unavailable` 记日志后不阻塞。用户编辑后的 Markdown 是 prompt 中的权威摘要；
+  `profile_json` 保留生成结构供 UI/校验，
   冲突时以用户编辑的 Markdown 为准。
 - UniDic：单独 `unidic.profile`，用 4 句代表性文本分词，确定性记录 29 字段布局、
   读音/词性/offset/cType/cForm 观察；**不要假装 UniDic 是可查词词典**。可附一次
@@ -434,17 +443,17 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
     `はず`、`わけ`、`ことになる`、`ようにする` 等），按 token 序列/lemma 最长匹配
     优先，重叠模式去重，用源文本子串查词典。
   - 不做无界 n-gram；不做全词典遍历。
-- 每目标按**用户词典顺序**携带全部选中词典查询；每词每典最多 3 条（覆盖多义/
-  同形），摘要 ≤400 字符；去重 `(dictionaryId, entryKey)`；记录
+- 每目标按**用户词典顺序**携带全部选中词典查询；初始 breadth 每个 target 每本
+  词典最多 1 条，摘要 ≤400 字符；去重 `(dictionaryId, entryKey)`；记录
   `dictionaryOrder`。2026-11-06 起 citation 发放的 group 起点按 target/query
   序号轮转，避免第一本词典独占预算（详见下方 breadth-first 条目）。
-  2026-10-31 反馈（F6，Wave 3 已实现）为全局递进：所有 target 先 exact；若唯一
-  citation 数未达 `AgentLimits.maxEvidenceEntries`（默认 60，禁止散落硬编码），
-  依次跑 prefix → suffix → incremental；每个模式只处理尚未满额的 target；某模式
-  新增为 0 也继续下一个模式（避免 prefix 空结果跳过 suffix/incremental）。正常
-  模式递进以全局 `maxEvidenceEntries` 为终止条件；取消会中断运行，某个
-  target/词典达到每词每典上限时只是不再为该 target/词典发查询，不终止模式循环。
-  `AgentLimits` 同时控制 UI 的“已检索 N / 上限 M”。
+  2026-11-06 P0 起 depth 默认关闭：第 2/3 条只在显式多义/coverage 补查时按需
+  获取，不再由初始 breadth 自动补齐。
+  查词递进：所有 target 先 exact；只有 exact 仍无 citation 的 target 才进入
+  prefix，prefix 仍无 citation 才进入 suffix/incremental。已经命中的 target
+  不重复跑后续模式；某个 target/词典达到每词每典上限时只是不再为该
+  target/词典发查询。取消会中断运行。`AgentLimits` 同时控制 UI 的
+  “已检索 N / 上限 M”。
 - `CitationRegistry.issue(toolCallId, dictionary, entryKey, headword, snippet,
   sourceSpan)` 发放 `source-N`；模型只看到 `source-N`，不能自造。
   2026-11-06 P0：WORD note 的每个 citation 必须属于该 token 的 `citation_ids`；
@@ -453,15 +462,19 @@ evidence → coverage → reasoning → validating → done | error | cancelled`
   为 token/pattern 附带其 citation ids，保证修复时能重新归属而无需重发 evidence。
 - 证据包只含：token ID/文本/读音/词性/offset、语法模式、清洗后的 citation 摘要；
   **不含原始 HTML、路径、MDD 资源、音频**。
-- 2026-11-03 性能/证据质量增量：`EvidenceBuilder` 采用 **breadth-first + depth**
-  分配。第一轮每个 target 只取 1 条 citation（按 target 顺序、模式 exact→prefix→
-  suffix→incremental），避免前几个词把全局 citation 预算吃满；随后复用已取得的
-  lookup 结果，在仍有预算时再补第 2/3 条和其他词典（每词每典上限仍为 3）。词典
-  数据充足时，这能让更多 target 获得依据，而不是堆叠早期词条的冗余义项。
+- 2026-11-03 性能/证据质量增量：`EvidenceBuilder` 采用 **breadth-first** 分配。
+  第一轮每个 target 每本词典只取 1 条 citation，避免前几个词把全局 citation
+  预算吃满；2026-11-06 P0 起 depth 默认关闭，只有显式多义/coverage 补查才补
+  第 2/3 条（`AgentLimits.enableDepthPass`，默认 false）。短文本（selected
+  target < `shortTextTargetThreshold`）的动态上限为
+  `contentTargetCount × dictionaryCount`，不再允许 1 句文本预取 60 条。
+  标点/符号不进入 target 和查词列表；内容词排在 pattern/功能词之前。
   2026-11-06 P0：breadth/depth 的词典 group 顺序按 target 序号轮转起点，coverage
-  补充检索按 query 序号轮转，避免第一本词典按 `dictionary_order` 独占 60 条预算；
+  补充检索按 query 序号轮转，避免第一本词典按 `dictionary_order` 独占预算；
   轮转仍遵守每词每典上限和用户词典顺序展示。选中但最终 0 条 citation 且没有查询
   错误的词典写入 `AgentRunResult.warnings`，不静默隐藏。
+  Coverage 的 MISSING 若为 `sense`/`usage`/`example`，补充查词允许每本词典取
+  2 条（显式多义信号）；`word`/`grammar`/`reading` 仍只取 1 条。
   同一模式的多个 target 查询通过 `BatchLookupPort` 合并为一次 MDict worker 往返
   （worker 内部仍顺序执行，上限见 `AgentLimits.lookupBatchSize`）。主分析 prompt
   使用紧凑投影，只发送选中的 OCR variant 文本一次，evidence 不重复 source text，
@@ -509,14 +522,14 @@ pattern id + 清洗 citation 摘要，保留 offset 与 entry_key/matched_key，
   再走流程 A；模型不能单独决定删除，跨词典或多个组共享的 keep 不会被删。
 - 每个用户请求最多一次覆盖审查 + 一次回退查词（`coverageFallbackUsed`）；没有
   可验证缺口/重复时直接进入 reasoning，不循环。
-- 2026-11-03 自适应触发：默认仅当存在尚未获得 citation 的检索目标，或 citation
-  已达全局上限（需要验证重复以释放槽位）时运行；全部目标已有 citation 且仍有
-  剩余槽位时跳过，避免每个 run 固定多一次小模型调用。
-  `AgentLimits.adaptiveCoverageReview=false` 可强制每次都审查。
-  2026-11-04 修正：判断使用 `AgentEvidenceBudget.targetsWithCitations` 与
-  `uniqueTargets` 的真实 per-target 比较，不再用
-  `citations < targets` 的数量代理（多词典/多义项会让数量代理误跳过仍有空目标的
-  run）。
+- 2026-11-06 P0 自适应触发：只看**内容词**（`Token.isContentWord`）的 citation
+  命中率，排除助词、标点、符号和纯功能词；命中率
+  `< AgentLimits.coverageContentHitRateThreshold`（默认 0.8）时才运行 coverage。
+  不再因为 `citations >= maxEvidenceEntries` 强制运行，也不再使用固定的
+  “quote ≤ 2 且文本 < 50 字符”短路。`adaptiveCoverageReview=false` 仍可强制
+  每次都审查。
+  2026-11-03 的旧规则（存在任一未命中 target 或达到全局上限即审查）已被本条
+  取代；2026-11-04 的 per-target 比较也随之退役。
 - 2026-11-03 补充检索去重：MISSING query 如果已被现有 citation、或已有
   citation_ids 的 token/pattern 覆盖（按归一化 key），不再重复查词；重复 query
   也跳过。补充查词每个缺失 query 每本词典只取 1 条，避免 coverage 自己把
@@ -546,10 +559,13 @@ Stage 0 envelope + Stage 1 evidence + 已确认的 dictionary profiles。输出�
 （`agent_intent.dart` 关键词检测翻译/语法/解释/读音/校对和多问题），只用于
 提示模型排列输出区块，不单独发 intent 调用，用户请求仍是权威。每次 run 返回
 `AgentRunTelemetry`（调用数、输入/输出/推理字符、LLM/总耗时、citation target
-覆盖、repair 次数）；它只含计数，不含正文/路径/Key，并随 history result JSON
-回放。计数范围是分析管线核心调用（coverage/analysis/repair/language），不含
-档案生成和富文本后处理。覆盖合并/删重后重新计算 `targetsWithCitations`，避免
-telemetry 使用旧值。
+覆盖、repair 次数）；2026-11-06 P0 增加 `httpAttempts`（核心分析管线实际
+provider HTTP 尝试数，含 provider 重试和流式续传）、`analysisTtftMs`（主分析
+首字延迟）和 `analysisPrefillChars`（主分析实际发送的 prompt 字符数，含续传）。
+`targetsWithCitations/targetCount` 只统计内容词，排除助词、标点和纯功能词。
+它只含计数，不含正文/路径/Key，并随 history result JSON 回放；debug 模式输出
+`[AgentTelemetry]` 行。计数范围仍是核心分析管线
+（coverage/analysis/repair/language），**不含档案生成和富文本后处理**。
 
 2026-11-06（Phase 3，默认关闭）：当 `AgentLimits.enableDictionaryFanOut=true`
 且词典数 > 8 或 source+citation 字符估算 > 16,000 时，按词典分区 citation
@@ -807,6 +823,10 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
 entry_structure, fields, search_behavior, strengths, caveats,
 recommended_query_forms, confidence, schema_version`。UI 展示的 Markdown 由模型
 生成，用户可编辑；编辑后的 Markdown 是 prompt 的权威摘要。
+熟悉期/档案管理 sheet 还提供 `language_pairs` 增删编辑（检测结果可能不准确）。
+保存时同时更新 `profile_json` 和 Markdown 的“语言”行；确认队列通过
+`ProfileConfirmation.profile` 传递人工修正后的 profile，后续分析使用修正后的
+Markdown。人工修正不使指纹失效，也不会重新生成档案。
 
 ### 9.3 用户同意与存储
 

@@ -377,6 +377,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('3 个探针未采样'), findsOneWidget);
+    expect(find.textContaining('3 项检查未覆盖'), findsOneWidget);
   });
 }

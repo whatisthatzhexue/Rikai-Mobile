@@ -66,6 +66,19 @@ class AgentResultView extends StatelessWidget {
           ),
         ),
       );
+      blocks.add(
+        Text(
+          strings.evidenceTruncatedCounts(
+            result.evidence.citations.length,
+            result.validation.citationsUsed.length,
+            result.evidence.budget.maxCitations,
+          ),
+          style: theme.textTheme.bodySmall?.copyWith(
+            fontSize: AgentTokens.helper,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      );
     }
     if (result.evidence.structureUnavailable) {
       blocks.add(

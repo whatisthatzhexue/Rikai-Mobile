@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
 import '../../core/models/dict_info.dart';
 import '../../core/models/dictionary_scan.dart';
 import '../../core/theme/app_tokens.dart';
@@ -91,21 +92,39 @@ class _DictionaryImportPageState extends ConsumerState<DictionaryImportPage> {
       _progressTotal = 0;
     });
     try {
-      final existing = ref
-          .read(dictionaryRepositoryProvider)
-          .map((dictionary) => dictionary.mdxPath)
-          .toSet();
-      final entries = await _scanner.scan(path, existingPaths: existing);
+      final existing = <String, DictionaryInfo>{
+        for (final dictionary in ref.read(dictionaryRepositoryProvider))
+          p.normalize(dictionary.mdxPath).toLowerCase(): dictionary,
+      };
+      final entries = await _scanner.scan(
+        path,
+        existingPaths: existing.keys.toSet(),
+      );
       if (!mounted || token != _token) return;
+      // Existing dictionaries are not probed again. Reuse the MDX-derived
+      // title already stored in the library so the import list and the
+      // management page show the same name (never the folder/file fallback).
+      final titledEntries = <DictionaryScanEntry>[
+        for (final entry in entries)
+          if (existing[p.normalize(entry.path).toLowerCase()]?.title
+                  .trim()
+                  .isNotEmpty ??
+              false)
+            entry.copyWith(
+              title: existing[p.normalize(entry.path).toLowerCase()]!.title,
+            )
+          else
+            entry,
+      ];
       setState(() {
-        _entries = entries;
+        _entries = titledEntries;
         _scanning = false;
-        _probing = entries.isNotEmpty;
-        _status = entries.isEmpty ? '没有找到 .mdx 词典' : '正在读取词典信息…';
+        _probing = titledEntries.isNotEmpty;
+        _status = titledEntries.isEmpty ? '没有找到 .mdx 词典' : '正在读取词典信息…';
         _progressCurrent = 0;
-        _progressTotal = entries.length;
+        _progressTotal = titledEntries.length;
       });
-      if (entries.isNotEmpty) {
+      if (titledEntries.isNotEmpty) {
         await _probeEntries(token);
       }
     } catch (_) {
@@ -441,14 +460,18 @@ class _ScanEntryTile extends StatelessWidget {
       value: selected,
       onChanged: onChanged,
       controlAffinity: ListTileControlAffinity.leading,
-      title: Text(entry.title),
+      title: Text(
+        entry.status == DictionaryScanStatus.scanning
+            ? '正在读取词典信息…'
+            : entry.title,
+      ),
       subtitle: Padding(
         padding: const EdgeInsets.only(top: AppSpacing.xxs),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${entry.folder}\n${formatBytes(entry.size)} · $status',
+              '${entry.fileName}\n${formatBytes(entry.size)} · $status',
               style: theme.textTheme.bodySmall?.copyWith(
                 fontSize: AppTypography.helper,
                 height: 1.5,

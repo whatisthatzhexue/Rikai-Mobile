@@ -48,6 +48,9 @@ String buildAgentResultMarkdown(AgentRunResult result, AgentUiStrings strings) {
   if (result.evidence.truncated) {
     buffer
       ..writeln('- ${strings.resultTruncated}')
+      ..writeln(
+        '- ${strings.evidenceTruncatedCounts(result.evidence.citations.length, result.validation.citationsUsed.length, result.evidence.budget.maxCitations)}',
+      )
       ..writeln();
   }
   if (result.analysis.truncated) {

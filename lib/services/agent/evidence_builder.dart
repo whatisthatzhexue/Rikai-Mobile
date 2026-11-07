@@ -119,6 +119,10 @@ class EvidenceBuilder {
                 : token.lookupCandidates,
           ),
         );
+        // Punctuation/symbols are shown as context but never become lookup
+        // targets. They almost always miss and used to consume both a target
+        // slot and citation budget.
+        if (token.isPunctuationOrSymbol) continue;
         final candidates = token.lookupCandidates.isEmpty
             ? <String>[token.surface]
             : token.lookupCandidates;
@@ -194,14 +198,34 @@ class EvidenceBuilder {
       for (final target in rawTargets)
         if (!tokenTargets.containsKey(_targetKey(target.candidates))) target,
     ];
+    // Content words first: the short-text citation cap is derived from their
+    // count, so grammar patterns/function words must not consume the budget
+    // before the words the user is reading.
     final targets = <_LookupTarget>[
-      ...patternTargets,
       ...tokenTargets.values.where((target) => target.content),
       ...rawOnlyTargets,
+      ...patternTargets,
       ...tokenTargets.values.where((target) => !target.content),
     ];
     final selectedTargets = targets.take(maxTargets).toList(growable: false);
     if (targets.length > selectedTargets.length) truncated = true;
+
+    // Short inputs should not prefetch the full 60-entry budget. The breadth
+    // pass grants one entry per content-word target per dictionary; for a
+    // short text that is the natural ceiling. Function words/patterns may
+    // still be looked up, but they cannot push the bundle to 60 on their own.
+    final contentTargetCount = selectedTargets
+        .whereType<_TokenTarget>()
+        .where((target) => target.content)
+        .length;
+    final shortText = selectedTargets.length < limits.shortTextTargetThreshold;
+    final shortTextTargetCount = contentTargetCount > 0
+        ? contentTargetCount
+        : selectedTargets.length;
+    final shortTextLimit = shortTextTargetCount * dictionaries.length;
+    final citationLimit = shortText
+        ? (shortTextLimit < maxCitations ? shortTextLimit : maxCitations)
+        : maxCitations;
 
     void recordLookupFailure(DictionaryInfo dictionary, String message) {
       dictionaryIssues.putIfAbsent(
@@ -220,10 +244,9 @@ class EvidenceBuilder {
       selectedTargets[index].ordinal = index;
     }
 
-    // F6 breadth pass: give every target at most one citation before granting
-    // extra senses/dictionaries. The old target-by-target 3-entry fetch let
-    // early words consume the global citation budget, so later targets (and
-    // the model) received too little useful evidence.
+    // Breadth pass: one best entry per target per dictionary. The default
+    // depth pass is off, so this is the complete initial evidence set; extra
+    // senses are only fetched by an explicit follow-up.
     var capReached = false;
     final batchSize = limits.lookupBatchSize <= 0 ? 1 : limits.lookupBatchSize;
     final storedResults = <_StoredLookup>[];
@@ -244,6 +267,9 @@ class EvidenceBuilder {
         target.ordinal,
         dictionaryOrder,
       );
+      // Breadth = one best entry per dictionary for this target. Previously it
+      // stopped after the first dictionary, which made the first dictionary
+      // dominate short inputs once the depth pass filled the rest.
       for (final group in groups) {
         var remaining =
             maxEntriesPerDictionary -
@@ -259,10 +285,10 @@ class EvidenceBuilder {
             target.citationIds.add(existing.id);
             target.perDictionary[group.dictionary.id] =
                 (target.perDictionary[group.dictionary.id] ?? 0) + 1;
-            return false;
+            break;
           }
-          if (citations.count >= maxCitations) {
-            truncated = true;
+          if (citations.count >= citationLimit) {
+            if (citationLimit == maxCitations) truncated = true;
             return true;
           }
           final citation = citations.issue(
@@ -280,12 +306,12 @@ class EvidenceBuilder {
           target.perDictionary[group.dictionary.id] =
               (target.perDictionary[group.dictionary.id] ?? 0) + 1;
           onProgress?.call(citations.count);
-          if (citations.count >= maxCitations) {
-            truncated = true;
+          if (citations.count >= citationLimit) {
+            if (citationLimit == maxCitations) truncated = true;
             return true;
           }
-          // One citation per target is enough for the breadth pass.
-          return false;
+          // One entry per dictionary; continue to the next dictionary.
+          break;
         }
       }
       return false;
@@ -323,8 +349,8 @@ class EvidenceBuilder {
             if (firstPerDictionaryOnly) break;
             continue;
           }
-          if (citations.count >= maxCitations) {
-            truncated = true;
+          if (citations.count >= citationLimit) {
+            if (citationLimit == maxCitations) truncated = true;
             return true;
           }
           final citation = citations.issue(
@@ -343,8 +369,8 @@ class EvidenceBuilder {
               (target.perDictionary[group.dictionary.id] ?? 0) + 1;
           remaining--;
           onProgress?.call(citations.count);
-          if (citations.count >= maxCitations) {
-            truncated = true;
+          if (citations.count >= citationLimit) {
+            if (citationLimit == maxCitations) truncated = true;
             return true;
           }
           if (firstPerDictionaryOnly) break;
@@ -364,7 +390,7 @@ class EvidenceBuilder {
       );
       for (var index = 0; index < results.length; index++) {
         final result = results[index];
-        if (result.hasHits) {
+        if (limits.enableDepthPass && result.hasHits) {
           storedResults.add(
             _StoredLookup(target: targets[index], result: result),
           );
@@ -376,6 +402,7 @@ class EvidenceBuilder {
       }
     }
 
+    var modeIndex = 0;
     for (final mode in _lookupModes) {
       if (capReached) break;
       if (isCancelled?.call() == true) {
@@ -384,13 +411,14 @@ class EvidenceBuilder {
           '已取消',
         );
       }
-      if (citations.count >= maxCitations) {
-        truncated = true;
+      if (citations.count >= citationLimit) {
+        if (citationLimit == maxCitations) truncated = true;
         break;
       }
-      // Query every target in every mode so the depth pass can reuse later
-      // modes (prefix/suffix/incremental and other dictionaries). The breadth
-      // pass itself still issues at most one citation per target.
+      // Exact runs for every target. Later modes run only for targets that
+      // still have no citation, so once exact/prefix finds a result we stop
+      // paying for suffix/incremental scans on that target.
+      final isFirstMode = modeIndex == 0;
       final batchTargets = <_LookupTarget>[];
       final batchRequests = <LookupRequest>[];
       for (final target in selectedTargets) {
@@ -400,6 +428,7 @@ class EvidenceBuilder {
             '已取消',
           );
         }
+        if (!isFirstMode && target.citationIds.isNotEmpty) continue;
         final eligible = <DictionaryInfo>[
           for (final dictionary in dictionaries)
             if ((target.perDictionary[dictionary.id] ?? 0) <
@@ -420,13 +449,16 @@ class EvidenceBuilder {
       if (!capReached && batchRequests.isNotEmpty) {
         await flushBreadthBatch(batchTargets, batchRequests);
       }
+      modeIndex++;
       if (capReached) break;
     }
 
-    // Depth pass, the first round: add one entry from each dictionary that is
-    // not represented yet. This keeps multi-dictionary evidence diverse before
-    // granting a second/third sense from the same dictionary.
-    if (!capReached && citations.count < maxCitations) {
+    // Depth is opt-in. The default pipeline stops after the one-entry breadth
+    // pass; the second/third entry is only useful for an explicit multi-sense
+    // follow-up and otherwise just bloats the prompt.
+    if (limits.enableDepthPass &&
+        !capReached &&
+        citations.count < citationLimit) {
       for (final stored in storedResults) {
         if (isCancelled?.call() == true) {
           throw const AgentCapabilityException(
@@ -446,7 +478,9 @@ class EvidenceBuilder {
     }
     // Depth pass, the second round: use the remaining budget for extra senses
     // up to the per-target/per-dictionary cap.
-    if (!capReached && citations.count < maxCitations) {
+    if (limits.enableDepthPass &&
+        !capReached &&
+        citations.count < citationLimit) {
       for (final stored in storedResults) {
         if (isCancelled?.call() == true) {
           throw const AgentCapabilityException(
@@ -532,7 +566,7 @@ class EvidenceBuilder {
             .length,
         citations: sortedCitations.length,
         maxTargets: maxTargets,
-        maxCitations: maxCitations,
+        maxCitations: citationLimit,
       ),
     );
   }
@@ -544,6 +578,7 @@ class EvidenceBuilder {
     required List<String> queries,
     required List<DictionaryInfo> dictionaries,
     required int maxNewCitations,
+    int perDictionaryLimit = 1,
     Set<String> excludedKeys = const <String>{},
     bool Function()? isCancelled,
     void Function(int citations)? onProgress,
@@ -569,10 +604,12 @@ class EvidenceBuilder {
     final queryIds = <String, Set<String>>{
       for (final query in order) query: <String>{},
     };
-    // Coverage supplements are breadth work: one entry per dictionary per
-    // missing query is enough to fill a gap. Additional senses are left to
-    // the model's next MISSING query instead of consuming several slots now.
-    const perDictionaryLimit = 1;
+    // Coverage supplements are normally breadth work (one entry per
+    // dictionary per query). An explicit sense/usage/example gap may request
+    // a second entry for that query, which is the on-demand depth path.
+    final effectivePerDictionaryLimit = perDictionaryLimit < 1
+        ? 1
+        : perDictionaryLimit;
     var newCount = 0;
     var capReached = false;
     final batchSize = limits.lookupBatchSize <= 0 ? 1 : limits.lookupBatchSize;
@@ -591,7 +628,8 @@ class EvidenceBuilder {
         if (group.error.isNotEmpty) {
           onDictionaryError?.call(group.dictionary, group.error);
         }
-        var remaining = perDictionaryLimit - (counts[group.dictionary.id] ?? 0);
+        var remaining =
+            effectivePerDictionaryLimit - (counts[group.dictionary.id] ?? 0);
         if (remaining <= 0) continue;
         for (final entry in group.entries) {
           if (remaining <= 0) break;
@@ -674,7 +712,8 @@ class EvidenceBuilder {
         final counts = perQuery[query]!;
         final eligible = <DictionaryInfo>[
           for (final dictionary in dictionaries)
-            if ((counts[dictionary.id] ?? 0) < perDictionaryLimit) dictionary,
+            if ((counts[dictionary.id] ?? 0) < effectivePerDictionaryLimit)
+              dictionary,
         ];
         if (eligible.isEmpty) continue;
         batchQueries.add(query);
@@ -684,7 +723,7 @@ class EvidenceBuilder {
             <String>[query],
             eligible,
             mode,
-            maxEntriesPerDictionary: perDictionaryLimit,
+            maxEntriesPerDictionary: effectivePerDictionaryLimit,
           ),
         );
         if (batchRequests.length >= batchSize) {

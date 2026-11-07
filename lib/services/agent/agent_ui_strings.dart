@@ -87,6 +87,30 @@ class AgentUiStrings {
     'No displayable result was saved for this analysis.',
     'この分析には表示できる結果が保存されていません。',
   );
+
+  /// History stores only the stable error code, not the live provider message.
+  /// Never show the wire name (for example `invalid_arguments`) to a user.
+  String historyErrorMessageFor(String code) {
+    // Older rows may store the lowercase/raw code; normalize before mapping so
+    // the user never sees a wire string and still gets the best message.
+    final parsed = AgentToolErrorCode.fromWire(code.trim().toUpperCase());
+    if (parsed == AgentToolErrorCode.invalidArguments) {
+      return _pick(
+        '请求参数无效，请检查模型设置后重试',
+        'The request parameters were invalid. Check the model settings and retry.',
+        'リクエストパラメータが無効です。モデル設定を確認して再試行してください。',
+      );
+    }
+    return errorMessageFor(
+      parsed,
+      _pick(
+        '分析失败，请检查设置后重试',
+        'The analysis failed. Check the settings and retry.',
+        '分析に失敗しました。設定を確認して再試行してください。',
+      ),
+    );
+  }
+
   String get historyVariantsTitle => _pick('文字识别结果', 'OCR result', '文字認識結果');
   String get historyQuestion => _pick('提问', 'Question', '質問');
   String get historyUntitled => _pick('未命名分析', 'Untitled analysis', '無題の分析');
@@ -284,10 +308,29 @@ class AgentUiStrings {
     '辞書プロファイル · $title',
   );
   String get profileSheetBody => _pick(
-    '这是模型根据少量样本生成的词典使用说明。请确认后再用于后续回答；你可以直接编辑下面的文字。',
-    'This dictionary guide was generated from a small sample. Review it before it is used in later answers; you can edit the text below.',
-    'これは少量のサンプルから生成された辞書の利用説明です。今後の回答に使う前に確認してください。下の文章は編集できます。',
+    '这是模型根据少量样本生成的词典使用说明。语言对识别可能不准确，可在下方修正；确认后再用于后续回答。你也可以直接编辑下面的文字。',
+    'This dictionary guide was generated from a small sample. The detected language pair may be inaccurate; correct it below before the profile is used. You can also edit the text below.',
+    'これは少量のサンプルから生成された辞書の利用説明です。言語ペアの判定が不正確な場合は下で修正してください。下の文章も編集できます。',
   );
+  String get profileLanguagePairsTitle =>
+      _pick('语言对', 'Language pairs', '言語ペア');
+  String get profileLanguagePairsHint => _pick(
+    '自动识别可能不准确；删除错误项并添加正确方向，保存后用于后续回答。',
+    'Detection may be inaccurate. Remove wrong pairs and add the correct direction; changes apply after saving.',
+    '自動判定は不正確な場合があります。誤ったペアを削除し、正しい方向を追加して保存してください。',
+  );
+  String get profileLanguagePairSource => _pick('源语言', 'Source', '原言語');
+  String get profileLanguagePairTarget => _pick('目标语言', 'Target', '対象言語');
+  String get profileLanguagePairAdd => _pick('添加语言对', 'Add pair', 'ペアを追加');
+  String get profileLanguagePairsEmpty =>
+      _pick('未识别到语言对', 'No language pairs detected', '言語ペアが検出されませんでした');
+  String languageLabel(String code) => switch (code.toLowerCase()) {
+    'ja' => _pick('日语', 'Japanese', '日本語'),
+    'zh' => _pick('中文', 'Chinese', '中国語'),
+    'en' => _pick('英语', 'English', '英語'),
+    'ko' => _pick('韩语', 'Korean', '韓国語'),
+    _ => code.toUpperCase(),
+  };
   String get profileHint => _pick('词典档案', 'Dictionary profile', '辞書プロファイル');
   String get saveAndTrust => _pick('保存并信任', 'Save and trust', '保存して信頼');
   String get skipOnce => _pick('本次跳过', 'Skip this time', '今回のみスキップ');
@@ -326,11 +369,22 @@ class AgentUiStrings {
       _pick('正在重试词典档案', 'Retrying dictionary profile', '辞書プロファイルを再試行中');
 
   // Result view.
-  String get resultTruncated => _pick(
-    '部分内容超出预算，未全部分析',
-    'Some content exceeded the budget and was not analyzed',
-    '一部の内容が予算を超えたため、解析されていません',
+  String runTimeout(int seconds) => _pick(
+    '分析超时（$seconds 秒），已停止等待；可重试或缩短文本',
+    'Analysis timed out after $seconds seconds. Retry or shorten the input.',
+    '分析が$seconds秒でタイムアウトしました。再試行するか、入力を短くしてください。',
   );
+  String get resultTruncated => _pick(
+    '词典依据已达上限，部分义项未送入模型（原文已分析）',
+    'Dictionary evidence reached its limit; some senses were not sent to the model (the source was analyzed).',
+    '辞書根拠が上限に達したため、一部の語義はモデルに送信されていません（原文は解析済み）。',
+  );
+  String evidenceTruncatedCounts(int prefetched, int adopted, int limit) =>
+      _pick(
+        '预取 $prefetched 条 / 采用 $adopted 条（上限 $limit）',
+        'Prefetched $prefetched / adopted $adopted (limit $limit)',
+        '取得 $prefetched 件 / 採用 $adopted 件（上限 $limit）',
+      );
   String get structureUnavailable => _pick(
     '结构分析不可用（未配置 UniDic）；本次只提供译文和词典依据',
     'Structural analysis unavailable (UniDic is not configured). Only translation and dictionary evidence are provided.',
@@ -529,10 +583,10 @@ class AgentUiStrings {
   String get profileStatusDeclined => _pick('已拒绝', 'Declined', '拒否済み');
   String get profileStatusPending => _pick('待确认', 'Pending', '確認待ち');
   String get profileStatusStale => _pick('已失效', 'Stale', '無効');
-  String profileSampleTruncated(int probes) => _pick(
-    '词典样本达到上限，$probes 个探针未采样',
-    'Dictionary sample hit its limit; $probes probes were not sampled',
-    '辞書サンプルが上限に達し、$probes 個の探針が未サンプルです',
+  String profileSampleTruncated(int checks) => _pick(
+    '词典样本已达到上限，另有 $checks 项检查未覆盖（不影响基本使用）',
+    'The dictionary sample limit was reached; $checks check(s) were not covered (basic use is unaffected)',
+    '辞書サンプルの上限に達したため、$checks 件の確認を省略しました（基本利用には影響しません）',
   );
   String get profileUnavailableDictionary =>
       _pick('词典当前不可用', 'Dictionary currently unavailable', '辞書は現在利用できません');

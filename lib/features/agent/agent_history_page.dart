@@ -33,6 +33,7 @@ class AgentHistoryPage extends ConsumerStatefulWidget {
 
 class _AgentHistoryPageState extends ConsumerState<AgentHistoryPage> {
   late Future<List<AgentHistoryEntry>> _entries;
+  List<AgentHistoryEntry>? _cachedEntries;
   bool _selecting = false;
   final Set<String> _selected = <String>{};
 
@@ -42,8 +43,12 @@ class _AgentHistoryPageState extends ConsumerState<AgentHistoryPage> {
     _entries = _load();
   }
 
-  Future<List<AgentHistoryEntry>> _load() {
-    return ref.read(agentHistoryRepositoryProvider).listHistory();
+  Future<List<AgentHistoryEntry>> _load() async {
+    final entries = await ref
+        .read(agentHistoryRepositoryProvider)
+        .listHistory();
+    _cachedEntries = entries;
+    return entries;
   }
 
   void _reload() {
@@ -203,11 +208,16 @@ class _AgentHistoryPageState extends ConsumerState<AgentHistoryPage> {
       ),
       body: FutureBuilder<List<AgentHistoryEntry>>(
         future: _entries,
+        // Keep the previous list mounted while a return from a detail page
+        // reloads the data. Replacing it with a spinner disposed the
+        // Scrollable and reset the user's position to the top.
+        initialData: _cachedEntries,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              snapshot.data == null) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (snapshot.hasError) {
+          if (snapshot.hasError && snapshot.data == null) {
             return _HistoryMessage(
               icon: Icons.error_outline,
               title: strings.historyLoadFailed,
@@ -215,7 +225,8 @@ class _AgentHistoryPageState extends ConsumerState<AgentHistoryPage> {
               onAction: _reload,
             );
           }
-          final entries = snapshot.data ?? const <AgentHistoryEntry>[];
+          final entries =
+              snapshot.data ?? _cachedEntries ?? const <AgentHistoryEntry>[];
           if (entries.isEmpty) {
             return _HistoryMessage(
               icon: Icons.history,
@@ -224,6 +235,7 @@ class _AgentHistoryPageState extends ConsumerState<AgentHistoryPage> {
             );
           }
           return ListView.separated(
+            key: const PageStorageKey<String>('agent-history-list'),
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
             itemCount: entries.length,
             separatorBuilder: (_, _) =>

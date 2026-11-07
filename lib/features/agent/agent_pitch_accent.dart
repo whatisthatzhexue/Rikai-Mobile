@@ -250,7 +250,9 @@ List<PitchAccentSegment> pitchAccentSegments({
   }
   if (accent.accentType == accent.moraCount &&
       accent.moraPattern.endsWith('H')) {
-    final endX = size.width - strokeWidth / 2;
+    // The final mora's horizontal segment ends exactly at size.width. Keep
+    // the closing drop on that same x so it does not look shifted left.
+    final endX = size.width;
     segments.add((start: Offset(endX, highY), end: Offset(endX, lowY)));
   }
   return segments;

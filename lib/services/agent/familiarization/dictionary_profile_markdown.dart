@@ -23,8 +23,8 @@ String profileToMarkdown(
       headwordScripts: '见出し文字',
       definitionScripts: '释义文字',
       featureCount: '结构特征',
-      sampleTruncated: '采样提示',
-      unsampledProbes: '个探针未采样',
+      sampleTruncated: '样本提示',
+      unsampledProbes: ' 项检查未覆盖（不影响基本使用）',
       strengthsCaveats: '强项 / 注意事项',
       strengths: '强项',
       caveats: '注意',
@@ -51,8 +51,8 @@ String profileToMarkdown(
       headwordScripts: 'Headword scripts',
       definitionScripts: 'Definition scripts',
       featureCount: 'Structural features',
-      sampleTruncated: 'Sampling warning',
-      unsampledProbes: ' probes were not sampled',
+      sampleTruncated: 'Sample note',
+      unsampledProbes: ' check(s) were not covered (basic use is unaffected)',
       strengthsCaveats: 'Strengths / caveats',
       strengths: 'Strengths',
       caveats: 'Caveats',
@@ -79,8 +79,8 @@ String profileToMarkdown(
       headwordScripts: '見出し文字',
       definitionScripts: '語義文字',
       featureCount: '構造特徴',
-      sampleTruncated: 'サンプリング警告',
-      unsampledProbes: ' 個の探針が未サンプル',
+      sampleTruncated: 'サンプルの注意',
+      unsampledProbes: ' 件の確認を省略（基本利用に影響なし）',
       strengthsCaveats: '強み / 注意',
       strengths: '強み',
       caveats: '注意',
@@ -164,6 +164,42 @@ String profileToMarkdown(
     ..writeln('')
     ..writeln('${labels.confidence}: ${profile.confidence.toStringAsFixed(2)}');
   return buffer.toString().trim();
+}
+
+/// Updates the human-readable language/language-pair line in an existing
+/// profile Markdown while preserving every other user edit.
+///
+/// The profile sheet lets the user correct an automatically detected language
+/// pair. The prompt consumes this Markdown, so changing only the structured
+/// `DictionaryProfile` would not affect later answers.
+String updateLanguagePairsMarkdown(
+  String markdown,
+  DictionaryProfile profile,
+  AgentProfileLanguage language,
+) {
+  final label = switch (language) {
+    AgentProfileLanguage.chinese => '语言',
+    AgentProfileLanguage.english => 'Languages',
+    AgentProfileLanguage.japanese => '言語',
+  };
+  final joiner = language == AgentProfileLanguage.english ? ', ' : '、';
+  final value = profile.languagePairs.isEmpty
+      ? profile.languages.join(joiner)
+      : profile.languagePairs.map((pair) => pair.label).join(joiner);
+  final line = '- $label: $value';
+  final pattern = RegExp('^- ${RegExp.escape(label)}:.*\$', multiLine: true);
+  if (pattern.hasMatch(markdown)) {
+    return markdown.replaceFirstMapped(pattern, (_) => line);
+  }
+  // A user may have removed the line. Keep the correction discoverable by
+  // inserting it right after the first heading instead of appending it at the
+  // very bottom.
+  final firstNewline = markdown.indexOf('\n');
+  if (firstNewline >= 0) {
+    return '${markdown.substring(0, firstNewline + 1)}$line\n'
+        '${markdown.substring(firstNewline + 1)}';
+  }
+  return '$markdown\n$line';
 }
 
 String _scriptLabel(String script, AgentProfileLanguage language) {

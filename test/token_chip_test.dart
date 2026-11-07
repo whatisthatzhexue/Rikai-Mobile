@@ -44,6 +44,19 @@ void main() {
     expect(furigana.style?.color, AppColors.primary);
   });
 
+  testWidgets('furigana covers only the unknown kanji stem', (tester) async {
+    await _pumpToken(
+      tester,
+      _token(surface: '悩んでも', kana: 'ナヤンデモ', pos1: '動詞'),
+    );
+
+    expect(find.text('悩'), findsOneWidget);
+    expect(find.text('なや'), findsOneWidget);
+    expect(find.text('んでも'), findsOneWidget);
+    expect(find.text('悩んでも'), findsNothing);
+    expect(find.text('なやんでも'), findsNothing);
+  });
+
   testWidgets('function words and punctuation use black, not grey', (
     tester,
   ) async {

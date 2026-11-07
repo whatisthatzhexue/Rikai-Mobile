@@ -156,6 +156,31 @@ class _TwoTokenize implements TokenizePort {
   }
 }
 
+class _FiveContentTokenize implements TokenizePort {
+  @override
+  Future<List<Token>> analyze(String text) async {
+    return <Token>[
+      for (var index = 1; index <= 5; index++)
+        Token.fromFeatures(
+          surface: '語$index',
+          features: <String>[
+            '名詞',
+            ...List<String>.filled(6, '*'),
+            '語$index',
+            '語$index',
+            '*',
+            '語$index',
+            ...List<String>.filled(9, '*'),
+            'ゴ$index',
+            ...List<String>.filled(8, '*'),
+          ],
+          start: index * 2,
+          end: index * 2 + 2,
+        ),
+    ];
+  }
+}
+
 class _CompoundTokenize implements TokenizePort {
   @override
   Future<List<Token>> analyze(String text) async {
@@ -353,8 +378,9 @@ void main() {
     expect(result.telemetry.llmCalls, 2);
     expect(result.telemetry.analysisCalls, 1);
     expect(result.telemetry.coverageCalls, 1);
-    expect(result.telemetry.targetCount, 2);
-    expect(result.telemetry.targetsWithCitations, 2);
+    // ところ is the only content word; が is a particle and is excluded.
+    expect(result.telemetry.targetCount, 1);
+    expect(result.telemetry.targetsWithCitations, 1);
     expect(result.telemetry.citationCoverage, 1);
   });
 
@@ -701,4 +727,40 @@ void main() {
       expect(provider.requests.first.messages.first.text, contains('COVERAGE'));
     },
   );
+
+  test('coverage skips at 80% content-word citation coverage', () async {
+    final lookup = _LookupScript(<List<LookupEntry>>[
+      <LookupEntry>[_entry('語1', '一')],
+      <LookupEntry>[_entry('語2', '二')],
+      <LookupEntry>[_entry('語3', '三')],
+      <LookupEntry>[_entry('語4', '四')],
+      const <LookupEntry>[],
+    ]);
+    final provider = FakeProvider(responseText: _plainAnalysis);
+
+    final result =
+        await _orchestrator(
+          provider: provider,
+          lookup: lookup,
+          tokenize: _FiveContentTokenize(),
+          limits: const AgentLimits(
+            maxCoverageFallback: 1,
+            adaptiveCoverageReview: true,
+            enableRichTextPostProcess: false,
+          ),
+        ).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.loose,
+            dictionaries: <DictionaryInfo>[_dictionary],
+            provider: _provider,
+            userText: '語1語2語3語4語5',
+          ),
+        );
+
+    expect(result.evidence.citations, hasLength(4));
+    // 4/5 content words = 80%, so coverage is skipped.
+    expect(provider.requests, hasLength(1));
+    expect(result.telemetry.coverageCalls, 0);
+  });
 }

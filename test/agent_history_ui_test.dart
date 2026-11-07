@@ -115,17 +115,22 @@ AgentRunResult _result() {
 AgentHistoryEntry _entry({
   String runId = 'run-1',
   String title = '何卒宜しくお願い致します。',
+  AgentHistoryStatus status = AgentHistoryStatus.done,
+  String errorCode = '',
+  int imageCount = 1,
+  bool hasResult = true,
 }) => AgentHistoryEntry(
   runId: runId,
   sessionId: 'session-1',
   title: title,
-  status: AgentHistoryStatus.done,
+  status: status,
   mode: AgentMode.strict,
   startedAt: DateTime.now().subtract(const Duration(seconds: 2)),
   finishedAt: DateTime.now(),
   providerLabel: 'DeepSeek',
-  imageCount: 1,
-  hasResult: true,
+  imageCount: imageCount,
+  hasResult: hasResult,
+  errorCode: errorCode,
 );
 
 class _MutableHistoryRepository implements AgentHistoryRepository {
@@ -382,6 +387,81 @@ void main() {
     expect(find.textContaining('manga_ocr/vertical'), findsOneWidget);
     expect(find.text('当时选中'), findsOneWidget);
     expect(find.textContaining('/private/'), findsNothing);
+  });
+
+  testWidgets('returning from detail keeps the history scroll position', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'flutter.app_onboarding_completed': true,
+    });
+    _preferences = await SharedPreferences.getInstance();
+    final entries = <AgentHistoryEntry>[
+      for (var index = 0; index < 12; index++)
+        _entry(runId: 'run-$index', title: '记录 $index'),
+    ];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(_preferences),
+          agentProvidersProvider.overrideWith((ref) async => const []),
+          agentHistoryRepositoryProvider.overrideWithValue(
+            _FakeHistoryRepository(
+              entries: entries,
+              detail: AgentHistoryDetail(entry: entries[6], userText: '何卒'),
+            ),
+          ),
+        ],
+        child: RikaiApp(key: UniqueKey()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('词典助手'));
+    await tester.tap(find.text('词典助手'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.history));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    expect(find.text('记录 0'), findsNothing);
+    expect(find.text('记录 6'), findsOneWidget);
+
+    await tester.tap(find.text('记录 6'));
+    await tester.pumpAndSettle();
+    expect(find.text('历史记录只读；原图未保存。'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('记录 0'), findsNothing);
+    expect(find.text('记录 6'), findsOneWidget);
+  });
+
+  testWidgets('failed history shows a localized message, not a wire code', (
+    tester,
+  ) async {
+    final entry = _entry(
+      runId: 'run-failed',
+      status: AgentHistoryStatus.error,
+      errorCode: 'invalid_arguments',
+      imageCount: 0,
+      hasResult: false,
+    );
+    await tester.pumpWidget(
+      _app(
+        const AgentHistoryDetailPage(runId: 'run-failed'),
+        _FakeHistoryRepository(
+          entries: <AgentHistoryEntry>[entry],
+          detail: AgentHistoryDetail(entry: entry, userText: '何卒'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('请求参数无效，请检查模型设置后重试'), findsOneWidget);
+    expect(find.textContaining('INVALID_ARGUMENTS'), findsNothing);
+    expect(find.textContaining('invalid_arguments'), findsNothing);
   });
 
   testWidgets('history detail copies the result as Markdown', (tester) async {

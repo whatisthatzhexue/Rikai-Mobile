@@ -262,6 +262,9 @@ void main() {
       adoptedCitationCount: 2,
       targetsWithCitations: 2,
       targetCount: 4,
+      httpAttempts: 3,
+      analysisTtftMs: 1200,
+      analysisPrefillChars: 5000,
     );
 
     final restored = AgentRunTelemetry.fromJson(telemetry.toJson());
@@ -271,6 +274,9 @@ void main() {
     expect(restored.repairCalls, 1);
     expect(restored.inputChars, 100);
     expect(restored.outputChars, 40);
+    expect(restored.httpAttempts, 3);
+    expect(restored.analysisTtftMs, 1200);
+    expect(restored.analysisPrefillChars, 5000);
     expect(restored.citationCoverage, 0.5);
     expect(restored.repairRate, 1);
   });

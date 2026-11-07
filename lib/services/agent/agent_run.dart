@@ -65,6 +65,7 @@ class AgentRunRequest {
     this.context = '',
     this.images = const <AgentImageInput>[],
     this.allowFamiliarization = true,
+    this.pendingProfileDictionaryIds = const <String>{},
     this.unidicPath = '',
     this.responseLanguage = AgentResponseLanguage.chinese,
   });
@@ -80,6 +81,11 @@ class AgentRunRequest {
   final String context;
   final List<AgentImageInput> images;
   final bool allowFamiliarization;
+
+  /// Dictionary ids whose generated profile is already waiting in the app
+  /// inbox. The current run uses noProfileInstruction and does not regenerate
+  /// them; the next run reuses the confirmed profile.
+  final Set<String> pendingProfileDictionaryIds;
   final String unidicPath;
   final AgentResponseLanguage responseLanguage;
 }
@@ -122,6 +128,9 @@ class AgentRunTelemetry {
     this.adoptedCitationCount = 0,
     this.targetsWithCitations = 0,
     this.targetCount = 0,
+    this.httpAttempts = 0,
+    this.analysisTtftMs = 0,
+    this.analysisPrefillChars = 0,
   });
 
   final int llmCalls;
@@ -139,7 +148,21 @@ class AgentRunTelemetry {
   final int targetsWithCitations;
   final int targetCount;
 
-  /// Targets that received at least one citation, divided by lookup targets.
+  /// Actual provider HTTP attempts, including provider retries and stream
+  /// reconnects. Unlike [llmCalls] (one per orchestrator request), this is the
+  /// number of network round trips.
+  final int httpAttempts;
+
+  /// Main-analysis time to first text delta, including any reconnect attempts.
+  final int analysisTtftMs;
+
+  /// Actual prompt characters sent for main analysis, including continuation
+  /// requests after a reconnect.
+  final int analysisPrefillChars;
+
+  /// Content-word targets that received at least one citation, divided by
+  /// content-word targets. Particles, punctuation and grammar patterns are
+  /// excluded.
   double get citationCoverage =>
       targetCount == 0 ? 0 : targetsWithCitations / targetCount;
 
@@ -161,6 +184,9 @@ class AgentRunTelemetry {
     'adopted_citation_count': adoptedCitationCount,
     'targets_with_citations': targetsWithCitations,
     'target_count': targetCount,
+    'http_attempts': httpAttempts,
+    'analysis_ttft_ms': analysisTtftMs,
+    'analysis_prefill_chars': analysisPrefillChars,
   };
 
   factory AgentRunTelemetry.fromJson(Map<String, Object?> json) {
@@ -179,6 +205,9 @@ class AgentRunTelemetry {
       adoptedCitationCount: agentInt(json['adopted_citation_count']),
       targetsWithCitations: agentInt(json['targets_with_citations']),
       targetCount: agentInt(json['target_count']),
+      httpAttempts: agentInt(json['http_attempts']),
+      analysisTtftMs: agentInt(json['analysis_ttft_ms']),
+      analysisPrefillChars: agentInt(json['analysis_prefill_chars']),
     );
   }
 }

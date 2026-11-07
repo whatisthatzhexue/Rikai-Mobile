@@ -96,9 +96,10 @@ class AgentOrchestrator {
     void Function(int citations)? onEvidenceProgress,
   }) async {
     var stage = AgentStage.prepare;
-    var uiLanguage = resolveAgentUiLanguage(request.responseLanguage);
+    final uiLanguage = resolveAgentUiLanguage(request.responseLanguage);
     final runWatch = Stopwatch()..start();
     final telemetry = _RunTelemetryBuilder();
+    var deferredProfileDictionaries = const <DictionaryInfo>[];
     void notify(AgentStage next, String message) {
       stage = next;
       _timing('stage=${next.name} elapsed=${runWatch.elapsedMilliseconds}ms');
@@ -181,71 +182,52 @@ class AgentOrchestrator {
         );
         checkCancelled();
         try {
-          final generation = await familiarizer.generateMany(
+          // Local confirmed profiles are used immediately. Missing profiles are
+          // not generated on the critical path: the current run uses
+          // noProfileInstruction and the proposals are generated after the
+          // result, then confirmed/auto-accepted for the next run.
+          final cached = await familiarizer.loadCached(
             request.dictionaries,
-            runId: request.runId,
+            pendingDictionaryIds: request.pendingProfileDictionaryIds,
           );
-          for (final result in generation.results) {
-            if (result.markdown.isNotEmpty &&
-                (result.action == FamiliarizationAction.reuse ||
-                    result.action == FamiliarizationAction.created)) {
+          for (final result in cached.results) {
+            if (result.action == FamiliarizationAction.reuse &&
+                result.markdown.isNotEmpty) {
               profiles.add(result.markdown);
+            } else if (result.action == FamiliarizationAction.declined) {
+              profiles.add(
+                noProfileInstruction(
+                  result.stored?.displayTitle ?? 'dictionary',
+                  'user declined',
+                ),
+              );
             }
           }
-          profileWarnings.addAll(generation.warnings);
-          unavailableProfiles.addAll(generation.issues);
-
-          final proposals = generation.proposals;
-          if (proposals.isNotEmpty && onProfilesGenerated != null) {
-            notify(
-              AgentStage.awaitingProfile,
-              agentStageMessage(AgentStage.awaitingProfile, uiLanguage),
-            );
-            checkCancelled();
-            final decisions = await onProfilesGenerated(
-              request.runId,
-              proposals,
-            );
-            for (var index = 0; index < proposals.length; index++) {
-              final proposal = proposals[index];
-              final decision = index < decisions.length
-                  ? decisions[index]
-                  : ProfileConfirmation(
-                      action: ProfileConfirmationAction.skipOnce,
-                      markdown: proposal.markdown,
-                    );
-              // The inbox persists the decision before releasing this future.
-              // Only a saved profile is added to this run's prompt.
-              if (decision.action == ProfileConfirmationAction.save) {
-                final markdown = decision.markdown.trim().isEmpty
-                    ? proposal.markdown
-                    : decision.markdown.trim();
-                if (markdown.isNotEmpty) profiles.add(markdown);
-              }
-            }
-          } else if (proposals.isNotEmpty && onProfile != null) {
-            // Direct callers/tests may resolve inline; the app controller uses
-            // the app-level inbox callback above.
-            for (final proposal in proposals) {
-              final decision = await onProfile(
-                proposal.profile,
-                proposal.markdown,
+          for (final dictionary in request.dictionaries) {
+            if (request.pendingProfileDictionaryIds.contains(dictionary.id)) {
+              profiles.add(
+                noProfileInstruction(dictionary.title, 'pending confirmation'),
               );
-              final result = await familiarizer.persistDecision(
-                proposal,
-                decision.action,
-                decision.markdown,
-              );
-              if (result.markdown.isNotEmpty &&
-                  result.action == FamiliarizationAction.created) {
-                profiles.add(result.markdown);
-              }
             }
           }
+          for (final dictionary in cached.missing) {
+            profiles.add(
+              noProfileInstruction(dictionary.title, 'profile not ready'),
+            );
+          }
+          deferredProfileDictionaries = cached.missing;
         } on AgentCapabilityException catch (error) {
           // A profile is an aid, not a gate. Keep going with raw evidence and
           // show the failure to the user instead of blocking the whole run.
           profileWarnings.add(error.message);
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint(
+              '[AgentFamiliarization] cache load failed '
+              '(${error.runtimeType})',
+            );
+          }
+          profileWarnings.add('词典档案读取失败');
         }
       }
       for (final issue in unavailableProfiles) {
@@ -371,7 +353,7 @@ class AgentOrchestrator {
           '[AgentCoverage] skipped '
           'citations=${evidence.citations.length} '
           'targets=${evidence.budget.uniqueTargets} '
-          'cap=${limits.maxEvidenceEntries}',
+          'cap=${evidence.budget.maxCitations}',
         );
       }
       _noteDictionariesWithoutEvidence(
@@ -448,6 +430,7 @@ class AgentOrchestrator {
           if (languageCheck.isMismatch) {
             warnings.add(agentLanguageWarning(uiLanguage));
           }
+          final fanOutStats = _contentCitationStats(evidence);
           var result = _buildResult(
             envelope: envelope,
             evidence: evidence,
@@ -463,8 +446,8 @@ class AgentOrchestrator {
               elapsedMs: runWatch.elapsedMilliseconds,
               citationCount: evidence.citations.length,
               adoptedCitationCount: validation.citationsUsed.length,
-              targetsWithCitations: evidence.budget.targetsWithCitations,
-              targetCount: evidence.budget.uniqueTargets,
+              targetsWithCitations: fanOutStats.cited,
+              targetCount: fanOutStats.total,
             ),
           );
           result = await _formatResultRichText(
@@ -783,6 +766,7 @@ class AgentOrchestrator {
           }
           checkCancelled();
           noteTruncation(salvaged.analysis);
+          final salvageStats = _contentCitationStats(evidence);
           var result = _buildResult(
             envelope: envelope,
             evidence: evidence,
@@ -802,8 +786,8 @@ class AgentOrchestrator {
               elapsedMs: runWatch.elapsedMilliseconds,
               citationCount: evidence.citations.length,
               adoptedCitationCount: salvageValidation.citationsUsed.length,
-              targetsWithCitations: evidence.budget.targetsWithCitations,
-              targetCount: evidence.budget.uniqueTargets,
+              targetsWithCitations: salvageStats.cited,
+              targetCount: salvageStats.total,
             ),
           );
           // A validation failure must not disable display formatting. The
@@ -836,6 +820,7 @@ class AgentOrchestrator {
       }
 
       checkCancelled();
+      final finalStats = _contentCitationStats(evidence);
       var result = _buildResult(
         envelope: envelope,
         evidence: evidence,
@@ -851,8 +836,8 @@ class AgentOrchestrator {
           elapsedMs: runWatch.elapsedMilliseconds,
           citationCount: evidence.citations.length,
           adoptedCitationCount: validation.citationsUsed.length,
-          targetsWithCitations: evidence.budget.targetsWithCitations,
-          targetCount: evidence.budget.uniqueTargets,
+          targetsWithCitations: finalStats.cited,
+          targetCount: finalStats.total,
         ),
       );
       result = await _formatResultRichText(
@@ -887,6 +872,75 @@ class AgentOrchestrator {
         message: 'Agent 运行失败',
         cause: error,
       );
+    } finally {
+      final deferred = deferredProfileDictionaries;
+      final familiarizer = dictionaryFamiliarizer;
+      if (deferred.isNotEmpty &&
+          familiarizer != null &&
+          cancellation?.isCancelled != true) {
+        // Start only after the analysis path has finished so profile sampling
+        // and the profile model call never compete with the user's answer.
+        unawaited(
+          _generateProfilesInBackground(
+            familiarizer: familiarizer,
+            dictionaries: deferred,
+            request: request,
+            onProfilesGenerated: onProfilesGenerated,
+            onProfile: onProfile,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _generateProfilesInBackground({
+    required DictionaryFamiliarizationService familiarizer,
+    required List<DictionaryInfo> dictionaries,
+    required AgentRunRequest request,
+    required AgentProfileReviewCallback? onProfilesGenerated,
+    required ProfileConfirmationCallback? onProfile,
+  }) async {
+    try {
+      final generation = await familiarizer.generateMany(
+        dictionaries,
+        runId: request.runId,
+      );
+      final proposals = generation.proposals;
+      if (proposals.isEmpty) return;
+      if (onProfilesGenerated != null) {
+        // The app inbox enqueues synchronously and then waits for decisions.
+        // This future intentionally lives beyond the run.
+        await onProfilesGenerated(request.runId, proposals);
+        return;
+      }
+      if (onProfile == null) return;
+      for (final proposal in proposals) {
+        try {
+          final decision = await onProfile(proposal.profile, proposal.markdown);
+          await familiarizer.persistDecision(
+            proposal,
+            decision.action,
+            decision.markdown,
+            profile: decision.profile,
+          );
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint(
+              '[AgentFamiliarization] background decision failed '
+              '(${error.runtimeType})',
+            );
+          }
+        }
+      }
+    } catch (error) {
+      // Profile generation is an aid; a background failure never affects the
+      // already-delivered result.
+      if (kDebugMode) {
+        debugPrint(
+          '[AgentFamiliarization] background generation failed '
+          '(${error.runtimeType})',
+        );
+      }
     }
   }
 
@@ -1243,14 +1297,29 @@ class AgentOrchestrator {
   bool _shouldRunCoverageReview(AgentEvidenceBundle evidence) {
     if (limits.maxCoverageFallback <= 0) return false;
     if (!limits.adaptiveCoverageReview) return true;
-    final citations = evidence.citations.length;
-    if (citations >= limits.maxEvidenceEntries) return true;
-    final targets = evidence.budget.uniqueTargets;
-    if (targets <= 0) return false;
-    // Per design §6.3.1: run coverage when at least one retrieval target has
-    // no citation. The old count comparison could skip a run when a few
-    // targets had multiple citations and other targets had none.
-    return evidence.budget.targetsWithCitations < targets;
+    // Only content words drive coverage. Punctuation, particles and other
+    // function words used to make every run look under-covered even when all
+    // readable words already had dictionary evidence.
+    final stats = _contentCitationStats(evidence);
+    if (stats.total <= 0) return false;
+    final hitRate = stats.cited / stats.total;
+    return hitRate < limits.coverageContentHitRateThreshold;
+  }
+
+  /// Content-word citation coverage used by coverage review and telemetry.
+  /// Counts token occurrences, not every lookup target: particles/punctuation
+  /// and grammar-pattern targets are excluded.
+  ({int total, int cited}) _contentCitationStats(AgentEvidenceBundle evidence) {
+    var total = 0;
+    var cited = 0;
+    for (final source in evidence.sources) {
+      for (final token in source.tokens) {
+        if (!token.content) continue;
+        total++;
+        if (token.citationIds.isNotEmpty) cited++;
+      }
+    }
+    return (total: total, cited: cited);
   }
 
   /// F7: one bounded coverage review after the initial evidence. It may run one
@@ -1382,6 +1451,9 @@ class AgentOrchestrator {
 
     var workingEvidence = evidence;
     var fallbackUsed = false;
+    // Coverage supplements are explicit follow-up lookups; they may add
+    // targeted entries beyond the short-text initial breadth cap, up to the
+    // global citation limit.
     var remainingSlots =
         limits.maxEvidenceEntries - workingEvidence.citations.length;
     if (remainingSlots < 0) remainingSlots = 0;
@@ -1422,10 +1494,20 @@ class AgentOrchestrator {
       );
     }
 
+    // A sense/usage/example gap is an explicit multi-sense signal, so allow a
+    // second entry per dictionary for this targeted follow-up. Word/grammar/
+    // reading gaps remain breadth-only.
+    final wantsDepth = validated.missing.any(
+      (item) =>
+          item.kind == AgentCoverageKind.sense ||
+          item.kind == AgentCoverageKind.usage ||
+          item.kind == AgentCoverageKind.example,
+    );
     final supplementary = await evidenceBuilder.lookupExtraQueries(
       queries: <String>[for (final item in validated.missing) item.query],
       dictionaries: request.dictionaries,
       maxNewCitations: remainingSlots,
+      perDictionaryLimit: wantsDepth ? 2 : 1,
       excludedKeys: excludedKeys,
       isCancelled: () => cancellation?.isCancelled == true,
       onProgress: onProgress,
@@ -1842,6 +1924,9 @@ class AgentOrchestrator {
       int outputChars,
       int reasoningChars,
       int elapsedMs,
+      int httpAttempts,
+      int firstTextMs,
+      int prefillChars,
     )?
     onTelemetry,
     String label = 'request',
@@ -1850,10 +1935,16 @@ class AgentOrchestrator {
     final reasoning = StringBuffer();
     final watch = Stopwatch()..start();
     var firstEventAt = -1;
+    var firstTextAt = -1;
+    var httpAttempts = 0;
+    var prefillChars = 0;
     final reconnectAttempts = limits.streamReconnectAttempts < 0
         ? 0
         : limits.streamReconnectAttempts;
     final maxAttempts = 1 + reconnectAttempts;
+    final observedBase = request.copyWith(
+      onHttpAttempt: (attempt, retry) => httpAttempts++,
+    );
 
     // The tagged protocol is line-oriented. Drop an incomplete trailing line
     // before a continuation so the model re-emits it instead of duplicating
@@ -1886,10 +1977,15 @@ class AgentOrchestrator {
         }
       }
       final attemptRequest = attempt == 0 || buffer.isEmpty
-          ? request
-          : buildStreamContinuationRequest(request, buffer.toString());
+          ? observedBase
+          : buildStreamContinuationRequest(observedBase, buffer.toString());
+      final attemptChars = attemptRequest.messages.fold<int>(
+        0,
+        (sum, message) => sum + message.text.length,
+      );
       var finished = false;
       final attemptStartChars = buffer.length;
+      final attemptsBefore = httpAttempts;
       try {
         await for (final event in llm.stream(
           attemptRequest,
@@ -1905,6 +2001,7 @@ class AgentOrchestrator {
           if (firstEventAt < 0) firstEventAt = watch.elapsedMilliseconds;
           switch (event.type) {
             case LlmEventType.textDelta:
+              if (firstTextAt < 0) firstTextAt = watch.elapsedMilliseconds;
               buffer.write(event.text);
               // Only the accumulated length is published. Converting the
               // whole buffer to a String on every delta is O(n²) for
@@ -1969,6 +2066,12 @@ class AgentOrchestrator {
         }
         continue;
       }
+      // Fakes and adapters that do not report HTTP attempts still count as
+      // one request per stream attempt. Real providers report each retry via
+      // LlmRequest.onHttpAttempt.
+      if (httpAttempts == attemptsBefore) httpAttempts++;
+      final attemptHttp = httpAttempts - attemptsBefore;
+      prefillChars += attemptChars * (attemptHttp > 0 ? attemptHttp : 1);
       if (kDebugMode) {
         debugPrint(
           '[AgentTiming] stream label=$label attempt=$attempt '
@@ -2008,6 +2111,9 @@ class AgentOrchestrator {
       buffer.length,
       reasoning.length,
       watch.elapsedMilliseconds,
+      httpAttempts,
+      firstTextAt,
+      prefillChars,
     );
     return buffer.toString();
   }
@@ -2056,6 +2162,9 @@ class _RunTelemetryBuilder {
   int outputChars = 0;
   int reasoningChars = 0;
   int llmElapsedMs = 0;
+  int httpAttempts = 0;
+  int analysisTtftMs = 0;
+  int analysisPrefillChars = 0;
 
   void record(
     LlmRequest request,
@@ -2063,8 +2172,12 @@ class _RunTelemetryBuilder {
     int outputChars,
     int reasoningChars,
     int elapsedMs,
+    int httpAttempts,
+    int firstTextMs,
+    int prefillChars,
   ) {
     llmCalls++;
+    this.httpAttempts += httpAttempts;
     inputChars += request.messages.fold<int>(
       0,
       (sum, message) => sum + message.text.length,
@@ -2074,6 +2187,11 @@ class _RunTelemetryBuilder {
     llmElapsedMs += elapsedMs;
     if (label == 'analysis' || label.startsWith('analysis:')) {
       analysisCalls++;
+      analysisPrefillChars += prefillChars;
+      if (firstTextMs >= 0 &&
+          (analysisTtftMs == 0 || firstTextMs < analysisTtftMs)) {
+        analysisTtftMs = firstTextMs;
+      }
     }
     if (label == 'coverage' || label == 'coverage_repair') coverageCalls++;
     if (label == 'analysis_repair') repairCalls++;
@@ -2087,7 +2205,7 @@ class _RunTelemetryBuilder {
     required int targetsWithCitations,
     required int targetCount,
   }) {
-    return AgentRunTelemetry(
+    final telemetry = AgentRunTelemetry(
       llmCalls: llmCalls,
       analysisCalls: analysisCalls,
       coverageCalls: coverageCalls,
@@ -2102,7 +2220,21 @@ class _RunTelemetryBuilder {
       adoptedCitationCount: adoptedCitationCount,
       targetsWithCitations: targetsWithCitations,
       targetCount: targetCount,
+      httpAttempts: httpAttempts,
+      analysisTtftMs: analysisTtftMs,
+      analysisPrefillChars: analysisPrefillChars,
     );
+    if (kDebugMode) {
+      debugPrint(
+        '[AgentTelemetry] llm=${telemetry.llmCalls} http=${telemetry.httpAttempts} '
+        'prefill=${telemetry.analysisPrefillChars} '
+        'ttft=${telemetry.analysisTtftMs}ms '
+        'elapsed=${telemetry.elapsedMs}ms '
+        'citations=${telemetry.citationCount}/${telemetry.adoptedCitationCount} '
+        'contentTargets=${telemetry.targetsWithCitations}/${telemetry.targetCount}',
+      );
+    }
+    return telemetry;
   }
 }
 

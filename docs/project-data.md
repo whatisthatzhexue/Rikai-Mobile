@@ -40,16 +40,17 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **534** |
-| 当前测试文件数 | **95** |
+| 当前 test/testWidgets 声明数 | **551** |
+| 当前测试文件数 | **97** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | **543 passed**（声明 534；参数化/循环用例产生 543 个执行用例） |
+| 最近 `flutter test` | **560 passed**（声明 551；参数化/循环用例产生 560 个执行用例） |
 | 最近 `flutter build apk --debug` | success（2026-11-04 P6.6/P6.7 验证；2026-11-06 后台服务改动未做 APK 构建） |
 | 最近 Android Kotlin 编译 | success（2026-11-06 `:app:compileDebugKotlin --offline`；含 AgentRunService/MainActivity） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
-> 该数字对应 2026-11-06 Agent UI/后台/续传修复工作区（含 Phase 4 安全子集、
-> Wave 3、P6.6、P7.0 富文本修正、Phase 1a–3）。新增/删除测试后只更新本节。
+> 该数字对应 2026-11-06 词典/阅读器/历史 UI 修正工作区（含 Agent UI/后台/续传、
+> Phase 4 安全子集、Wave 3、P6.6、P7.0 富文本修正、Phase 1a–3）。新增/删除测试后
+> 只更新本节。
 
 ### 2.2 历史测试基线（不要当作当前值）
 
@@ -83,7 +84,8 @@
 | Phase 4 安全子集 | 519（声明 510） | 静态 ja/zh/en 词表包、覆盖评估、非日语脚本跳过 UniDic |
 | Phase 4 采样截断显式化 | 523（声明 514） | 词表语义边界测试、DictionarySample/coverage 截断字段、Markdown/卡片/warnings 警告、prompt 投影 |
 | Agent UI/后台/续传修复 | 543（声明 534） | ruby 宽度/音调 baseline/尾高、下划线换行、历史复制、档案锁定、provider 持久化、会话模式、后台服务、断流续传（含续传耗尽保留 partial） |
-| 当前 | **543（声明 534）** | 见 §2.1 |
+| 词典/阅读器/历史 UI 修正 | 560（声明 551） | entry:// 失败气泡、导入名称统一 MDX、历史错误本地化/滚动保持、音调尾降对齐、最小 Ruby/振假名、样本上限文案、语言对修正 |
+| 当前 | **560（声明 551）** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
@@ -168,6 +170,10 @@ arm64 真机性能另需复测。
 | 输入占位 | 输入问题，或粘贴文本… |
 | 查词占位 | 搜索…… |
 | 档案操作 | 保存并信任、本次跳过、不再询问 |
+| 档案语言对 | 语言对、源语言、目标语言、添加语言对、未识别到语言对；语言名 日语/中文/英语/韩语 |
+| 样本上限提示 | 词典样本已达到上限，另有 N 项检查未覆盖（不影响基本使用） |
+| 词典内跳转失败 | 当前词典中没有「word」 |
+| 导入读取状态 | 正在读取词典信息… |
 | 档案删除锁定 | 分析进行中，暂不能删除档案（灰色锁图标） |
 | 隐私文案 | 图片只在本机 OCR，不会上传 |
 | 设置分组 | 词典助手设置、模型服务、服务商、接口地址、快速模型、高精度模型、接口密钥（API Key） |
@@ -191,8 +197,8 @@ arm64 真机性能另需复测。
 |---|---:|---|
 | 单次分析源文本 | 6,000 字符 | `AgentLimits.maxSourceChars`；orchestrator 拒绝超限 |
 | 唯一检索目标 | 120 | `AgentLimits.maxTargets`；EvidenceBuilder |
-| citation 总数 | 60 | `AgentLimits.maxEvidenceEntries`；EvidenceBuilder |
-| 每词每典条数 | 3 | `AgentLimits.maxEntriesPerDictionary`；lookup |
+| citation 总数 | 全局 60；短文本动态 | `AgentLimits.maxEvidenceEntries`；selected target < 15 时上限为 `contentTargetCount × dictionaryCount`（再与 60 取小） |
+| 每词每典条数 | breadth 1；depth 3 | `AgentLimits.maxEntriesPerDictionary`；`enableDepthPass` 默认 false，只有显式多义/coverage 补查才补第 2/3 条 |
 | 摘要长度 | 400 字符 | `AgentLimits.maxSnippetChars`；citation 展示清洗另截断至 240 |
 | 单个 source 的 quote 上限 | 40 | `quote_builder.dart` |
 | 熟悉期每词典样本 | 20 | `DictionaryFamiliarizationService`；探针 16 精确 + 11 前缀 |
@@ -208,8 +214,13 @@ arm64 真机性能另需复测。
 | 覆盖审查 missing / duplicate / fallback | 20 / 10 / 1 | `AgentLimits`（F7 已实现，单次回退） |
 | 覆盖审查 query 字符上限 | 100 | `AgentLimits.maxCoverageQueryChars`；仅防超长字符串 |
 | 复合词补查 token 跨度 | 6 | `AgentLimits.maxCoverageCompoundTokens`；未知 word query；无 tokenizer 时只接受已知术语 |
-| 覆盖审查自适应触发 | 默认开启 | `AgentLimits.adaptiveCoverageReview`；全部 target 已有 citation 且未达上限时跳过 |
-| 覆盖审查触发口径 | per-target | 2026-11-04：`targetsWithCitations < uniqueTargets`，不用 citation 总数代理 |
+| 短文本 target 阈值 | 15 | `AgentLimits.shortTextTargetThreshold`；低于此值使用内容词动态 citation 上限 |
+| content-word coverage 命中率 | 80% | `AgentLimits.coverageContentHitRateThreshold`；≥80% 跳过 coverage |
+| coverage 按需 depth | sense/usage/example 每典 2 条 | 其他 missing kind 每典 1 条 |
+| 全局 Run Deadline | 30 秒（0/负数禁用） | `AgentLimits.runDeadlineSeconds`；controller 超时取消 provider/OCR，`TOOL_TIMEOUT` 可重试并保留 provisional/retained result |
+| 首跑词典档案 | 非阻塞 | 当前 run 使用 `noProfileInstruction`；分析后后台生成；确认/不再询问后下次 run 生效 |
+| 覆盖审查自适应触发 | 默认开启 | `AgentLimits.adaptiveCoverageReview`；内容词 citation 命中率 < 80% 时运行；达到 60 条不再强制审查 |
+| 覆盖审查触发口径 | 内容词命中率 | 2026-11-06 P0：只统计 `Token.isContentWord`；排除助词/标点/功能词；固定 quote≤2/文本<50 短路已删除 |
 | 词典 fan-out | 默认关闭 | `AgentLimits.enableDictionaryFanOut`；真实 provider/arm64 验收前不默认开启 |
 | fan-out 触发 | >8 词典或 >16,000 字符 | `dictionaryFanOutThreshold` / `dictionaryFanOutEvidenceChars`；source+citation 估算 |
 | fan-out 并发 | 2 | `AgentLimits.dictionaryFanOutConcurrency`；按用户词典顺序合并 |

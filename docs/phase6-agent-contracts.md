@@ -589,14 +589,16 @@ COVERAGE 根块唯一、MISSING/DUPLICATE/NOTES 必须位于 COVERAGE 内、同�
 - 每个用户请求最多一次覆盖审查 + 一次回退；失败/无重复/无可追溯 query 时保留
   原证据并显示 warning，不让整次 run 失败。`AgentRunResult.warnings` 承载
   本地化 warning，`coverageFallbackUsed` 标记是否执行过补充检索。
-- 2026-11-03 自适应触发：默认仅当存在尚未获得 citation 的检索目标，或 citation
-  已达全局上限（需要验证重复以释放槽位）时运行；全部目标已有 citation 且仍有
-  剩余槽位时跳过，避免每个 run 固定多一次小模型调用。
+- 2026-11-06 P0 自适应触发：只看内容词 citation 命中率，排除助词、标点、符号
+  和纯功能词；命中率 `< AgentLimits.coverageContentHitRateThreshold`
+  （默认 0.8）时才运行。删除“citation 达到全局上限强制审查”和固定
+  `quote ≤ 2 && 文本 < 50 字符` 短路。
   `AgentLimits.adaptiveCoverageReview=false` 可强制每次都审查。
 - 2026-11-03 去重：MISSING query 已被现有 citation 或带 citation_ids 的
-  token/pattern 覆盖时跳过；重复 query 跳过。补充查词每个 query 每本词典只取
-  1 条，只有 sense/usage/example 类 MISSING 可在已覆盖词上继续查。主证据采用
-  breadth-first（每个 target 先 1 条）再 depth，避免早期词条耗尽全局预算。
+  token/pattern 覆盖时跳过；重复 query 跳过。主证据采用 breadth-first
+  （每个 target 每词典先 1 条）；depth 默认关闭，只在显式多义/coverage 补查时
+  按需获取。Coverage MISSING 的 `sense`/`usage`/`example` 类允许补充查词每本
+  词典取 2 条；`word`/`grammar`/`reading` 类仍只取 1 条。
 - 运行时输出为标签文本（`stream:false`，不发 `response_format`/
   `json_schema`）；解析或标签块完整性失败只做一次“正文不变、只补标签”的格式
   修复。模型返回的 coverage 建议必须经过本地可追溯性/重复校验，不能直接删除或
@@ -840,13 +842,18 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
   方向性语言对优先使用标题脚本提示和样本文字脚本；模型 `[LANGUAGES]` 只作
   低置信度回退，不额外发请求。无 tokenizer/无法判断时语言对可为空。
 - 采样截断：`DictionarySample` 的本地字段 `truncated`/`unsampled_probes`
-  记录因 `maxEntries` 上限未执行的探针；`DictionaryCoverage` 只持久化
+  记录因 `maxEntries` 上限未执行的检查；`DictionaryCoverage` 只持久化
   `sample_truncated`/`unsampled_probe_count`。这些字段用于本地告警，不进入
   profile 模型 prompt；截断时档案 Markdown、档案卡片和 familiarization
-  warnings 必须显示提示，不能静默丢弃探针。
+  warnings 必须显示**用户可读**的提示（“另有 N 项检查未覆盖（不影响基本使用）”），
+  不能静默丢弃；内部仍使用 probe 术语。
 - 词表覆盖（`word_list_coverage.dart`）是语义场景覆盖，不是 POS 覆盖率；
   不新增 POS schema/指标。
 - 用户可编辑 Markdown 摘要；该 Markdown 是 prompt 的权威版本，JSON 作为结构备份。
+- **语言对修正**：确认/编辑 sheet 允许用户增删 `language_pairs`；保存时同时更新
+  `DictionaryProfile.languagePairs`、`profile_json` 与 Markdown 的“语言”行，
+  `ProfileConfirmation.profile` 把修正后的 profile 传给 inbox/manager 持久化。
+  后续 prompt 使用修正后的 Markdown；指纹不因人工修正而变化。
 - profile prompt 版本已升到 2（新增 INTRO/本地分析字段）；旧档案通过指纹失效后
   重新生成，JSON schema 标识仍为 v1（新字段可选，旧 JSON 可读）。
 - 指纹：`dictionary_id + mdx size/mtime + entryCount + encoding +
@@ -897,8 +904,7 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
 idle
   → prepare
   → ocr
-  → familiarizing
-  → awaitingProfile（应用级档案队列，逐个用户处理）
+  → familiarizing（只读本地已确认/已拒绝档案）
   → tokenizing
   → evidence
   → coverage（一次覆盖审查，可选补充检索）
@@ -908,10 +914,17 @@ idle
   → done | error | cancelled
 ```
 
-- `awaitingProfile` 只在需要熟悉且仍有未处理档案时出现；**必须由用户显式处理
-  （信任/本次跳过/不再询问）全部已生成档案后，才进入 tokenizing**。页面离开、
-  重建或 dismiss sheet 不得自动 skip；`unavailable` 档案无确认内容，记录 issue
-  后不阻塞。队列属于应用级 controller，不属于 `AgentPage`。**Wave 2 已实现**
+- 2026-11-06 P0 起 `familiarizing` **不阻塞**：缺失档案在当前 run 使用
+  `noProfileInstruction`，分析结束后后台生成并进入应用级待确认队列；Agent 页
+  不自动弹 sheet（只显示待处理数量），档案管理页显式确认。确认/“不再询问”后
+  保存并在**下次 run** 生效；未确认的同一档案不会重复生成。`awaitingProfile`
+  保留为历史/兼容状态，不再是正常首跑路径。页面离开、重建或 dismiss sheet 不得
+  自动 skip；`unavailable` 档案无确认内容，记录 issue 后不阻塞。队列属于应用级
+  controller，不属于 `AgentPage`。**Wave 2 已实现，P0 改为非阻塞**
+- 2026-11-06 P0 全局 Run Deadline：`AgentLimits.runDeadlineSeconds` 默认 30
+  （0/负数禁用）。controller 超时取消 provider/OCR，状态为可恢复的
+  `TOOL_TIMEOUT`，保留 current provisional/retained result；done/error/cancel/
+  newSession 清理计时器。直接调用 orchestrator 的测试/集成不经过该计时器。
   （`AgentProfileInboxController` + `DictionaryFamiliarizationService.generateMany`）。
 - 确认窗口的“不再询问”= 保存当前档案并开启 `agent_profiles_auto_accept`；
   默认关闭。开启后新生成的档案直接保存并信任，Agent 设置可再次关闭。确认窗口

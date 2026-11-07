@@ -39,6 +39,146 @@ final RegExp _trailingParenPattern = RegExp(r'[（(]([^（）()\r\n]*)[）)]$');
 final RegExp _leadingBracketPattern = RegExp(r'^【([^【】\r\n]*)】');
 final RegExp _leadingParenPattern = RegExp(r'^[（(]([^（）()\r\n]*)[）)]');
 
+/// One display segment of a minimal ruby annotation. A null [reading] is plain
+/// base text; a non-null reading is a ruby span over [base].
+typedef MinimalRubySegment = ({String base, String? reading});
+
+bool _isKanaCodePoint(int rune) {
+  return (rune >= 0x3040 && rune <= 0x309F) ||
+      (rune >= 0x30A0 && rune <= 0x30FF) ||
+      rune == 0x30FC ||
+      (rune >= 0x31F0 && rune <= 0x31FF) ||
+      (rune >= 0xFF66 && rune <= 0xFF9F);
+}
+
+/// Splits a whole-word ruby into the minimal unknown part plus plain kana.
+///
+/// Japanese okurigana is already known from the base text, so annotating
+/// `悩んでも` as `なやんでも` repeats information. The minimal rule annotates
+/// only `悩（なや）` and leaves `んでも` plain. Prefix/suffix kana are trimmed
+/// first; internal kana anchors (for example the `し` in `申し込み`) are found
+/// with an LCS on equal kana code points, producing `申（もう）し込（こ）み`.
+/// If the two strings cannot be aligned, the original whole-word pair is
+/// returned and the caller keeps the existing ruby.
+List<MinimalRubySegment> minimalRubySegments(String base, String reading) {
+  final baseRunes = base.runes.toList(growable: false);
+  final readingRunes = reading.runes.toList(growable: false);
+  final full = <MinimalRubySegment>[(base: base, reading: reading)];
+  if (base.isEmpty || reading.isEmpty || base == reading) {
+    return full;
+  }
+
+  final baseLength = baseRunes.length;
+  final readingLength = readingRunes.length;
+  var prefix = 0;
+  while (prefix < baseLength &&
+      prefix < readingLength &&
+      baseRunes[prefix] == readingRunes[prefix] &&
+      _isKanaCodePoint(baseRunes[prefix])) {
+    prefix++;
+  }
+  var suffix = 0;
+  while (suffix < baseLength - prefix &&
+      suffix < readingLength - prefix &&
+      baseRunes[baseLength - 1 - suffix] ==
+          readingRunes[readingLength - 1 - suffix] &&
+      _isKanaCodePoint(baseRunes[baseLength - 1 - suffix])) {
+    suffix++;
+  }
+
+  final baseMiddle = baseRunes.sublist(prefix, baseLength - suffix);
+  final readingMiddle = readingRunes.sublist(prefix, readingLength - suffix);
+  if (baseMiddle.isEmpty || readingMiddle.isEmpty) return full;
+
+  // LCS anchors: only equal kana may stay plain. Kanji/Latin base characters
+  // are always part of a ruby segment even when the reading happens to contain
+  // the same character.
+  final n = baseMiddle.length;
+  final m = readingMiddle.length;
+  final anchors = <(int, int)>[];
+  if (n > 0 && m > 0) {
+    final dp = List<List<int>>.generate(
+      n + 1,
+      (_) => List<int>.filled(m + 1, 0),
+      growable: false,
+    );
+    for (var i = n - 1; i >= 0; i--) {
+      for (var j = m - 1; j >= 0; j--) {
+        if (baseMiddle[i] == readingMiddle[j] &&
+            _isKanaCodePoint(baseMiddle[i])) {
+          dp[i][j] = dp[i + 1][j + 1] + 1;
+        } else {
+          dp[i][j] = dp[i + 1][j] >= dp[i][j + 1] ? dp[i + 1][j] : dp[i][j + 1];
+        }
+      }
+    }
+    var i = 0;
+    var j = 0;
+    while (i < n && j < m) {
+      if (baseMiddle[i] == readingMiddle[j] &&
+          _isKanaCodePoint(baseMiddle[i])) {
+        anchors.add((i, j));
+        i++;
+        j++;
+      } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+        i++;
+      } else {
+        j++;
+      }
+    }
+  }
+
+  String baseRange(List<int> runes, int start, int end) =>
+      String.fromCharCodes(runes.sublist(start, end));
+
+  final segments = <MinimalRubySegment>[];
+  if (prefix > 0) {
+    segments.add((base: baseRange(baseRunes, 0, prefix), reading: null));
+  }
+  var baseCursor = 0;
+  var readingCursor = 0;
+  for (final anchor in anchors) {
+    final basePart = baseRange(baseMiddle, baseCursor, anchor.$1);
+    final readingPart = baseRange(readingMiddle, readingCursor, anchor.$2);
+    if (basePart.isEmpty || readingPart.isEmpty) {
+      // Extra kana on one side cannot be represented as one ruby span; fall
+      // back to the original pair instead of dropping part of the reading.
+      return full;
+    }
+    segments.add((base: basePart, reading: readingPart));
+    segments.add((
+      base: String.fromCharCode(baseMiddle[anchor.$1]),
+      reading: null,
+    ));
+    baseCursor = anchor.$1 + 1;
+    readingCursor = anchor.$2 + 1;
+  }
+  final tailBase = baseRange(baseMiddle, baseCursor, n);
+  final tailReading = baseRange(readingMiddle, readingCursor, m);
+  if (tailBase.isNotEmpty || tailReading.isNotEmpty) {
+    if (tailBase.isEmpty || tailReading.isEmpty) return full;
+    segments.add((base: tailBase, reading: tailReading));
+  }
+  if (suffix > 0) {
+    segments.add((
+      base: baseRange(baseRunes, baseLength - suffix, baseLength),
+      reading: null,
+    ));
+  }
+  return segments.isEmpty ? full : segments;
+}
+
+/// Converts a full-word base/reading pair to the minimal tagged display form.
+String minimalRubyText(String base, String reading) {
+  return minimalRubySegments(base, reading)
+      .map(
+        (segment) => segment.reading == null
+            ? segment.base
+            : '[RUBY=${segment.reading}]${segment.base}[/RUBY]',
+      )
+      .join();
+}
+
 /// Full-width and half-width punctuation that may wrap or trail a reading
 /// annotation. It is removed before comparing YOMI contents and before a
 /// RUBY reading is shown/copied.

@@ -78,6 +78,7 @@ class OpenAiCompatibleProvider implements LlmPort {
         data: payload,
         options: options,
         cancelToken: cancelToken,
+        onAttempt: request.onHttpAttempt,
       );
       if (!useStream) {
         for (final event in _eventsFromResponse(response.data)) {
@@ -231,6 +232,7 @@ class OpenAiCompatibleProvider implements LlmPort {
             receiveTimeout: timeout,
           ),
           cancelToken: cancelToken,
+          onAttempt: request.onHttpAttempt,
         );
         for (final event in _eventsFromResponse(fallback.data)) {
           yield event;

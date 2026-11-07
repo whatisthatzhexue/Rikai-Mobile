@@ -263,6 +263,7 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
         proposal: proposal,
         action: decision.action,
         markdown: decision.markdown,
+        profile: decision.profile,
       );
       ref.invalidate(agentProfilesProvider);
       if (decision.action == ProfileConfirmationAction.save ||

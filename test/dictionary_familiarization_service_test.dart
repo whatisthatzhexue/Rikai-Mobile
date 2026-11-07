@@ -168,12 +168,12 @@ void main() {
     ]);
 
     expect(generation.proposals, hasLength(1));
-    expect(generation.warnings.single, contains('2 个探针未采样'));
+    expect(generation.warnings.single, contains('2 项检查未覆盖'));
     final proposal = generation.proposals.single;
     expect(proposal.profile.coverage.sampleTruncated, isTrue);
     expect(proposal.profile.coverage.unsampledProbeCount, 2);
-    expect(proposal.markdown, contains('采样提示'));
-    expect(proposal.markdown, contains('2个探针未采样'));
+    expect(proposal.markdown, contains('样本提示'));
+    expect(proposal.markdown, contains('2 项检查未覆盖'));
 
     // Truncation diagnostics stay local; the model-facing sample JSON keeps
     // its previous shape.
@@ -429,5 +429,37 @@ void main() {
       profileToMarkdown(profile, AgentProfileLanguage.japanese),
       contains('種類'),
     );
+  });
+
+  test('persistAgentProfileDecision stores corrected language pairs', () async {
+    final original = DictionaryProfile.fromJson(_profileJson);
+    final corrected = original.copyWith(
+      languagePairs: const <DictionaryLanguagePair>[
+        DictionaryLanguagePair(source: 'ja', target: 'zh', confidence: 1),
+      ],
+    );
+    final repository = InMemoryDictionaryProfileRepository();
+    final markdown = updateLanguagePairsMarkdown(
+      profileToMarkdown(original),
+      corrected,
+      AgentProfileLanguage.chinese,
+    );
+    await persistAgentProfileDecision(
+      repository: repository,
+      proposal: AgentProfileProposal(
+        id: 'proposal-1',
+        dictionary: _dictionary,
+        fingerprint: 'fingerprint',
+        profile: original,
+        markdown: profileToMarkdown(original),
+      ),
+      action: ProfileConfirmationAction.save,
+      markdown: markdown,
+      profile: corrected,
+    );
+
+    final stored = await repository.load('dict_a');
+    expect(stored?.profile?.languagePairs.single.label, 'ja→zh');
+    expect(stored?.markdown, contains('- 语言: ja→zh'));
   });
 }

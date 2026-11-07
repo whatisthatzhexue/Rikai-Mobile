@@ -62,12 +62,32 @@ class LlmRequest {
     required this.messages,
     this.maxTokens = 16000,
     this.stream = true,
+    this.onHttpAttempt,
   });
 
   final String model;
   final List<LlmMessage> messages;
   final int maxTokens;
   final bool stream;
+
+  /// Called by provider adapters for every HTTP attempt, including retries.
+  /// Used only for content-free telemetry; it must never receive prompt text.
+  final void Function(int attempt, bool retry)? onHttpAttempt;
+
+  LlmRequest copyWith({
+    List<LlmMessage>? messages,
+    int? maxTokens,
+    bool? stream,
+    void Function(int attempt, bool retry)? onHttpAttempt,
+  }) {
+    return LlmRequest(
+      model: model,
+      messages: messages ?? this.messages,
+      maxTokens: maxTokens ?? this.maxTokens,
+      stream: stream ?? this.stream,
+      onHttpAttempt: onHttpAttempt ?? this.onHttpAttempt,
+    );
+  }
 }
 
 enum LlmEventType { textDelta, reasoningDelta, done, error }

@@ -50,9 +50,10 @@ void main() {
       secrets: secrets,
     );
 
+    final observedAttempts = <String>[];
     final events = await provider
         .stream(
-          const LlmRequest(
+          LlmRequest(
             model: 'large',
             messages: <LlmMessage>[
               LlmMessage(
@@ -60,11 +61,15 @@ void main() {
                 parts: <LlmTextPart>[LlmTextPart('请翻译')],
               ),
             ],
+            onHttpAttempt: (attempt, retry) {
+              observedAttempts.add('$attempt:$retry');
+            },
           ),
         )
         .toList();
 
     expect(attempts, 2);
+    expect(observedAttempts, <String>['1:false', '2:true']);
     expect(events.any((event) => event.text == '好的'), isTrue);
   });
 }

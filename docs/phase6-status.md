@@ -34,6 +34,87 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 > copy. Wave 3 adds `AgentLanguageValidator` post-validation of human-readable
 > fields plus one language repair with a visible warning when it still differs.
 
+## 2026-11-06 P0 过度抓取 / 高延迟收敛
+
+- `AgentLimits` 新增 `shortTextTargetThreshold=15`、
+  `coverageContentHitRateThreshold=0.8`、`enableDepthPass=false`。
+- `EvidenceBuilder` 广度轮改为每个 target 每本词典只取 1 条；短文本（selected
+  target < 15）citation 上限为 `contentTargetCount × dictionaryCount`，
+  不再允许 1 句文本预取 60 条。内容词排在 pattern/功能词之前；标点/符号只保留
+  为上下文 token，不进入 lookup target。
+- depth 默认关闭，仅在 `enableDepthPass=true` 的显式多义/补查场景补齐第 2/3 条；
+  初始管线不再自动跑 depth。
+- 查词递进改为缺口驱动：所有 target 先 exact；只有 exact 仍无 citation 的 target
+  才进入 prefix，之后才是 suffix/incremental；已命中 target 不再跑后续模式。
+- Coverage 触发改为内容词 citation 命中率 `<80%`；删除“citations>=60 强制审查”
+  和固定 `quote≤2 && 文本<50` 短路。助词、标点、功能词不计入命中率；coverage
+  补查仍可在初始短文本上限之外使用全局 60 条预算。MISSING 为
+  `sense`/`usage`/`example` 时，补充查词允许每本词典取 2 条，作为显式多义的
+  按需 depth 路径；`word`/`grammar`/`reading` 仍只取 1 条。
+- `AgentRunTelemetry` 新增 `httpAttempts`（核心管线实际 HTTP 尝试，含 provider
+  重试与续传）、`analysisTtftMs`（主分析首字延迟）、`analysisPrefillChars`
+  （主分析实际 prefill 字符）；`targetsWithCitations/targetCount` 改为内容词
+  统计；debug 输出 `[AgentTelemetry]`。
+- `resultTruncated` 文案改为“词典依据已达上限，部分义项未送入模型（原文已分析）”，
+  UI/Markdown 同时显示“预取 N 条 / 采用 X 条（上限 M）”。
+- 测试：新增样本形态短文本（内容词 3、2 词典）断言 **6 条 citation（≤15）**、
+  仅 exact 模式、prefill < 12,000 字符；新增 80% coverage 阈值、depth 关闭、
+  breadth 每词典 1 条、provider HTTP attempt 回调测试。`flutter analyze` 无问题，
+  完整 `flutter test` **547 项通过**。全部为 fake/local provider，未使用付费 Key；
+  真实 provider/arm64/真实大词典仍未验收。
+
+## 2026-11-06 首跑档案非阻塞 / 全局 Run Deadline
+
+- 首跑不再等待词典档案生成或用户确认：
+  `DictionaryFamiliarizationService.loadCached()` 只读取指纹有效的本地
+  已确认/已拒绝档案；缺失档案当前 run 使用 `noProfileInstruction` 兜底分析。
+- 分析结束后由 orchestrator `finally` 启动后台 `generateMany()`；生成结果进入
+  应用级待确认队列。Agent 页 `AgentProfileInboxHost(autoPresent:false)` 不自动
+  弹 sheet，只显示待处理数量；档案管理页仍可显式确认。确认/“不再询问”后才写档案，
+  **下次 run 生效**；`AgentRunRequest.pendingProfileDictionaryIds` 防止对待确认
+  档案重复生成。自动保存（`agent_profiles_auto_accept`）仍可用，当次 run 和之后
+  的 run 都不阻塞。
+- `AgentLimits.runDeadlineSeconds` 默认 **30 秒**（0/负数禁用）。controller 在 run
+  开始时启动计时器，超时立即取消 provider/OCR、停止后台服务，状态变为可恢复的
+  `TOOL_TIMEOUT`，并保留 current provisional 或 retained result；done/error/
+  cancel/newSession 会清理计时器。直接调用 orchestrator 的测试/集成不经过该
+  controller 计时器。
+- 测试：生命周期新增“档案不阻塞分析/分析后生成/自动保存/待确认不重复生成”和
+  “30 秒 deadline 保留 retained result 且可重试”；`flutter analyze` 无问题，
+  完整 `flutter test` **559 项通过**。全部 fake/local provider，未使用付费 Key；
+  真实 provider 下 30 秒是否适合当前模型仍需实测调整，arm64/设备未验收。
+
+## 2026-11-06 词典/阅读器/历史 UI 修正
+
+- **entry:// 检索失败**：词典页内跳转仍限定当前词典 exact 查询；无命中时显示
+  “当前词典中没有「word」”气泡，不打开空白词条页。
+- **导入词典名统一为 MDX**：批量导入列表中，已存在词典复用注册表里由 MDX 头
+  解析出的标题；新词典探测后使用 `displayDictionaryTitle(metadata.title, path)`；
+  探测前显示“正在读取词典信息…”，副标题改为 MDX 文件名，不再以文件夹名充当词典名。
+- **历史错误本地化**：历史只保存稳定错误码；详情页改用
+  `AgentUiStrings.historyErrorMessageFor`，不再显示 `INVALID_ARGUMENTS` 等内部
+  字串；`invalid_arguments` 显示本地化的“请求参数无效，请检查模型设置后重试”。
+- **历史滚动位置**：历史列表用 `_cachedEntries` + `FutureBuilder.initialData`
+  保持返回详情前的列表挂载；从详情页返回刷新时不再用 spinner 替换列表，保留用户
+  滚动位置（仍保留 `PageStorageKey` 兜底）。
+- **音调尾降对齐**：尾高下降线改为落在最后一个 mora 水平段的右端点
+  `size.width`，不再左移 `strokeWidth/2`。
+- **最小 Ruby/振假名**：新增 `minimalRubySegments`（最长公共 kana 前后缀 + 内部
+  kana LCS 锚点），只标注未知部分：`悩んでも/なやんでも` → `悩（なや）んでも`，
+  `申し込み/もうしこみ` → `申（もう）し込（こ）み`。Agent 富文本渲染与阅读器
+  `TokenChip` 都使用该规则；无可靠对齐时保留整词 Ruby。
+- **样本上限文案**：用户可见的“N 个探针未采样”改为
+  “词典样本已达到上限，另有 N 项检查未覆盖（不影响基本使用）”；档案 Markdown
+  同步为“样本提示”。内部 `probe`/`unsampledProbeCount` 术语保留。
+- **语言对可修正**：档案确认/编辑 sheet 增加语言对 chips 与源/目标语言选择器；
+  保存时更新 `DictionaryProfile.languagePairs`、档案 Markdown 的“语言”行以及
+  `profile_json`。pending proposal 通过 `ProfileConfirmation.profile` 传到 inbox，
+  档案管理页编辑走 `DictionaryProfileRepository.save`；后续分析 prompt 使用修正后
+  的 Markdown。
+- 验证：新增 minimal ruby（纯函数 + Agent/阅读器 widget）、语言对编辑/持久化、
+  历史错误本地化、历史滚动保持用例；`flutter analyze` 通过，完整 `flutter test`
+  通过。真实设备视觉、MDX 标题与语言对修正的 provider 行为仍需真机验收。
+
 ## 2026-11-06 Agent 结果稳定性 / 后台持续 / 断流续传
 
 - **结果复核闪烁**：AI 气泡摘要改为 provisional/final/error 共用同一个稳定

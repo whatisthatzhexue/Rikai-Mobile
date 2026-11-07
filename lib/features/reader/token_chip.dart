@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/token.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/utils/rich_text_tags.dart';
 import 'furigana_text.dart';
 
 /// One tappable word in the reader.
@@ -67,28 +68,83 @@ class TokenChip extends StatelessWidget {
               horizontal: punctuation ? 0 : AppSpacing.xs,
               vertical: AppSpacing.xxs,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FuriganaText(
-                  text: reading,
-                  fontSize: fontSize * 0.55,
-                  color: scheme.primary,
-                ),
-                Text(
-                  token.surface,
-                  style: TextStyle(
-                    fontSize: fontSize,
-                    height: 1.15,
-                    color: foreground,
-                    fontWeight: contentWord ? FontWeight.w600 : FontWeight.w400,
-                  ),
-                ),
-              ],
+            child: _TokenSurface(
+              surface: token.surface,
+              reading: reading,
+              fontSize: fontSize,
+              foreground: foreground,
+              readingColor: scheme.primary,
+              contentWord: contentWord,
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Renders the token's reading only above the parts that need it.
+///
+/// A full-token furigana line repeats okurigana (`悩んでも` → `なやんでも`).
+/// Splitting the surface at kana anchors keeps the reading over the unknown
+/// kanji only (`悩（なや）んでも`), while every segment still reserves the
+/// same furigana height so the base text stays on one line.
+class _TokenSurface extends StatelessWidget {
+  const _TokenSurface({
+    required this.surface,
+    required this.reading,
+    required this.fontSize,
+    required this.foreground,
+    required this.readingColor,
+    required this.contentWord,
+  });
+
+  final String surface;
+  final String reading;
+  final double fontSize;
+  final Color foreground;
+  final Color readingColor;
+  final bool contentWord;
+
+  @override
+  Widget build(BuildContext context) {
+    final baseStyle = TextStyle(
+      fontSize: fontSize,
+      height: 1.15,
+      color: foreground,
+      fontWeight: contentWord ? FontWeight.w600 : FontWeight.w400,
+    );
+    if (reading.isEmpty) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FuriganaText(
+            text: '',
+            fontSize: fontSize * 0.55,
+            color: readingColor,
+          ),
+          Text(surface, style: baseStyle),
+        ],
+      );
+    }
+    final segments = minimalRubySegments(surface, reading);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (final segment in segments)
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FuriganaText(
+                text: segment.reading ?? '',
+                fontSize: fontSize * 0.55,
+                color: readingColor,
+              ),
+              Text(segment.base, style: baseStyle),
+            ],
+          ),
+      ],
     );
   }
 }

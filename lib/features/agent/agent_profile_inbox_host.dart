@@ -64,10 +64,16 @@ class AgentProfileInboxHost extends ConsumerStatefulWidget {
     super.key,
     required this.strings,
     required this.child,
+    this.autoPresent = true,
   });
 
   final AgentUiStrings strings;
   final Widget child;
+
+  /// When false, pending proposals are counted but no confirmation sheet is
+  /// opened automatically. The profile manager still presents them when the
+  /// user explicitly opens it.
+  final bool autoPresent;
 
   @override
   ConsumerState<AgentProfileInboxHost> createState() =>
@@ -103,7 +109,7 @@ class _AgentProfileInboxHostState extends ConsumerState<AgentProfileInboxHost> {
   }
 
   void _schedule() {
-    if (_scheduled) return;
+    if (!widget.autoPresent || _scheduled) return;
     _scheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scheduled = false;

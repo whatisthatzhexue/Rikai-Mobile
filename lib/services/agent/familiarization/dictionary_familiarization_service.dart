@@ -19,10 +19,18 @@ import 'profile_repository.dart';
 enum ProfileConfirmationAction { save, skipOnce, saveAndNeverAsk, decline }
 
 class ProfileConfirmation {
-  const ProfileConfirmation({required this.action, required this.markdown});
+  const ProfileConfirmation({
+    required this.action,
+    required this.markdown,
+    this.profile,
+  });
 
   final ProfileConfirmationAction action;
   final String markdown;
+
+  /// User-edited profile metadata (currently language pairs). When null the
+  /// generated proposal profile is used unchanged.
+  final DictionaryProfile? profile;
 }
 
 typedef ProfileConfirmationCallback =
@@ -120,6 +128,17 @@ class AgentProfileProposal {
   String get title => dictionary.title;
 }
 
+class FamiliarizationCache {
+  const FamiliarizationCache({required this.results, required this.missing});
+
+  /// Local confirmed/declined profiles available without a model call.
+  final List<FamiliarizationResult> results;
+
+  /// Dictionaries that still need background generation. Pending proposals
+  /// already in the app inbox are deliberately excluded by the caller.
+  final List<DictionaryInfo> missing;
+}
+
 class FamiliarizationGeneration {
   const FamiliarizationGeneration({
     required this.results,
@@ -215,7 +234,12 @@ class DictionaryFamiliarizationService {
       }
       final decision = await confirm(proposal.profile, proposal.markdown);
       results.add(
-        await persistDecision(proposal, decision.action, decision.markdown),
+        await persistDecision(
+          proposal,
+          decision.action,
+          decision.markdown,
+          profile: decision.profile,
+        ),
       );
     }
     return FamiliarizationBatchResult(
@@ -223,6 +247,57 @@ class DictionaryFamiliarizationService {
       warnings: generation.warnings,
       issues: generation.issues,
     );
+  }
+
+  /// Loads only local profiles whose fingerprint still matches. This method
+  /// never calls the model and never samples a dictionary, so the current run
+  /// can use confirmed profiles immediately and defer missing ones to the
+  /// background.
+  ///
+  /// [pendingDictionaryIds] are skipped entirely: an unreviewed proposal is
+  /// already in the app inbox and must not be regenerated on every run.
+  Future<FamiliarizationCache> loadCached(
+    List<DictionaryInfo> dictionaries, {
+    Set<String> pendingDictionaryIds = const <String>{},
+  }) async {
+    final results = <FamiliarizationResult>[];
+    final missing = <DictionaryInfo>[];
+    for (final dictionary in dictionaries) {
+      final fingerprint = await dictionaryProfileFingerprint(
+        dictionary,
+        promptVersion: promptVersion,
+        schemaVersion: schemaVersion,
+        language: profileLanguage,
+      );
+      final existing = await _repository.load(dictionary.id);
+      if (existing != null && existing.fingerprint == fingerprint) {
+        if (existing.isConfirmed) {
+          results.add(
+            FamiliarizationResult(
+              action: FamiliarizationAction.reuse,
+              stored: existing,
+              draft: existing.profile,
+              markdown: existing.markdown,
+            ),
+          );
+          continue;
+        }
+        if (existing.status == DictionaryProfileStatus.declined) {
+          results.add(
+            FamiliarizationResult(
+              action: FamiliarizationAction.declined,
+              stored: existing,
+              markdown: existing.markdown,
+            ),
+          );
+          continue;
+        }
+      }
+      if (!pendingDictionaryIds.contains(dictionary.id)) {
+        missing.add(dictionary);
+      }
+    }
+    return FamiliarizationCache(results: results, missing: missing);
   }
 
   /// Samples and generates profiles without asking for consent or writing a
@@ -293,8 +368,8 @@ class DictionaryFamiliarizationService {
         samples[dictionary.id] = sample;
         if (sample.truncated) {
           warnings.add(
-            '${dictionary.title}: 词典样本达到上限，'
-            '${sample.unsampledProbeCount} 个探针未采样',
+            '${dictionary.title}: 词典样本已达到上限，另有 '
+            '${sample.unsampledProbeCount} 项检查未覆盖（不影响基本使用）',
           );
         }
       } catch (error) {
@@ -487,13 +562,15 @@ class DictionaryFamiliarizationService {
   Future<FamiliarizationResult> persistDecision(
     AgentProfileProposal proposal,
     ProfileConfirmationAction action,
-    String markdown,
-  ) {
+    String markdown, {
+    DictionaryProfile? profile,
+  }) {
     return persistAgentProfileDecision(
       repository: _repository,
       proposal: proposal,
       action: action,
       markdown: markdown,
+      profile: profile,
     );
   }
 
@@ -542,8 +619,10 @@ Future<FamiliarizationResult> persistAgentProfileDecision({
   required AgentProfileProposal proposal,
   required ProfileConfirmationAction action,
   required String markdown,
+  DictionaryProfile? profile,
 }) async {
   final dictionary = proposal.dictionary;
+  final effectiveProfile = profile ?? proposal.profile;
   switch (action) {
     case ProfileConfirmationAction.save ||
         ProfileConfirmationAction.saveAndNeverAsk:
@@ -553,7 +632,7 @@ Future<FamiliarizationResult> persistAgentProfileDecision({
         fingerprint: proposal.fingerprint,
         markdown: markdown.trim().isEmpty ? proposal.markdown : markdown.trim(),
         status: DictionaryProfileStatus.confirmed,
-        profile: proposal.profile,
+        profile: effectiveProfile,
         confirmedAt: DateTime.now(),
         modelId: proposal.modelId,
         promptVersion: proposal.promptVersion,
@@ -563,7 +642,7 @@ Future<FamiliarizationResult> persistAgentProfileDecision({
       return FamiliarizationResult(
         action: FamiliarizationAction.created,
         stored: stored,
-        draft: proposal.profile,
+        draft: effectiveProfile,
         markdown: stored.markdown,
       );
     case ProfileConfirmationAction.decline:
@@ -586,7 +665,7 @@ Future<FamiliarizationResult> persistAgentProfileDecision({
     case ProfileConfirmationAction.skipOnce:
       return FamiliarizationResult(
         action: FamiliarizationAction.skipped,
-        draft: proposal.profile,
+        draft: effectiveProfile,
         markdown: proposal.markdown,
       );
   }
