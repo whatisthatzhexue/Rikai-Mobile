@@ -772,4 +772,82 @@ void main() {
     expect(find.text('无法可靠分析'), findsOneWidget);
     expect(find.textContaining('OCR 文本无法辨认'), findsOneWidget);
   });
+
+  testWidgets('citation card shows an extracted title instead of its key', (
+    tester,
+  ) async {
+    const citation = AgentCitation(
+      id: 'source-1',
+      kind: 'mdict',
+      dictionaryId: 'dict_a',
+      dictionaryTitle: 'A',
+      dictionaryOrder: 0,
+      entryKey: '01570 03798',
+      headword: '01570 03798',
+      snippet: '今いま【今】［名］現在の時点。',
+      toolCallId: 'call-1',
+    );
+    final result = AgentRunResult(
+      input: _result.input,
+      evidence: const AgentEvidenceBundle(
+        sources: <AgentSourceEvidence>[],
+        citations: <AgentCitation>[citation],
+      ),
+      quotes: _result.quotes,
+      analysis: const AgentAnalysis(
+        sourceId: 'src-1',
+        translation: <AgentTranslation>[
+          AgentTranslation(quoteId: 'q1', text: '请多关照。'),
+        ],
+        segments: <AgentSegment>[
+          AgentSegment(
+            id: 'seg-1',
+            quoteId: 'q1',
+            literal: '何卒',
+            interpretation: '正式请求',
+            epistemic: AgentEpistemic.dictionaryFact,
+            wordNotes: <AgentWordNote>[
+              AgentWordNote(
+                tokenId: 't1',
+                surface: '何卒',
+                reading: 'なにとぞ',
+                sense: '请务必',
+                citationIds: <String>['source-1'],
+              ),
+            ],
+          ),
+        ],
+      ),
+      validation: _result.validation,
+      sources: _result.sources,
+      dictionaryProfiles: _result.dictionaryProfiles,
+    );
+
+    expect(citation.displayTitle, '今');
+    expect(result.adoptedCitations, hasLength(1));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentResultView(
+              result: result,
+              onCitationTap: (_) {},
+              strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Citation details live inside the collapsed evidence group.
+    await tester.tap(find.textContaining('A · 1 条'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('今'), findsOneWidget);
+    expect(find.textContaining('01570'), findsNothing);
+    expect(find.textContaining('@daijirin'), findsNothing);
+  });
 }

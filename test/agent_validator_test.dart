@@ -15,7 +15,9 @@ const _evidence = AgentEvidenceBundle(
         AgentTokenEvidence(
           id: 't1',
           surface: '何卒',
-          reading: 'なにとぞ',
+          // Real UniDic readings are katakana; the model often writes
+          // hiragana. Validation must compare normalized kana.
+          reading: 'ナニトゾ',
           start: 0,
           end: 2,
           content: true,
@@ -52,6 +54,8 @@ const _quotes = <AgentQuoteRef>[
 
 AgentAnalysis _analysis({
   String literal = '何卒',
+  String reading = '',
+  String tokenId = 't1',
   List<String> citationIds = const <String>['source-1'],
   AgentEpistemic epistemic = AgentEpistemic.dictionaryFact,
   List<AgentModelSupplement> supplements = const <AgentModelSupplement>[],
@@ -71,8 +75,9 @@ AgentAnalysis _analysis({
         epistemic: epistemic,
         wordNotes: <AgentWordNote>[
           AgentWordNote(
-            tokenId: 't1',
+            tokenId: tokenId,
             surface: '何卒',
+            reading: reading,
             sense: '请务必',
             citationIds: citationIds,
           ),
@@ -340,5 +345,101 @@ void main() {
       unrelated.errors.any((error) => error.contains('不属于该模式或组成词')),
       isTrue,
     );
+  });
+
+  test('word reading comparison ignores hiragana/katakana script', () {
+    final hiragana = validator.validate(
+      analysis: _analysis(reading: 'なにとぞ'),
+      evidence: _evidence,
+      quotes: _quotes,
+      mode: AgentMode.strict,
+    );
+    expect(hiragana.valid, isTrue);
+
+    final katakana = validator.validate(
+      analysis: _analysis(reading: 'ナニトゾ'),
+      evidence: _evidence,
+      quotes: _quotes,
+      mode: AgentMode.strict,
+    );
+    expect(katakana.valid, isTrue);
+
+    final wrong = validator.validate(
+      analysis: _analysis(reading: 'たかし'),
+      evidence: _evidence,
+      quotes: _quotes,
+      mode: AgentMode.strict,
+    );
+    expect(wrong.valid, isFalse);
+    expect(
+      wrong.errors.any((error) => error.contains('读音与 UniDic 不一致')),
+      isTrue,
+    );
+  });
+
+  test('word note falls back to a unique surface inside the quote', () {
+    for (final tokenId in <String>['', 't99']) {
+      final result = validator.validate(
+        analysis: _analysis(tokenId: tokenId, reading: 'なにとぞ'),
+        evidence: _evidence,
+        quotes: _quotes,
+        mode: AgentMode.strict,
+      );
+      expect(result.valid, isTrue, reason: 'tokenId=$tokenId');
+    }
+  });
+
+  test('free grammar notes do not require a supplied pattern id', () {
+    AgentAnalysis analysisWith(String patternId, List<String> citationIds) {
+      return AgentAnalysis(
+        sourceId: 'src-1',
+        translation: _analysis().translation,
+        segments: <AgentSegment>[
+          AgentSegment(
+            id: 'seg-1',
+            quoteId: 'q1',
+            literal: '何卒',
+            interpretation: '正式请求',
+            epistemic: AgentEpistemic.structuralAnalysis,
+            grammarNotes: <AgentGrammarNote>[
+              AgentGrammarNote(
+                patternId: patternId,
+                explanation: '「何卒」是副词',
+                citationIds: citationIds,
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    final emptyId = validator.validate(
+      analysis: analysisWith('', const <String>['source-1']),
+      evidence: _evidence,
+      quotes: _quotes,
+      mode: AgentMode.strict,
+    );
+    expect(emptyId.valid, isTrue);
+
+    final unknownId = validator.validate(
+      analysis: analysisWith('p99', const <String>['source-1']),
+      evidence: _evidence,
+      quotes: _quotes,
+      mode: AgentMode.strict,
+    );
+    expect(unknownId.valid, isTrue);
+
+    final evidenceWithOther = AgentEvidenceBundle(
+      sources: _evidence.sources,
+      citations: <AgentCitation>[..._evidence.citations, _citationB],
+    );
+    final unrelated = validator.validate(
+      analysis: analysisWith('', const <String>['source-2']),
+      evidence: evidenceWithOther,
+      quotes: _quotes,
+      mode: AgentMode.strict,
+    );
+    expect(unrelated.valid, isFalse);
+    expect(unrelated.errors.any((error) => error.contains('原文范围内')), isTrue);
   });
 }

@@ -103,6 +103,37 @@ class _FakeLookup implements LookupPort {
 /// Every dictionary returns [entriesPerDictionary] entries for every lookup.
 /// The entry keys include the requested surface so different targets do not
 /// dedupe into one citation.
+class _OpaqueTitleLookup implements LookupPort {
+  @override
+  Future<LookupResult> lookup(LookupRequest request) async {
+    return LookupResult(
+      query: request.query,
+      candidates: request.rawCandidates,
+      groups: <DictionaryLookupGroup>[
+        DictionaryLookupGroup(
+          dictionary: _dictionaryA,
+          entries: const <LookupEntry>[
+            LookupEntry(
+              matchedKey: '01570 03798',
+              headword: '01570 03798',
+              html: '<div>今いま【今】［名］現在の時点。</div>',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<List<String>> suggest({
+    required String prefix,
+    required List<DictionaryInfo> dictionaries,
+    int limit = 10,
+  }) async {
+    return const <String>[];
+  }
+}
+
 class _AllHitsLookup implements LookupPort {
   _AllHitsLookup(this.entriesPerDictionary);
 
@@ -248,6 +279,29 @@ void main() {
       expect(bundle.truncated, isFalse);
     },
   );
+
+  test('derives a readable citation title from entry HTML', () async {
+    final citations = CitationRegistry();
+    final builder = EvidenceBuilder(
+      tokenizePort: _FakeTokenize(<Token>[_token('今', 0)]),
+      lookupPort: _OpaqueTitleLookup(),
+      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+      citations: citations,
+    );
+
+    final bundle = await builder.build(
+      sources: <AgentSourceInput>[_source('今')],
+      dictionaries: const <DictionaryInfo>[_dictionaryA],
+    );
+
+    final citation = bundle.citations.single;
+    // The internal key stays available for exact lookup/navigation, while the
+    // user-facing headword is extracted from the entry HTML.
+    expect(citation.entryKey, '01570 03798');
+    expect(citation.headword, '今');
+    expect(citation.displayTitle, '今');
+    expect(jsonEncode(bundle.toJson()), isNot(contains('"headword":"01570')));
+  });
 
   test('keeps UniDic pitch local and out of the provider JSON', () async {
     final features = List<String>.filled(Token.expectedFeatureCount, '*');

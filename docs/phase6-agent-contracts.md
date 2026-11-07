@@ -765,8 +765,10 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
 ### 5.4 输出上限与 NO_ANALYSIS（2026-11-04 实现）
 
 - **硬上限**：SEGMENT 40、每 quote 每 type 1 段、OPTION 8、每段
-  WORD/GRAMMAR 20。parser 超限时截断并设置 `AgentAnalysis.truncated=true`；
-  即使模型继续输出，超出部分不得进入结果。
+  WORD/GRAMMAR 20。同一 quote+type 的重复 SEGMENT 先合并到首段（notes 去重、
+  citation 取并集、MEANING 用“；”合并），合并不设置 `truncated`；只有真正超过
+  段数、OPTION 数或合并后 note 上限时才截断并设置
+  `AgentAnalysis.truncated=true`。
 - **显式警告**：`truncated=true` 必须在 UI（`AgentRunResult.warnings`，由
   `agentAnalysisTruncatedWarning` 生成）和 Markdown 导出
   （`strings.analysisTruncated`）中出现；禁止静默丢弃。规则见
@@ -878,6 +880,12 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
 }
 ```
 
+- `entry_key` 是 MDict 的内部定位 key（可能是 `01570 03798`、
+  `@daijirin2-...`），只用于查词、去重和 citation 跳转，**不得直接展示**。
+- `headword` 是展示标题：orchestrator 从词条 HTML 的 `【...】`/headword 元素
+  提取；旧历史没有新标题时从保存的 `snippet` 回退。`matched_key` 也不保证可读，
+  不能单独作为显示标题。
+
 ### 7.2 Quote
 
 完整 schema：`docs/schemas/agent/quote.v1.schema.json`。
@@ -928,7 +936,19 @@ idle
   `AgentRunSnapshot.thinkingStartedAt` 记录 reasoning 开始时间；此前 UI 显示
   “任务已进行 X 秒”，此后显示“已思考 X 秒”，完成态显示“任务用时 X 秒”。
   直接调用 orchestrator 的测试/集成不经过该计时器。
+- 2026-11-07 档案后台生成生命周期：orchestrator 通过
+  `onBackgroundProfiles` 暴露 `generateMany` future；controller 用
+  `AgentBackgroundLease` 引用计数持有前台服务，直到生成完成且 proposals 已
+  入队/持久化，**不等待用户确认**。分析失败/取消不启动后台档案生成。档案管理页
+  手动重新生成也持有同一 lease。`enqueue` 返回持久化 future；`waitForAll` 先注册
+  decision completer 再入队，避免 cancel 竞态。
   （`AgentProfileInboxController` + `DictionaryFamiliarizationService.generateMany`）。
+- 2026-11-07 解析/校验：同一 quote+type 的重复 SEGMENT 合并到首段（notes 去重、
+  citation 取并集、MEANING 用“；”合并），不再丢弃或设置 truncated；只有真正
+  超过 SEGMENT/OPTION/每段 note 上限才设置。GRAMMAR 空/未知 `pattern_id` 作为
+  free grammar note，citation 必须属于当前 quote 范围 token；WORD 读音比较做
+  NFKC + 片假名→平假名归一化；WORD 缺失/错误 `token_id` 时在当前 quote 内按唯一
+  surface/lemma 回退解析。
 - 确认窗口的“不再询问”= 保存当前档案并开启 `agent_profiles_auto_accept`；
   默认关闭。开启后新生成的档案直接保存并信任，Agent 设置可再次关闭。确认窗口
   由 `AgentProfileInboxHost` 统一呈现：Agent 页、档案管理页和 Agent 设置页共用，

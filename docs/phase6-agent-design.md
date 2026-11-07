@@ -368,6 +368,11 @@ coverage → reasoning → validating → done | error | cancelled`。
   `unavailable` 记日志后不阻塞。用户编辑后的 Markdown 是 prompt 中的权威摘要；
   `profile_json` 保留生成结构供 UI/校验，
   冲突时以用户编辑的 Markdown 为准。
+  2026-11-07 后台生成生命周期：分析结果 `done` 后不得立即停止前台服务；controller
+  通过 `onBackgroundProfiles` 拿到 `generateMany` 的 future，并持有引用计数的
+  `AgentBackgroundLease` 直到生成完成且 proposals 已入队/持久化（**不等待用户
+  确认**）。档案管理页的手动重新生成也持有同一 lease。否则用户切后台时 Android
+  可能挂起进程，只有部分词典批次完成，表现为“熟悉词典阶段跳过了一部分词典”。
 - UniDic：单独 `unidic.profile`，用 4 句代表性文本分词，确定性记录 29 字段布局、
   读音/词性/offset/cType/cForm 观察；**不要假装 UniDic 是可查词词典**。可附一次
   小模型摘要，但不是必需。
@@ -463,6 +468,11 @@ coverage → reasoning → validating → done | error | cancelled`。
   GRAMMAR note 的每个 citation 必须属于该 pattern 的 `citation_ids` 或其组成
   token 的 `citation_ids`；否则 validator 拒绝。repair prompt 的 `Available ids`
   为 token/pattern 附带其 citation ids，保证修复时能重新归属而无需重发 evidence。
+  2026-11-07：模型常给出词表未收录的语法说明。GRAMMAR 的空/未知 `pattern_id`
+  现在按 free grammar note 处理，citation 必须属于当前 quote 范围内 token 的
+  `citation_ids`；不再因“模式不存在”使整次结果失效。WORD 读音比较先做
+  NFKC 与片假名→平假名归一化，避免 UniDic 片假名读音与模型平假名读音被误判；
+  WORD 缺失/错误 `token_id` 时在当前 quote 内按唯一 surface/lemma 回退解析。
 - 证据包只含：token ID/文本/读音/词性/offset、语法模式、清洗后的 citation 摘要；
   **不含原始 HTML、路径、MDD 资源、音频**。
 - 2026-11-03 性能/证据质量增量：`EvidenceBuilder` 采用 **breadth-first** 分配。
@@ -593,7 +603,10 @@ per-dictionary 修复、语言修复或 provisional 流式；语言偏离只记 
 **2026-11-04 输出上限与 NO_ANALYSIS**：解析器强制执行 SEGMENT 40、
 每 quote 每 type 1 段、OPTION 8、每段 WORD/GRAMMAR 20 的硬上限；超限内容被
 截断并设置 `AgentAnalysis.truncated=true`，UI 与 Markdown 导出必须显示本地化
-截断警告，禁止静默丢弃（R-AGENT-LIMITS-001）。模型可用
+截断警告，禁止静默丢弃（R-AGENT-LIMITS-001）。**2026-11-07 例外**：同一 quote
+同一 type 的重复 SEGMENT 不再丢弃并标记 truncated，而是并入第一段：WORD/
+GRAMMAR note 去重并合并 citation，MEANING 用“；”合并；只有合并后超过每段
+note 上限、或真正新增段超过 SEGMENT/OPTION 上限时才设置 truncated。模型可用
 `[NO_ANALYSIS reason="short reason"]` 单独返回“无法可靠分析”，该标签不能与
 TRANSLATION/SEGMENT/OPTION/UNRESOLVED/SUPPLEMENT 共存；parser/validator/UI
 接受零翻译零段落，语言后校验包含该 reason。
@@ -659,9 +672,9 @@ substring 校验。`literal` 字段由编排器按 quote 填充，模型不得�
    OPTION 必须有 citation；`dictionary_fact` 段中的 GRAMMAR 也必须有 citation**。
    无依据时模型应省略该 WORD/OPTION/GRAMMAR 并改用 `UNRESOLVED`；prompt 与
    validator 必须同时维护该规则。
-5. 读音校验：模型给出的读音必须匹配 token 读音或 citation 摘要；prompt 要求
-   `WORD` 的 reading 直接复制所引用 token 的 reading，token 无读音时留空；
-   否则移除或标 `未验证`。
+5. 读音校验：模型给出的读音必须匹配 token 读音或 citation 摘要；比较前做
+   NFKC 与平假名/片假名归一化（2026-11-07），prompt 要求 `WORD` 的 reading
+   直接复制所引用 token 的 reading，token 无读音时留空；否则移除或标 `未验证`。
 6. 词典顺序：证据按 `dictionaryOrder` 排序；提示词要求模型按序引用；UI 渲染层再次
    排序，保证“输出顺序严格按用户设置”。
 7. 失败时做一次修复调用；**格式修复使用 small model + 紧凑 prompt**（只发
@@ -688,9 +701,10 @@ UI 渲染：原文引用块 → 译文（标注）→ 逐句理解 → 词/语�
 - 历史 tool loop 预算（6 次/单工具 60s/总 90s）仅作未来参考，不是当前实现。
 - 超预算时显示“已按预算缩减，未分析的部分不会出现在结果中”，并允许用户缩小范围；
   记录 `truncated` 标记。**有损上限原则（R-AGENT-LIMITS-001）**：SEGMENT 40、
-  每 quote 每 type 1 段、OPTION 8、每段 WORD/GRAMMAR 20 是硬上限；任何截断必须
-  在 UI 与 Markdown 导出中显式警告，禁止静默丢弃。`NO_ANALYSIS` 是唯一合法的
-  零结果路径，不能与翻译/段落/选项共存。
+  每 quote 每 type 1 段（重复 quote+type 合并到首段，不设置 truncated）、
+  OPTION 8、每段 WORD/GRAMMAR 20 是硬上限；任何真正截断必须在 UI 与 Markdown
+  导出中显式警告，禁止静默丢弃。`NO_ANALYSIS` 是唯一合法的零结果路径，不能与
+  翻译/段落/选项共存。
 - 每个阶段可取消；取消 OCR 调用 `OcrService.cancel()`；已发出的 MDict/MeCab 请求
   无法中断时用 generation token 丢弃结果；provider 用 `CancelToken` 取消。
 - **流式中断续传（2026-11-06）**：provider 断流且可重试时，以最后一次完整换行

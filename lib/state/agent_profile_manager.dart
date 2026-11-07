@@ -43,11 +43,20 @@ class AgentProfileManager {
         settings.agentProfileLanguage,
       ),
     );
-    return familiarizer.generateMany(
-      dictionaries,
-      force: true,
-      runId: 'profile-manager-${DateTime.now().microsecondsSinceEpoch}',
-    );
+    // Profile queries are the same long-running network work as an Agent run;
+    // hold the foreground service so switching apps cannot suspend a batch
+    // halfway and leave only some dictionaries analyzed.
+    final background = _ref.read(agentBackgroundLeaseProvider);
+    await background.acquire();
+    try {
+      return await familiarizer.generateMany(
+        dictionaries,
+        force: true,
+        runId: 'profile-manager-${DateTime.now().microsecondsSinceEpoch}',
+      );
+    } finally {
+      await background.release();
+    }
   }
 }
 
@@ -122,7 +131,7 @@ class AgentProfileRegenerationController
       if (ref.read(appSettingsProvider).agentProfilesAutoAccept) {
         await inbox.autoAcceptAll(generation.proposals);
       } else {
-        inbox.enqueue(generation.proposals);
+        await inbox.enqueue(generation.proposals);
       }
       ref.invalidate(agentProfilesProvider);
       _finish(

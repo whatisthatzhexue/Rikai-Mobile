@@ -1,6 +1,6 @@
 # Phase 6 status — dictionary assistant core
 
-Date: 2026-11-06
+Date: 2026-11-07
 Base: Phase 5 complete (`docs/phase5-status.md`)
 Design: `docs/phase6-agent-design.md` v2
 Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
@@ -93,6 +93,43 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
   fake/local provider，未使用付费 Key；真实 provider 等待时长与 arm64/设备
   仍未验收。
 
+## 2026-11-07 短文本误报截断/校验与档案后台生成修复
+
+- **短文本“已按上限缩减输出”根因**：样本 `2026-11-07-21-24.txt` 只有 3 个可见
+  SEGMENT，未达到 SEGMENT 40/OPTION 8/每段 note 20。触发的是
+  `maxSegmentsPerQuotePerType=1`：DeepSeek 常把同一 quote 拆成多个同 type 的
+  `[SEGMENT]`（例如每个词一个 fact 段）；旧 parser 直接 `continue` 丢弃后续段并
+  设置 `truncated=true`。现在重复 quote+type 段**合并**到首段：WORD/GRAMMAR note
+  去重并合并 citation，MEANING 用“；”合并；只有真正超过 SEGMENT/OPTION/note
+  上限才显示截断警告。
+- **“部分内容未通过校验”根因（按样本结构复现确认）**：
+  1. UniDic 读音是片假名，DeepSeek 常写平假名（如 ジブン → じぶん）；旧 validator
+     逐字符比较，导致每个 WORD note 都报“读音与 UniDic 不一致”。
+  2. DeepSeek 会给出白名单未收录的 GRAMMAR 说明且省略/自造 `pattern_id`；旧
+     validator 对空/未知 id 直接报“语法注引用了不存在的模式”，使整次结果无效。
+  3. 模型可能省略 WORD `id` 或写错 id；旧 validator 直接报“不存在的 token”。
+  修复：读音比较先 NFKC + 片假名→平假名；GRAMMAR 空/未知 id 按 free grammar note
+  处理，citation 必须属于当前 quote 范围内 token；WORD 在当前 quote 内按唯一
+  surface/lemma 回退解析 token。样本结构 probe 修复后 `valid=true`，无
+  validationPartial。
+- **档案后台生成被切后台跳过**：分析 `done` 后 controller 立即停前台服务，而
+  `generateMany` 仍在后台跑；Android 挂起进程后部分批次未完成，表现为只生成了
+  一部分词典档案。现在 orchestrator 通过 `onBackgroundProfiles` 暴露生成 future，
+  controller 用引用计数 `AgentBackgroundLease` 持有前台服务直到生成完成且
+  proposals 入队/持久化；**不等待用户确认**（确认仍由应用级 inbox 处理）。手动
+  档案重新生成也持有同一 lease；分析失败/取消不启动后台档案生成。`enqueue`
+  返回持久化 future，`waitForAll` 先注册 completer 再入队，修复 cancel 竞态。
+- **依据卡片标题**：明镜、大辞林等词典的 MDX key 可能是内部索引
+  （`01570 03798`、`@daijirin2-...`），不能直接展示。新增
+  `dictionary_entry_title.dart`：从词条 HTML 的 `【...】`/headword 元素提取标题，
+  内部 key 只保留给查词/跳转；旧历史没有新标题时从保存的 snippet 回退。依据卡片、
+  语义标签、Markdown 导出、历史 fallback、点击后的词条页、查词结果列表和 P6.6
+  依据预览都不再显示内部 key。
+- 测试：新增重复段合并、读音假名归一化、free grammar note、前台服务 lease 引用
+  计数、生成中保持服务/完成后释放；依据标题提取/卡片/查词列表回归。`flutter
+  analyze` 无问题，完整 `flutter test` **585 项通过**。全部 fake/local provider，
+  未使用付费 Key；真实 DeepSeek 复测、arm64 后台与设备验收仍未进行。
+
 ## 2026-11-06 词典/阅读器/历史 UI 修正
 
 - **entry:// 检索失败**：词典页内跳转仍限定当前词典 exact 查询；无命中时显示
@@ -125,9 +162,16 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
   `profile_json`。pending proposal 通过 `ProfileConfirmation.profile` 传到 inbox，
   档案管理页编辑走 `DictionaryProfileRepository.save`；后续分析 prompt 使用修正后
   的 Markdown。
+- **保存档案立即清除“已失效”**：编辑/保存档案时不再保留旧 `fingerprint`，而是用
+  当前词典 stat、当前 prompt/schema 版本和当前档案语言重新计算并写入
+  `dictionary_profiles.fingerprint`；随后清空 `_staleFutures` 并 invalidate
+  `agentProfilesProvider`，卡片上的“已失效”立即消失。指纹计算通过
+  `dictionaryProfileFingerprintProvider` 注入，widget 测试可避免真实文件 I/O。
+  新增“编辑失效档案后只剩另一本未编辑档案仍失效”的回归用例。
 - 验证：新增 minimal ruby（纯函数 + Agent/阅读器 widget）、语言对编辑/持久化、
-  历史错误本地化、历史滚动保持用例；`flutter analyze` 通过，完整 `flutter test`
-  通过。真实设备视觉、MDX 标题与语言对修正的 provider 行为仍需真机验收。
+  历史错误本地化、历史滚动保持、失效档案保存用例；`flutter analyze` 通过，完整
+  `flutter test` 通过。真实设备视觉、MDX 标题与语言对修正的 provider 行为仍需
+  真机验收。
 
 ## 2026-11-06 Agent 结果稳定性 / 后台持续 / 断流续传
 

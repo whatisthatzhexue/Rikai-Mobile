@@ -436,7 +436,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     StoredDictionaryProfile profile,
     AgentProfileLanguage language,
   ) async {
-    final fingerprint = await dictionaryProfileFingerprint(
+    final fingerprint = await ref.read(dictionaryProfileFingerprintProvider)(
       dictionary,
       promptVersion: dictionaryProfilePromptVersion,
       schemaVersion: dictionaryProfileSchemaVersion,
@@ -470,13 +470,35 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
     );
     if (!mounted || decision == null) return;
     final updatedProfile = decision.profile ?? profile.profile;
+    // Saving the edited profile is an explicit re-confirmation. Refresh the
+    // fingerprint with the current dictionary stat/version/language so the
+    // "已失效" warning disappears immediately instead of surviving because the
+    // old fingerprint was preserved.
+    DictionaryInfo? dictionary;
+    for (final item in ref.read(enabledDictionariesProvider)) {
+      if (item.id == profile.dictionaryId) {
+        dictionary = item;
+        break;
+      }
+    }
+    final language = AgentProfileLanguage.fromWire(
+      ref.read(appSettingsProvider).agentProfileLanguage,
+    );
+    final fingerprint = dictionary == null
+        ? profile.fingerprint
+        : await ref.read(dictionaryProfileFingerprintProvider)(
+            dictionary,
+            promptVersion: dictionaryProfilePromptVersion,
+            schemaVersion: dictionaryProfileSchemaVersion,
+            language: language,
+          );
     await ref
         .read(agentProfileRepositoryProvider)
         .save(
           StoredDictionaryProfile(
             dictionaryId: profile.dictionaryId,
             title: profile.title,
-            fingerprint: profile.fingerprint,
+            fingerprint: fingerprint,
             markdown: decision.markdown.trim().isEmpty
                 ? profile.markdown
                 : decision.markdown,
@@ -484,8 +506,8 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
             profile: updatedProfile,
             confirmedAt: DateTime.now(),
             modelId: profile.modelId,
-            promptVersion: profile.promptVersion,
-            schemaVersion: profile.schemaVersion,
+            promptVersion: dictionaryProfilePromptVersion,
+            schemaVersion: dictionaryProfileSchemaVersion,
           ),
         );
     _staleFutures.clear();

@@ -1076,7 +1076,11 @@ class _EvidenceGroup extends StatelessWidget {
                             children: [
                               Expanded(
                                 child: Text(
-                                  citation.entryKey,
+                                  citation.displayTitle.isEmpty
+                                      ? strings.citationTitleFallback
+                                      : citation.displayTitle,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     fontSize: AgentTokens.evidenceTitle,
                                     color: AppColors.textPrimary,
@@ -1143,9 +1147,12 @@ class _CitationChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final displayTitle = citation.displayTitle.isEmpty
+        ? strings.citationTitleFallback
+        : citation.displayTitle;
     return Semantics(
       button: true,
-      label: strings.citationSemantics(number, citation.headword),
+      label: strings.citationSemantics(number, displayTitle),
       child: GestureDetector(
         onTap: () => onTap(citation),
         child: Container(

@@ -6,6 +6,7 @@ import 'package:rikai_mobile/core/models/dict_info.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
 import 'package:rikai_mobile/features/agent/agent_profiles_page.dart';
 import 'package:rikai_mobile/services/agent/agent_run.dart';
+import 'package:rikai_mobile/services/agent/familiarization/profile_repository.dart';
 import 'package:rikai_mobile/state/agent_profile_manager.dart';
 import 'package:rikai_mobile/state/agent_providers.dart';
 import 'package:rikai_mobile/state/agent_run_controller.dart';
@@ -102,6 +103,34 @@ class _FixedRunController extends AgentRunController {
 
   @override
   AgentRunSnapshot build() => _snapshot;
+}
+
+class _MutableProfileRepository implements DictionaryProfileRepository {
+  _MutableProfileRepository(Iterable<StoredDictionaryProfile> profiles) {
+    for (final profile in profiles) {
+      _values[profile.dictionaryId] = profile;
+    }
+  }
+
+  final Map<String, StoredDictionaryProfile> _values =
+      <String, StoredDictionaryProfile>{};
+
+  Future<List<StoredDictionaryProfile>> list() async =>
+      _values.values.toList(growable: false);
+
+  @override
+  Future<StoredDictionaryProfile?> load(String dictionaryId) async =>
+      _values[dictionaryId];
+
+  @override
+  Future<void> save(StoredDictionaryProfile profile) async {
+    _values[profile.dictionaryId] = profile;
+  }
+
+  @override
+  Future<void> delete(String dictionaryId) async {
+    _values.remove(dictionaryId);
+  }
 }
 
 Future<void> _pumpProfilesPage(
@@ -378,5 +407,60 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('3 项检查未覆盖'), findsOneWidget);
+  });
+
+  testWidgets('editing a stale profile clears its stale label immediately', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final preferences = await SharedPreferences.getInstance();
+    final repository = _MutableProfileRepository(<StoredDictionaryProfile>[
+      _stored,
+      _storedB,
+    ]);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          agentProfilesProvider.overrideWith((ref) async => repository.list()),
+          agentProfileRepositoryProvider.overrideWithValue(repository),
+          dictionaryProfileFingerprintProvider.overrideWithValue(
+            (
+              dictionary, {
+              required promptVersion,
+              required schemaVersion,
+              required language,
+            }) async => 'current-fingerprint',
+          ),
+          enabledDictionariesProvider.overrideWithValue(<DictionaryInfo>[
+            _dictionary,
+            _dictionaryB,
+          ]),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const AgentProfilesPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('测试词典A'), findsOneWidget);
+    expect(find.text('已失效'), findsNWidgets(2));
+
+    await tester.tap(
+      find.widgetWithIcon(IconButton, Icons.edit_outlined).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('保存'));
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    final saved = await repository.load('dict-a');
+    expect(saved, isNotNull);
+    expect(saved!.fingerprint, isNot('outdated'));
+    // A is now valid; B was not edited and remains stale.
+    expect(find.text('已失效'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
   });
 }

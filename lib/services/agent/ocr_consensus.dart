@@ -10,6 +10,7 @@ import '../../core/models/lookup_match_mode.dart';
 import '../../core/models/lookup_models.dart';
 import '../../core/models/lookup_request.dart';
 import '../../core/models/token.dart';
+import '../../core/utils/dictionary_entry_title.dart';
 import '../../core/utils/html_text.dart';
 import 'ports/agent_capability_exception.dart';
 import 'ports/lookup_port.dart';
@@ -319,11 +320,16 @@ abstract final class OcrConsensus {
             for (final group in result.groups) {
               if (group.entries.isEmpty) continue;
               final entry = group.entries.first;
-              final headword = entry.headword.isEmpty
+              final entryKey = entry.headword.isEmpty
                   ? entry.matchedKey
                   : entry.headword;
+              final displayTitle = dictionaryEntryDisplayTitle(
+                html: entry.html,
+                matchedKey: entry.matchedKey,
+                headword: entry.headword,
+              );
               final key =
-                  '${group.dictionary.id}\u0000$headword\u0000${entry.matchedKey}';
+                  '${group.dictionary.id}\u0000$entryKey\u0000${entry.matchedKey}';
               if (!seenEntries.add(key)) continue;
               final snippet = cleanDictionaryText(
                 htmlToPlainText(entry.html),
@@ -334,7 +340,7 @@ abstract final class OcrConsensus {
                 OcrLookupPreviewEntry(
                   dictionaryId: group.dictionary.id,
                   dictionaryTitle: group.dictionary.title,
-                  headword: headword,
+                  headword: displayTitle,
                   snippet: snippet,
                 ),
               );

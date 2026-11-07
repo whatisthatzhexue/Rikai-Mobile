@@ -275,6 +275,29 @@ class _SlowAnalysisProvider implements LlmPort {
   }
 }
 
+class _BlockingProfileProvider implements LlmPort {
+  int calls = 0;
+  final Completer<void> profileStarted = Completer<void>();
+  final Completer<void> releaseProfile = Completer<void>();
+
+  @override
+  Stream<LlmEvent> stream(
+    LlmRequest request, {
+    LlmCancelToken? cancellation,
+  }) async* {
+    calls++;
+    if (calls == 1) {
+      yield LlmEvent(type: LlmEventType.textDelta, text: _analysisTagged);
+      yield LlmEvent.done();
+      return;
+    }
+    if (!profileStarted.isCompleted) profileStarted.complete();
+    await releaseProfile.future;
+    yield LlmEvent(type: LlmEventType.textDelta, text: _profileTagged);
+    yield LlmEvent.done();
+  }
+}
+
 class _FailingSecondAnalysisProvider implements LlmPort {
   int calls = 0;
 
@@ -553,7 +576,75 @@ void main() {
     final controller = container.read(agentRunControllerProvider.notifier);
 
     await _runToCompletion(container, controller);
+    // The foreground service now stays up until deferred profile generation
+    // finishes, then releases the lease.
+    for (
+      var attempt = 0;
+      attempt < 100 && provider.requests.length < 2;
+      attempt++
+    ) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    for (var attempt = 0; attempt < 100 && background.stops < 1; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
     expect(background.starts, 1);
+    expect(background.stops, 1);
+  });
+
+  test(
+    'deferred profile generation keeps the foreground service until done',
+    () async {
+      final provider = _BlockingProfileProvider();
+      final background = _FakeBackground();
+      final container = ProviderContainer(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(_preferences),
+          agentBackgroundServiceProvider.overrideWithValue(background),
+          agentLimitsProvider.overrideWithValue(
+            const AgentLimits(
+              maxCoverageFallback: 0,
+              enableRichTextPostProcess: false,
+            ),
+          ),
+          agentRunServicesProvider.overrideWithValue(
+            ({required bool needsOcr, bool Function()? isCancelled}) async =>
+                _services(provider),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(agentRunControllerProvider.notifier);
+
+      final snapshot = await _runToCompletion(container, controller);
+      expect(snapshot.status, AgentRunStatus.done);
+      await provider.profileStarted.future.timeout(const Duration(seconds: 5));
+
+      // The answer is done, but profile generation is still in flight, so the
+      // process-lifetime guarantee must remain active.
+      expect(background.starts, 1);
+      expect(background.stops, 0);
+
+      provider.releaseProfile.complete();
+      for (var attempt = 0; attempt < 100 && background.stops < 1; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      expect(background.stops, 1);
+    },
+  );
+
+  test('background lease reference-counts overlapping work', () async {
+    final background = _FakeBackground();
+    final lease = AgentBackgroundLease(background);
+    await lease.acquire();
+    await lease.acquire();
+    expect(background.starts, 1);
+    expect(background.stops, 0);
+    await lease.release();
+    expect(background.stops, 0);
+    await lease.release();
+    expect(background.stops, 1);
+    await lease.release();
     expect(background.stops, 1);
   });
 

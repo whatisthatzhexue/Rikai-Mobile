@@ -501,6 +501,7 @@ class AgentUiStrings {
       _pick('可能性$percent%', 'Possibility $percent%', '可能性$percent%');
   String citationLabel(int number) =>
       _pick('依据$number', 'Citation $number', '根拠$number');
+  String get citationTitleFallback => _pick('词条', 'Entry', '項目');
   String citationSemantics(int number, String headword) => _pick(
     '查看依据$number $headword',
     'View citation $number $headword',

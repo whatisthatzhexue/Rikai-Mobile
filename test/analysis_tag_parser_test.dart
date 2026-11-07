@@ -110,6 +110,37 @@ Some prose context_inference（90%） that should be ignored.
     expect(analysisTagIntegrityErrors(raw), isNotEmpty);
   });
 
+  test('merges repeated quote/type segments instead of dropping content', () {
+    const raw = '''
+[TRANSLATION quote="q1"]译文[/TRANSLATION]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]第一事实[/MEANING]
+[WORD id="t1"]何卒||请务必|source-1[/WORD]
+[/SEGMENT]
+[SEGMENT type="fact" quote="q1"]
+[MEANING]第二事实[/MEANING]
+[WORD id="t1"]何卒||请务必|source-2[/WORD]
+[WORD id="t2"]宜しく||请多关照|source-1[/WORD]
+[/SEGMENT]
+''';
+
+    final analysis = parseTaggedAnalysis(raw, sourceId: 'src-1');
+
+    expect(analysis, isNotNull);
+    expect(analysis!.segments, hasLength(1));
+    expect(analysis.truncated, isFalse);
+    expect(analysis.segments.single.interpretation, contains('第一事实'));
+    expect(analysis.segments.single.interpretation, contains('第二事实'));
+    expect(
+      analysis.segments.single.wordNotes.map((note) => note.surface),
+      <String>['何卒', '宜しく'],
+    );
+    expect(analysis.segments.single.wordNotes.first.citationIds, <String>[
+      'source-1',
+      'source-2',
+    ]);
+  });
+
   test('caps segments, duplicate quote/type, options and notes', () {
     final buffer = StringBuffer('[TRANSLATION quote="q1"]译文[/TRANSLATION]\n');
     // The note-heavy segment is first so it is parsed before the segment cap.
@@ -124,7 +155,7 @@ Some prose context_inference（90%） that should be ignored.
         '[MEANING]解释$index[/MEANING][/SEGMENT]',
       );
     }
-    // A second segment with the same quote and type must be dropped.
+    // A second segment with the same quote and type is merged into the first.
     buffer.writeln(
       '[SEGMENT type="fact" quote="q1"]'
       '[MEANING]重复[/MEANING][/SEGMENT]',

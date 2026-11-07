@@ -189,8 +189,11 @@ String buildAgentResultMarkdown(AgentRunResult result, AgentUiStrings strings) {
       buffer.writeln('### ${group.first.dictionaryTitle}');
       for (final citation in group) {
         final number = citationNumbers[citation.id] ?? 0;
+        final title = citation.displayTitle.isEmpty
+            ? strings.citationTitleFallback
+            : citation.displayTitle;
         buffer.writeln(
-          '- ${strings.citationLabel(number)} · ${citation.entryKey}：'
+          '- ${strings.citationLabel(number)} · $title：'
           '${citation.snippet}',
         );
       }

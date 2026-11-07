@@ -8,7 +8,6 @@ import '../core/models/agent/agent_profile.dart';
 import '../core/models/agent/agent_provider.dart';
 import '../core/models/agent/agent_tool.dart';
 import '../core/models/dict_info.dart';
-import '../services/agent/agent_background_service.dart';
 import '../services/agent/agent_messages.dart';
 import '../services/agent/agent_orchestrator.dart';
 import '../services/agent/agent_run.dart';
@@ -34,7 +33,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   AgentRichTextOutputs? _pendingRichText;
   AgentUiLanguage _uiLanguage = AgentUiLanguage.chinese;
   Future<void> Function()? _cancelOcr;
-  AgentBackgroundPort? _backgroundPort;
+  AgentBackgroundLease? _backgroundLease;
+  _BackgroundHold? _backgroundHold;
   AgentMode? _sessionMode;
   Timer? _slowWarningTimer;
 
@@ -46,11 +46,11 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     _sessionMode = mode;
   }
 
-  AgentBackgroundPort get _background {
-    final existing = _backgroundPort;
+  AgentBackgroundLease get _backgroundLeaseRef {
+    final existing = _backgroundLease;
     if (existing != null) return existing;
-    final created = ref.read(agentBackgroundServiceProvider);
-    _backgroundPort = created;
+    final created = ref.read(agentBackgroundLeaseProvider);
+    _backgroundLease = created;
     return created;
   }
 
@@ -58,8 +58,9 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   AgentRunSnapshot build() {
     ref.onDispose(() {
       _slowWarningTimer?.cancel();
-      final port = _backgroundPort;
-      if (port != null) unawaited(port.stop());
+      final hold = _backgroundHold;
+      _backgroundHold = null;
+      if (hold != null) unawaited(hold.release());
     });
     ref.listen(agentProfileInboxProvider, (previous, next) {
       // Pending profiles may be resolved after this run is done. Keep the
@@ -188,14 +189,19 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     _slowWarningTimer?.cancel();
     _slowWarningTimer = null;
 
-    // Keep the process (and therefore the HTTP stream) alive if the user
-    // switches apps or turns the screen off. This is best-effort: a platform
-    // failure must not block the analysis.
+    // Keep the process (and therefore the HTTP stream and deferred profile
+    // generation) alive if the user switches apps or turns the screen off.
+    // This is best-effort: a platform failure must not block the analysis.
+    final previousHold = _backgroundHold;
+    if (previousHold != null) unawaited(previousHold.release());
+    final backgroundHold = _BackgroundHold(_backgroundLeaseRef);
+    _backgroundHold = backgroundHold;
     try {
-      await _background.start();
+      await backgroundHold.acquire();
     } catch (_) {
       // Ignored; the run continues without the process-lifetime guarantee.
     }
+    Future<void>? backgroundProfileWork;
 
     try {
       final loadServices = ref.read(agentRunServicesProvider);
@@ -206,7 +212,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       if (services == null) {
         _slowWarningTimer?.cancel();
         _slowWarningTimer = null;
-        unawaited(_background.stop());
+        await _releaseBackgroundHold(backgroundHold);
         return;
       }
       _cancelOcr = services.cancelOcr;
@@ -329,15 +335,18 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         // 4 Hz whole-page rebuilds for an unused counter.
         onTextDelta: (chars) => _textChars = chars,
         onReasoningDelta: (chars) => _reasoningChars = chars,
-        // The app-level inbox owns the decision futures. If the page is not
-        // mounted, the run stays in `awaitingProfile`; it never auto-skips.
+        // The app-level inbox owns the pending queue. Generation does not
+        // wait for the user's decision: profiles take effect next run, and
+        // waiting here would keep the foreground service alive indefinitely.
         onProfilesGenerated: (runId, proposals) async {
           final inbox = ref.read(agentProfileInboxProvider.notifier);
           if (ref.read(appSettingsProvider).agentProfilesAutoAccept) {
             return inbox.autoAcceptAll(proposals);
           }
-          return inbox.waitForAll(runId, proposals);
+          await inbox.enqueue(proposals);
+          return const <ProfileConfirmation>[];
         },
+        onBackgroundProfiles: (work) => backgroundProfileWork = work,
       );
       if (!_isActive(token)) return;
       if (kDebugMode) {
@@ -375,7 +384,14 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         finishedAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
-      unawaited(_background.stop());
+      if (identical(_backgroundHold, backgroundHold)) {
+        _backgroundHold = null;
+      }
+      // Keep the foreground service until deferred profile generation has
+      // actually enqueued its proposals. Stopping it at `done` let Android
+      // suspend the process mid-generation when the user switched apps,
+      // which silently skipped the remaining dictionaries.
+      unawaited(_releaseBackgroundAfter(backgroundHold, backgroundProfileWork));
       if (kDebugMode) {
         debugPrint(
           '[AgentTiming] controller done_state '
@@ -460,7 +476,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     }
     final cancelOcr = _cancelOcr;
     if (cancelOcr != null) unawaited(cancelOcr());
-    unawaited(_background.stop());
+    _releaseBackgroundNow();
     _pendingRichText = null;
     state = state.copyWith(
       status: AgentRunStatus.cancelled,
@@ -482,7 +498,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     _slowWarningTimer?.cancel();
     _slowWarningTimer = null;
     _cancellation?.cancel();
-    unawaited(_background.stop());
+    _releaseBackgroundNow();
     _cancellation = null;
     _lastInputs = null;
     _sessionId = null;
@@ -497,6 +513,35 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
 
   bool _isActive(AgentCancellation token) =>
       identical(_cancellation, token) && !token.isCancelled;
+
+  /// Releases the current run's foreground-service hold immediately. Safe to
+  /// call when no hold is active or when a deferred profile task has already
+  /// taken over the hold.
+  void _releaseBackgroundNow() {
+    final hold = _backgroundHold;
+    _backgroundHold = null;
+    if (hold != null) unawaited(hold.release());
+  }
+
+  Future<void> _releaseBackgroundHold(_BackgroundHold hold) async {
+    if (identical(_backgroundHold, hold)) _backgroundHold = null;
+    await hold.release();
+  }
+
+  Future<void> _releaseBackgroundAfter(
+    _BackgroundHold hold,
+    Future<void>? work,
+  ) async {
+    if (work != null) {
+      try {
+        await work;
+      } catch (_) {
+        // Profile generation already logs its own failures; the service must
+        // still be released.
+      }
+    }
+    await _releaseBackgroundHold(hold);
+  }
 
   int get _receivedChars =>
       _textChars > _reasoningChars ? _textChars : _reasoningChars;
@@ -536,7 +581,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     _slowWarningTimer?.cancel();
     _slowWarningTimer = null;
     _pendingRichText = null;
-    unawaited(_background.stop());
+    _releaseBackgroundNow();
     // Prefer the current run's provisional answer over an older retained one;
     // the user has already seen it and a failed post-check must not erase it.
     final hadProvisional = state.provisionalResult != null;
@@ -631,6 +676,23 @@ AgentRunStatus _statusFor(AgentStage stage) => switch (stage) {
   AgentStage.error => AgentRunStatus.error,
   AgentStage.cancelled => AgentRunStatus.cancelled,
 };
+
+/// One run's foreground-service hold. A hold is released at most once even if
+/// done/failure/dispose race with deferred profile generation.
+class _BackgroundHold {
+  _BackgroundHold(this.lease);
+
+  final AgentBackgroundLease lease;
+  bool _released = false;
+
+  Future<void> acquire() => lease.acquire();
+
+  Future<void> release() async {
+    if (_released) return;
+    _released = true;
+    await lease.release();
+  }
+}
 
 class _RunInputs {
   const _RunInputs({

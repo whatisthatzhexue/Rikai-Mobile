@@ -6,6 +6,7 @@ import '../../core/models/agent/agent_limits.dart';
 import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_quote.dart';
 import '../../core/models/dictionary_sample.dart';
+import '../../core/utils/dictionary_entry_title.dart';
 import 'agent_intent.dart';
 import 'ports/llm_port.dart';
 
@@ -270,7 +271,8 @@ Map<String, Object?> _analysisEvidenceJson(AgentEvidenceBundle evidence) {
           'id': citation.id,
           'dictionary_title': citation.dictionaryTitle,
           if (citation.matchedKey.isNotEmpty &&
-              citation.matchedKey != citation.headword)
+              citation.matchedKey != citation.headword &&
+              !isOpaqueDictionaryKey(citation.matchedKey))
             'matched_key': citation.matchedKey,
           'headword': citation.headword,
           'snippet': citation.snippet,
@@ -623,7 +625,11 @@ Map<String, Object?> _coverageInputJson(
         <String, Object?>{
           'id': citation.id,
           'dictionary_id': citation.dictionaryId,
-          'entry_key': citation.entryKey,
+          'entry_key': isOpaqueDictionaryKey(citation.entryKey)
+              ? (citation.headword.isEmpty
+                    ? citation.entryKey
+                    : citation.headword)
+              : citation.entryKey,
           'headword': citation.headword,
           'snippet': _boundedSnippet(citation.snippet, maxSnippetChars),
         },

@@ -110,6 +110,10 @@ AgentAnalysis? parseTaggedAnalysis(
   var segmentIndex = 0;
   var truncated = false;
   final segmentCounts = <String, int>{};
+  final segmentIndexes = <String, int>{};
+  final perQuoteTypeLimit = limits.maxSegmentsPerQuotePerType < 1
+      ? 1
+      : limits.maxSegmentsPerQuotePerType;
   for (final match in segmentPattern.allMatches(raw)) {
     segmentIndex++;
     final attrs = match.group(1) ?? '';
@@ -119,19 +123,6 @@ AgentAnalysis? parseTaggedAnalysis(
     final effectiveType = declaredType.isEmpty
         ? _leakedType(body)
         : declaredType;
-    if (segments.length >= limits.maxSegments) {
-      truncated = true;
-      break;
-    }
-    if (quoteId.isNotEmpty) {
-      final segmentKey = '$quoteId\u0000${effectiveType.trim().toLowerCase()}';
-      final count = segmentCounts[segmentKey] ?? 0;
-      if (count >= limits.maxSegmentsPerQuotePerType) {
-        truncated = true;
-        continue;
-      }
-      segmentCounts[segmentKey] = count + 1;
-    }
     final meaningMatch = RegExp(
       r'\[MEANING\]([\s\S]*?)\[/MEANING\]',
       caseSensitive: false,
@@ -233,6 +224,31 @@ AgentAnalysis? parseTaggedAnalysis(
       );
     }
 
+    final segmentKey = '$quoteId\u0000${effectiveType.trim().toLowerCase()}';
+    final existingIndex = segmentIndexes[segmentKey];
+    final count = segmentCounts[segmentKey] ?? 0;
+    if (existingIndex != null && count >= perQuoteTypeLimit) {
+      // Models commonly split one quote into several SEGMENT blocks of the
+      // same type (for example one fact block per word). Treat the cap as a
+      // merge boundary instead of silently dropping the extra block: notes
+      // and interpretations are preserved and the result is not marked
+      // truncated.
+      segments[existingIndex] = _mergeDuplicateSegment(
+        segments[existingIndex],
+        interpretation: interpretation,
+        wordNotes: wordNotes,
+        grammarNotes: grammarNotes,
+        maxNotesPerSegment: limits.maxNotesPerSegment,
+        onTruncated: () => truncated = true,
+      );
+      continue;
+    }
+    if (segments.length >= limits.maxSegments) {
+      truncated = true;
+      break;
+    }
+    segmentCounts[segmentKey] = count + 1;
+    segmentIndexes.putIfAbsent(segmentKey, () => segments.length);
     final boundedWordNotes = wordNotes.length > limits.maxNotesPerSegment
         ? wordNotes.take(limits.maxNotesPerSegment).toList(growable: false)
         : wordNotes;
@@ -335,6 +351,129 @@ AgentAnalysis? parseTaggedAnalysis(
     modelSupplements: supplements,
     truncated: truncated,
   );
+}
+
+/// Merges a repeated quote+type SEGMENT into the first one instead of
+/// dropping it. The hard per-quote/type cap remains one visible segment, but
+/// notes and prose from later blocks are preserved and de-duplicated.
+AgentSegment _mergeDuplicateSegment(
+  AgentSegment existing, {
+  required String interpretation,
+  required List<AgentWordNote> wordNotes,
+  required List<AgentGrammarNote> grammarNotes,
+  required int maxNotesPerSegment,
+  required void Function() onTruncated,
+}) {
+  final mergedWordNotes = _mergeWordNotes(existing.wordNotes, wordNotes);
+  final mergedGrammarNotes = _mergeGrammarNotes(
+    existing.grammarNotes,
+    grammarNotes,
+  );
+  final wordLimit = maxNotesPerSegment < 0 ? 0 : maxNotesPerSegment;
+  final boundedWordNotes = mergedWordNotes.length > wordLimit
+      ? mergedWordNotes.take(wordLimit).toList(growable: false)
+      : mergedWordNotes;
+  final boundedGrammarNotes = mergedGrammarNotes.length > wordLimit
+      ? mergedGrammarNotes.take(wordLimit).toList(growable: false)
+      : mergedGrammarNotes;
+  if (boundedWordNotes.length != mergedWordNotes.length ||
+      boundedGrammarNotes.length != mergedGrammarNotes.length) {
+    onTruncated();
+  }
+  return AgentSegment(
+    id: existing.id,
+    quoteId: existing.quoteId,
+    literal: existing.literal,
+    interpretation: _mergeInterpretation(
+      existing.interpretation,
+      interpretation,
+    ),
+    epistemic: existing.epistemic,
+    wordNotes: boundedWordNotes,
+    grammarNotes: boundedGrammarNotes,
+    confidence: existing.confidence,
+  );
+}
+
+String _mergeInterpretation(String first, String second) {
+  final left = first.trim();
+  final right = second.trim();
+  if (left.isEmpty) return right;
+  if (right.isEmpty || left == right || left.contains(right)) return left;
+  if (right.contains(left)) return right;
+  return '$left；$right';
+}
+
+List<AgentWordNote> _mergeWordNotes(
+  List<AgentWordNote> existing,
+  List<AgentWordNote> incoming,
+) {
+  final result = <AgentWordNote>[...existing];
+  final indexes = <String, int>{
+    for (var index = 0; index < result.length; index++)
+      _wordNoteKey(result[index]): index,
+  };
+  for (final note in incoming) {
+    final key = _wordNoteKey(note);
+    final index = indexes[key];
+    if (index == null) {
+      indexes[key] = result.length;
+      result.add(note);
+      continue;
+    }
+    final current = result[index];
+    result[index] = AgentWordNote(
+      tokenId: current.tokenId,
+      surface: current.surface,
+      reading: current.reading,
+      sense: current.sense,
+      citationIds: _unionIds(current.citationIds, note.citationIds),
+    );
+  }
+  return result;
+}
+
+List<AgentGrammarNote> _mergeGrammarNotes(
+  List<AgentGrammarNote> existing,
+  List<AgentGrammarNote> incoming,
+) {
+  final result = <AgentGrammarNote>[...existing];
+  final indexes = <String, int>{
+    for (var index = 0; index < result.length; index++)
+      _grammarNoteKey(result[index]): index,
+  };
+  for (final note in incoming) {
+    final key = _grammarNoteKey(note);
+    final index = indexes[key];
+    if (index == null) {
+      indexes[key] = result.length;
+      result.add(note);
+      continue;
+    }
+    final current = result[index];
+    result[index] = AgentGrammarNote(
+      patternId: current.patternId,
+      explanation: current.explanation,
+      citationIds: _unionIds(current.citationIds, note.citationIds),
+    );
+  }
+  return result;
+}
+
+String _wordNoteKey(AgentWordNote note) =>
+    '${note.tokenId}\u0000${note.surface}\u0000${note.reading}\u0000${note.sense}';
+
+String _grammarNoteKey(AgentGrammarNote note) =>
+    '${note.patternId}\u0000${note.explanation}';
+
+List<String> _unionIds(List<String> first, List<String> second) {
+  if (second.isEmpty) return first;
+  final seen = <String>{...first};
+  return <String>[
+    ...first,
+    for (final id in second)
+      if (seen.add(id)) id,
+  ];
 }
 
 /// Parses `[NO_ANALYSIS reason="..."]` or the block form

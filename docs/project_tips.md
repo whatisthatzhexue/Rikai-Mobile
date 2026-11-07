@@ -1375,6 +1375,32 @@ fallback。用户会看到其他本来可以正常格式化的 section 也退回
 参考实现：`lib/core/ui/rikai_toast.dart`、`lib/features/lookup/lookup_actions.dart`；
 测试 `test/rikai_toast_test.dart`。
 
+### T-139 依据卡片直接显示 MDict 内部 key
+
+**误区**：Agent 依据卡片把 `LookupEntry.headword` 当标题直接渲染。明镜等词典的
+entry key 是 `01570 03798`，大辞林重定向后是 `@daijirin2-...`，用户看到的是
+无意义索引；点击后的词条页和复制 Markdown 也会带出同一串索引。
+
+**原因**：MDict 的 key 只保证唯一和可定位，不保证可读；`LookupEntry` 的
+`headword` 是最终解析 key，不一定等于词条内容里的标题。`matchedKey` 有时是
+用户查询词，有时仍是内部索引，不能单独作为显示标题。
+
+**正确做法**：
+
+- 新增 `lib/core/utils/dictionary_entry_title.dart`：优先从词条 HTML 的
+  `【...】` 提取标题，其次 `headword/entry-title` 类元素，再回退到
+  `matchedKey`；去除 `▽▼△▲` 等词典标记。
+- `entryKey` 保留给查词、去重和 citation 导航；`AgentCitation.headword` 存
+  显示标题。旧历史没有新标题时，从保存的 snippet 里提取 `【...】`。
+- 所有用户可见面统一走 `citation.displayTitle`：依据卡片、语义标签、Markdown
+  导出、fallback 弹窗、点击后的词条页、查词结果列表和 P6.6 依据预览。
+- 不要用“是否含数字/字母”粗暴判断；`01570 03798`、`@daijirin2-...` 是索引，
+  但 `apple`、`B2B` 是正常词条。
+
+参考实现：`dictionary_entry_title.dart`、`AgentCitation.displayTitle`、
+`evidence_builder.dart`；测试 `dictionary_entry_title_test.dart`、
+`agent_result_view_test.dart`、`lookup_result_list_test.dart`。
+
 > 先按症状定位 `T-###`，再阅读对应条目；本表不重复完整做法。
 
 | 症状/报错 | 直接处理 |
@@ -1385,6 +1411,7 @@ fallback。用户会看到其他本来可以正常格式化的 section 也退回
 | MeCab 初始化返回 null / 报 rc 文件错误 | 检查 UniDic 5 个文件；创建私有 `mecabrc`；传 `-r <私有路径>`；确认 Android 可读路径（`T-006`） |
 | `dict_reader` 读取后页面只显示 `@@@LINK=...` | 解析重定向（`T-011`），最多 3 层 |
 | 词典内跳转失败无任何提示；查询日志显示 hits=0 | 不要用 `navigator.context` 弹 `RikaiToast`；用页面 context，并让 `RikaiToast` 回退到 `NavigatorState.overlay`（`T-138`） |
+| 依据卡片/词条页显示 `01570 03798`、`@daijirin2-...` | 那是 MDict 内部 key；从词条 HTML 提取标题，key 只用于查词/跳转（`T-139`） |
 | WebView 空白或图片缺失 | 检查 `loadDataWithBaseUrl` 的 base URL、MDD 提取路径、`src` 重写、本地文件权限；确认 JS 关闭不影响布局（`T-033`） |
 | `dart run` 在根包失败并出现 Visual Studio 安装清单 | 根包 native-assets hook（MeCab）在 Windows 失败；改用隔离 Dart 包跑主机脚本（`T-010`） |
 | Debug APK 很大（~260MB） | 正常：全 ABI + debug。需要时构建 arm64 release；不要把 debug 大小当 release（`T-019`） |

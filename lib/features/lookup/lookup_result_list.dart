@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/lookup_models.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/utils/dictionary_entry_title.dart';
 import '../../core/utils/html_text.dart';
 
 /// Grouped lookup hits shared by the reader sheet and the search page.
@@ -17,6 +18,16 @@ class LookupHitList extends StatelessWidget {
   final void Function(DictionaryLookupGroup group, LookupEntry entry)
   onOpenEntry;
   final ValueChanged<DictionaryLookupGroup> onOpenAll;
+
+  String _entryTitle(LookupEntry entry) {
+    final title = dictionaryEntryDisplayTitle(
+      html: entry.html,
+      matchedKey: entry.matchedKey,
+      headword: entry.headword,
+    );
+    // Never fall back to an opaque internal key in the visible list.
+    return title.isEmpty ? '词条' : title;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -92,13 +103,11 @@ class LookupHitList extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              // Some dictionaries redirect to internal ids
-                              // such as `00044` or `@daijirin2-...`; the
-                              // matched key is the human-readable title shown
-                              // by the entry page.
-                              entry.matchedKey.isNotEmpty
-                                  ? entry.matchedKey
-                                  : entry.headword,
+                              // Some dictionaries use internal ids such as
+                              // `00044`, `01570 03798` or `@daijirin2-...` as
+                              // keys. Show the title extracted from the entry
+                              // HTML (falling back to the matched key) instead.
+                              _entryTitle(entry),
                               style: theme.textTheme.headlineSmall,
                             ),
                             const SizedBox(height: AppSpacing.xs),

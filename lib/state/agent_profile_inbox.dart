@@ -161,7 +161,7 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
     }
   }
 
-  void enqueue(List<AgentProfileProposal> proposals) {
+  Future<void> enqueue(List<AgentProfileProposal> proposals) async {
     if (proposals.isEmpty) return;
     final known = <String>{for (final item in state.pending) item.id};
     final added = <AgentProfileProposal>[
@@ -172,14 +172,15 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
     state = state.copyWith(
       pending: <AgentProfileProposal>[...state.pending, ...added],
     );
-    unawaited(_persistPending(added));
+    await _persistPending(added);
   }
 
   Future<List<ProfileConfirmation>> waitForAll(
     String runId,
     List<AgentProfileProposal> proposals,
   ) {
-    enqueue(proposals);
+    // Register decision completers before enqueue yields to persistence, so
+    // a cancel/clear immediately after waitForAll cannot strand the future.
     final futures = <Future<ProfileConfirmation>>[];
     for (final proposal in proposals) {
       final completer = _decisions.putIfAbsent(
@@ -188,6 +189,7 @@ class AgentProfileInboxController extends Notifier<AgentProfileInboxState> {
       );
       futures.add(completer.future);
     }
+    unawaited(enqueue(proposals));
     return Future.wait(futures);
   }
 

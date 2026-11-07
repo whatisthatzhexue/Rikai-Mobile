@@ -1,3 +1,4 @@
+import '../../utils/dictionary_entry_title.dart';
 import 'agent_json.dart';
 import 'agent_pitch.dart';
 
@@ -120,6 +121,24 @@ class AgentCitation {
   final String headword;
   final String snippet;
   final String toolCallId;
+
+  /// Human-readable title for display only.
+  ///
+  /// New citations store a title extracted from the full entry HTML in
+  /// [headword]. Old history entries may still contain an internal MDict key
+  /// such as `01570 03798` or `@daijirin2-...`; in that case fall back to the
+  /// bracket headword in the saved snippet. Never show [entryKey] directly.
+  String get displayTitle {
+    final head = headword.trim();
+    if (!isOpaqueDictionaryKey(head)) return head;
+    final fromSnippet = extractDictionaryEntryTitleFromText(snippet);
+    if (fromSnippet != null && fromSnippet.isNotEmpty) return fromSnippet;
+    final matched = matchedKey.trim();
+    if (!isOpaqueDictionaryKey(matched)) return matched;
+    final key = entryKey.trim();
+    if (!isOpaqueDictionaryKey(key)) return key;
+    return '';
+  }
 
   Map<String, Object?> toJson() => {
     'id': id,

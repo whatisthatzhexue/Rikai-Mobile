@@ -80,10 +80,13 @@ Future<void> openAgentCitation(
       );
       return;
     }
+    final displayTitle = citation.displayTitle.isEmpty
+        ? strings.citationTitleFallback
+        : citation.displayTitle;
     Navigator.of(context).push(
       RikaiPageRoute<void>(
         builder: (context) => EntryPage(
-          word: citation.entryKey,
+          word: displayTitle,
           groups: <DictionaryLookupGroup>[
             DictionaryLookupGroup(
               dictionary: group.dictionary,
@@ -128,7 +131,9 @@ Future<void> _showCitationFallback(
     context: context,
     builder: (dialogContext) => AlertDialog(
       title: Text(
-        citation.headword.isEmpty ? citation.entryKey : citation.headword,
+        citation.displayTitle.isEmpty
+            ? strings.citationTitleFallback
+            : citation.displayTitle,
       ),
       content: SingleChildScrollView(child: Text(fallbackSnippet)),
       actions: [

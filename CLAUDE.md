@@ -355,7 +355,9 @@ provider 测试连接与发布打磨未完成。2026-11-06 另修复结果复核
 2026-11-07 定位 entry:// 未命中提示不显示的原因为 `RikaiToast.show` 使用
 `navigator.context` 时找不到其下方 Overlay，已改用页面 context 并加
 `NavigatorState.overlay` 兜底，样本上限文案缩短为“词典样本达上限，N 项检查未覆盖”；
-真实弱网 provider、arm64 后台/通知与真机视觉验收仍未进行。
+同日修复档案编辑保存后“已失效”不消失：保存时用当前词典 stat/prompt/schema/语言
+重算并写入 fingerprint，清 stale future 后立即刷新；真实弱网 provider、arm64
+后台/通知与真机视觉验收仍未进行。
 当前进度、验证记录与工作队列只维护在以下文档，本文件不再复述：
 
 - 实现进度与验证记录：`docs/phase6-status.md`

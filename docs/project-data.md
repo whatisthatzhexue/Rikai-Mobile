@@ -40,17 +40,18 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **559** |
-| 当前测试文件数 | **97** |
+| 当前 test/testWidgets 声明数 | **576** |
+| 当前测试文件数 | **98** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | **568 passed**（声明 559；参数化/循环用例产生 568 个执行用例） |
+| 最近 `flutter test` | **585 passed**（声明 576；参数化/循环用例产生 585 个执行用例） |
 | 最近 `flutter build apk --debug` | success（2026-11-04 P6.6/P6.7 验证；2026-11-06 后台服务改动未做 APK 构建） |
 | 最近 Android Kotlin 编译 | success（2026-11-06 `:app:compileDebugKotlin --offline`；含 AgentRunService/MainActivity） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
-> 该数字对应 2026-11-07 entry:// toast 根因/短文案工作区（含慢请求提示/prompt
-> 精简、Agent UI/后台/续传、Phase 4 安全子集、Wave 3、P6.6、P7.0 富文本修正、
-> Phase 1a–3）。新增/删除测试后只更新本节。
+> 该数字对应 2026-11-07 档案失效刷新/短文本校验/后台生成工作区（含 entry://
+> toast 根因/短文案、慢请求提示/prompt 精简、重复段合并、读音归一化、free
+> grammar note、档案后台生成 lease、Agent UI/后台/续传、Phase 4 安全子集、
+> Wave 3、P6.6、P7.0 富文本修正、Phase 1a–3）。新增/删除测试后只更新本节。
 
 ### 2.2 历史测试基线（不要当作当前值）
 
@@ -87,7 +88,9 @@
 | 词典/阅读器/历史 UI 修正 | 560（声明 551） | entry:// 失败气泡、导入名称统一 MDX、历史错误本地化/滚动保持、音调尾降对齐、最小 Ruby/振假名、样本上限文案、语言对修正 |
 | 慢请求提示/prompt 精简 | 567（声明 558） | reasoning 计时/橙色提示、完成态任务用时、prompt 去掉内部偏移/冗余 citation 字段与标点 token、coverage snippet 上限、function-word 只 exact |
 | entry:// toast 根因与短文案 | 568（声明 559） | RikaiToast 的 NavigatorState context 兜底、entryLinkMissMessage 回归、样本上限短文案 |
-| 当前 | **568（声明 559）** | 见 §2.1 |
+| 失效档案保存刷新 fingerprint | 569（声明 560） | 编辑保存后重算 fingerprint/清 stale future；只显示另一本未编辑档案的“已失效” |
+| 短文本校验/档案后台修复 | 585（声明 576） | 重复 quote+type 段合并、读音假名归一化、free grammar note、WORD token 表面回退、档案后台生成持有前台服务 lease |
+| 当前 | **585（声明 576）** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
@@ -222,6 +225,7 @@ arm64 真机性能另需复测。
 | coverage 按需 depth | sense/usage/example 每典 2 条 | 其他 missing kind 每典 1 条 |
 | 慢请求提示 | 30 秒（0/负数禁用） | `AgentLimits.slowRequestWarningSeconds`；从主分析 `reasoning` 起计时，达到阈值只显示橙色“本次处理时间较长，请耐心等待”，**不取消** provider/OCR；此前显示“任务已进行 X 秒”，此后“已思考 X 秒”，完成态“任务用时 X 秒” |
 | 首跑词典档案 | 非阻塞 | 当前 run 使用 `noProfileInstruction`；分析后后台生成；确认/不再询问后下次 run 生效 |
+| 档案后台生成服务 | 持有到入队完成 | `AgentBackgroundLease` 引用计数；analysis done 后不立即停前台服务；生成完成且 proposals 持久化后释放；手动重新生成共用同一 lease |
 | 覆盖审查自适应触发 | 默认开启 | `AgentLimits.adaptiveCoverageReview`；内容词 citation 命中率 < 80% 时运行；达到 60 条不再强制审查 |
 | 覆盖审查触发口径 | 内容词命中率 | 2026-11-06 P0：只统计 `Token.isContentWord`；排除助词/标点/功能词；固定 quote≤2/文本<50 短路已删除 |
 | 词典 fan-out | 默认关闭 | `AgentLimits.enableDictionaryFanOut`；真实 provider/arm64 验收前不默认开启 |

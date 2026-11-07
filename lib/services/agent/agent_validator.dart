@@ -3,6 +3,8 @@ import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
 import '../../core/models/agent/agent_json.dart';
 import '../../core/models/agent/agent_quote.dart';
+import '../../core/utils/kana.dart';
+import '../../core/utils/text_normalizer.dart';
 
 class AgentValidationResult {
   const AgentValidationResult({
@@ -71,6 +73,19 @@ class AgentValidator {
     final quoteMap = <String, AgentQuoteRef>{
       for (final quote in quotes) quote.id: quote,
     };
+    // Free grammar notes (no supplied pattern id) may only cite tokens that
+    // overlap their quote. This keeps strict traceability without rejecting a
+    // valid grammar explanation just because the whitelist did not match it.
+    final quoteTokenIds = <String, Set<String>>{
+      for (final quote in quotes)
+        quote.id: <String>{
+          for (final source in evidence.sources)
+            if (source.id == quote.sourceId)
+              for (final token in source.tokens)
+                if (token.start < quote.end && token.end > quote.start)
+                  token.id,
+        },
+    };
     final unresolvedQuotes = analysis.unresolved
         .map((item) => item.quoteId)
         .toSet();
@@ -128,7 +143,16 @@ class AgentValidator {
       }
       final claimCitations = <String>[];
       for (final note in segment.wordNotes) {
-        final token = tokenMap[note.tokenId];
+        // Some models omit WORD id or use a display surface instead. Resolve a
+        // unique surface/lemma within the current quote before rejecting the
+        // note; this keeps traceability without failing an otherwise correct
+        // analysis on a formatting omission.
+        final token = _resolveWordToken(
+          note,
+          segment.quoteId,
+          tokenMap,
+          quoteTokenIds,
+        );
         if (token == null) {
           errors.add('词注引用了不存在的 token ${note.tokenId}');
         }
@@ -147,45 +171,67 @@ class AgentValidator {
         }
         claimCitations.addAll(note.citationIds);
         if (note.reading.isNotEmpty) {
+          final noteReading = _normalizeReading(note.reading);
           final tokenReading = token?.reading ?? '';
-          if (tokenReading.isNotEmpty && tokenReading != note.reading) {
+          if (noteReading.isNotEmpty &&
+              tokenReading.isNotEmpty &&
+              _normalizeReading(tokenReading) != noteReading) {
             errors.add('词注 ${note.surface} 的读音与 UniDic 不一致');
-          } else if (tokenReading.isEmpty &&
-              !note.citationIds.any(
-                (id) => citationMap[id]?.snippet.contains(note.reading) == true,
-              )) {
+          } else if (noteReading.isNotEmpty &&
+              tokenReading.isEmpty &&
+              !note.citationIds.any((id) {
+                final snippet = citationMap[id]?.snippet ?? '';
+                return snippet.isNotEmpty &&
+                    _normalizeReading(snippet).contains(noteReading);
+              })) {
             errors.add('词注 ${note.surface} 的读音没有依据');
           }
         }
       }
       for (final note in segment.grammarNotes) {
-        final pattern = patternMap[note.patternId];
-        if (pattern == null) {
-          errors.add('语法注引用了不存在的模式 ${note.patternId}');
-        }
+        // A model may explain grammar that is not in the supplied pattern
+        // whitelist. An empty/unknown pattern id is treated as a free grammar
+        // note; its citations must still come from tokens overlapping the
+        // current quote. This avoids invalidating an otherwise correct result
+        // just because the whitelist had no matching pattern.
+        final pattern = note.patternId.isEmpty
+            ? null
+            : patternMap[note.patternId];
         validateCitations(
           note.citationIds,
-          '语法注 ${note.patternId}',
+          '语法注 ${note.patternId.isEmpty ? note.explanation : note.patternId}',
           requiredInStrict:
               mode == AgentMode.strict &&
               segment.epistemic == AgentEpistemic.dictionaryFact,
         );
-        if (pattern != null && note.citationIds.isNotEmpty) {
-          final allowed = <String>{
-            ...pattern.citationIds,
-            for (final tokenId in pattern.tokenIds)
-              ...?tokenMap[tokenId]?.citationIds,
-          };
+        if (note.citationIds.isNotEmpty) {
+          final allowed = pattern != null
+              ? <String>{
+                  ...pattern.citationIds,
+                  for (final tokenId in pattern.tokenIds)
+                    ...?tokenMap[tokenId]?.citationIds,
+                }
+              : <String>{
+                  for (final tokenId
+                      in quoteTokenIds[segment.quoteId] ?? const <String>{})
+                    ...?tokenMap[tokenId]?.citationIds,
+                };
           if (note.citationIds.any((id) => !allowed.contains(id))) {
-            errors.add('语法注 ${note.patternId} 的 citation 不属于该模式或组成词的检索结果');
+            errors.add(
+              '语法注 ${note.patternId.isEmpty ? note.explanation : note.patternId} '
+              '${pattern != null ? '的 citation 不属于该模式或组成词的检索结果' : '的 citation 不属于原文范围内的检索结果'}',
+            );
           }
         }
         claimCitations.addAll(note.citationIds);
         if (mode == AgentMode.strict &&
             segment.epistemic == AgentEpistemic.structuralAnalysis &&
             note.citationIds.isEmpty &&
-            !patternMap.containsKey(note.patternId)) {
-          errors.add('语法注 ${note.patternId} 缺少 UniDic 或词典依据');
+            pattern == null) {
+          errors.add(
+            '语法注 ${note.patternId.isEmpty ? note.explanation : note.patternId} '
+            '缺少 UniDic 或词典依据',
+          );
         }
       }
 
@@ -245,4 +291,33 @@ class AgentValidator {
       citationsUsed: List<String>.unmodifiable(used),
     );
   }
+}
+
+AgentTokenEvidence? _resolveWordToken(
+  AgentWordNote note,
+  String quoteId,
+  Map<String, AgentTokenEvidence> tokenMap,
+  Map<String, Set<String>> quoteTokenIds,
+) {
+  final direct = tokenMap[note.tokenId];
+  if (direct != null) return direct;
+  final surface = note.surface.trim();
+  if (surface.isEmpty) return null;
+  final matches = <AgentTokenEvidence>[];
+  for (final tokenId in quoteTokenIds[quoteId] ?? const <String>{}) {
+    final token = tokenMap[tokenId];
+    if (token != null && (token.surface == surface || token.lemma == surface)) {
+      matches.add(token);
+    }
+  }
+  return matches.length == 1 ? matches.single : null;
+}
+
+/// UniDic readings are commonly katakana while a model writes hiragana (or
+/// vice versa). Compare normalized kana, not raw code units, so a correct
+/// reading is never reported as "inconsistent with UniDic".
+String _normalizeReading(String value) {
+  return katakanaToHiragana(
+    normalizeLookupText(value),
+  ).replaceAll(RegExp(r'[\s・]'), '');
 }

@@ -655,7 +655,9 @@ class _VariantLookupPreview extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.xxs),
                 child: Text(
-                  '${entry.dictionaryTitle} · ${entry.headword}：${entry.snippet}',
+                  '${entry.dictionaryTitle} · '
+                  '${entry.headword.isEmpty ? strings.citationTitleFallback : entry.headword}'
+                  '：${entry.snippet}',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(

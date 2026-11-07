@@ -94,8 +94,10 @@ class AgentOrchestrator {
     void Function(int accumulatedChars)? onTextDelta,
     void Function(int accumulatedChars)? onReasoningDelta,
     void Function(int citations)? onEvidenceProgress,
+    void Function(Future<void> work)? onBackgroundProfiles,
   }) async {
     var stage = AgentStage.prepare;
+    var runSucceeded = false;
     final uiLanguage = resolveAgentUiLanguage(request.responseLanguage);
     final runWatch = Stopwatch()..start();
     final telemetry = _RunTelemetryBuilder();
@@ -468,6 +470,7 @@ class AgentOrchestrator {
           _timing(
             'result_ready fan_out=true elapsed=${runWatch.elapsedMilliseconds}ms',
           );
+          runSucceeded = true;
           return result;
         }
       }
@@ -807,6 +810,7 @@ class AgentOrchestrator {
           _timing(
             'result_ready salvage=true elapsed=${runWatch.elapsedMilliseconds}ms',
           );
+          runSucceeded = true;
           return result;
         }
         throw AgentRunFailure(
@@ -855,6 +859,7 @@ class AgentOrchestrator {
       _timing(
         'result_ready salvage=false elapsed=${runWatch.elapsedMilliseconds}ms',
       );
+      runSucceeded = true;
       return result;
     } on AgentRunFailure {
       rethrow;
@@ -875,20 +880,23 @@ class AgentOrchestrator {
     } finally {
       final deferred = deferredProfileDictionaries;
       final familiarizer = dictionaryFamiliarizer;
-      if (deferred.isNotEmpty &&
+      if (runSucceeded &&
+          deferred.isNotEmpty &&
           familiarizer != null &&
           cancellation?.isCancelled != true) {
         // Start only after the analysis path has finished so profile sampling
         // and the profile model call never compete with the user's answer.
-        unawaited(
-          _generateProfilesInBackground(
-            familiarizer: familiarizer,
-            dictionaries: deferred,
-            request: request,
-            onProfilesGenerated: onProfilesGenerated,
-            onProfile: onProfile,
-          ),
+        final work = _generateProfilesInBackground(
+          familiarizer: familiarizer,
+          dictionaries: deferred,
+          request: request,
+          onProfilesGenerated: onProfilesGenerated,
+          onProfile: onProfile,
         );
+        // The controller keeps the foreground service alive until this future
+        // completes, so switching apps cannot suspend profile generation.
+        onBackgroundProfiles?.call(work);
+        unawaited(work);
       }
     }
   }

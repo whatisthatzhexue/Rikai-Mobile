@@ -8,6 +8,7 @@ import '../../core/models/lookup_match_mode.dart';
 import '../../core/models/lookup_models.dart';
 import '../../core/models/lookup_request.dart';
 import '../../core/models/token.dart';
+import '../../core/utils/dictionary_entry_title.dart';
 import '../../core/utils/html_text.dart';
 import '../../core/utils/script_language.dart';
 import '../../core/utils/text_normalizer.dart';
@@ -24,6 +25,17 @@ const _lookupModes = <LookupMatchMode>[
   LookupMatchMode.suffix,
   LookupMatchMode.incremental,
 ];
+
+/// The entry key remains the internal MDict key used for dedupe/navigation.
+/// Only the citation's display headword is extracted from the entry HTML.
+String _citationHeadword(LookupEntry entry) {
+  final title = dictionaryEntryDisplayTitle(
+    html: entry.html,
+    matchedKey: entry.matchedKey,
+    headword: entry.headword,
+  );
+  return title;
+}
 
 /// Builds one bounded evidence bundle for all sources in a run.
 class EvidenceBuilder {
@@ -296,7 +308,7 @@ class EvidenceBuilder {
             dictionary: group.dictionary,
             entryKey: entryKey,
             matchedKey: entry.matchedKey,
-            headword: entry.headword.isEmpty ? entryKey : entry.headword,
+            headword: _citationHeadword(entry),
             snippet: htmlToPlainText(
               entry.html,
               maxLength: limits.maxSnippetChars,
@@ -358,7 +370,7 @@ class EvidenceBuilder {
             dictionary: group.dictionary,
             entryKey: entryKey,
             matchedKey: entry.matchedKey,
-            headword: entry.headword.isEmpty ? entryKey : entry.headword,
+            headword: _citationHeadword(entry),
             snippet: htmlToPlainText(
               entry.html,
               maxLength: limits.maxSnippetChars,
@@ -662,7 +674,7 @@ class EvidenceBuilder {
             dictionary: group.dictionary,
             entryKey: entryKey,
             matchedKey: entry.matchedKey,
-            headword: entry.headword.isEmpty ? entryKey : entry.headword,
+            headword: _citationHeadword(entry),
             snippet: htmlToPlainText(
               entry.html,
               maxLength: limits.maxSnippetChars,
