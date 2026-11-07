@@ -199,7 +199,9 @@ class AgentAssistantBubble extends StatelessWidget {
     required this.errorDetail,
     required this.stageMessage,
     required this.startedAt,
+    required this.thinkingStartedAt,
     required this.finishedAt,
+    this.slowRequestWarning = false,
     required this.progressStep,
     required this.evidenceCount,
     required this.citationCount,
@@ -228,7 +230,9 @@ class AgentAssistantBubble extends StatelessWidget {
   final String errorDetail;
   final String stageMessage;
   final DateTime? startedAt;
+  final DateTime? thinkingStartedAt;
   final DateTime? finishedAt;
+  final bool slowRequestWarning;
   final int progressStep;
   final int evidenceCount;
   final int citationCount;
@@ -379,7 +383,21 @@ class AgentAssistantBubble extends StatelessWidget {
               ),
               if (startedAt != null) ...[
                 const SizedBox(height: AppSpacing.xs),
-                AgentElapsedLabel(startedAt: startedAt!, language: uiLanguage),
+                AgentElapsedLabel(
+                  startedAt: startedAt!,
+                  thinkingStartedAt: thinkingStartedAt,
+                  language: uiLanguage,
+                ),
+              ],
+              if (slowRequestWarning) ...[
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  strings.slowRequestWarning,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: AgentTokens.helper,
+                    color: AppColors.warning,
+                  ),
+                ),
               ],
               if (!provisional && result != null) ...[
                 const SizedBox(height: AppSpacing.xs),
@@ -430,6 +448,7 @@ class AgentAssistantBubble extends StatelessWidget {
               const SizedBox(height: AppSpacing.xxs),
               AgentElapsedLabel(
                 startedAt: startedAt!,
+                thinkingStartedAt: thinkingStartedAt,
                 finishedAt: finishedAt,
                 language: uiLanguage,
               ),
@@ -476,19 +495,26 @@ class AgentAssistantBubble extends StatelessWidget {
   }
 }
 
-/// Ticking "thinking time" label. Character counts are intentionally not shown:
-/// the provider stream is raw tagged text and users should see how long the run has
-/// been thinking, not internal generation volume.
+/// Ticking elapsed label. Character counts are intentionally not shown:
+/// the provider stream is raw tagged text and users should see honest timing,
+/// not internal generation volume.
+///
+/// Before [thinkingStartedAt] is set the pipeline is still preparing,
+/// OCRing, tokenizing or looking up, so the label says "task running". Once
+/// the main analysis model enters generation it switches to thinking time.
+/// A finished run shows total task duration, never "thinking".
 class AgentElapsedLabel extends StatefulWidget {
   const AgentElapsedLabel({
     super.key,
     required this.startedAt,
     required this.language,
+    this.thinkingStartedAt,
     this.finishedAt,
   });
 
   final DateTime startedAt;
   final AgentUiLanguage language;
+  final DateTime? thinkingStartedAt;
   final DateTime? finishedAt;
 
   @override
@@ -530,9 +556,25 @@ class _AgentElapsedLabelState extends State<AgentElapsedLabel> {
 
   @override
   Widget build(BuildContext context) {
-    final end = widget.finishedAt ?? DateTime.now();
-    final elapsed = end.difference(widget.startedAt);
-    final text = agentElapsedLabel(elapsed.inSeconds, widget.language);
+    final now = DateTime.now();
+    final end = widget.finishedAt ?? now;
+    final String text;
+    if (widget.finishedAt != null) {
+      text = agentTaskDurationLabel(
+        end.difference(widget.startedAt).inSeconds,
+        widget.language,
+      );
+    } else if (widget.thinkingStartedAt != null) {
+      text = agentElapsedLabel(
+        end.difference(widget.thinkingStartedAt!).inSeconds,
+        widget.language,
+      );
+    } else {
+      text = agentTaskElapsedLabel(
+        end.difference(widget.startedAt).inSeconds,
+        widget.language,
+      );
+    }
     return Text(
       text,
       style: Theme.of(context).textTheme.bodySmall?.copyWith(

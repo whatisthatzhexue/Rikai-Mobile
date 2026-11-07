@@ -36,7 +36,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   Future<void> Function()? _cancelOcr;
   AgentBackgroundPort? _backgroundPort;
   AgentMode? _sessionMode;
-  Timer? _deadlineTimer;
+  Timer? _slowWarningTimer;
 
   /// Strict/loose selected for the current app session. It survives page
   /// rebuilds, is snapshotted into each run, and resets with a new session.
@@ -57,7 +57,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   @override
   AgentRunSnapshot build() {
     ref.onDispose(() {
-      _deadlineTimer?.cancel();
+      _slowWarningTimer?.cancel();
       final port = _backgroundPort;
       if (port != null) unawaited(port.stop());
     });
@@ -183,13 +183,10 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       startedAt: startedAt,
       updatedAt: startedAt,
     );
-    _deadlineTimer?.cancel();
-    if (limits.runDeadlineSeconds > 0) {
-      _deadlineTimer = Timer(
-        Duration(seconds: limits.runDeadlineSeconds),
-        () => _onDeadline(token, limits.runDeadlineSeconds),
-      );
-    }
+    // The slow-request advisory starts only when the main analysis model
+    // enters its generation stage, not while OCR/tokenization/lookup run.
+    _slowWarningTimer?.cancel();
+    _slowWarningTimer = null;
 
     // Keep the process (and therefore the HTTP stream) alive if the user
     // switches apps or turns the screen off. This is best-effort: a platform
@@ -207,8 +204,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         isCancelled: () => !_isActive(token),
       );
       if (services == null) {
-        _deadlineTimer?.cancel();
-        _deadlineTimer = null;
+        _slowWarningTimer?.cancel();
+        _slowWarningTimer = null;
         unawaited(_background.stop());
         return;
       }
@@ -266,17 +263,24 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
               'elapsed=${runWatch.elapsedMilliseconds}ms',
             );
           }
-          _update(
-            token,
-            (snapshot) => snapshot.copyWith(
+          if (stage == AgentStage.reasoning &&
+              state.thinkingStartedAt == null) {
+            _startSlowWarningTimer(token, limits.slowRequestWarningSeconds);
+          }
+          _update(token, (snapshot) {
+            final thinkingStartedAt = stage == AgentStage.reasoning
+                ? snapshot.thinkingStartedAt ?? DateTime.now()
+                : snapshot.thinkingStartedAt;
+            return snapshot.copyWith(
               status: _statusFor(stage),
               stageMessage: message,
               progressStep: _progressStepFor(stage, snapshot.progressStep),
+              thinkingStartedAt: thinkingStartedAt,
               // Force the last throttled progress value; stage changes are rare
               // and the stream may already be done when `validating` arrives.
               receivedChars: _receivedChars,
-            ),
-          );
+            );
+          });
         },
         onProvisionalResult: (provisional) {
           if (kDebugMode) {
@@ -342,8 +346,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
           'elapsed=${runWatch.elapsedMilliseconds}ms',
         );
       }
-      _deadlineTimer?.cancel();
-      _deadlineTimer = null;
+      _slowWarningTimer?.cancel();
+      _slowWarningTimer = null;
       final pendingRichText = _pendingRichText;
       _pendingRichText = null;
       final finalResult = pendingRichText == null
@@ -367,6 +371,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         errorDetail: '',
         retainedResult: null,
         resultRetainedAfterFailure: false,
+        slowRequestWarning: false,
         finishedAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -446,8 +451,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
   void cancel() {
     final token = _cancellation;
     if (token == null || token.isCancelled || !state.isRunning) return;
-    _deadlineTimer?.cancel();
-    _deadlineTimer = null;
+    _slowWarningTimer?.cancel();
+    _slowWarningTimer = null;
     token.cancel();
     final runId = state.runId;
     if (runId != null) {
@@ -466,6 +471,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       resultReplaced: state.provisionalResult != null,
       pendingProfileCount: ref.read(agentProfileInboxProvider).pendingCount,
       richTextFormatting: false,
+      slowRequestWarning: false,
       finishedAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -473,8 +479,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
 
   void newSession() {
     if (state.isRunning) return;
-    _deadlineTimer?.cancel();
-    _deadlineTimer = null;
+    _slowWarningTimer?.cancel();
+    _slowWarningTimer = null;
     _cancellation?.cancel();
     unawaited(_background.stop());
     _cancellation = null;
@@ -503,37 +509,21 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     state = update(state).copyWith(updatedAt: DateTime.now());
   }
 
-  /// Global run deadline. Cancels the in-flight provider request immediately
-  /// and keeps any provisional/retained result visible with a retryable
-  /// TOOL_TIMEOUT error instead of letting the user wait indefinitely.
-  void _onDeadline(AgentCancellation token, int seconds) {
-    if (!_isActive(token)) return;
-    _deadlineTimer = null;
-    token.cancel();
-    final cancelOcr = _cancelOcr;
-    if (cancelOcr != null) unawaited(cancelOcr());
-    unawaited(_background.stop());
-    _pendingRichText = null;
-    final hadProvisional = state.provisionalResult != null;
-    final fallback = state.provisionalResult ?? state.retainedResult;
-    final message = agentRunTimeoutMessage(_uiLanguage, seconds);
-    state = state.copyWith(
-      status: AgentRunStatus.error,
-      stageMessage: message,
-      errorMessage: message,
-      errorCode: AgentToolErrorCode.toolTimeout,
-      retryable: true,
-      errorDetail: '',
-      result: fallback,
-      provisionalResult: null,
-      retainedResult: null,
-      resultRetainedAfterFailure: fallback != null,
-      resultReplaced: hadProvisional,
-      pendingProfileCount: ref.read(agentProfileInboxProvider).pendingCount,
-      richTextFormatting: false,
-      finishedAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
+  /// Starts the orange advisory shown after the main analysis model has been
+  /// generating for [seconds]. It never cancels the run: the user can keep
+  /// waiting or stop explicitly. Zero/negative disables the advisory.
+  void _startSlowWarningTimer(AgentCancellation token, int seconds) {
+    _slowWarningTimer?.cancel();
+    _slowWarningTimer = null;
+    if (seconds <= 0) return;
+    _slowWarningTimer = Timer(Duration(seconds: seconds), () {
+      if (!_isActive(token)) return;
+      _slowWarningTimer = null;
+      _update(token, (snapshot) {
+        if (snapshot.slowRequestWarning) return snapshot;
+        return snapshot.copyWith(slowRequestWarning: true);
+      });
+    });
   }
 
   void _fail(
@@ -543,8 +533,8 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     AgentToolErrorCode? code,
   ]) {
     if (!_isActive(token)) return;
-    _deadlineTimer?.cancel();
-    _deadlineTimer = null;
+    _slowWarningTimer?.cancel();
+    _slowWarningTimer = null;
     _pendingRichText = null;
     unawaited(_background.stop());
     // Prefer the current run's provisional answer over an older retained one;
@@ -565,6 +555,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       resultReplaced: hadProvisional,
       pendingProfileCount: ref.read(agentProfileInboxProvider).pendingCount,
       richTextFormatting: false,
+      slowRequestWarning: false,
       finishedAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );

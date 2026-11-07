@@ -383,6 +383,34 @@ void main() {
     },
   );
 
+  test(
+    'analysis prompt omits internal offsets and redundant citation metadata',
+    () async {
+      final provider = FakeProvider(responseText: _analysisTagged);
+      await _orchestrator(provider: provider).run(
+        const AgentRunRequest(
+          sessionId: 's1',
+          mode: AgentMode.strict,
+          dictionaries: <DictionaryInfo>[_dictionary],
+          provider: _provider,
+          userText: '何卒',
+        ),
+      );
+
+      final prompt = provider.requests.single.messages
+          .map((message) => message.text)
+          .join('\n');
+      expect(prompt, isNot(contains('"start":')));
+      expect(prompt, isNot(contains('"end":')));
+      expect(prompt, isNot(contains('"schema":')));
+      expect(prompt, isNot(contains('"entry_key":')));
+      expect(prompt, isNot(contains('"dictionary_id":')));
+      expect(prompt, isNot(contains('"origin":')));
+      expect(prompt, contains('"citation_ids":'));
+      expect(prompt, contains('"headword":'));
+    },
+  );
+
   test('OCR image paths are never placed in the provider request', () async {
     final provider = FakeProvider(responseText: _analysisTagged);
     final ocr = _FakeOcr();
@@ -405,7 +433,10 @@ void main() {
     final requestText = provider.requests.single.messages
         .map((message) => message.text)
         .join('\n');
-    expect(requestText.contains('img-1'), isTrue);
+    expect(requestText.contains('src-1'), isTrue);
+    // The opaque image handle is local metadata; only the source id/kind and
+    // selected text are needed by the model.
+    expect(requestText.contains('img-1'), isFalse);
     expect(requestText.contains('/sdcard'), isFalse);
     expect(requestText.contains('private-page.jpg'), isFalse);
   });
@@ -994,7 +1025,10 @@ void main() {
       final requestText = provider.requests.single.messages
           .map((message) => message.text)
           .join('\n');
-      expect(requestText, contains('"selected_variant_id":"v1"'));
+      // The selected text is sent once; variant/image handles are local
+      // orchestration metadata and are intentionally omitted from the prompt.
+      expect(requestText, contains('"kind":"image_ocr"'));
+      expect(requestText, isNot(contains('"selected_variant_id"')));
       expect(requestText, isNot(contains('"variants"')));
       expect(requestText, isNot(contains('"lookup_candidates"')));
       expect(requestText, isNot(contains('"tool_call_id"')));

@@ -48,4 +48,24 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     expect(find.text('已保存'), findsNothing);
   });
+
+  testWidgets('toast also works from a NavigatorState context', (tester) async {
+    final navigatorKey = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        theme: AppTheme.light(),
+        home: const Scaffold(body: SizedBox.shrink()),
+      ),
+    );
+
+    // NavigatorState.context sits above the Overlay it creates; this was the
+    // entry:// failure path and must fall back to the navigator's overlay.
+    RikaiToast.show(navigatorKey.currentState!.context, '查询失败');
+    await tester.pump();
+    expect(find.text('查询失败'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.text('查询失败'), findsNothing);
+  });
 }

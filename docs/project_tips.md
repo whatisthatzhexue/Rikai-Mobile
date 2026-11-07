@@ -4,8 +4,8 @@
 > 其它文档只引用 `T-###`，不再复制误区正文；**今后的新误区只在本文件追加**。
 >
 > - last_migrated: 2026-11-01（从原交接文档 §5 迁移，共 129 条）
-> - last_updated: 2026-11-06（新增词典采样截断速查）
-> - 编号说明：条目使用连续的 `T-001`–`T-137`；原文档 §5.14 的 #122–#130
+> - last_updated: 2026-11-07（新增 Toast context 条目）
+> - 编号说明：条目使用连续的 `T-001`–`T-138`；原文档 §5.14 的 #122–#130
 >   顺延为 `T-121`–`T-129`。编号一经发布不再复用。
 >
 > **何时查看**：遇到报错、异常行为、构建失败或准备重复试错时；接手 OCR、
@@ -44,7 +44,7 @@
 | §5.12 Phase 4.5 OCR 收敛 | §11 | T-082–T-112 |
 | §5.13 Agent v2 设计期 | §12 | T-113–T-120 |
 | §5.14 Phase 5 语料/引导 | §13 | T-121–T-129 |
-| 新增（Agent 请求/覆盖/滚动/解释概率/推理空正文/富文本 diff/流结束后延迟/批量独立降级） | §14 | T-130–T-137 |
+| 新增（Agent 请求/覆盖/滚动/解释概率/推理空正文/富文本 diff/流结束后延迟/批量独立降级/Toast context） | §14 | T-130–T-138 |
 
 ## 1. 架构与 OCR（T-001–T-005）
 
@@ -1350,6 +1350,31 @@ fallback。用户会看到其他本来可以正常格式化的 section 也退回
 `agent_prompts.dart` 的 `buildBatchedRichTextPostProcessRequest`；契约 §5.3；
 规则 `R-AGENT-LIMITS-001`。
 
+### T-138 用 `NavigatorState.context` 弹 `RikaiToast`，toast 永远不显示
+
+**误区**：`lookupAndOpenEntry` 在词典 `entry://` 跳转失败时用
+`RikaiToast.show(navigator.context, ...)` 提示“当前词典中没有…”。查询确实
+执行了（日志 `hits=0`），但页面没有任何提示。
+
+**原因**：`RikaiToast.show` 通过 `Overlay.maybeOf(context, rootOverlay: true)`
+向上查找 Overlay。`NavigatorState.context` 是 Navigator 本身的 context，位于它
+创建的 Overlay **上层**；Overlay 是 Navigator 的子节点，因此向上查找返回 null，
+`RikaiToast.show` 静默 `return`。`showDialog` 能工作是因为它直接由 Navigator
+压入 overlay route，不依赖祖先 Overlay。
+
+**正确做法**：
+
+- 页面内 toast 使用页面/子树的 `BuildContext`（Overlay 的后代），不要传
+  `navigator.context`。
+- `RikaiToast.show` 增加兜底：祖先 Overlay 找不到时，若 context 的 State 是
+  `NavigatorState`，使用 `state.overlay`；否则尝试
+  `Navigator.maybeOf(context)?.overlay`。
+- 回归测试直接以 `navigatorKey.currentState!.context` 调用 `RikaiToast.show`，
+  断言消息可见。
+
+参考实现：`lib/core/ui/rikai_toast.dart`、`lib/features/lookup/lookup_actions.dart`；
+测试 `test/rikai_toast_test.dart`。
+
 > 先按症状定位 `T-###`，再阅读对应条目；本表不重复完整做法。
 
 | 症状/报错 | 直接处理 |
@@ -1359,6 +1384,7 @@ fallback。用户会看到其他本来可以正常格式化的 section 也退回
 | `permission_handler_android ... Unresolved reference: kotlin/compilerOptions` | 不要重装/降级插件；移除 permission_handler，用原生 MethodChannel（`T-015`） |
 | MeCab 初始化返回 null / 报 rc 文件错误 | 检查 UniDic 5 个文件；创建私有 `mecabrc`；传 `-r <私有路径>`；确认 Android 可读路径（`T-006`） |
 | `dict_reader` 读取后页面只显示 `@@@LINK=...` | 解析重定向（`T-011`），最多 3 层 |
+| 词典内跳转失败无任何提示；查询日志显示 hits=0 | 不要用 `navigator.context` 弹 `RikaiToast`；用页面 context，并让 `RikaiToast` 回退到 `NavigatorState.overlay`（`T-138`） |
 | WebView 空白或图片缺失 | 检查 `loadDataWithBaseUrl` 的 base URL、MDD 提取路径、`src` 重写、本地文件权限；确认 JS 关闭不影响布局（`T-033`） |
 | `dart run` 在根包失败并出现 Visual Studio 安装清单 | 根包 native-assets hook（MeCab）在 Windows 失败；改用隔离 Dart 包跑主机脚本（`T-010`） |
 | Debug APK 很大（~260MB） | 正常：全 ABI + debug。需要时构建 arm64 release；不要把 debug 大小当 release（`T-019`） |

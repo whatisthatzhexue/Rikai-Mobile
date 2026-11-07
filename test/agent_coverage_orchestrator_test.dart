@@ -330,6 +330,12 @@ void main() {
     );
     expect(result.warnings, isNot(contains('覆盖审查不可用，已保留现有资料')));
     expect(provider.requests, hasLength(2));
+    final coveragePrompt = provider.requests.first.messages
+        .map((message) => message.text)
+        .join('\n');
+    expect(coveragePrompt, isNot(contains('"start":')));
+    expect(coveragePrompt, isNot(contains('"dictionary_title":')));
+    expect(coveragePrompt, contains('"entry_key":'));
   });
 
   test('flow C supplements a traceable compound query once', () async {

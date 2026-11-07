@@ -719,6 +719,7 @@ void main() {
             errorDetail: '',
             stageMessage: '正在生成',
             startedAt: DateTime(2026),
+            thinkingStartedAt: DateTime(2026, 1, 1, 0, 0, 1),
             finishedAt: running ? null : DateTime(2026, 1, 1, 0, 0, 1),
             progressStep: running ? 2 : 4,
             evidenceCount: 0,

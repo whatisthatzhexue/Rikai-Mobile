@@ -587,8 +587,10 @@ class AgentRunSnapshot {
     this.responseLanguage = AgentResponseLanguage.chinese,
     this.providerLabel = '',
     this.startedAt,
+    this.thinkingStartedAt,
     this.finishedAt,
     this.updatedAt,
+    this.slowRequestWarning = false,
   });
 
   static const AgentRunSnapshot idle = AgentRunSnapshot();
@@ -646,8 +648,17 @@ class AgentRunSnapshot {
   final AgentResponseLanguage responseLanguage;
   final String providerLabel;
   final DateTime? startedAt;
+
+  /// When the main analysis model actually entered its generation stage.
+  /// Null during prepare/OCR/lookup; the UI shows task elapsed time until
+  /// this is set, then switches to honest thinking time.
+  final DateTime? thinkingStartedAt;
   final DateTime? finishedAt;
   final DateTime? updatedAt;
+
+  /// True after [AgentLimits.slowRequestWarningSeconds] of main-analysis
+  /// thinking. It is an orange advisory only; the run continues.
+  final bool slowRequestWarning;
 
   bool get isRunning => switch (status) {
     AgentRunStatus.preparing ||
@@ -703,8 +714,10 @@ class AgentRunSnapshot {
     AgentResponseLanguage? responseLanguage,
     String? providerLabel,
     Object? startedAt = _unset,
+    Object? thinkingStartedAt = _unset,
     Object? finishedAt = _unset,
     DateTime? updatedAt,
+    bool? slowRequestWarning,
   }) {
     return AgentRunSnapshot(
       runId: identical(runId, _unset) ? this.runId : runId as String?,
@@ -749,10 +762,14 @@ class AgentRunSnapshot {
       startedAt: identical(startedAt, _unset)
           ? this.startedAt
           : startedAt as DateTime?,
+      thinkingStartedAt: identical(thinkingStartedAt, _unset)
+          ? this.thinkingStartedAt
+          : thinkingStartedAt as DateTime?,
       finishedAt: identical(finishedAt, _unset)
           ? this.finishedAt
           : finishedAt as DateTime?,
       updatedAt: updatedAt ?? this.updatedAt,
+      slowRequestWarning: slowRequestWarning ?? this.slowRequestWarning,
     );
   }
 }

@@ -65,6 +65,7 @@ class _RecordingRunController extends AgentRunController {
       evidenceCount: 5,
       citationCount: 2,
       startedAt: DateTime.now(),
+      thinkingStartedAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
   }

@@ -369,10 +369,10 @@ class AgentUiStrings {
       _pick('正在重试词典档案', 'Retrying dictionary profile', '辞書プロファイルを再試行中');
 
   // Result view.
-  String runTimeout(int seconds) => _pick(
-    '分析超时（$seconds 秒），已停止等待；可重试或缩短文本',
-    'Analysis timed out after $seconds seconds. Retry or shorten the input.',
-    '分析が$seconds秒でタイムアウトしました。再試行するか、入力を短くしてください。',
+  String get slowRequestWarning => _pick(
+    '本次处理时间较长，请耐心等待',
+    'This is taking longer than usual. Please wait.',
+    '処理に時間がかかっています。しばらくお待ちください。',
   );
   String get resultTruncated => _pick(
     '词典依据已达上限，部分义项未送入模型（原文已分析）',
@@ -584,9 +584,9 @@ class AgentUiStrings {
   String get profileStatusPending => _pick('待确认', 'Pending', '確認待ち');
   String get profileStatusStale => _pick('已失效', 'Stale', '無効');
   String profileSampleTruncated(int checks) => _pick(
-    '词典样本已达到上限，另有 $checks 项检查未覆盖（不影响基本使用）',
-    'The dictionary sample limit was reached; $checks check(s) were not covered (basic use is unaffected)',
-    '辞書サンプルの上限に達したため、$checks 件の確認を省略しました（基本利用には影響しません）',
+    '词典样本达上限，$checks 项检查未覆盖',
+    'Dictionary sample limit reached; $checks check(s) not covered',
+    '辞書サンプル上限、$checks 件の確認未実施',
   );
   String get profileUnavailableDictionary =>
       _pick('词典当前不可用', 'Dictionary currently unavailable', '辞書は現在利用できません');
@@ -808,19 +808,45 @@ class AgentUiStrings {
     );
   }
 
+  /// Honest elapsed time before the main analysis model starts generating.
+  /// OCR/tokenization/lookup time must not be labelled as model thinking.
+  String taskElapsedLabel(int seconds) {
+    final clock = _durationClock(seconds);
+    return switch (language) {
+      AgentUiLanguage.chinese => '任务已进行 $clock',
+      AgentUiLanguage.english => 'Task running for $clock',
+      AgentUiLanguage.japanese => 'タスク実行中 $clock',
+    };
+  }
+
+  /// Time spent in the main analysis generation stage only.
   String elapsedLabel(int seconds) {
+    final clock = _durationClock(seconds);
+    return switch (language) {
+      AgentUiLanguage.chinese => '已思考 $clock',
+      AgentUiLanguage.english => 'Thinking for $clock',
+      AgentUiLanguage.japanese => '思考中 $clock',
+    };
+  }
+
+  /// Completed-run wall-clock duration. The pipeline includes OCR/lookup and
+  /// post-checks, so this is not labelled as thinking time.
+  String taskDurationLabel(int seconds) {
+    final clock = _durationClock(seconds);
+    return switch (language) {
+      AgentUiLanguage.chinese => '任务用时 $clock',
+      AgentUiLanguage.english => 'Task took $clock',
+      AgentUiLanguage.japanese => 'タスク所要時間 $clock',
+    };
+  }
+
+  String _durationClock(int seconds) {
     final safe = seconds < 0 ? 0 : seconds;
+    final secondUnit = language == AgentUiLanguage.english ? 's' : ' 秒';
+    final minuteUnit = language == AgentUiLanguage.english ? 'm' : ' 分';
+    if (safe < 60) return '$safe$secondUnit';
     final minutes = safe ~/ 60;
     final rest = (safe % 60).toString().padLeft(2, '0');
-    return switch (language) {
-      AgentUiLanguage.chinese =>
-        safe < 60 ? '已思考 $safe 秒' : '已思考 $minutes 分 $rest 秒',
-      AgentUiLanguage.english =>
-        safe < 60
-            ? 'Thinking for ${safe}s'
-            : 'Thinking for ${minutes}m ${rest}s',
-      AgentUiLanguage.japanese =>
-        safe < 60 ? '思考中 $safe 秒' : '思考中 $minutes 分 $rest 秒',
-    };
+    return '$minutes$minuteUnit $rest$secondUnit';
   }
 }

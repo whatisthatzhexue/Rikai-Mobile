@@ -845,7 +845,7 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
   记录因 `maxEntries` 上限未执行的检查；`DictionaryCoverage` 只持久化
   `sample_truncated`/`unsampled_probe_count`。这些字段用于本地告警，不进入
   profile 模型 prompt；截断时档案 Markdown、档案卡片和 familiarization
-  warnings 必须显示**用户可读**的提示（“另有 N 项检查未覆盖（不影响基本使用）”），
+  warnings 必须显示**用户可读**的提示（“词典样本达上限，N 项检查未覆盖”），
   不能静默丢弃；内部仍使用 probe 术语。
 - 词表覆盖（`word_list_coverage.dart`）是语义场景覆盖，不是 POS 覆盖率；
   不新增 POS schema/指标。
@@ -921,10 +921,13 @@ idle
   保留为历史/兼容状态，不再是正常首跑路径。页面离开、重建或 dismiss sheet 不得
   自动 skip；`unavailable` 档案无确认内容，记录 issue 后不阻塞。队列属于应用级
   controller，不属于 `AgentPage`。**Wave 2 已实现，P0 改为非阻塞**
-- 2026-11-06 P0 全局 Run Deadline：`AgentLimits.runDeadlineSeconds` 默认 30
-  （0/负数禁用）。controller 超时取消 provider/OCR，状态为可恢复的
-  `TOOL_TIMEOUT`，保留 current provisional/retained result；done/error/cancel/
-  newSession 清理计时器。直接调用 orchestrator 的测试/集成不经过该计时器。
+- 2026-11-07 慢请求提示：`AgentLimits.slowRequestWarningSeconds` 默认 30
+  （0/负数禁用）。controller 只在主分析进入 `reasoning` 时启动计时；达到阈值
+  不取消 provider/OCR，仅设置 `slowRequestWarning=true`，由 UI 显示橙色
+  “本次处理时间较长，请耐心等待”。done/error/cancel/newSession 清理计时器。
+  `AgentRunSnapshot.thinkingStartedAt` 记录 reasoning 开始时间；此前 UI 显示
+  “任务已进行 X 秒”，此后显示“已思考 X 秒”，完成态显示“任务用时 X 秒”。
+  直接调用 orchestrator 的测试/集成不经过该计时器。
   （`AgentProfileInboxController` + `DictionaryFamiliarizationService.generateMany`）。
 - 确认窗口的“不再询问”= 保存当前档案并开启 `agent_profiles_auto_accept`；
   默认关闭。开启后新生成的档案直接保存并信任，Agent 设置可再次关闭。确认窗口

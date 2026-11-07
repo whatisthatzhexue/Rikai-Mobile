@@ -254,7 +254,12 @@ class _BlockingSecondAnalysisProvider implements LlmPort {
   }
 }
 
-class _HangingAfterFirstProvider implements LlmPort {
+class _SlowAnalysisProvider implements LlmPort {
+  // Long enough that the 1.1s assertion below observes the running state even
+  // on a slow CI event loop; the analyzer still completes on its own.
+  static const Duration delay = Duration(milliseconds: 2000);
+
+  final Completer<void> started = Completer<void>();
   int calls = 0;
 
   @override
@@ -263,22 +268,9 @@ class _HangingAfterFirstProvider implements LlmPort {
     LlmCancelToken? cancellation,
   }) async* {
     calls++;
-    if (calls == 1) {
-      yield LlmEvent(type: LlmEventType.textDelta, text: _analysisTagged);
-      yield LlmEvent.done();
-      return;
-    }
-    final released = Completer<void>();
-    void release() {
-      if (!released.isCompleted) released.complete();
-    }
-
-    cancellation?.addListener(release);
-    try {
-      await released.future;
-    } finally {
-      cancellation?.removeListener(release);
-    }
+    if (!started.isCompleted) started.complete();
+    await Future<void>.delayed(delay);
+    yield LlmEvent(type: LlmEventType.textDelta, text: _analysisTagged);
     yield LlmEvent.done();
   }
 }
@@ -652,74 +644,71 @@ void main() {
     );
   });
 
-  test(
-    'run deadline keeps the retained result and becomes retryable',
-    () async {
-      final provider = _HangingAfterFirstProvider();
-      final repository = InMemoryDictionaryProfileRepository();
-      final fingerprint = await dictionaryProfileFingerprint(
-        _dictionary,
-        promptVersion: dictionaryProfilePromptVersion,
-        schemaVersion: dictionaryProfileSchemaVersion,
-        language: AgentProfileLanguage.chinese,
-      );
-      await repository.save(
-        StoredDictionaryProfile(
-          dictionaryId: 'dict_a',
-          title: 'A',
-          fingerprint: fingerprint,
-          markdown: 'trusted profile',
-          status: DictionaryProfileStatus.confirmed,
-          confirmedAt: DateTime.now(),
+  test('slow analysis shows an orange advisory and keeps running', () async {
+    final provider = _SlowAnalysisProvider();
+    final repository = InMemoryDictionaryProfileRepository();
+    final fingerprint = await dictionaryProfileFingerprint(
+      _dictionary,
+      promptVersion: dictionaryProfilePromptVersion,
+      schemaVersion: dictionaryProfileSchemaVersion,
+      language: AgentProfileLanguage.chinese,
+    );
+    await repository.save(
+      StoredDictionaryProfile(
+        dictionaryId: 'dict_a',
+        title: 'A',
+        fingerprint: fingerprint,
+        markdown: 'trusted profile',
+        status: DictionaryProfileStatus.confirmed,
+        confirmedAt: DateTime.now(),
+      ),
+    );
+    final container = ProviderContainer(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(_preferences),
+        agentLimitsProvider.overrideWithValue(
+          const AgentLimits(
+            maxCoverageFallback: 0,
+            enableRichTextPostProcess: false,
+            slowRequestWarningSeconds: 1,
+          ),
         ),
-      );
-      final container = ProviderContainer(
-        overrides: [
-          sharedPreferencesProvider.overrideWithValue(_preferences),
-          agentLimitsProvider.overrideWithValue(
-            const AgentLimits(
-              maxCoverageFallback: 0,
-              enableRichTextPostProcess: false,
-              runDeadlineSeconds: 1,
-            ),
-          ),
-          agentProfileRepositoryProvider.overrideWithValue(repository),
-          agentRunServicesProvider.overrideWithValue(
-            ({required bool needsOcr, bool Function()? isCancelled}) async =>
-                _services(provider, profileRepository: repository),
-          ),
-        ],
-      );
-      addTearDown(container.dispose);
-      final controller = container.read(agentRunControllerProvider.notifier);
+        agentProfileRepositoryProvider.overrideWithValue(repository),
+        agentRunServicesProvider.overrideWithValue(
+          ({required bool needsOcr, bool Function()? isCancelled}) async =>
+              _services(provider, profileRepository: repository),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(agentRunControllerProvider.notifier);
 
-      final first = await _runToCompletion(container, controller);
-      expect(first.status, AgentRunStatus.done);
-      final firstResult = first.result;
-      expect(firstResult, isNotNull);
+    final run = controller.start(
+      userText: '何卒',
+      images: const <AgentImageInput>[],
+      dictionaries: const <DictionaryInfo>[_dictionary],
+      provider: _provider,
+      mode: AgentMode.strict,
+      unidicPath: '',
+      responseLanguage: AgentResponseLanguage.chinese,
+      profileLanguage: AgentProfileLanguage.chinese,
+    );
+    await provider.started.future;
+    await Future<void>.delayed(const Duration(milliseconds: 1100));
 
-      final second = controller.start(
-        userText: '何卒',
-        images: const <AgentImageInput>[],
-        dictionaries: const <DictionaryInfo>[_dictionary],
-        provider: _provider,
-        mode: AgentMode.strict,
-        unidicPath: '',
-        responseLanguage: AgentResponseLanguage.chinese,
-        profileLanguage: AgentProfileLanguage.chinese,
-        retainResult: firstResult,
-      );
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
-      final timedOut = container.read(agentRunControllerProvider);
-      expect(timedOut.status, AgentRunStatus.error);
-      expect(timedOut.errorCode, AgentToolErrorCode.toolTimeout);
-      expect(timedOut.retryable, isTrue);
-      expect(timedOut.result, same(firstResult));
-      expect(timedOut.resultRetainedAfterFailure, isTrue);
-      expect(timedOut.errorMessage, contains('超时'));
-      await second;
-    },
-  );
+    final during = container.read(agentRunControllerProvider);
+    expect(during.status, AgentRunStatus.reasoning);
+    expect(during.thinkingStartedAt, isNotNull);
+    expect(during.slowRequestWarning, isTrue);
+    expect(during.isRunning, isTrue);
+    expect(during.errorMessage, isNull);
+
+    await run;
+    final after = container.read(agentRunControllerProvider);
+    expect(after.status, AgentRunStatus.done);
+    expect(after.result, isNotNull);
+    expect(after.slowRequestWarning, isFalse);
+  });
 
   test(
     'missing profiles are generated after the answer without gating',

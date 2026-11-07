@@ -368,8 +368,8 @@ class DictionaryFamiliarizationService {
         samples[dictionary.id] = sample;
         if (sample.truncated) {
           warnings.add(
-            '${dictionary.title}: 词典样本已达到上限，另有 '
-            '${sample.unsampledProbeCount} 项检查未覆盖（不影响基本使用）',
+            '${dictionary.title}: 词典样本达上限，'
+            '${sample.unsampledProbeCount} 项检查未覆盖',
           );
         }
       } catch (error) {

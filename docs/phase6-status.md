@@ -63,7 +63,7 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
   完整 `flutter test` **547 项通过**。全部为 fake/local provider，未使用付费 Key；
   真实 provider/arm64/真实大词典仍未验收。
 
-## 2026-11-06 首跑档案非阻塞 / 全局 Run Deadline
+## 2026-11-06 首跑档案非阻塞 / 2026-11-07 慢请求提示
 
 - 首跑不再等待词典档案生成或用户确认：
   `DictionaryFamiliarizationService.loadCached()` 只读取指纹有效的本地
@@ -74,20 +74,34 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
   **下次 run 生效**；`AgentRunRequest.pendingProfileDictionaryIds` 防止对待确认
   档案重复生成。自动保存（`agent_profiles_auto_accept`）仍可用，当次 run 和之后
   的 run 都不阻塞。
-- `AgentLimits.runDeadlineSeconds` 默认 **30 秒**（0/负数禁用）。controller 在 run
-  开始时启动计时器，超时立即取消 provider/OCR、停止后台服务，状态变为可恢复的
-  `TOOL_TIMEOUT`，并保留 current provisional 或 retained result；done/error/
-  cancel/newSession 会清理计时器。直接调用 orchestrator 的测试/集成不经过该
-  controller 计时器。
-- 测试：生命周期新增“档案不阻塞分析/分析后生成/自动保存/待确认不重复生成”和
-  “30 秒 deadline 保留 retained result 且可重试”；`flutter analyze` 无问题，
-  完整 `flutter test` **559 项通过**。全部 fake/local provider，未使用付费 Key；
-  真实 provider 下 30 秒是否适合当前模型仍需实测调整，arm64/设备未验收。
+- 2026-11-07 真机反馈 30 秒硬超时会终止大量正常的长思考请求，因此改为
+  `AgentLimits.slowRequestWarningSeconds` 默认 **30 秒**（0/负数禁用）的慢请求
+  提示：计时从主分析进入 `reasoning` 才开始，达到阈值**不取消** provider/OCR，
+  只在 UI 显示橙色“本次处理时间较长，请耐心等待”；用户仍可主动停止。
+- 时间显示按真实阶段区分：`AgentRunSnapshot.thinkingStartedAt` 为空时显示
+  “任务已进行 X 秒”（准备/OCR/分词/查词/coverage），进入 `reasoning` 后显示
+  “已思考 X 秒”，完成态显示“任务用时 X 秒”。done/error/cancel/newSession
+  会清理提示计时器。直接调用 orchestrator 的测试/集成不经过 controller 计时器。
+- 效率：分析/coverage prompt 去掉内部 token 偏移、标点 token 对象、quote
+  `schema/offset/origin`、citation `dictionary_id/order/entry_key` 等模型不
+  使用的字段；coverage snippet 上限 240 字符；后续 prefix/suffix/incremental
+  查词只针对内容词和语法模式，助词等功能词只做 exact。新增
+  `[AgentPromptBudget]` debug 打点。
+- 测试：生命周期新增“慢分析显示橙色提示但继续完成”；UI 新增“任务已进行/
+  已思考/任务用时”和橙色提示测试；prompt 精简与 function-word 查词测试已补。
+  `flutter analyze` 无问题，完整 `flutter test` **567 项通过**。全部
+  fake/local provider，未使用付费 Key；真实 provider 等待时长与 arm64/设备
+  仍未验收。
 
 ## 2026-11-06 词典/阅读器/历史 UI 修正
 
 - **entry:// 检索失败**：词典页内跳转仍限定当前词典 exact 查询；无命中时显示
-  “当前词典中没有「word」”气泡，不打开空白词条页。
+  “当前词典中没有「word」”气泡，不打开空白词条页。2026-11-07 日志定位到
+  toast 使用 `navigator.context`，`Overlay.maybeOf` 找不到 Navigator 下方的
+  Overlay 而静默返回；改为页面 context，并给 `RikaiToast.show` 增加
+  `NavigatorState.overlay` 兜底。日志同时发现该词典链接目标是内部 ID
+  `daijirin2-011462-0000`；内部 ID/空目标改为通用提示“当前词典中没有对应的词条”，
+  普通词仍显示原词。临时 `[EntryLink]` 日志已移除。
 - **导入词典名统一为 MDX**：批量导入列表中，已存在词典复用注册表里由 MDX 头
   解析出的标题；新词典探测后使用 `displayDictionaryTitle(metadata.title, path)`；
   探测前显示“正在读取词典信息…”，副标题改为 MDX 文件名，不再以文件夹名充当词典名。
@@ -103,9 +117,9 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
   kana LCS 锚点），只标注未知部分：`悩んでも/なやんでも` → `悩（なや）んでも`，
   `申し込み/もうしこみ` → `申（もう）し込（こ）み`。Agent 富文本渲染与阅读器
   `TokenChip` 都使用该规则；无可靠对齐时保留整词 Ruby。
-- **样本上限文案**：用户可见的“N 个探针未采样”改为
-  “词典样本已达到上限，另有 N 项检查未覆盖（不影响基本使用）”；档案 Markdown
-  同步为“样本提示”。内部 `probe`/`unsampledProbeCount` 术语保留。
+- **样本上限文案**：用户可见的“N 个探针未采样”改为短文案
+  “词典样本达上限，N 项检查未覆盖”；档案 Markdown 同步为同一形式。内部
+  `probe`/`unsampledProbeCount` 术语保留。
 - **语言对可修正**：档案确认/编辑 sheet 增加语言对 chips 与源/目标语言选择器；
   保存时更新 `DictionaryProfile.languagePairs`、档案 Markdown 的“语言”行以及
   `profile_json`。pending proposal 通过 `ProfileConfirmation.profile` 传到 inbox，

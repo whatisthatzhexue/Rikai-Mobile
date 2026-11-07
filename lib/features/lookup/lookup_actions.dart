@@ -56,7 +56,20 @@ LookupRequest entryLinkLookupRequest({
 
 /// User-facing bubble when an entry:// target is absent from the dictionary
 /// currently being read. Tests assert this instead of the widget overlay.
-String entryLinkMissMessage(String word) => '当前词典中没有「$word」';
+///
+/// Some dictionaries use opaque internal IDs as link targets
+/// (`daijirin2-011462-0000`); echoing those is meaningless to a reader. Only
+/// show the target when it looks like a human-readable word/term.
+String entryLinkMissMessage(String word) {
+  final trimmed = word.trim();
+  final opaqueId =
+      RegExp(r'[0-9]').hasMatch(trimmed) &&
+      RegExp(r'^[A-Za-z0-9_.:\-]+$').hasMatch(trimmed);
+  if (trimmed.isEmpty || opaqueId) {
+    return '当前词典中没有对应的词条';
+  }
+  return '当前词典中没有「$trimmed」';
+}
 
 /// Looks up [word] (for example an `entry://` link) and pushes an entry page.
 Future<void> lookupAndOpenEntry(
@@ -101,16 +114,16 @@ Future<void> lookupAndOpenEntry(
   }
 
   if (navigator.mounted) navigator.pop(); // close the progress dialog
-  if (!navigator.mounted) return;
+  if (!navigator.mounted || !context.mounted) return;
   if (error != null) {
-    RikaiToast.show(navigator.context, '查询失败：${_shortError(error)}');
+    RikaiToast.show(context, '查询失败：${_shortError(error)}');
     return;
   }
   final hitGroups = result?.hitGroups ?? const [];
   if (hitGroups.isEmpty) {
     // An entry:// link stays inside the dictionary being read. Make the
     // per-dictionary miss explicit instead of leaving the user on a blank page.
-    RikaiToast.show(navigator.context, entryLinkMissMessage(word));
+    RikaiToast.show(context, entryLinkMissMessage(word));
     return;
   }
 

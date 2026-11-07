@@ -428,7 +428,10 @@ class EvidenceBuilder {
             '已取消',
           );
         }
-        if (!isFirstMode && target.citationIds.isNotEmpty) continue;
+        if (!isFirstMode &&
+            (!target.content || target.citationIds.isNotEmpty)) {
+          continue;
+        }
         final eligible = <DictionaryInfo>[
           for (final dictionary in dictionaries)
             if ((target.perDictionary[dictionary.id] ?? 0) <
@@ -824,6 +827,11 @@ class _StoredLookup {
 abstract class _LookupTarget {
   List<String> get candidates;
 
+  /// Content words and grammar patterns may need fuzzy modes; particles and
+  /// other function words are exact-only so they cannot trigger expensive
+  /// suffix/incremental scans.
+  bool get content;
+
   var toolCallId = '';
   var ordinal = 0;
 
@@ -841,6 +849,7 @@ class _TokenTarget extends _LookupTarget {
   @override
   final List<String> candidates;
   final List<String> tokenIds;
+  @override
   final bool content;
 }
 
@@ -850,6 +859,9 @@ class _PatternTarget extends _LookupTarget {
   final int evidenceIndex;
   @override
   final List<String> candidates;
+
+  @override
+  bool get content => true;
 }
 
 String _targetKey(List<String> candidates) => candidates.join('\u0000');

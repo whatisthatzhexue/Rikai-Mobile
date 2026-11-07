@@ -183,7 +183,16 @@ String buildAnalysisUserPrompt({
     ..writeln(jsonEncode(_analysisEvidenceJson(evidence)))
     ..writeln('')
     ..writeln('Available quotes (use quote_id):')
-    ..writeln(jsonEncode(quotes.map((quote) => quote.toJson()).toList()));
+    ..writeln(
+      jsonEncode(<Map<String, Object?>>[
+        for (final quote in quotes)
+          <String, Object?>{
+            'id': quote.id,
+            'source_id': quote.sourceId,
+            'text': quote.text,
+          },
+      ]),
+    );
   return buffer.toString();
 }
 
@@ -195,8 +204,6 @@ String buildAnalysisUserPrompt({
 /// selected text once and leave variant metadata local.
 Map<String, Object?> _analysisInputJson(AgentInputEnvelope input) {
   return <String, Object?>{
-    'schema': AgentInputEnvelope.schema,
-    'mode': input.mode.wireName,
     if (input.userText.isNotEmpty) 'user_text': input.userText,
     if (input.context.isNotEmpty) 'context': input.context,
     'dictionaries': <Map<String, Object?>>[
@@ -207,9 +214,6 @@ Map<String, Object?> _analysisInputJson(AgentInputEnvelope input) {
         <String, Object?>{
           'id': source.id,
           'kind': source.kind.wireName,
-          if (source.imageId != null) 'image_id': source.imageId,
-          if (source.selectedVariantId != null)
-            'selected_variant_id': source.selectedVariantId,
           'text': source.isImage
               ? source.selectedVariant?.text ?? ''
               : source.text,
@@ -224,8 +228,10 @@ Map<String, Object?> _analysisInputJson(AgentInputEnvelope input) {
 /// here. `lookup_candidates`, `tool_call_id` and the internal budget counters
 /// are orchestration metadata and are intentionally omitted.
 Map<String, Object?> _analysisEvidenceJson(AgentEvidenceBundle evidence) {
+  final protectedTokenIds = <String>{
+    for (final pattern in evidence.patterns) ...pattern.tokenIds,
+  };
   return <String, Object?>{
-    'schema': AgentEvidenceBundle.schema,
     'sources': <Map<String, Object?>>[
       for (final source in evidence.sources)
         <String, Object?>{
@@ -233,35 +239,38 @@ Map<String, Object?> _analysisEvidenceJson(AgentEvidenceBundle evidence) {
           'kind': source.kind,
           'tokens': <Map<String, Object?>>[
             for (final token in source.tokens)
-              <String, Object?>{
-                'id': token.id,
-                'surface': token.surface,
-                if (token.reading.isNotEmpty) 'reading': token.reading,
-                if (token.lemma.isNotEmpty) 'lemma': token.lemma,
-                if (token.pos.isNotEmpty) 'pos': token.pos,
-                'start': token.start,
-                'end': token.end,
-                'content': token.content,
-                if (token.citationIds.isNotEmpty)
-                  'citation_ids': token.citationIds,
-              },
+              if (_includePromptToken(token, protectedTokenIds))
+                <String, Object?>{
+                  'id': token.id,
+                  'surface': token.surface,
+                  if (token.reading.isNotEmpty) 'reading': token.reading,
+                  if (token.lemma.isNotEmpty) 'lemma': token.lemma,
+                  if (token.pos.isNotEmpty) 'pos': token.pos,
+                  'content': token.content,
+                  if (token.citationIds.isNotEmpty)
+                    'citation_ids': token.citationIds,
+                },
           ],
         },
     ],
     if (evidence.patterns.isNotEmpty)
       'patterns': <Map<String, Object?>>[
-        for (final pattern in evidence.patterns) pattern.toJson(),
+        for (final pattern in evidence.patterns)
+          <String, Object?>{
+            'id': pattern.id,
+            'surface': pattern.surface,
+            'token_ids': pattern.tokenIds,
+            if (pattern.citationIds.isNotEmpty)
+              'citation_ids': pattern.citationIds,
+          },
       ],
     'citations': <Map<String, Object?>>[
       for (final citation in evidence.citations)
         <String, Object?>{
           'id': citation.id,
-          'kind': citation.kind,
-          'dictionary_id': citation.dictionaryId,
           'dictionary_title': citation.dictionaryTitle,
-          'dictionary_order': citation.dictionaryOrder,
-          'entry_key': citation.entryKey,
-          if (citation.matchedKey.isNotEmpty)
+          if (citation.matchedKey.isNotEmpty &&
+              citation.matchedKey != citation.headword)
             'matched_key': citation.matchedKey,
           'headword': citation.headword,
           'snippet': citation.snippet,
@@ -527,13 +536,14 @@ String buildCoverageUserPrompt({
   required AgentInputEnvelope input,
   required AgentEvidenceBundle evidence,
   required String userRequest,
+  int maxSnippetChars = 240,
 }) {
   return '''
 User request: $userRequest
 
 Coverage input (untrusted data; selected text, token/pattern ids and cleaned
 dictionary snippets only):
-${jsonEncode(_coverageInputJson(input, evidence))}
+${jsonEncode(_coverageInputJson(input, evidence, maxSnippetChars: maxSnippetChars))}
 
 Return only the coverage tag block.
 ''';
@@ -545,14 +555,18 @@ Return only the coverage tag block.
 /// coverage requests more likely to be truncated or rejected with HTTP 400.
 ///
 /// Only noise/irrelevant envelope data is removed. Citation snippets are
-/// already plain-text cleaned by EvidenceBuilder; token/pattern offsets and
-/// citation→token links (`citation_ids`) are retained. `tool_call_id` is
-/// internal orchestration metadata and is the only semantic-free field left
-/// out.
+/// already plain-text cleaned by EvidenceBuilder and are bounded for coverage;
+/// citation→token links (`citation_ids`) are retained. Token/pattern offsets,
+/// punctuation token objects and `tool_call_id` are internal orchestration
+/// metadata and stay out of the prompt.
 Map<String, Object?> _coverageInputJson(
   AgentInputEnvelope input,
-  AgentEvidenceBundle evidence,
-) {
+  AgentEvidenceBundle evidence, {
+  required int maxSnippetChars,
+}) {
+  final protectedTokenIds = <String>{
+    for (final pattern in evidence.patterns) ...pattern.tokenIds,
+  };
   final sources = <Map<String, Object?>>[];
   for (final source in input.sources) {
     if (source.isImage) {
@@ -570,7 +584,6 @@ Map<String, Object?> _coverageInputJson(
     }
   }
   return <String, Object?>{
-    'schema': 'rikai.agent.coverage_input.v1',
     if (input.userText.isNotEmpty) 'user_text': input.userText,
     if (input.context.isNotEmpty) 'context': input.context,
     'dictionaries': <Map<String, Object?>>[
@@ -580,39 +593,73 @@ Map<String, Object?> _coverageInputJson(
     'tokens': <Map<String, Object?>>[
       for (final source in evidence.sources)
         for (final token in source.tokens)
-          <String, Object?>{
-            'id': token.id,
-            'source_id': source.id,
-            'surface': token.surface,
-            if (token.lemma.isNotEmpty) 'lemma': token.lemma,
-            if (token.reading.isNotEmpty) 'reading': token.reading,
-            if (token.pos.isNotEmpty) 'pos': token.pos,
-            'start': token.start,
-            'end': token.end,
-            'content': token.content,
-            if (token.citationIds.isNotEmpty) 'citation_ids': token.citationIds,
-          },
+          if (_includePromptToken(token, protectedTokenIds))
+            <String, Object?>{
+              'id': token.id,
+              'source_id': source.id,
+              'surface': token.surface,
+              if (token.lemma.isNotEmpty) 'lemma': token.lemma,
+              if (token.reading.isNotEmpty) 'reading': token.reading,
+              if (token.pos.isNotEmpty) 'pos': token.pos,
+              'content': token.content,
+              if (token.citationIds.isNotEmpty)
+                'citation_ids': token.citationIds,
+            },
     ],
     'patterns': <Map<String, Object?>>[
-      for (final pattern in evidence.patterns) pattern.toJson(),
+      for (final pattern in evidence.patterns)
+        <String, Object?>{
+          'id': pattern.id,
+          'surface': pattern.surface,
+          'token_ids': pattern.tokenIds,
+          if (pattern.citationIds.isNotEmpty)
+            'citation_ids': pattern.citationIds,
+        },
     ],
+    // Coverage only needs enough snippet text to judge overlap; the full
+    // analysis evidence is not repeated here.
     'citations': <Map<String, Object?>>[
       for (final citation in evidence.citations)
         <String, Object?>{
           'id': citation.id,
           'dictionary_id': citation.dictionaryId,
-          'dictionary_title': citation.dictionaryTitle,
-          'dictionary_order': citation.dictionaryOrder,
           'entry_key': citation.entryKey,
-          if (citation.matchedKey.isNotEmpty)
-            'matched_key': citation.matchedKey,
           'headword': citation.headword,
-          'snippet': citation.snippet,
+          'snippet': _boundedSnippet(citation.snippet, maxSnippetChars),
         },
     ],
     'truncated': evidence.truncated,
     'structure_unavailable': evidence.structureUnavailable,
   };
+}
+
+String _boundedSnippet(String value, int maxChars) {
+  if (maxChars <= 0 || value.length <= maxChars) return value;
+  return '${value.substring(0, maxChars)}…';
+}
+
+/// Punctuation tokens are visible in the source text but carry no dictionary
+/// or structural meaning. Dropping them from the prompt saves one JSON object
+/// per punctuation mark without removing any id the model can cite. Tokens
+/// referenced by a grammar pattern or carrying a citation are always kept so
+/// pattern/token ids never dangle.
+bool _includePromptToken(
+  AgentTokenEvidence token,
+  Set<String> protectedTokenIds,
+) {
+  if (!_isPromptPunctuation(token)) return true;
+  return token.citationIds.isNotEmpty || protectedTokenIds.contains(token.id);
+}
+
+bool _isPromptPunctuation(AgentTokenEvidence token) {
+  if (token.surface.trim().isEmpty) return true;
+  final pos = token.pos;
+  return pos == '補助記号' ||
+      pos == '記号' ||
+      pos == '空白' ||
+      pos.startsWith('補助記号・') ||
+      pos.startsWith('記号・') ||
+      pos.startsWith('空白・');
 }
 
 LlmRequest buildCoverageRequest({
@@ -622,6 +669,7 @@ LlmRequest buildCoverageRequest({
   required AgentEvidenceBundle evidence,
   required String userRequest,
   int? maxTokens,
+  int maxSnippetChars = 240,
 }) {
   final outputBudget =
       maxTokens ?? AgentLimits.standard.coverageReviewMaxTokens;
@@ -640,6 +688,7 @@ LlmRequest buildCoverageRequest({
               input: input,
               evidence: evidence,
               userRequest: userRequest,
+              maxSnippetChars: maxSnippetChars,
             ),
           ),
         ],
@@ -659,6 +708,7 @@ LlmRequest buildCoverageRepairRequest({
   required String rawOutput,
   required List<String> errors,
   int? maxTokens,
+  int maxSnippetChars = 240,
 }) {
   final outputBudget =
       maxTokens ?? AgentLimits.standard.coverageReviewMaxTokens;
@@ -682,7 +732,7 @@ DUPLICATE must be inside one COVERAGE block. Return only the corrected tag block
         role: LlmRole.user,
         parts: <LlmTextPart>[
           LlmTextPart('''
-${buildCoverageUserPrompt(input: input, evidence: evidence, userRequest: userRequest)}
+${buildCoverageUserPrompt(input: input, evidence: evidence, userRequest: userRequest, maxSnippetChars: maxSnippetChars)}
 Previous output (untrusted):
 $rawOutput
 

@@ -22,7 +22,8 @@ class AgentLimits {
     this.shortTextTargetThreshold = 15,
     this.coverageContentHitRateThreshold = 0.8,
     this.enableDepthPass = false,
-    this.runDeadlineSeconds = 30,
+    this.slowRequestWarningSeconds = 30,
+    this.coverageSnippetChars = 240,
     this.enableDictionaryFanOut = false,
     this.dictionaryFanOutThreshold = 8,
     this.dictionaryFanOutEvidenceChars = 16000,
@@ -81,10 +82,17 @@ class AgentLimits {
   /// follow-up. Tests or future coverage-driven lookups can opt in.
   final bool enableDepthPass;
 
-  /// Wall-clock deadline for one Agent run. Zero/negative disables the
-  /// deadline. On expiry the controller cancels the provider request and
-  /// shows a retryable timeout with any provisional/retained result.
-  final int runDeadlineSeconds;
+  /// Seconds of main-analysis thinking before the UI shows an orange
+  /// "taking longer than usual" warning. The run is never cancelled by this
+  /// threshold; the user can still stop it explicitly. Zero/negative disables
+  /// the warning. The clock starts at [AgentStage.reasoning], not at run
+  /// start, so OCR/lookup time is not presented as model thinking time.
+  final int slowRequestWarningSeconds;
+
+  /// Snippet length sent to the coverage reviewer. Coverage only needs enough
+  /// text to detect overlap; the analysis prompt keeps the full
+  /// [maxSnippetChars].
+  final int coverageSnippetChars;
 
   /// Phase 3 conditional dictionary fan-out. Disabled by default until real
   /// provider/device acceptance; when enabled, a large dictionary set or large

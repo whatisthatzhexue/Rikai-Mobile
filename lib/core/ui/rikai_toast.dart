@@ -19,7 +19,15 @@ abstract final class RikaiToast {
     Duration duration = const Duration(seconds: 2),
   }) {
     if (message.trim().isEmpty) return;
-    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    // Page contexts find their Overlay ancestor. A NavigatorState.context is
+    // above the Overlay it creates, so an ancestor lookup returns null there;
+    // fall back to the Navigator's own overlay before giving up.
+    OverlayState? overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlay == null && context is StatefulElement) {
+      final state = context.state;
+      if (state is NavigatorState) overlay = state.overlay;
+    }
+    overlay ??= Navigator.maybeOf(context)?.overlay;
     if (overlay == null) return;
 
     _remove();

@@ -4,6 +4,7 @@ import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
 import 'package:rikai_mobile/core/models/agent/agent_input.dart';
 import 'package:rikai_mobile/core/models/agent/agent_limits.dart';
 import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
+import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
 import 'package:rikai_mobile/services/agent/agent_coverage_parser.dart';
 import 'package:rikai_mobile/services/agent/agent_prompts.dart';
 import 'package:rikai_mobile/services/agent/coverage_support.dart';
@@ -185,14 +186,61 @@ void main() {
     );
     expect(request.maxTokens, AgentLimits.standard.coverageReviewMaxTokens);
     final text = request.messages.map((message) => message.text).join('\n');
-    expect(text, contains('rikai.agent.coverage_input.v1'));
     expect(text, contains('"tokens"'));
-    expect(text, contains('"start":0'));
+    expect(text, isNot(contains('"start":')));
+    expect(text, isNot(contains('"end":')));
     expect(text, contains('"citations"'));
     expect(text, contains('"entry_key":"何卒"'));
-    expect(text, contains('"matched_key":"何卒・一致"'));
+    expect(text, isNot(contains('"matched_key"')));
     expect(text, isNot(contains('"variants"')));
     expect(text, isNot(contains('"lookup_candidates"')));
+  });
+
+  test('analysis prompt omits punctuation token objects', () {
+    final request = buildAnalysisRequest(
+      model: 'large',
+      mode: AgentMode.strict,
+      responseLanguage: AgentResponseLanguage.chinese,
+      input: _input,
+      evidence: _evidenceFor('何卒。', <AgentTokenEvidence>[
+        _token('t1', '何卒', 0, 2),
+        const AgentTokenEvidence(
+          id: 't2',
+          surface: '。',
+          pos: '補助記号・句点',
+          start: 2,
+          end: 3,
+        ),
+      ]),
+      quotes: const <AgentQuoteRef>[],
+      dictionaryProfiles: const <String>[],
+      userRequest: '解释这句话',
+    );
+    final text = request.messages.map((message) => message.text).join('\n');
+    expect(text, contains('"id":"t1"'));
+    expect(text, isNot(contains('"id":"t2"')));
+  });
+
+  test('coverage prompt omits punctuation token objects', () {
+    final request = buildCoverageRequest(
+      model: 'small',
+      language: AgentResponseLanguage.chinese,
+      input: _input,
+      evidence: _evidenceFor('何卒。', <AgentTokenEvidence>[
+        _token('t1', '何卒', 0, 2),
+        const AgentTokenEvidence(
+          id: 't2',
+          surface: '。',
+          pos: '補助記号・句点',
+          start: 2,
+          end: 3,
+        ),
+      ]),
+      userRequest: '解释这句话',
+    );
+    final text = request.messages.map((message) => message.text).join('\n');
+    expect(text, contains('"id":"t1"'));
+    expect(text, isNot(contains('"id":"t2"')));
   });
 
   test('coverage prompt documents compound MISSING expansion', () {

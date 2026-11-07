@@ -24,7 +24,8 @@ String profileToMarkdown(
       definitionScripts: '释义文字',
       featureCount: '结构特征',
       sampleTruncated: '样本提示',
-      unsampledProbes: ' 项检查未覆盖（不影响基本使用）',
+      sampleLimitReached: '词典样本达上限，',
+      unsampledProbes: ' 项检查未覆盖',
       strengthsCaveats: '强项 / 注意事项',
       strengths: '强项',
       caveats: '注意',
@@ -52,7 +53,8 @@ String profileToMarkdown(
       definitionScripts: 'Definition scripts',
       featureCount: 'Structural features',
       sampleTruncated: 'Sample note',
-      unsampledProbes: ' check(s) were not covered (basic use is unaffected)',
+      sampleLimitReached: 'Dictionary sample limit reached; ',
+      unsampledProbes: ' check(s) not covered',
       strengthsCaveats: 'Strengths / caveats',
       strengths: 'Strengths',
       caveats: 'Caveats',
@@ -80,7 +82,8 @@ String profileToMarkdown(
       definitionScripts: '語義文字',
       featureCount: '構造特徴',
       sampleTruncated: 'サンプルの注意',
-      unsampledProbes: ' 件の確認を省略（基本利用に影響なし）',
+      sampleLimitReached: '辞書サンプル上限、',
+      unsampledProbes: ' 件の確認未実施',
       strengthsCaveats: '強み / 注意',
       strengths: '強み',
       caveats: '注意',
@@ -151,7 +154,7 @@ String profileToMarkdown(
       ..writeln('- ${labels.featureCount}: ${profile.coverage.featureCount}');
     if (profile.coverage.sampleTruncated) {
       buffer.writeln(
-        '- ${labels.sampleTruncated}: '
+        '- ${labels.sampleTruncated}: ${labels.sampleLimitReached}'
         '${profile.coverage.unsampledProbeCount}${labels.unsampledProbes}',
       );
     }
@@ -263,6 +266,7 @@ class _ProfileLabels {
     required this.definitionScripts,
     required this.featureCount,
     required this.sampleTruncated,
+    required this.sampleLimitReached,
     required this.unsampledProbes,
     required this.strengthsCaveats,
     required this.strengths,
@@ -291,6 +295,7 @@ class _ProfileLabels {
   final String definitionScripts;
   final String featureCount;
   final String sampleTruncated;
+  final String sampleLimitReached;
   final String unsampledProbes;
   final String strengthsCaveats;
   final String strengths;

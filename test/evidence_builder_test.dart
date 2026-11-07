@@ -149,17 +149,21 @@ class _AllHitsLookup implements LookupPort {
 }
 
 class _ModeLookup implements LookupPort {
-  _ModeLookup(this.entriesByMode, {this.onLookup});
+  _ModeLookup(this.entriesByMode, {this.onLookup, this.entriesForRequest});
 
   final Map<LookupMatchMode, List<String>> entriesByMode;
   final void Function(LookupRequest request)? onLookup;
+  final List<String> Function(LookupRequest request)? entriesForRequest;
   final List<LookupMatchMode> modes = <LookupMatchMode>[];
 
   @override
   Future<LookupResult> lookup(LookupRequest request) async {
     modes.add(request.matchMode);
     onLookup?.call(request);
-    final keys = entriesByMode[request.matchMode] ?? const <String>[];
+    final keys =
+        entriesForRequest?.call(request) ??
+        entriesByMode[request.matchMode] ??
+        const <String>[];
     return LookupResult(
       query: request.query,
       candidates: request.rawCandidates,
@@ -429,6 +433,46 @@ void main() {
     // One breadth entry per dictionary; depth is not reached because the
     // dynamic short-text limit is already satisfied.
     expect(bundle.citations, hasLength(1));
+  });
+
+  test('later lookup modes skip function-word targets', () async {
+    final calls = <({String query, LookupMatchMode mode})>[];
+    final lookup = _ModeLookup(
+      <LookupMatchMode, List<String>>{
+        LookupMatchMode.exact: <String>[],
+        LookupMatchMode.prefix: <String>[],
+      },
+      entriesForRequest: (request) =>
+          request.matchMode == LookupMatchMode.prefix && request.query == '何卒'
+          ? <String>['何卒']
+          : <String>[],
+      onLookup: (request) =>
+          calls.add((query: request.query, mode: request.matchMode)),
+    );
+    final builder = EvidenceBuilder(
+      tokenizePort: _FakeTokenize(<Token>[
+        _tokenWithPos('何卒', '副詞', 0),
+        _tokenWithPos('は', '助詞', 2),
+      ]),
+      lookupPort: lookup,
+      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+      citations: CitationRegistry(),
+      limits: const AgentLimits(maxEntriesPerDictionary: 10),
+    );
+
+    final bundle = await builder.build(
+      sources: <AgentSourceInput>[_source('何卒は')],
+      dictionaries: const <DictionaryInfo>[_dictionaryA],
+    );
+
+    expect(
+      calls
+          .where((call) => call.mode == LookupMatchMode.prefix)
+          .map((call) => call.query),
+      <String>['何卒'],
+    );
+    expect(bundle.citations, hasLength(1));
+    expect(bundle.sources.single.tokens.last.citationIds, isEmpty);
   });
 
   test('coverage extra lookup continues past an empty mode', () async {

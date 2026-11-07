@@ -21,5 +21,8 @@ void main() {
 
   test('entry link misses show a current-dictionary bubble', () {
     expect(entryLinkMissMessage('東京'), '当前词典中没有「東京」');
+    expect(entryLinkMissMessage('daijirin2-011462-0000'), '当前词典中没有对应的词条');
+    expect(entryLinkMissMessage('apple'), '当前词典中没有「apple」');
+    expect(entryLinkMissMessage(''), '当前词典中没有对应的词条');
   });
 }

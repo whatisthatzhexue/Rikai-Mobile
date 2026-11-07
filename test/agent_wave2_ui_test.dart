@@ -204,6 +204,7 @@ void main() {
               errorDetail: '',
               stageMessage: '完成',
               startedAt: DateTime(2026, 1, 1),
+              thinkingStartedAt: DateTime(2026, 1, 1, 0, 0, 1),
               finishedAt: DateTime(2026, 1, 1, 0, 0, 10),
               progressStep: 4,
               evidenceCount: 1,
@@ -258,6 +259,7 @@ void main() {
               errorDetail: '',
               stageMessage: '正在复核…',
               startedAt: DateTime(2026, 1, 1),
+              thinkingStartedAt: DateTime(2026, 1, 1, 0, 0, 1),
               finishedAt: null,
               progressStep: 3,
               evidenceCount: 1,
@@ -300,6 +302,7 @@ void main() {
                 errorDetail: '',
                 stageMessage: '',
                 startedAt: DateTime(2026, 1, 1),
+                thinkingStartedAt: DateTime(2026, 1, 1, 0, 0, 1),
                 finishedAt: DateTime(2026, 1, 1, 0, 0, 1),
                 progressStep: 4,
                 evidenceCount: 1,
@@ -350,6 +353,7 @@ void main() {
               errorDetail: '',
               stageMessage: '',
               startedAt: DateTime(2026, 1, 1),
+              thinkingStartedAt: DateTime(2026, 1, 1, 0, 0, 1),
               finishedAt: DateTime(2026, 1, 1, 0, 0, 1),
               progressStep: 4,
               evidenceCount: 1,
@@ -518,23 +522,105 @@ void main() {
     expect(snapshot.canCancel, isTrue);
   });
 
-  testWidgets(
-    'elapsed label includes wall-clock time spent away from the page',
-    (tester) async {
-      final started = DateTime(2026, 1, 1);
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: AppTheme.light(),
-          home: Scaffold(
-            body: AgentElapsedLabel(
-              startedAt: started,
-              finishedAt: started.add(const Duration(seconds: 10)),
-              language: AgentUiLanguage.chinese,
-            ),
+  testWidgets('finished elapsed label reports total task duration honestly', (
+    tester,
+  ) async {
+    final started = DateTime(2026, 1, 1);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: AgentElapsedLabel(
+            startedAt: started,
+            thinkingStartedAt: started.add(const Duration(seconds: 2)),
+            finishedAt: started.add(const Duration(seconds: 10)),
+            language: AgentUiLanguage.chinese,
           ),
         ),
-      );
-      expect(find.text('已思考 10 秒'), findsOneWidget);
-    },
-  );
+      ),
+    );
+    expect(find.text('任务用时 10 秒'), findsOneWidget);
+    expect(find.textContaining('已思考'), findsNothing);
+  });
+
+  testWidgets('elapsed label shows task time before model generation', (
+    tester,
+  ) async {
+    final started = DateTime.now().subtract(const Duration(seconds: 10));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: AgentElapsedLabel(
+            startedAt: started,
+            language: AgentUiLanguage.chinese,
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('任务已进行'), findsOneWidget);
+    expect(find.textContaining('已思考'), findsNothing);
+  });
+
+  testWidgets('elapsed label switches to thinking time at reasoning stage', (
+    tester,
+  ) async {
+    final started = DateTime.now().subtract(const Duration(seconds: 10));
+    final thinking = DateTime.now().subtract(const Duration(seconds: 4));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: AgentElapsedLabel(
+            startedAt: started,
+            thinkingStartedAt: thinking,
+            language: AgentUiLanguage.chinese,
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('已思考'), findsOneWidget);
+    expect(find.textContaining('任务已进行'), findsNothing);
+  });
+
+  testWidgets('slow-request advisory is orange and non-blocking', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: AgentAssistantBubble(
+            theme: AppTheme.light(),
+            providerLabel: 'DeepSeek',
+            mode: AgentMode.strict,
+            running: true,
+            cancelled: false,
+            error: null,
+            errorDetail: '',
+            stageMessage: '生成结果',
+            startedAt: DateTime.now().subtract(const Duration(seconds: 40)),
+            thinkingStartedAt: DateTime.now().subtract(
+              const Duration(seconds: 35),
+            ),
+            finishedAt: null,
+            slowRequestWarning: true,
+            progressStep: 2,
+            evidenceCount: 1,
+            citationCount: 1,
+            uiLanguage: AgentUiLanguage.chinese,
+            strings: _strings,
+            result: null,
+            onRetry: null,
+            onLooseRetry: null,
+            onSettings: () {},
+          ),
+        ),
+      ),
+    );
+
+    final warning = tester.widget<Text>(find.text('本次处理时间较长，请耐心等待'));
+    expect(warning.style?.color, AppColors.warning);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+  });
 }

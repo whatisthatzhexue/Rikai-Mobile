@@ -1352,6 +1352,7 @@ class AgentOrchestrator {
           evidence: evidence,
           userRequest: userRequest,
           maxTokens: limits.coverageReviewMaxTokens,
+          maxSnippetChars: limits.coverageSnippetChars,
         ),
         cancellation,
         onTelemetry: telemetry.record,
@@ -1399,6 +1400,7 @@ class AgentOrchestrator {
             rawOutput: parsed.normalizedText,
             errors: parsed.errors,
             maxTokens: limits.coverageReviewMaxTokens,
+            maxSnippetChars: limits.coverageSnippetChars,
           ),
           cancellation,
           onTelemetry: telemetry.record,
@@ -1934,6 +1936,17 @@ class AgentOrchestrator {
     final buffer = StringBuffer();
     final reasoning = StringBuffer();
     final watch = Stopwatch()..start();
+    if (kDebugMode) {
+      final promptChars = request.messages.fold<int>(
+        0,
+        (sum, message) => sum + message.text.length,
+      );
+      debugPrint(
+        '[AgentPromptBudget] label=$label model=${request.model} '
+        'messages=${request.messages.length} chars=$promptChars '
+        'stream=${request.stream}',
+      );
+    }
     var firstEventAt = -1;
     var firstTextAt = -1;
     var httpAttempts = 0;

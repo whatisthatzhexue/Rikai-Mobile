@@ -38,9 +38,6 @@ String agentDictionaryNoEvidence(
   List<String> names,
 ) => AgentUiStrings.of(language).dictionaryNoEvidence(names);
 
-String agentRunTimeoutMessage(AgentUiLanguage language, int seconds) =>
-    AgentUiStrings.of(language).runTimeout(seconds);
-
 String agentInputRequiredMessage(AgentUiLanguage language) =>
     AgentUiStrings.of(language).inputRequired;
 
@@ -67,3 +64,12 @@ String agentThinkingFallback(AgentUiLanguage language) =>
 
 String agentElapsedLabel(int seconds, AgentUiLanguage language) =>
     AgentUiStrings.of(language).elapsedLabel(seconds);
+
+String agentTaskElapsedLabel(int seconds, AgentUiLanguage language) =>
+    AgentUiStrings.of(language).taskElapsedLabel(seconds);
+
+String agentTaskDurationLabel(int seconds, AgentUiLanguage language) =>
+    AgentUiStrings.of(language).taskDurationLabel(seconds);
+
+String agentSlowRequestWarning(AgentUiLanguage language) =>
+    AgentUiStrings.of(language).slowRequestWarning;

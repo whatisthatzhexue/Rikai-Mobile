@@ -307,10 +307,13 @@ coverage → reasoning → validating → done | error | cancelled`。
 进行，确认后下次 run 生效（见 §6.1）。旧的 `awaitingProfile` 状态保留给历史/
 兼容，不再出现在正常首跑路径。`coverage` 是 2026-10-31 反馈新增的一次性覆盖
 审查（见 §6.3.1），最多触发一次补充检索。每个阶段可取消，UI 显示本地化阶段名；
-运行记录写入 `agent_runs`。2026-11-06 P0 增加 controller 级全局 Run Deadline
-（`AgentLimits.runDeadlineSeconds`，默认 30 秒，0/负数禁用）：超时取消
-provider/OCR，状态为可恢复的 `TOOL_TIMEOUT`，保留 provisional/retained result，
-绝不让用户无限等待。直接调用 orchestrator 的测试/集成不经过该计时器。
+运行记录写入 `agent_runs`。2026-11-07 起 30 秒阈值改为**慢请求提示**，不再
+终止任务：controller 从主分析进入 `reasoning` 时开始计时
+（`AgentLimits.slowRequestWarningSeconds`，默认 30 秒，0/负数禁用）；达到阈值
+只在 UI 显示橙色“本次处理时间较长，请耐心等待”，provider/OCR 继续运行，用户
+仍可主动停止。计时前 UI 显示“任务已进行 X 秒”，进入 `reasoning` 后显示
+“已思考 X 秒”，完成态显示“任务用时 X 秒”，避免把 OCR/查词时间伪装成模型
+思考时间。直接调用 orchestrator 的测试/集成不经过 controller 计时器。
 
 ### 6.1 Stage -1：词典熟悉（Step -1）
 
