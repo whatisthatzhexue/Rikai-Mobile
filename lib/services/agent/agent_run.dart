@@ -101,6 +101,9 @@ class AgentRichTextOutputs {
     this.segmentTexts = const <String>[],
     this.segmentNotes = const <String>[],
     this.formattingCalls = 0,
+    this.acceptedSections = 0,
+    this.rejectedSections = 0,
+    this.repairedSections = 0,
   });
 
   final String? originalText;
@@ -110,6 +113,15 @@ class AgentRichTextOutputs {
   /// One for a batched formatting request, zero when the local fallback was
   /// used without contacting the provider.
   final int formattingCalls;
+
+  /// Content-free section counters for the formatting pass. Accepted includes
+  /// local YOMI fallback; rejected means the section kept the local baseline.
+  final int acceptedSections;
+  final int rejectedSections;
+
+  /// Accepted sections whose malformed style tags were locally dropped while
+  /// preserving the base text and valid tags.
+  final int repairedSections;
 }
 
 /// Per-run, content-free execution telemetry.
@@ -125,6 +137,9 @@ class AgentRunTelemetry {
     this.repairCalls = 0,
     this.languageRepairCalls = 0,
     this.formattingCalls = 0,
+    this.formattingAcceptedSections = 0,
+    this.formattingRejectedSections = 0,
+    this.formattingRepairedSections = 0,
     this.inputChars = 0,
     this.outputChars = 0,
     this.reasoningChars = 0,
@@ -148,6 +163,9 @@ class AgentRunTelemetry {
   /// Rich-text display-formatting requests. These are included in [llmCalls]
   /// so it remains the total provider call count.
   final int formattingCalls;
+  final int formattingAcceptedSections;
+  final int formattingRejectedSections;
+  final int formattingRepairedSections;
   final int inputChars;
   final int outputChars;
   final int reasoningChars;
@@ -173,6 +191,9 @@ class AgentRunTelemetry {
   AgentRunTelemetry copyWith({
     int? llmCalls,
     int? formattingCalls,
+    int? formattingAcceptedSections,
+    int? formattingRejectedSections,
+    int? formattingRepairedSections,
     int? inputChars,
     int? outputChars,
     int? llmElapsedMs,
@@ -184,6 +205,12 @@ class AgentRunTelemetry {
       repairCalls: repairCalls,
       languageRepairCalls: languageRepairCalls,
       formattingCalls: formattingCalls ?? this.formattingCalls,
+      formattingAcceptedSections:
+          formattingAcceptedSections ?? this.formattingAcceptedSections,
+      formattingRejectedSections:
+          formattingRejectedSections ?? this.formattingRejectedSections,
+      formattingRepairedSections:
+          formattingRepairedSections ?? this.formattingRepairedSections,
       inputChars: inputChars ?? this.inputChars,
       outputChars: outputChars ?? this.outputChars,
       reasoningChars: reasoningChars,
@@ -215,6 +242,9 @@ class AgentRunTelemetry {
     'repair_calls': repairCalls,
     'language_repair_calls': languageRepairCalls,
     'formatting_calls': formattingCalls,
+    'formatting_accepted_sections': formattingAcceptedSections,
+    'formatting_rejected_sections': formattingRejectedSections,
+    'formatting_repaired_sections': formattingRepairedSections,
     'input_chars': inputChars,
     'output_chars': outputChars,
     'reasoning_chars': reasoningChars,
@@ -237,6 +267,15 @@ class AgentRunTelemetry {
       repairCalls: agentInt(json['repair_calls']),
       languageRepairCalls: agentInt(json['language_repair_calls']),
       formattingCalls: agentInt(json['formatting_calls']),
+      formattingAcceptedSections: agentInt(
+        json['formatting_accepted_sections'],
+      ),
+      formattingRejectedSections: agentInt(
+        json['formatting_rejected_sections'],
+      ),
+      formattingRepairedSections: agentInt(
+        json['formatting_repaired_sections'],
+      ),
       inputChars: agentInt(json['input_chars']),
       outputChars: agentInt(json['output_chars']),
       reasoningChars: agentInt(json['reasoning_chars']),

@@ -82,3 +82,43 @@ bool shouldUseJapaneseTokenizer(String text) {
   final language = detectScriptLanguage(text);
   return language == null || language == ScriptLanguage.japanese;
 }
+
+/// Han-only text is ambiguous between Chinese and kanji-only Japanese.
+///
+/// The app keeps the Japanese tokenizer for its primary use case, but callers
+/// must tell the model that UniDic readings/structure are not certain.
+bool isHanOnlyAmbiguous(String text) {
+  var han = 0;
+  var otherLetters = 0;
+  for (final rune in text.runes) {
+    final isHan =
+        (rune >= 0x3400 && rune <= 0x4DBF) ||
+        (rune >= 0x4E00 && rune <= 0x9FFF) ||
+        (rune >= 0xF900 && rune <= 0xFAFF) ||
+        (rune >= 0x20000 && rune <= 0x2FA1F);
+    if (isHan) {
+      han++;
+      continue;
+    }
+    final isOtherLetter =
+        (rune >= 0x3040 && rune <= 0x30FF) ||
+        (rune >= 0x31F0 && rune <= 0x31FF) ||
+        (rune >= 0xFF66 && rune <= 0xFF9F) ||
+        (rune >= 0x1100 && rune <= 0x11FF) ||
+        (rune >= 0x3130 && rune <= 0x318F) ||
+        (rune >= 0xAC00 && rune <= 0xD7AF) ||
+        (rune >= 0x0400 && rune <= 0x052F) ||
+        (rune >= 0x0370 && rune <= 0x03FF) ||
+        (rune >= 0x1F00 && rune <= 0x1FFF) ||
+        (rune >= 0x0E00 && rune <= 0x0E7F) ||
+        (rune >= 0x0600 && rune <= 0x06FF) ||
+        (rune >= 0x0750 && rune <= 0x077F) ||
+        (rune >= 0x08A0 && rune <= 0x08FF) ||
+        (rune >= 0x0041 && rune <= 0x005A) ||
+        (rune >= 0x0061 && rune <= 0x007A) ||
+        (rune >= 0x00C0 && rune <= 0x024F) ||
+        (rune >= 0x1E00 && rune <= 0x1EFF);
+    if (isOtherLetter) otherLetters++;
+  }
+  return han > 0 && otherLetters == 0;
+}

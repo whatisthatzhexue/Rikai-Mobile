@@ -36,8 +36,9 @@
 - 只实现安全 JSON AST 的装饰子集：`ruby`、`pitch`、`bold`、`underline` +
   `when`。
 - 不做 `text`/`group` 节点、不做自由文本/JSON 编辑器、不做用户导入。
-- 内置 2–3 套规则集：基础注音、注音+音调、关闭；先覆盖 `reader`、`photo`、
-  `corpus`，**不接入 Agent 结果**。
+- 内置菜单规则集：基础注音、注音 + 音调；关闭标注由“显示注音”总开关承担，
+  避免重复入口。`none` 常量仅保留给旧设置迁移/内部回退。先覆盖 `reader`、
+  `photo`、`corpus`，**不接入 Agent 结果**。
 - 预览使用当前阅读页/照片集/语料页的实时渲染；版本回滚先实现“恢复默认”
   （内置规则集版本化仍保留在 schema 中），不新增版本历史管理界面。
 - `R-AGENT-26`、契约 §14.3、设计 §17.2.4 按本范围修订；完整 `text/group`/
@@ -205,6 +206,11 @@
   mode，图片 run 暂不缓存。
 - Phase 5：`AgentTaskRoute` 路由表；`AgentRunTelemetry.formattingCalls`，
   `llmCalls` 现包含富文本调用；路由测试完成。
+- 1.1 UI 增量：应用副标题/版本 1.1；DeepSeek 快捷配置与重名后缀；provider
+  测试按钮/API key 复用/max_tokens 文案；标注菜单移除“关闭标注”并在选择
+  “注音+音调”时提示 UniDic 音调限制；动词/い形容词活用形后接非标点 token
+  时抑制音调（音便动词和原形除外）；Markdown 档案预览竖屏高度调整；依据标题
+  改为清洗 HTML 第一行最简单词（`【...】` 仅兼容回退）。
 
 仍待完成：
 

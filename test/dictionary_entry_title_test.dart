@@ -8,9 +8,19 @@ void main() {
       '焼べる',
     );
     expect(extractDictionaryEntryTitle('<div>今いま【今】［名］現在の時点。</div>'), '今');
+    expect(extractDictionaryEntryTitle('<div>それ[0]【其▼れ】（代）あれ。</div>'), '其れ');
     expect(
-      extractDictionaryEntryTitle('<div>のろい【呪い・詛▼い】のろうこと。</div>'),
+      extractDictionaryEntryTitle('<div>のろいのろひ【呪い・詛▼い】のろうこと。</div>'),
       '呪い・詛い',
+    );
+  });
+
+  test('uses the first line simplest word without a bracket convention', () {
+    expect(extractDictionaryEntryTitle('<div>りんご 果物の一種。</div>'), 'りんご');
+    expect(extractDictionaryEntryTitle('<div>苹果 一种水果。</div>'), '苹果');
+    expect(
+      extractDictionaryEntryTitle('<div>apple a fruit for eating.</div>'),
+      'apple',
     );
   });
 
@@ -54,7 +64,7 @@ void main() {
   test('falls back to the matched key and rejects opaque keys', () {
     expect(
       dictionaryEntryDisplayTitle(
-        html: '<div>definition only</div>',
+        html: '<div></div>',
         matchedKey: '愛',
         headword: '00044',
       ),
@@ -62,7 +72,7 @@ void main() {
     );
     expect(
       dictionaryEntryDisplayTitle(
-        html: '<div>definition only</div>',
+        html: '<div></div>',
         matchedKey: '01570 03798',
         headword: '01570 03798',
       ),

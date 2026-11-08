@@ -4,6 +4,7 @@ import 'package:rikai_mobile/core/models/annotation_rules.dart';
 import 'package:rikai_mobile/core/models/token.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
 import 'package:rikai_mobile/core/ui/pitch_accent_overlay.dart';
+import 'package:rikai_mobile/features/reader/reader_block.dart';
 import 'package:rikai_mobile/features/reader/token_chip.dart';
 
 Token _token({
@@ -19,6 +20,44 @@ Token _token({
     features: features,
     start: 0,
     end: surface.length,
+  );
+}
+
+Token _pitchToken({
+  required String surface,
+  required String lemma,
+  required String kana,
+  required String pos1,
+  String cForm = '*',
+  String accentType = '0',
+}) {
+  final features = List<String>.filled(Token.expectedFeatureCount, '*');
+  features[0] = pos1;
+  features[5] = cForm;
+  features[7] = lemma;
+  features[20] = kana;
+  features[24] = accentType;
+  return Token.fromFeatures(
+    surface: surface,
+    features: features,
+    start: 0,
+    end: surface.length,
+  );
+}
+
+Future<void> _pumpTokens(WidgetTester tester, List<Token> tokens) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      theme: AppTheme.light(),
+      home: Scaffold(
+        body: ReaderBlock(
+          tokens: tokens,
+          fontSize: 20,
+          showFurigana: true,
+          annotationRules: AnnotationRuleSets.pitch,
+        ),
+      ),
+    ),
   );
 }
 
@@ -133,5 +172,103 @@ void main() {
 
     final punctuation = tester.widget<Text>(find.text('。'));
     expect(punctuation.style?.color, AppColors.textPrimary);
+  });
+
+  testWidgets('inflected verbs drop pitch before another token', (
+    tester,
+  ) async {
+    await _pumpTokens(tester, <Token>[
+      _pitchToken(
+        surface: '食べ',
+        lemma: '食べる',
+        kana: 'タベ',
+        pos1: '動詞',
+        cForm: '連用形-一般',
+      ),
+      _pitchToken(
+        surface: 'ます',
+        lemma: 'ます',
+        kana: 'マス',
+        pos1: '助動詞',
+        accentType: '*',
+      ),
+    ]);
+    expect(find.byType(PitchAccentOverlay), findsNothing);
+
+    await _pumpTokens(tester, <Token>[
+      _pitchToken(
+        surface: '食べ',
+        lemma: '食べる',
+        kana: 'タベ',
+        pos1: '動詞',
+        cForm: '連用形-一般',
+      ),
+      _pitchToken(
+        surface: '。',
+        lemma: '。',
+        kana: '。',
+        pos1: '補助記号',
+        accentType: '*',
+      ),
+    ]);
+    expect(find.byType(PitchAccentOverlay), findsWidgets);
+  });
+
+  testWidgets('onbin verbs keep pitch and inflected adjectives drop it', (
+    tester,
+  ) async {
+    await _pumpTokens(tester, <Token>[
+      _pitchToken(
+        surface: '書い',
+        lemma: '書く',
+        kana: 'カイ',
+        pos1: '動詞',
+        cForm: '連用形-イ音便',
+      ),
+      _pitchToken(
+        surface: 'た',
+        lemma: 'た',
+        kana: 'タ',
+        pos1: '助動詞',
+        accentType: '*',
+      ),
+    ]);
+    expect(find.byType(PitchAccentOverlay), findsWidgets);
+
+    await _pumpTokens(tester, <Token>[
+      _pitchToken(
+        surface: '美しく',
+        lemma: '美しい',
+        kana: 'ウツクシク',
+        pos1: '形容詞',
+        cForm: '連用形-一般',
+      ),
+      _pitchToken(
+        surface: 'て',
+        lemma: 'て',
+        kana: 'テ',
+        pos1: '助詞',
+        accentType: '*',
+      ),
+    ]);
+    expect(find.byType(PitchAccentOverlay), findsNothing);
+
+    await _pumpTokens(tester, <Token>[
+      _pitchToken(
+        surface: '美しい',
+        lemma: '美しい',
+        kana: 'ウツクシイ',
+        pos1: '形容詞',
+        cForm: '終止形-一般',
+      ),
+      _pitchToken(
+        surface: '。',
+        lemma: '。',
+        kana: '。',
+        pos1: '補助記号',
+        accentType: '*',
+      ),
+    ]);
+    expect(find.byType(PitchAccentOverlay), findsWidgets);
   });
 }

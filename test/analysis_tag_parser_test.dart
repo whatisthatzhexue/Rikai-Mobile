@@ -68,25 +68,25 @@ Some prose context_inference（90%） that should be ignored.
     expect(analysis.segments.single.wordNotes.single.reading, isEmpty);
   });
 
-  test(
-    'returns null when required translation or segment blocks are absent',
-    () {
-      expect(
-        parseTaggedAnalysis(
-          '[TRANSLATION quote="q1"]译文[/TRANSLATION]',
-          sourceId: 'src-1',
-        ),
-        isNull,
-      );
-      expect(
-        parseTaggedAnalysis(
-          '[SEGMENT type="fact" quote="q1"][MEANING]解释[/MEANING][/SEGMENT]',
-          sourceId: 'src-1',
-        ),
-        isNull,
-      );
-    },
-  );
+  test('keeps partial translation-only or segment-only output', () {
+    final translationOnly = parseTaggedAnalysis(
+      '[TRANSLATION quote="q1"]译文[/TRANSLATION]',
+      sourceId: 'src-1',
+    );
+    expect(translationOnly, isNotNull);
+    expect(translationOnly!.translation, hasLength(1));
+    expect(translationOnly.segments, isEmpty);
+
+    final segmentOnly = parseTaggedAnalysis(
+      '[SEGMENT type="fact" quote="q1"][MEANING]解释[/MEANING][/SEGMENT]',
+      sourceId: 'src-1',
+    );
+    expect(segmentOnly, isNotNull);
+    expect(segmentOnly!.translation, isEmpty);
+    expect(segmentOnly.segments, hasLength(1));
+
+    expect(parseTaggedAnalysis('no tags at all', sourceId: 'src-1'), isNull);
+  });
 
   test('parses a standalone NO_ANALYSIS result', () {
     final analysis = parseTaggedAnalysis(

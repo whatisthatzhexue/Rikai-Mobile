@@ -332,7 +332,18 @@ AgentAnalysis? parseTaggedAnalysis(
     if (text.isNotEmpty) supplements.add(AgentModelSupplement(text: text));
   }
 
-  if (translations.isEmpty || segments.isEmpty) return null;
+  // Partial output is intentionally returned to the caller. The model often
+  // omits one whole category (for example a translation-only answer for a
+  // grammar question); local cleaning decides whether what remains is usable.
+  // Returning null here forced a repair call even when the parsed content was
+  // already displayable.
+  if (translations.isEmpty &&
+      segments.isEmpty &&
+      interpretations.isEmpty &&
+      unresolved.isEmpty &&
+      supplements.isEmpty) {
+    return null;
+  }
   final usedCitations = <String>{
     for (final translation in translations) ...translation.citationIds,
     for (final segment in segments) ...{

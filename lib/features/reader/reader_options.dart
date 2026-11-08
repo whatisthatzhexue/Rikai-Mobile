@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/annotation_rules.dart';
+import '../../core/ui/rikai_toast.dart';
 import '../../state/providers.dart';
 
 /// Shared reading options menu: furigana visibility and reading font size.
@@ -28,8 +29,14 @@ class ReaderOptionsMenu extends ConsumerWidget {
           }
         } else if (value.startsWith('style:')) {
           final id = value.substring('style:'.length);
+          final showPitchHint =
+              id == AnnotationRuleSets.pitchId &&
+              settings.annotationRuleSetId != AnnotationRuleSets.pitchId;
           notifier.setAnnotationRuleSet(id);
           notifier.setShowFurigana(id != AnnotationRuleSets.noneId);
+          if (showPitchHint) {
+            RikaiToast.show(context, '单词音调数据来自UniDic，复合单词的音调请以词典为准。');
+          }
         } else if (value.startsWith('size:')) {
           notifier.setReaderFontSize(
             double.parse(value.substring('size:'.length)),
@@ -43,7 +50,7 @@ class ReaderOptionsMenu extends ConsumerWidget {
           child: const Text('显示注音'),
         ),
         const PopupMenuDivider(),
-        for (final ruleSet in AnnotationRuleSets.all)
+        for (final ruleSet in AnnotationRuleSets.selectable)
           CheckedPopupMenuItem<String>(
             value: 'style:${ruleSet.id}',
             checked: settings.annotationRuleSetId == ruleSet.id,

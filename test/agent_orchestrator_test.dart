@@ -85,6 +85,27 @@ const _analysisWithoutCitation = '''
 [/SEGMENT]
 ''';
 
+const _analysisNoContent = '''
+[UNRESOLVED quote="q1"]无法形成可用结果[/UNRESOLVED]
+''';
+
+const _analysisTranslationOnly = '''
+[TRANSLATION quote="q1"]请多关照。[/TRANSLATION]
+''';
+
+const _analysisSegmentOnly = '''
+[SEGMENT type="fact" quote="q1"]
+[MEANING]正式请求[/MEANING]
+[WORD id="t1"]何卒||请务必|source-1[/WORD]
+[/SEGMENT]
+''';
+
+const _coverageMissing = '''
+[COVERAGE verdict="missing"]
+[MISSING kind="usage" query="何卒" refs="t1" priority="1"]缺少用法[/MISSING]
+[/COVERAGE]
+''';
+
 const _analysisJapanese = '''
 [TRANSLATION quote="q1"]どういたしまして。[/TRANSLATION]
 [SEGMENT type="fact" quote="q1"]
@@ -225,6 +246,40 @@ class _OneDictionaryLookup implements LookupPort {
   }
 }
 
+/// First lookup returns the headword entry; later lookups (coverage) return a
+/// distinct usage entry. Shared across two orchestrator runs so the second run
+/// can prove that cached citation ids were restored before coverage issued.
+class _ScriptedLookup implements LookupPort {
+  int calls = 0;
+
+  @override
+  Future<LookupResult> lookup(LookupRequest request) async {
+    calls++;
+    final key = calls == 1 ? '何卒' : '何卒・用法';
+    return LookupResult(
+      query: request.query,
+      candidates: request.rawCandidates,
+      groups: <DictionaryLookupGroup>[
+        DictionaryLookupGroup(
+          dictionary: request.dictionaries.first,
+          entries: <LookupEntry>[
+            LookupEntry(matchedKey: key, headword: key, html: '<b>$key</b>'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<List<String>> suggest({
+    required String prefix,
+    required List<DictionaryInfo> dictionaries,
+    int limit = 10,
+  }) async {
+    return const <String>[];
+  }
+}
+
 class _FakeLookup implements LookupPort {
   int calls = 0;
 
@@ -293,13 +348,14 @@ AgentOrchestrator _orchestrator({
     enableRichTextPostProcess: false,
   ),
   AgentEvidenceCache? evidenceCache,
+  CitationRegistry? citations,
 }) {
   return AgentOrchestrator(
     ocrPort: ocr ?? _FakeOcr(),
     tokenizePort: _FakeTokenize(),
     lookupPort: lookup ?? _FakeLookup(),
     grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
-    citations: CitationRegistry(),
+    citations: citations ?? CitationRegistry(),
     llmFactory: (_) => provider,
     // Most tests isolate analysis; F7 coverage/rich-text tests opt in.
     limits: limits,
@@ -388,6 +444,70 @@ void main() {
     expect(lookup.calls, 1);
   });
 
+  test('cache hit restores citation ids before coverage supplements', () async {
+    final lookup = _ScriptedLookup();
+    final cache = AgentEvidenceCache();
+    const request = AgentRunRequest(
+      sessionId: 's1',
+      mode: AgentMode.strict,
+      dictionaries: <DictionaryInfo>[_dictionary],
+      provider: _provider,
+      userText: '何卒',
+    );
+    const limits = AgentLimits(
+      maxCoverageFallback: 1,
+      adaptiveCoverageReview: false,
+      enableRichTextPostProcess: false,
+    );
+
+    final firstRegistry = CitationRegistry();
+    await _orchestrator(
+      provider: FakeProvider(
+        responseSequence: <String>[_coverageMissing, _analysisTagged],
+      ),
+      lookup: lookup,
+      limits: limits,
+      evidenceCache: cache,
+      citations: firstRegistry,
+    ).run(request);
+    expect(firstRegistry.count, 2);
+
+    final secondRegistry = CitationRegistry();
+    final second = await _orchestrator(
+      provider: FakeProvider(
+        responseSequence: <String>[_coverageMissing, _analysisTagged],
+      ),
+      lookup: lookup,
+      limits: limits,
+      evidenceCache: cache,
+      citations: secondRegistry,
+    ).run(request);
+
+    // The cached run must restore source-1/source-2. Without restoration the
+    // coverage lookup starts again at source-1 and overwrites the cached entry.
+    expect(second.evidence.citations, hasLength(2));
+    expect(secondRegistry.count, 2);
+    expect(secondRegistry.find('dict_a', '何卒・用法'), isNotNull);
+  });
+
+  test('Han-only source adds an ambiguity instruction to the prompt', () async {
+    final provider = FakeProvider(responseText: _analysisTagged);
+    await _orchestrator(provider: provider).run(
+      const AgentRunRequest(
+        sessionId: 's1',
+        mode: AgentMode.strict,
+        dictionaries: <DictionaryInfo>[_dictionary],
+        provider: _provider,
+        userText: '何卒',
+      ),
+    );
+
+    final prompt = provider.requests.single.messages
+        .map((message) => message.text)
+        .join('\n');
+    expect(prompt, contains('SCRIPT AMBIGUOUS'));
+  });
+
   test('warns when a selected dictionary produced no citation', () async {
     final provider = FakeProvider(responseText: _analysisTagged);
     final result =
@@ -432,7 +552,7 @@ void main() {
           );
 
       expect(result.evidence.citations.length, lessThanOrEqualTo(15));
-      expect(result.evidence.citations, hasLength(2));
+      expect(result.evidence.citations, hasLength(1));
       expect(result.telemetry.httpAttempts, greaterThanOrEqualTo(1));
       expect(result.telemetry.analysisPrefillChars, greaterThan(0));
       expect(result.telemetry.analysisPrefillChars, lessThan(12000));
@@ -531,7 +651,7 @@ void main() {
     'strict validation failure is repaired without redoing OCR/lookup',
     () async {
       final provider = FakeProvider(
-        responseSequence: <String>[_analysisWithoutCitation, _analysisTagged],
+        responseSequence: <String>[_analysisNoContent, _analysisTagged],
       );
 
       final result = await _orchestrator(provider: provider).run(
@@ -629,32 +749,30 @@ void main() {
   );
 
   test(
-    'emits a displayable result before a slow validation repair finishes',
+    'salvageable output is returned without waiting for a repair call',
     () async {
       final provider = _BlockingRepairProvider(
         firstResponse: _analysisWithoutCitation,
       );
       final previews = <AgentRunResult>[];
-      final runFuture = _orchestrator(provider: provider).run(
-        const AgentRunRequest(
-          sessionId: 's1',
-          mode: AgentMode.strict,
-          dictionaries: <DictionaryInfo>[_dictionary],
-          provider: _provider,
-          userText: '何卒',
-        ),
-        onProvisionalResult: previews.add,
-      );
+      final result = await _orchestrator(provider: provider)
+          .run(
+            const AgentRunRequest(
+              sessionId: 's1',
+              mode: AgentMode.strict,
+              dictionaries: <DictionaryInfo>[_dictionary],
+              provider: _provider,
+              userText: '何卒',
+            ),
+            onProvisionalResult: previews.add,
+          )
+          .timeout(const Duration(seconds: 1));
 
-      await provider.repairStarted.future;
+      expect(result.validation.displayable, isTrue);
       expect(previews, isNotEmpty);
-      expect(previews.first.validation.valid, isFalse);
+      expect(previews.first.validation.displayable, isTrue);
       expect(previews.first.analysis.translation.single.text, '请多关照。');
-
-      provider.releaseRepair.complete();
-      final result = await runFuture;
-      expect(result.validation.valid, isTrue);
-      expect(provider.calls, 2);
+      expect(provider.calls, 1);
     },
   );
 
@@ -727,14 +845,9 @@ void main() {
   );
 
   test(
-    'orphan tag triggers one format repair even when content parses',
+    'tag integrity failure is cleaned locally without a repair call',
     () async {
-      final provider = FakeProvider(
-        responseSequence: <String>[
-          '$_analysisTagged[/SEGMENT]',
-          _analysisTagged,
-        ],
-      );
+      final provider = FakeProvider(responseText: '$_analysisTagged[/SEGMENT]');
 
       final result = await _orchestrator(provider: provider).run(
         const AgentRunRequest(
@@ -746,40 +859,20 @@ void main() {
         ),
       );
 
-      expect(result.validation.valid, isTrue);
-      expect(provider.requests, hasLength(2));
-      final repairPrompt = provider.requests.last.messages
-          .map((message) => message.text)
-          .join('\n');
-      expect(repairPrompt, contains('多余的结束标签 [/SEGMENT]'));
+      expect(result.validation.valid, isFalse);
+      expect(result.validation.displayable, isTrue);
+      expect(
+        result.validation.errors.any(
+          (error) => error.contains('多余的结束标签 [/SEGMENT]'),
+        ),
+        isTrue,
+      );
+      expect(result.analysis.translation, isNotEmpty);
+      expect(provider.requests, hasLength(1));
     },
   );
 
-  test('unrepaired tag integrity failure is reported, not accepted', () async {
-    final provider = FakeProvider(responseText: '$_analysisTagged[/SEGMENT]');
-
-    final result = await _orchestrator(provider: provider).run(
-      const AgentRunRequest(
-        sessionId: 's1',
-        mode: AgentMode.strict,
-        dictionaries: <DictionaryInfo>[_dictionary],
-        provider: _provider,
-        userText: '何卒',
-      ),
-    );
-
-    expect(result.validation.valid, isFalse);
-    expect(
-      result.validation.errors.any(
-        (error) => error.contains('多余的结束标签 [/SEGMENT]'),
-      ),
-      isTrue,
-    );
-    expect(result.analysis.translation, isNotEmpty);
-    expect(provider.requests, hasLength(2));
-  });
-
-  test('unrepaired output is salvaged instead of being thrown away', () async {
+  test('salvageable output is adopted locally without a repair call', () async {
     final provider = FakeProvider(responseText: _analysisWithoutCitation);
 
     final result = await _orchestrator(provider: provider).run(
@@ -793,20 +886,45 @@ void main() {
     );
 
     expect(result.validation.valid, isFalse);
+    expect(result.validation.displayable, isTrue);
     expect(result.validation.errors, isNotEmpty);
     expect(result.analysis.translation, isNotEmpty);
     expect(result.analysis.segments, isEmpty);
     expect(result.analysis.unresolved, isNotEmpty);
-    expect(provider.requests, hasLength(2));
+    expect(provider.requests, hasLength(1));
   });
+
+  test(
+    'translation-only or segment-only output is adopted without repair',
+    () async {
+      for (final response in <String>[
+        _analysisTranslationOnly,
+        _analysisSegmentOnly,
+      ]) {
+        final provider = FakeProvider(responseText: response);
+        final result = await _orchestrator(provider: provider).run(
+          const AgentRunRequest(
+            sessionId: 's1',
+            mode: AgentMode.strict,
+            dictionaries: <DictionaryInfo>[_dictionary],
+            provider: _provider,
+            userText: '何卒',
+          ),
+        );
+
+        expect(result.validation.displayable, isTrue);
+        expect(result.validation.valid, isFalse);
+        expect(provider.requests, hasLength(1));
+      }
+    },
+  );
 
   test('salvaged results still receive rich-text formatting', () async {
     const rich = '[BOLD]何卒[/BOLD]';
     final provider = FakeProvider(
       responseSequence: <String>[
         _analysisWithoutCitation,
-        _analysisWithoutCitation,
-        _batchResponse(<String, String>{'original': rich, 'segment-0': '无依据'}),
+        _batchResponse(<String, String>{'original': rich}),
       ],
     );
     final stages = <AgentStage>[];
@@ -830,9 +948,13 @@ void main() {
         );
 
     expect(result.validation.valid, isFalse);
+    expect(result.validation.displayable, isTrue);
     expect(result.richOriginalText, rich);
     expect(stages, contains(AgentStage.formatting));
-    expect(provider.requests, hasLength(3));
+    expect(provider.requests, hasLength(2));
+    expect(result.telemetry.formattingAcceptedSections, 1);
+    expect(result.telemetry.formattingRejectedSections, 0);
+    expect(result.telemetry.formattingRepairedSections, 0);
   });
 
   test(

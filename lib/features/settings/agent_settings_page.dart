@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_provider.dart';
+import '../../core/models/agent/agent_tool.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/ui/rikai_toast.dart';
 import '../../services/agent/agent_ui_strings.dart';
@@ -177,8 +178,21 @@ class AgentSettingsPage extends ConsumerWidget {
                   SizedBox(
                     height: AppSizes.control,
                     child: FilledButton(
+                      onPressed: () => _quickConfig(context, ref, strings),
+                      child: Text(strings.quickConfig),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  SizedBox(
+                    height: AppSizes.control,
+                    child: OutlinedButton(
                       onPressed: () =>
                           _editProvider(context, ref, null, strings),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                        side: const BorderSide(color: AppColors.primary),
+                        backgroundColor: Colors.transparent,
+                      ),
                       child: Text(strings.addProvider),
                     ),
                   ),
@@ -202,14 +216,27 @@ class AgentSettingsPage extends ConsumerWidget {
       builder: (context) =>
           _ProviderDialog(initial: existing, strings: strings),
     );
-    if (result == null) return;
+    if (result == null || !context.mounted) return;
+    await _persistProvider(context, ref, result, strings, existing: existing);
+  }
+
+  Future<void> _persistProvider(
+    BuildContext context,
+    WidgetRef ref,
+    AgentProviderDraft result,
+    AgentUiStrings strings, {
+    AgentProviderConfig? existing,
+    String? displayName,
+  }) async {
     final id =
         existing?.id ??
         'provider-${DateTime.now().microsecondsSinceEpoch.toString()}';
     final config = AgentProviderConfig(
       id: id,
       kind: result.kind,
-      displayName: result.displayName.trim().isEmpty
+      displayName: (displayName?.trim().isNotEmpty ?? false)
+          ? displayName!.trim()
+          : result.displayName.trim().isEmpty
           ? strings.unnamedProvider
           : result.displayName.trim(),
       baseUrl: result.baseUrl.trim(),
@@ -228,6 +255,32 @@ class AgentSettingsPage extends ConsumerWidget {
     ref.read(selectedAgentProviderProvider.notifier).select(id);
     ref.invalidate(agentProvidersProvider);
     if (context.mounted) RikaiToast.show(context, strings.providerSaved);
+  }
+
+  Future<void> _quickConfig(
+    BuildContext context,
+    WidgetRef ref,
+    AgentUiStrings strings,
+  ) async {
+    final result = await showDialog<AgentProviderDraft>(
+      context: context,
+      builder: (context) => _QuickProviderDialog(strings: strings),
+    );
+    if (result == null || !context.mounted) return;
+    final existing =
+        ref.read(agentProvidersProvider).asData?.value ??
+        const <AgentProviderConfig>[];
+    final displayName = uniqueProviderDisplayName(
+      result.smallModel,
+      existing.map((provider) => provider.displayName),
+    );
+    await _persistProvider(
+      context,
+      ref,
+      result,
+      strings,
+      displayName: displayName,
+    );
   }
 
   Future<void> _deleteProvider(
@@ -674,6 +727,15 @@ class _ProviderDialogState extends ConsumerState<_ProviderDialog> {
               ),
               const SizedBox(height: AppSpacing.xxs),
               Text(
+                widget.strings.providerApiKeyReuseHint,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: AppTypography.helper,
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xxs),
+              Text(
                 widget.strings.providerMaxOutputTokensHelp,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   fontSize: AppTypography.helper,
@@ -691,6 +753,231 @@ class _ProviderDialogState extends ConsumerState<_ProviderDialog> {
           child: Text(widget.strings.cancel),
         ),
         FilledButton(onPressed: _save, child: Text(widget.strings.save)),
+      ],
+    );
+  }
+}
+
+/// Minimal DeepSeek setup dialog. The model fields stay hidden until a
+/// non-auth connectivity failure, so the normal path is provider + API key +
+/// test + save/cancel.
+class _QuickProviderDialog extends ConsumerStatefulWidget {
+  const _QuickProviderDialog({required this.strings});
+
+  final AgentUiStrings strings;
+
+  @override
+  ConsumerState<_QuickProviderDialog> createState() =>
+      _QuickProviderDialogState();
+}
+
+class _QuickProviderDialogState extends ConsumerState<_QuickProviderDialog> {
+  static const _preset = AgentProviderPreset.deepSeek;
+  static const _defaultModel = 'deepseek-chat';
+
+  late final TextEditingController _apiKey;
+  late final TextEditingController _smallModel;
+  late final TextEditingController _complexModel;
+  bool _testing = false;
+  bool _showModels = false;
+  String? _testStatus;
+  bool _testOk = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _apiKey = TextEditingController();
+    _smallModel = TextEditingController(text: _defaultModel);
+    _complexModel = TextEditingController(text: _defaultModel);
+  }
+
+  @override
+  void dispose() {
+    _apiKey.dispose();
+    _smallModel.dispose();
+    _complexModel.dispose();
+    super.dispose();
+  }
+
+  AgentProviderConfig _config() {
+    return AgentProviderConfig(
+      id: 'provider-test',
+      kind: _preset.kind,
+      displayName: _smallModel.text.trim(),
+      baseUrl: _preset.defaultBaseUrl,
+      smallModel: _smallModel.text.trim(),
+      complexModel: _complexModel.text.trim(),
+      supportsStreaming: true,
+    );
+  }
+
+  Future<void> _test() async {
+    setState(() {
+      _testing = true;
+      _testStatus = null;
+    });
+    final result = await ref
+        .read(agentProviderTesterProvider)
+        .test(config: _config(), apiKey: _apiKey.text);
+    if (!mounted) return;
+    final authProblem =
+        result.errorCode == AgentToolErrorCode.providerAuthFailed ||
+        result.errorCode == AgentToolErrorCode.notConfigured;
+    setState(() {
+      _testing = false;
+      _testOk = result.ok;
+      _testStatus = result.ok
+          ? widget.strings.providerTestSuccess(result.latencyMs, result.model)
+          : widget.strings.errorMessageFor(result.errorCode, result.message);
+      if (!result.ok && !authProblem) _showModels = true;
+    });
+  }
+
+  AgentProviderDraft _draft() {
+    final small = _smallModel.text.trim().isEmpty
+        ? _defaultModel
+        : _smallModel.text.trim();
+    final complex = _complexModel.text.trim().isEmpty
+        ? small
+        : _complexModel.text.trim();
+    return AgentProviderDraft(
+      kind: _preset.kind,
+      displayName: small,
+      baseUrl: _preset.defaultBaseUrl,
+      smallModel: small,
+      complexModel: complex,
+      maxOutputTokens: 0,
+      apiKey: _apiKey.text,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final displaySmall = _smallModel.text.trim().isEmpty
+        ? _defaultModel
+        : _smallModel.text.trim();
+    final displayComplex = _complexModel.text.trim().isEmpty
+        ? displaySmall
+        : _complexModel.text.trim();
+    return AlertDialog(
+      title: Text(widget.strings.quickConfigTitle),
+      content: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.65,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              DropdownButtonFormField<AgentProviderPreset>(
+                initialValue: _preset,
+                decoration: InputDecoration(
+                  labelText: widget.strings.quickConfigProvider,
+                  isDense: true,
+                ),
+                items: <DropdownMenuItem<AgentProviderPreset>>[
+                  DropdownMenuItem(value: _preset, child: Text(_preset.label)),
+                ],
+                onChanged: (_) {},
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                key: const ValueKey('agent-quick-api-key'),
+                controller: _apiKey,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: widget.strings.providerApiKey,
+                  isDense: true,
+                ),
+              ),
+              if (_showModels) ...[
+                const SizedBox(height: AppSpacing.sm),
+                TextField(
+                  key: const ValueKey('agent-quick-small-model'),
+                  controller: _smallModel,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    labelText: widget.strings.providerSmallModel,
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                TextField(
+                  key: const ValueKey('agent-quick-complex-model'),
+                  controller: _complexModel,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    labelText: widget.strings.providerComplexModel,
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  widget.strings.quickConfigModelsEditable,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: AppTypography.helper,
+                    color: AppColors.textSecondary,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                widget.strings.quickConfigAutoFilled(
+                  _preset.defaultBaseUrl,
+                  '$displaySmall / $displayComplex',
+                ),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: AppTypography.helper,
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _testing ? null : _test,
+                  icon: _testing
+                      ? const SizedBox(
+                          width: AppSizes.iconSmall,
+                          height: AppSizes.iconSmall,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.wifi_tethering, size: AppSizes.icon),
+                  label: Text(
+                    _testing
+                        ? widget.strings.providerTesting
+                        : widget.strings.providerTestConnection,
+                  ),
+                ),
+              ),
+              if (_testStatus != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.xs),
+                  child: Text(
+                    _testStatus!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontSize: AppTypography.helper,
+                      color: _testOk ? AppColors.success : AppColors.error,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(widget.strings.cancel),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_draft()),
+          child: Text(widget.strings.save),
+        ),
       ],
     );
   }

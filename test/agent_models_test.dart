@@ -254,6 +254,9 @@ void main() {
       repairCalls: 1,
       languageRepairCalls: 0,
       formattingCalls: 1,
+      formattingAcceptedSections: 2,
+      formattingRejectedSections: 1,
+      formattingRepairedSections: 1,
       inputChars: 100,
       outputChars: 40,
       reasoningChars: 5,
@@ -274,6 +277,9 @@ void main() {
     expect(restored.coverageCalls, 1);
     expect(restored.repairCalls, 1);
     expect(restored.formattingCalls, 1);
+    expect(restored.formattingAcceptedSections, 2);
+    expect(restored.formattingRejectedSections, 1);
+    expect(restored.formattingRepairedSections, 1);
     expect(restored.inputChars, 100);
     expect(restored.outputChars, 40);
     expect(restored.httpAttempts, 3);
@@ -387,5 +393,25 @@ void main() {
         'max_output_tokens': 2048,
       };
     expect(AgentProviderConfig.fromJson(dbStyle).maxOutputTokens, 2048);
+  });
+
+  test('quick setup provider names get numeric suffixes', () {
+    expect(
+      uniqueProviderDisplayName('deepseek-chat', const <String>[]),
+      'deepseek-chat',
+    );
+    expect(
+      uniqueProviderDisplayName('deepseek-chat', const <String>[
+        'deepseek-chat',
+      ]),
+      'deepseek-chat(1)',
+    );
+    expect(
+      uniqueProviderDisplayName('deepseek-chat', const <String>[
+        'deepseek-chat',
+        'deepseek-chat(1)',
+      ]),
+      'deepseek-chat(2)',
+    );
   });
 }

@@ -11,21 +11,36 @@ class AgentValidationResult {
     required this.valid,
     required this.errors,
     required this.citationsUsed,
+    this.usable,
   });
 
+  /// Contract-level validity. A locally cleaned result may still be `false`
+  /// here while remaining displayable; this keeps the original model errors
+  /// available for telemetry/history instead of pretending they never existed.
   final bool valid;
+
+  /// Whether the locally cleaned result can be shown without the generic
+  /// "partial validation" warning. Null means "follow [valid]" so old history
+  /// entries keep their previous behavior.
+  final bool? usable;
+
   final List<String> errors;
   final List<String> citationsUsed;
 
+  bool get displayable => usable ?? valid;
+
   Map<String, Object?> toJson() => <String, Object?>{
     'valid': valid,
+    if (usable != null) 'usable': usable,
     'errors': errors,
     'citations_used': citationsUsed,
   };
 
   factory AgentValidationResult.fromJson(Map<String, Object?> json) {
+    final usable = json['usable'];
     return AgentValidationResult(
       valid: agentBool(json['valid']),
+      usable: usable is bool ? usable : null,
       errors: agentStringList(json['errors']),
       citationsUsed: agentStringList(json['citations_used']),
     );
@@ -76,16 +91,10 @@ class AgentValidator {
     // Free grammar notes (no supplied pattern id) may only cite tokens that
     // overlap their quote. This keeps strict traceability without rejecting a
     // valid grammar explanation just because the whitelist did not match it.
-    final quoteTokenIds = <String, Set<String>>{
-      for (final quote in quotes)
-        quote.id: <String>{
-          for (final source in evidence.sources)
-            if (source.id == quote.sourceId)
-              for (final token in source.tokens)
-                if (token.start < quote.end && token.end > quote.start)
-                  token.id,
-        },
-    };
+    final quoteTokenIds = agentQuoteTokenIds(
+      quotes: quotes,
+      evidence: evidence,
+    );
     final unresolvedQuotes = analysis.unresolved
         .map((item) => item.quoteId)
         .toSet();
@@ -147,7 +156,7 @@ class AgentValidator {
         // unique surface/lemma within the current quote before rejecting the
         // note; this keeps traceability without failing an otherwise correct
         // analysis on a formatting omission.
-        final token = _resolveWordToken(
+        final token = resolveAgentWordToken(
           note,
           segment.quoteId,
           tokenMap,
@@ -171,18 +180,18 @@ class AgentValidator {
         }
         claimCitations.addAll(note.citationIds);
         if (note.reading.isNotEmpty) {
-          final noteReading = _normalizeReading(note.reading);
+          final noteReading = normalizeAgentReading(note.reading);
           final tokenReading = token?.reading ?? '';
           if (noteReading.isNotEmpty &&
               tokenReading.isNotEmpty &&
-              _normalizeReading(tokenReading) != noteReading) {
+              normalizeAgentReading(tokenReading) != noteReading) {
             errors.add('词注 ${note.surface} 的读音与 UniDic 不一致');
           } else if (noteReading.isNotEmpty &&
               tokenReading.isEmpty &&
               !note.citationIds.any((id) {
                 final snippet = citationMap[id]?.snippet ?? '';
                 return snippet.isNotEmpty &&
-                    _normalizeReading(snippet).contains(noteReading);
+                    normalizeAgentReading(snippet).contains(noteReading);
               })) {
             errors.add('词注 ${note.surface} 的读音没有依据');
           }
@@ -293,7 +302,24 @@ class AgentValidator {
   }
 }
 
-AgentTokenEvidence? _resolveWordToken(
+/// Token ids that overlap each quote. Shared by validation and salvage so a
+/// free grammar note keeps the same citation scope after a failed validation.
+Map<String, Set<String>> agentQuoteTokenIds({
+  required List<AgentQuoteRef> quotes,
+  required AgentEvidenceBundle evidence,
+}) {
+  return <String, Set<String>>{
+    for (final quote in quotes)
+      quote.id: <String>{
+        for (final source in evidence.sources)
+          if (source.id == quote.sourceId)
+            for (final token in source.tokens)
+              if (token.start < quote.end && token.end > quote.start) token.id,
+      },
+  };
+}
+
+AgentTokenEvidence? resolveAgentWordToken(
   AgentWordNote note,
   String quoteId,
   Map<String, AgentTokenEvidence> tokenMap,
@@ -316,7 +342,7 @@ AgentTokenEvidence? _resolveWordToken(
 /// UniDic readings are commonly katakana while a model writes hiragana (or
 /// vice versa). Compare normalized kana, not raw code units, so a correct
 /// reading is never reported as "inconsistent with UniDic".
-String _normalizeReading(String value) {
+String normalizeAgentReading(String value) {
   return katakanaToHiragana(
     normalizeLookupText(value),
   ).replaceAll(RegExp(r'[\s・]'), '');

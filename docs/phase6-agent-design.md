@@ -453,16 +453,18 @@ coverage → reasoning → validating → done | error | cancelled`。
     `はず`、`わけ`、`ことになる`、`ようにする` 等），按 token 序列/lemma 最长匹配
     优先，重叠模式去重，用源文本子串查词典。
   - 不做无界 n-gram；不做全词典遍历。
-- 每目标按**用户词典顺序**携带全部选中词典查询；初始 breadth 每个 target 每本
-  词典最多 1 条，摘要 ≤400 字符；去重 `(dictionaryId, entryKey)`；记录
-  `dictionaryOrder`。2026-11-06 起 citation 发放的 group 起点按 target/query
-  序号轮转，避免第一本词典独占预算（详见下方 breadth-first 条目）。
+- 每目标按**用户词典顺序**携带全部选中词典查询；初始 breadth 每个内容词/语法
+  模式 target **全局只取 1 条** citation（不是每本词典各 1 条），摘要 ≤400
+  字符；去重 `(dictionaryId, entryKey)`；记录 `dictionaryOrder`。2026-11-06 起
+  citation 发放的 group 起点按 target/query 序号轮转，避免第一本词典独占预算。
+  2026-11-08 P0：默认不把助詞/助動詞等功能词加入 citation target；它们的
+  token 证据和语法模式 citation 已足够。只有 `enableDictionaryFanOut` 的
+  per-dictionary 分析仍保留每本词典 1 条 breadth。
   2026-11-06 P0 起 depth 默认关闭：第 2/3 条只在显式多义/coverage 补查时按需
   获取，不再由初始 breadth 自动补齐。
   查词递进：所有 target 先 exact；只有 exact 仍无 citation 的 target 才进入
   prefix，prefix 仍无 citation 才进入 suffix/incremental。已经命中的 target
-  不重复跑后续模式；某个 target/词典达到每词每典上限时只是不再为该
-  target/词典发查询。取消会中断运行。`AgentLimits` 同时控制 UI 的
+  不重复跑后续模式；取消会中断运行。`AgentLimits` 同时控制 UI 的
   “已检索 N / 上限 M”。
 - `CitationRegistry.issue(toolCallId, dictionary, entryKey, headword, snippet,
   sourceSpan)` 发放 `source-N`；模型只看到 `source-N`，不能自造。
@@ -478,22 +480,27 @@ coverage → reasoning → validating → done | error | cancelled`。
 - 证据包只含：token ID/文本/读音/词性/offset、语法模式、清洗后的 citation 摘要；
   **不含原始 HTML、路径、MDD 资源、音频**。
 - 2026-11-03 性能/证据质量增量：`EvidenceBuilder` 采用 **breadth-first** 分配。
-  第一轮每个 target 每本词典只取 1 条 citation，避免前几个词把全局 citation
-  预算吃满；2026-11-06 P0 起 depth 默认关闭，只有显式多义/coverage 补查才补
-  第 2/3 条（`AgentLimits.enableDepthPass`，默认 false）。短文本（selected
-  target < `shortTextTargetThreshold`）的动态上限为
-  `contentTargetCount × dictionaryCount`，不再允许 1 句文本预取 60 条。
-  标点/符号不进入 target 和查词列表；内容词排在 pattern/功能词之前。
+  2026-11-08 P0 起默认 breadth 为每个内容词/语法模式 **全局 1 条**；不再按
+  词典数线性膨胀。短文本（内容词+模式 target < `shortTextTargetThreshold`）的
+  有效上限为 `content/pattern targets + coverageCitationReserve`（默认 6，最高
+  60），长文本上限为 60。2026-11-06 P0 起 depth 默认关闭，只有显式多义/
+  coverage 补查才补第 2/3 条（`AgentLimits.enableDepthPass`，默认 false）。
+  标点/符号不进入 target 和查词列表；功能词默认不查 citation。
   2026-11-06 P0：breadth/depth 的词典 group 顺序按 target 序号轮转起点，coverage
-  补充检索按 query 序号轮转，避免第一本词典按 `dictionary_order` 独占预算；
-  轮转仍遵守每词每典上限和用户词典顺序展示。选中但最终 0 条 citation 且没有查询
-  错误的词典写入 `AgentRunResult.warnings`，不静默隐藏。
+  补充检索按 query 序号轮转，避免第一本词典按 `dictionary_order` 独占预算。
+  2026-11-08 P0：target 在内容词/模式内部按 quote 轮转，第一句不再先吃掉全部
+  120 个 target 或 60 条 citation；coverage 补充检索受本次 run 的有效 citation
+  上限约束，不再从短文本上限直接跳到全局 60。选中但最终 0 条 citation 且没有
+  查询错误的词典写入 `AgentRunResult.warnings`，不静默隐藏。
   Coverage 的 MISSING 若为 `sense`/`usage`/`example`，补充查词允许每本词典取
   2 条（显式多义信号）；`word`/`grammar`/`reading` 仍只取 1 条。
   同一模式的多个 target 查询通过 `BatchLookupPort` 合并为一次 MDict worker 往返
   （worker 内部仍顺序执行，上限见 `AgentLimits.lookupBatchSize`）。主分析 prompt
   使用紧凑投影，只发送选中的 OCR variant 文本一次，evidence 不重复 source text，
-  也不发送 `lookup_candidates`/`tool_call_id`/内部 budget。
+  也不发送 `lookup_candidates`/`tool_call_id`/内部 budget。2026-11-08 P1 技术项：
+  token 证据最多 `maxPromptTokenEntries=600` 行（优先 cited > pattern token >
+  content；未引用功能词不发送）；每词典 profile ≤2000 字符、总计 ≤6000
+  字符；这些组件上限与 source 6000、citation 60、snippet 240 共同构成输入预算。
 - 重复 token（如「は」出现 10 次）只查一次，但保留所有 span 映射；输出 token 级
   证据表供 UI 展开。
 - UniDic 未配置/分词失败：不伪造 token；严格模式提示“无法进行结构/语法校验”，
@@ -506,8 +513,10 @@ coverage → reasoning → validating → done | error | cancelled`。
   源文本脚本。假名按日语处理；拉丁/韩文/西里尔/泰文/阿拉伯文/希腊文等明确
   非日语脚本跳过 UniDic，设置 `structureUnavailable=true`，只保留有界
   raw-surface 查词，分析 prompt 禁止 WORD/GRAMMAR/structure 声明。Han-only
-  文本在中文与日语汉字之间歧义，暂按日语处理；没有非日语 tokenizer 前不能
-  声称支持这些语言的分词/语法分析。
+  文本在中文与日语汉字之间歧义，暂按日语处理；2026-11-08 P1 技术项增加
+  `SCRIPT AMBIGUOUS` prompt：不得把 UniDic 读音/词界/日语语法当作确定事实，
+  若源文本是中文则翻译并把结构声明标为 UNRESOLVED。没有非日语 tokenizer 前
+  不能声称支持这些语言的分词/语法分析。
 
 ### 6.3.1 覆盖审查（2026-10-31 反馈 F7，Wave 3 已实现）
 
@@ -532,9 +541,11 @@ pattern id + 清洗 citation 摘要，保留 offset 与 entry_key/matched_key，
 
 - 未达上限（流程 A）：按缺失关键词补充检索，仍按 exact→prefix→suffix→
   incremental；**某模式无新增也继续下一个模式**，直到上限或无 eligible target。
-- 已达上限（流程 B）：本地先验证同词典、摘要大部分重合（字符 bigram 重合或包含
-  关系），保留信息密度较高（摘要更长）的条目并删除其余重复 citation 腾出槽位，
-  再走流程 A；模型不能单独决定删除，跨词典或多个组共享的 keep 不会被删。
+- 已达本次有效上限（流程 B）：本地先验证同词典、摘要大部分重合（字符 bigram
+  重合或包含关系），保留信息密度较高（摘要更长）的条目并删除其余重复 citation
+  腾出槽位，再走流程 A；模型不能单独决定删除，跨词典或多个组共享的 keep 不会
+  被删。2026-11-08 P0 起 `remainingSlots` 基于
+  `evidence.budget.maxCitations`，不再默认使用全局 60。
 - 每个用户请求最多一次覆盖审查 + 一次回退查词（`coverageFallbackUsed`）；没有
   可验证缺口/重复时直接进入 reasoning，不循环。
 - 2026-11-06 P0 自适应触发：只看**内容词**（`Token.isContentWord`）的 citation
@@ -550,6 +561,10 @@ pattern id + 清洗 citation 摘要，保留 offset 与 entry_key/matched_key，
   也跳过。补充查词每个缺失 query 每本词典只取 1 条，避免 coverage 自己把
   citation 预算重新填满。只有 sense/usage/example 等“同一词但需要更多义项”的
   MISSING 才允许在已覆盖词上继续查。
+- 2026-11-08 P0：coverage 补充检索只能使用本次 run 的有效 citation 上限
+  （`evidence.budget.maxCitations`）；短文本上限为 content/pattern targets +
+  `coverageCitationReserve`（默认 6，最高 60）。这阻止了“1 句文本初始 6 条、
+  coverage 再补到 60”的路径。
 - 2026-11-06 复合词补查（Phase 1a）：允许对源文本中连续的复合词/固定搭配整体
   发出 `MISSING`（例如 `ところが` 而不是 `ところ`+`が`）。未知 `kind=word`
   query 除现有可追溯性外，还必须是源文本连续子串、不含换行，且至少一处匹配
@@ -662,8 +677,10 @@ substring 校验。`literal` 字段由编排器按 quote 填充，模型不得�
 
 `AgentValidator` 必须做：
 
-1. 标签解析结果/DTO 校验；未知字段/越界 ID 拒绝；标签缺失或标签块完整性失败时
-   先做一次格式纠错，仍失败再进入校验/salvage。
+1. 标签解析结果/DTO 校验；未知字段/越界 ID 拒绝。解析器允许部分结果（只有译文
+   或只有逐句）；解析/校验失败后**先本地 cleaning/salvage**，清洗后仍有非空译文
+   或至少一个非空逐句理解（或独立 `[NO_ANALYSIS]`）时直接采用，不再调用格式修复。
+   只有清洗后无可用内容时才做一次格式纠错/失败。
 2. citation 存在、属于本次 run、`dictionaryId` 在会话选择内；伪造/越界只按普通
    文本显示，不导航。`citations_used` 只作模型提示，最终由编排器从各 claim 的
    `citation_ids` 重新汇总，不信任模型自报的来源列表。
@@ -679,11 +696,15 @@ substring 校验。`literal` 字段由编排器按 quote 填充，模型不得�
    直接复制所引用 token 的 reading，token 无读音时留空；否则移除或标 `未验证`。
 6. 词典顺序：证据按 `dictionaryOrder` 排序；提示词要求模型按序引用；UI 渲染层再次
    排序，保证“输出顺序严格按用户设置”。
-7. 失败时做一次修复调用；**格式修复使用 small model + 紧凑 prompt**（只发
-   `availableIds`、previous output、validation errors，不重发 input/evidence/
-   profiles；`maxTokens` 按 raw output 长度计算），**语言修复使用 complex model
-   + 紧凑 prompt**（不重发完整 evidence）。仍失败则返回部分结果 + 可见的
-   `validation_errors`，严格模式拒绝无依据部分，不静默删改。
+7. 失败顺序：**先本地 cleaning/salvage；清洗结果达到可用标准时直接采用，不再
+   调用格式修复**。只有清洗后不可用才做一次修复调用；**格式修复使用 small model
+   + 紧凑 prompt**（只发 `availableIds`、previous output、validation errors，不
+   重发 input/evidence/profiles；`maxTokens` 按 raw output 长度计算），**语言修复
+   使用 complex model + 紧凑 prompt**（不重发完整 evidence）。仍失败且清洗后无
+   可用内容时才返回错误。清洗后的结果保留 `validation.valid=false` 和原始错误，
+   但 `validation.usable=true`；UI 不再显示“部分内容未通过校验”类格式 warning。
+   语言不一致、截断/依据上限、覆盖审查/词典/无依据 warning 仍显示。严格模式仍
+   拒绝无依据 claim，但拒绝/转为 unresolved 后只要还有译文或逐句理解就采用。
 8. `NO_ANALYSIS`：若 analysis 带 `no_analysis_reason`，只允许零
    translation/segments/interpretations/supplements；validator 直接返回有效，
    语言后校验检查 reason，UI 显示原因与证据。
@@ -1001,7 +1022,13 @@ P6.7 历史复用上述表，不新增图片字段：`agent_runs.result_json` �
   `<<<RIKAI_END id>>>` marker），词注/词典事实解释不进入批量请求、继续本地
   RUBY；响应必须按 section 独立解析和逐字符 diff，单个 marker 损坏或 diff 失败
   只降级该 section，绝不整批回退（T-137）。只有 provider 错误、空响应、批量响应
-  完全缺失 marker 或 `maxRichTextChars` 超限才允许整批回退。异步富文本后处理运行期间，会话上方
+  完全缺失 marker 或 `maxRichTextChars` 超限才允许整批回退。**2026-11-08 P1
+  技术项**：`maxRichTextChars` 降到 12,000，`richTextMaxTokens=16,000`（批量与
+  单 section 共用），避免“20k 字符 + 12k 输出上限”截断；格式模型只输出
+  BOLD/UNDERLINE 时，若仅有个别未闭合/错序/重复的 style tag，本地先删除坏标签
+  并保留其余合法标签与原文，RUBY/YOMI 畸形仍回退本地 RUBY 基线；接受/拒绝/
+  修复 section 计数写入 `AgentRunTelemetry`；富文本 prompt 的解释语言跟随
+  `AgentResponseLanguage`，不再固定写“Chinese explanations”。异步富文本后处理运行期间，会话上方
   显示可关闭的绿色横幅“界面美化正在进行中…”；完成、失败或取消后自动消失。
   关闭横幅只隐藏当前 run 的提示，不取消后处理、不影响已显示结果。
   读数转换是标签感知的：包住已有 `reading【surface】` 时只显示一份读音，

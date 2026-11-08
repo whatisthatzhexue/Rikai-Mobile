@@ -14,13 +14,13 @@ const DictionaryInfo _dictionary = DictionaryInfo(
 const LookupEntry _alpha = LookupEntry(
   matchedKey: 'Alpha',
   headword: 'Alpha',
-  html: '<div>first definition</div>',
+  html: '<div><h1>Alpha</h1><p>first definition</p></div>',
 );
 
 const LookupEntry _beta = LookupEntry(
   matchedKey: 'Beta',
   headword: 'Beta',
-  html: '<div>second definition</div>',
+  html: '<div><h1>Beta</h1><p>second definition</p></div>',
 );
 
 void main() {
@@ -78,7 +78,7 @@ void main() {
                   LookupEntry(
                     matchedKey: '愛',
                     headword: '00044',
-                    html: '<div>definition</div>',
+                    html: '<div></div>',
                   ),
                 ],
               ),

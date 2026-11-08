@@ -529,12 +529,20 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     AgentRichTextOutputs rich,
   ) {
     final updated = result.copyWithRichText(rich);
-    if (rich.formattingCalls <= 0) return updated;
     return updated.copyWithTelemetry(
       updated.telemetry.copyWith(
         llmCalls: updated.telemetry.llmCalls + rich.formattingCalls,
         formattingCalls:
             updated.telemetry.formattingCalls + rich.formattingCalls,
+        formattingAcceptedSections:
+            updated.telemetry.formattingAcceptedSections +
+            rich.acceptedSections,
+        formattingRejectedSections:
+            updated.telemetry.formattingRejectedSections +
+            rich.rejectedSections,
+        formattingRepairedSections:
+            updated.telemetry.formattingRepairedSections +
+            rich.repairedSections,
       ),
     );
   }

@@ -77,6 +77,7 @@ void main() {
     final drawer = tester.widget<Drawer>(find.byType(Drawer));
     final drawerShape = drawer.shape as RoundedRectangleBorder;
     expect(drawerShape.borderRadius, BorderRadius.zero);
+    expect(find.text('可扩充词典库的日语阅读工具'), findsOneWidget);
     expect(find.text('自定义字体'), findsOneWidget);
     expect(find.text('帮助'), findsOneWidget);
     expect(find.text('著作权信息'), findsOneWidget);

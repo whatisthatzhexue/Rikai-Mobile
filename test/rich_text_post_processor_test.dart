@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
 import 'package:rikai_mobile/core/utils/rich_text_tags.dart';
 import 'package:rikai_mobile/services/agent/providers/fake_provider.dart';
 import 'package:rikai_mobile/services/agent/rich_text_post_processor.dart';
@@ -579,8 +580,41 @@ void main() {
     expect(result.taggedText, isNull);
   });
 
-  test('rejects an unclosed formatting tag', () async {
-    final provider = FakeProvider(responseText: '[BOLD]何卒宜しくお願いします。');
+  test(
+    'repairs an unclosed style tag instead of discarding the section',
+    () async {
+      final provider = FakeProvider(responseText: '[BOLD]$_plain');
+      final result = await RichTextPostProcessor(
+        llm: provider,
+        model: 'small',
+      ).process(_plain);
+
+      expect(result.accepted, isTrue);
+      expect(result.rejectionReason, 'tags_repaired');
+      expect(result.taggedText, _plain);
+    },
+  );
+
+  test(
+    'keeps valid style tags when an orphan closing tag is present',
+    () async {
+      final provider = FakeProvider(
+        responseText: '[BOLD]何卒[/BOLD][/UNDERLINE]宜しくお願いします。',
+      );
+      final result = await RichTextPostProcessor(
+        llm: provider,
+        model: 'small',
+      ).process(_plain);
+
+      expect(result.accepted, isTrue);
+      expect(result.rejectionReason, 'tags_repaired');
+      expect(result.taggedText, contains('[BOLD]何卒[/BOLD]'));
+      expect(stripRichTextTags(result.taggedText!), _plain);
+    },
+  );
+
+  test('malformed RUBY still falls back instead of guessing', () async {
+    final provider = FakeProvider(responseText: '[RUBY=なにとぞ]何卒宜しくお願いします。');
     final result = await RichTextPostProcessor(
       llm: provider,
       model: 'small',
@@ -588,5 +622,20 @@ void main() {
 
     expect(result.accepted, isFalse);
     expect(result.rejectionReason, 'malformed_tags');
+  });
+
+  test('formatter prompt follows the selected explanation language', () async {
+    final provider = FakeProvider(responseText: _tagged);
+    await RichTextPostProcessor(
+      llm: provider,
+      model: 'small',
+      responseLanguage: AgentResponseLanguage.english,
+    ).process(_plain, detailed: true);
+
+    final prompt = provider.requests.single.messages
+        .map((message) => message.text)
+        .join('\n');
+    expect(prompt, contains('English explanations'));
+    expect(prompt, isNot(contains('Chinese explanations')));
   });
 }

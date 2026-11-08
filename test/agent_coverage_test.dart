@@ -243,6 +243,79 @@ void main() {
     expect(text, isNot(contains('"id":"t2"')));
   });
 
+  test('analysis prompt drops uncited function words', () {
+    final request = buildAnalysisRequest(
+      model: 'large',
+      mode: AgentMode.strict,
+      responseLanguage: AgentResponseLanguage.chinese,
+      input: _input,
+      evidence: _evidenceFor('何卒は', <AgentTokenEvidence>[
+        _token('t1', '何卒', 0, 2),
+        const AgentTokenEvidence(
+          id: 't2',
+          surface: 'は',
+          pos: '助詞',
+          start: 2,
+          end: 3,
+        ),
+      ]),
+      quotes: const <AgentQuoteRef>[],
+      dictionaryProfiles: const <String>[],
+      userRequest: '解释这句话',
+    );
+    final text = request.messages.map((message) => message.text).join('\n');
+    expect(text, contains('"id":"t1"'));
+    expect(text, isNot(contains('"id":"t2"')));
+  });
+
+  test('analysis prompt bounds token rows and profile Markdown', () {
+    final request = buildAnalysisRequest(
+      model: 'large',
+      mode: AgentMode.strict,
+      responseLanguage: AgentResponseLanguage.chinese,
+      input: _input,
+      evidence: _evidenceFor('何卒宜しく今日', <AgentTokenEvidence>[
+        _token('t1', '何卒', 0, 2),
+        _token('t2', '宜しく', 2, 5),
+        _token('t3', '今日', 5, 7),
+      ]),
+      quotes: const <AgentQuoteRef>[],
+      dictionaryProfiles: <String>['A' * 20, 'B' * 20],
+      userRequest: '解释这句话',
+      maxTokenEntries: 2,
+      maxProfileCharsPerDictionary: 5,
+      maxProfileTotalChars: 8,
+    );
+    final text = request.messages.map((message) => message.text).join('\n');
+    expect(text, contains('"id":"t1"'));
+    expect(text, contains('"id":"t2"'));
+    expect(text, isNot(contains('"id":"t3"')));
+    expect(text, contains('AAAAA…'));
+    expect(text, isNot(contains('A' * 20)));
+  });
+
+  test('coverage prompt drops uncited function words', () {
+    final request = buildCoverageRequest(
+      model: 'small',
+      language: AgentResponseLanguage.chinese,
+      input: _input,
+      evidence: _evidenceFor('何卒は', <AgentTokenEvidence>[
+        _token('t1', '何卒', 0, 2),
+        const AgentTokenEvidence(
+          id: 't2',
+          surface: 'は',
+          pos: '助詞',
+          start: 2,
+          end: 3,
+        ),
+      ]),
+      userRequest: '解释这句话',
+    );
+    final text = request.messages.map((message) => message.text).join('\n');
+    expect(text, contains('"id":"t1"'));
+    expect(text, isNot(contains('"id":"t2"')));
+  });
+
   test('coverage prompt documents compound MISSING expansion', () {
     final prompt = coverageSystemPrompt(AgentResponseLanguage.chinese);
     expect(prompt, contains('contiguous compound or fixed collocation'));

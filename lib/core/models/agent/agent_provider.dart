@@ -12,6 +12,18 @@ String? agentBaseUrlError(String raw) {
   return null;
 }
 
+/// Adds `(1)`, `(2)`, … to a quick-setup model name when it already exists.
+String uniqueProviderDisplayName(String base, Iterable<String> existing) {
+  final trimmed = base.trim().isEmpty ? 'deepseek-chat' : base.trim();
+  final names = existing.map((name) => name.trim()).toSet();
+  if (!names.contains(trimmed)) return trimmed;
+  var index = 1;
+  while (names.contains('$trimmed($index)')) {
+    index++;
+  }
+  return '$trimmed($index)';
+}
+
 enum AgentProviderKind {
   openAiCompatible('openai_compatible'),
   anthropic('anthropic');

@@ -683,6 +683,19 @@ class AgentUiStrings {
     'モデルが未設定です。DeepSeek、Claude、その他の OpenAI 互換サービスを追加してください。',
   );
   String get addProvider => _pick('添加模型服务', 'Add model service', 'モデルサービスを追加');
+  String get quickConfig => _pick('快捷配置', 'Quick setup', 'クイック設定');
+  String get quickConfigTitle => _pick('快捷配置', 'Quick setup', 'クイック設定');
+  String get quickConfigProvider => _pick('运营商', 'Provider', 'プロバイダー');
+  String quickConfigAutoFilled(String baseUrl, String model) => _pick(
+    '接口地址：$baseUrl；快速/复杂模型：$model',
+    'API address: $baseUrl; fast/complex model: $model',
+    'API アドレス：$baseUrl、高速/複雑モデル：$model',
+  );
+  String get quickConfigModelsEditable => _pick(
+    '连接失败不是 API key 问题，可以手动修改快速模型和复杂模型。',
+    'The failure is not an API-key problem; you can edit the fast and complex models.',
+    'API キーの問題ではないため、高速/複雑モデルを手動で変更できます。',
+  );
   String get editProvider =>
       _pick('编辑模型服务', 'Edit model service', 'モデルサービスを編集');
   String get deleteProviderTitle =>
@@ -720,9 +733,9 @@ class AgentUiStrings {
     '空欄を推奨（既定値を使用）',
   );
   String get providerMaxOutputTokensHelp => _pick(
-    'OpenAI-compatible 建议留空，由服务端/模型决定 max_tokens；仅当服务要求该参数或需要限制输出时填写。Anthropic 留空时使用分析请求默认值。填写后作为该服务的 max_tokens，推理模型请避免过小。',
-    'For OpenAI-compatible services, leave this blank and let the provider/model decide max_tokens; set it only if the service requires it or you need to limit output. For Anthropic, blank uses the analysis default. A value becomes this service\'s max_tokens; avoid very small values for reasoning models.',
-    'OpenAI 互換サービスでは空欄を推奨します（max_tokens はサービス/モデルが決定）。サービスが必須とする場合や出力を制限したい場合のみ入力してください。Anthropic で空欄の場合は解析リクエストの既定値を使用します。入力値はこのサービスの max_tokens になり、推論モデルでは小さすぎる値に注意してください。',
+    'OpenAI-compatible 协议的模型，max_tokens 建议留空，由服务端/模型决定；仅当服务要求该参数或需要限制输出时填写。Anthropic 留空时使用分析请求默认值。填写后作为该服务的 max_tokens，推理模型请避免过小。',
+    'For OpenAI-compatible models, leave max_tokens blank and let the provider/model decide; set it only if the service requires it or you need to limit output. For Anthropic, blank uses the analysis default. A value becomes this service\'s max_tokens; avoid very small values for reasoning models.',
+    'OpenAI 互換プロトコルのモデルでは max_tokens を空欄にし、サービス/モデルに任せることを推奨します。サービスが必須とする場合や出力を制限したい場合のみ入力してください。Anthropic で空欄の場合は解析リクエストの既定値を使用します。入力値はこのサービスの max_tokens になり、推論モデルでは小さすぎる値に注意してください。',
   );
   String get providerMaxOutputTokensInvalid => _pick(
     '请输入正整数，或留空使用默认',
@@ -734,8 +747,13 @@ class AgentUiStrings {
   String get providerApiKey => _pick('接口密钥（API Key）', 'API key', 'API キー');
   String get providerApiKeyKeep =>
       _pick('留空则不修改', 'Leave blank to keep', '空欄なら変更しません');
+  String get providerApiKeyReuseHint => _pick(
+    '若之前已填写过 API key 且 API key 仍然有效，无需再填写 API key。',
+    'If a valid API key was already saved, you do not need to enter it again.',
+    '有効な API キーが保存済みの場合、再入力は不要です。',
+  );
   String get providerTestConnection =>
-      _pick('测试连接', 'Test connection', '接続テスト');
+      _pick('测试快速模型连接', 'Test fast-model connection', '高速モデル接続テスト');
   String get providerTesting => _pick('正在测试…', 'Testing…', 'テスト中…');
   String providerTestSuccess(int latencyMs, String model) => _pick(
     '连接成功 · ${latencyMs}ms · $model',

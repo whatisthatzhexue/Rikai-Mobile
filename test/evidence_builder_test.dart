@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/agent_input.dart';
 import 'package:rikai_mobile/core/models/agent/agent_limits.dart';
+import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
 import 'package:rikai_mobile/core/models/agent/agent_tool.dart';
 import 'package:rikai_mobile/core/models/dict_info.dart';
 import 'package:rikai_mobile/core/models/lookup_match_mode.dart';
@@ -254,28 +255,29 @@ AgentSourceInput _source(String text) =>
 
 void main() {
   test(
-    'builds token citations, dedupes entries and sorts by dictionary order',
+    'builds one citation per target and sorts by dictionary order',
     () async {
       final citations = CitationRegistry();
       final builder = EvidenceBuilder(
-        tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0), _token('何卒', 0)]),
-        lookupPort: _FakeLookup(),
+        tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0), _token('宜しく', 3)]),
+        lookupPort: _AllHitsLookup(1),
         grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
         citations: citations,
       );
 
       final bundle = await builder.build(
-        sources: <AgentSourceInput>[_source('何卒何卒')],
+        sources: <AgentSourceInput>[_source('何卒宜しく')],
         dictionaries: const <DictionaryInfo>[_dictionaryB, _dictionaryA],
       );
 
+      // Target 0 starts at dictionary A (order 0), target 1 starts at B.
       expect(bundle.citations, hasLength(2));
       expect(bundle.citations.first.dictionaryOrder, 0);
       expect(bundle.citations.last.dictionaryOrder, 1);
       expect(bundle.sources.single.tokens, hasLength(2));
-      expect(bundle.sources.single.tokens.first.citationIds, hasLength(2));
-      expect(bundle.sources.single.tokens.last.citationIds, hasLength(2));
-      expect(bundle.budget.uniqueTargets, 1);
+      expect(bundle.sources.single.tokens.first.citationIds, hasLength(1));
+      expect(bundle.sources.single.tokens.last.citationIds, hasLength(1));
+      expect(bundle.budget.uniqueTargets, 2);
       expect(bundle.truncated, isFalse);
     },
   );
@@ -557,28 +559,25 @@ void main() {
     expect(result['何卒'], hasLength(1));
   });
 
-  test(
-    'breadth grants one entry per dictionary and skips later modes',
-    () async {
-      final lookup = _AllHitsLookup(3);
-      final builder = EvidenceBuilder(
-        tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
-        lookupPort: lookup,
-        grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
-        citations: CitationRegistry(),
-        limits: const AgentLimits(maxEntriesPerDictionary: 3),
-      );
+  test('breadth grants one entry per target and skips later modes', () async {
+    final lookup = _AllHitsLookup(3);
+    final builder = EvidenceBuilder(
+      tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
+      lookupPort: lookup,
+      grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+      citations: CitationRegistry(),
+      limits: const AgentLimits(maxEntriesPerDictionary: 3),
+    );
 
-      final bundle = await builder.build(
-        sources: <AgentSourceInput>[_source('何卒')],
-        dictionaries: const <DictionaryInfo>[_dictionaryA, _dictionaryB],
-      );
+    final bundle = await builder.build(
+      sources: <AgentSourceInput>[_source('何卒')],
+      dictionaries: const <DictionaryInfo>[_dictionaryA, _dictionaryB],
+    );
 
-      expect(lookup.modes, <LookupMatchMode>[LookupMatchMode.exact]);
-      expect(bundle.citations, hasLength(2));
-      expect(bundle.budget.maxCitations, 2);
-    },
-  );
+    expect(lookup.modes, <LookupMatchMode>[LookupMatchMode.exact]);
+    expect(bundle.citations, hasLength(1));
+    expect(bundle.budget.maxCitations, 7);
+  });
 
   test('cancellation stops between lookup modes', () async {
     var cancelled = false;
@@ -596,12 +595,7 @@ void main() {
       lookupPort: lookup,
       grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
       citations: CitationRegistry(),
-      limits: const AgentLimits(
-        maxEntriesPerDictionary: 10,
-        // Keep the global cap so the run reaches the next mode and checks
-        // cancellation instead of stopping at the short-text cap.
-        shortTextTargetThreshold: 0,
-      ),
+      limits: const AgentLimits(maxEntriesPerDictionary: 10),
     );
 
     await expectLater(
@@ -651,10 +645,10 @@ void main() {
         dictionaries: const <DictionaryInfo>[_dictionaryA, _dictionaryB],
       );
 
-      // 3 content targets × 2 dictionaries × one breadth entry = 6.
+      // One breadth entry per content target; the reserve is only for coverage.
       expect(bundle.citations.length, lessThanOrEqualTo(15));
-      expect(bundle.citations, hasLength(6));
-      expect(bundle.budget.maxCitations, 6);
+      expect(bundle.citations, hasLength(3));
+      expect(bundle.budget.maxCitations, 9);
       expect(bundle.truncated, isFalse);
       // Exact found the content words, so no prefix/suffix/incremental scans.
       expect(
@@ -671,13 +665,13 @@ void main() {
         final token = bundle.sources.single.tokens.firstWhere(
           (token) => token.surface == surface,
         );
-        expect(token.citationIds, hasLength(2));
+        expect(token.citationIds, hasLength(1));
       }
     },
   );
 
   test(
-    'rotates the first dictionary per target so the citation budget is shared',
+    'rotates the primary dictionary per target so dictionaries are shared',
     () async {
       final dictionaries = <DictionaryInfo>[
         for (var index = 0; index < 5; index++)
@@ -714,11 +708,13 @@ void main() {
           ifAbsent: () => 1,
         );
       }
-      expect(bundle.citations, hasLength(50));
+      expect(bundle.citations, hasLength(10));
+      // 10 content targets + the coverage reserve, not 10 × 5 dictionaries.
+      expect(bundle.budget.maxCitations, 16);
       for (final dictionary in dictionaries) {
         expect(
           counts[dictionary.id],
-          10,
+          2,
           reason: '${dictionary.id} should receive a fair share of citations',
         );
       }
@@ -732,6 +728,51 @@ void main() {
     },
   );
 
+  test(
+    'interleaves targets across quotes before front-loading a sentence',
+    () async {
+      final lookup = _AllHitsLookup(1);
+      final builder = EvidenceBuilder(
+        tokenizePort: _FakeTokenize(<Token>[
+          _tokenWithPos('何卒', '名詞', 0),
+          _tokenWithPos('宜しく', '形容詞', 2),
+          _tokenWithPos('今日', '名詞', 6),
+          _tokenWithPos('天気', '名詞', 8),
+        ]),
+        lookupPort: lookup,
+        grammar: GrammarPatternCatalog(const <GrammarPattern>[]),
+        citations: CitationRegistry(),
+      );
+
+      final bundle = await builder.build(
+        sources: <AgentSourceInput>[_source('何卒宜しく。今日天気。')],
+        dictionaries: const <DictionaryInfo>[_dictionaryA, _dictionaryB],
+        quotes: const <AgentQuoteRef>[
+          AgentQuoteRef(
+            id: 'q1',
+            sourceId: 'src-1',
+            start: 0,
+            end: 5,
+            text: '何卒宜しく',
+            origin: AgentQuoteOrigin.userText,
+          ),
+          AgentQuoteRef(
+            id: 'q2',
+            sourceId: 'src-1',
+            start: 6,
+            end: 10,
+            text: '今日天気',
+            origin: AgentQuoteOrigin.userText,
+          ),
+        ],
+      );
+
+      // q1 first target, q2 first target, then q1/q2 second targets.
+      expect(lookup.queries, <String>['何卒', '今日', '宜しく', '天気']);
+      expect(bundle.citations, hasLength(4));
+    },
+  );
+
   test('depth pass is opt-in and can add extra senses', () async {
     final builder = EvidenceBuilder(
       tokenizePort: _FakeTokenize(<Token>[_token('何卒', 0)]),
@@ -740,7 +781,6 @@ void main() {
       citations: CitationRegistry(),
       limits: const AgentLimits(
         maxEntriesPerDictionary: 3,
-        shortTextTargetThreshold: 0,
         enableDepthPass: true,
       ),
     );

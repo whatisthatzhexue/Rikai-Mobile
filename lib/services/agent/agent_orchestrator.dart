@@ -8,11 +8,13 @@ import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
 import '../../core/models/agent/agent_limits.dart';
 import '../../core/models/agent/agent_ocr.dart';
+import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/agent/agent_quote.dart';
 import '../../core/models/agent/agent_tool.dart';
 import '../../core/models/dict_info.dart';
 import '../../core/utils/rich_text_tags.dart';
+import '../../core/utils/script_language.dart';
 import 'agent_coverage_parser.dart';
 import 'agent_intent.dart';
 import 'analysis_merge.dart';
@@ -323,11 +325,13 @@ class AgentOrchestrator {
           await evidenceBuilder.build(
             sources: envelope.sources,
             dictionaries: request.dictionaries,
+            quotes: quotes,
             maxSourceChars: maxSourceChars,
             isCancelled: () => cancellation?.isCancelled == true,
             onProgress: onEvidenceProgress,
           );
       if (cachedEvidence != null) {
+        _citations.restore(cachedEvidence.citations);
         onEvidenceProgress?.call(cachedEvidence.citations.length);
       } else if (cacheKey != null && evidence.dictionaryIssues.isEmpty) {
         evidenceCache!.put(cacheKey, evidence);
@@ -343,6 +347,15 @@ class AgentOrchestrator {
       }
       if (evidence.structureUnavailable) {
         profiles.add(structureUnavailableInstruction());
+      } else if (envelope.sources.any((source) {
+        final text = source.isImage
+            ? source.selectedVariant?.text ?? ''
+            : source.text;
+        return isHanOnlyAmbiguous(text);
+      })) {
+        // Keep the safety notice before long profile Markdown, since the
+        // prompt budget truncates profiles from the end.
+        profiles.insert(0, hanOnlyAmbiguousInstruction());
       }
 
       final warnings = <String>[];
@@ -446,6 +459,14 @@ class AgentOrchestrator {
               mode: request.mode,
               expectedSourceId: primary?.id,
             );
+            if (!validation.valid && _hasUsableAnalysis(analysis)) {
+              validation = AgentValidationResult(
+                valid: false,
+                usable: true,
+                errors: validation.errors,
+                citationsUsed: validation.citationsUsed,
+              );
+            }
           }
           if (fanOut.partial) {
             warnings.add(agentFanOutPartialWarning(uiLanguage));
@@ -488,6 +509,7 @@ class AgentOrchestrator {
             onRichTextFormattingChanged: onRichTextFormattingChanged,
             notify: notify,
             uiLanguage: uiLanguage,
+            responseLanguage: request.responseLanguage,
             telemetry: telemetry,
           );
           checkCancelled();
@@ -512,6 +534,9 @@ class AgentOrchestrator {
         dictionaryProfiles: profiles,
         userRequest: requestedUser,
         intentHint: intentHint,
+        maxTokenEntries: limits.maxPromptTokenEntries,
+        maxProfileCharsPerDictionary: limits.maxProfileCharsPerDictionary,
+        maxProfileTotalChars: limits.maxProfileTotalChars,
       );
       var raw = await _collect(
         llm,
@@ -562,6 +587,56 @@ class AgentOrchestrator {
       );
 
       noteTruncation(analysis);
+
+      // Local-first tolerance: if the model output is imperfect but salvage
+      // can produce a displayable result (translation or at least one
+      // interpretation), adopt it and skip the repair call. Contract errors
+      // stay in `validation.errors` for telemetry; `usable` only suppresses
+      // the generic UI warning.
+      var cleanedUsable = false;
+      if (analysis != null &&
+          (formatErrors.isNotEmpty ||
+              validation == null ||
+              !validation.valid)) {
+        final cleaned = salvageAnalysis(
+          analysis: analysis,
+          evidence: evidence,
+          quotes: quotes,
+          mode: request.mode,
+          expectedSourceId: primary?.id,
+        );
+        if (_hasUsableAnalysis(cleaned.analysis)) {
+          final cleanedValidation = validator.validate(
+            analysis: cleaned.analysis,
+            evidence: evidence,
+            quotes: quotes,
+            mode: request.mode,
+            expectedSourceId: primary?.id,
+          );
+          final cleanedErrors = <String>{
+            ...formatErrors,
+            ...?validation?.errors,
+            ...cleaned.notes,
+            if (!cleanedValidation.valid) ...cleanedValidation.errors,
+          }.toList(growable: false);
+          if (kDebugMode) {
+            debugPrint(
+              '[AgentSalvage] usable errors=${cleanedErrors.join(' | ')}',
+            );
+          }
+          analysis = cleaned.analysis;
+          validation = AgentValidationResult(
+            valid: false,
+            usable: true,
+            errors: cleanedErrors,
+            citationsUsed: cleanedValidation.citationsUsed,
+          );
+          formatErrors = const <String>[];
+          cleanedUsable = true;
+        }
+      }
+      noteTruncation(analysis);
+
       // Show the main analysis before any optional repair/language call. This
       // is what keeps a finished stream from sitting behind a silent second
       // model request; the final result replaces this preview when checks end.
@@ -591,10 +666,11 @@ class AgentOrchestrator {
       // One bounded repair call. It reuses the same OCR/evidence/quotes; only
       // the model output is regenerated. A repair failure must not discard the
       // first analysis when it can still be salvaged.
-      if (analysis == null ||
-          formatErrors.isNotEmpty ||
-          validation == null ||
-          !validation.valid) {
+      if (!cleanedUsable &&
+          (analysis == null ||
+              formatErrors.isNotEmpty ||
+              validation == null ||
+              !validation.valid)) {
         checkCancelled();
         notify(AgentStage.validating, agentRepairingMessage(uiLanguage));
         try {
@@ -688,7 +764,7 @@ class AgentOrchestrator {
 
       // F1b: check only human-readable fields. A single repair may translate
       // them; a failed or still-mismatched repair keeps the result and warns.
-      if (analysis != null && validation != null && validation.valid) {
+      if (analysis != null && validation != null && validation.displayable) {
         final languageWatch = Stopwatch()..start();
         var languageCheck = languageValidator.check(
           analysis,
@@ -760,7 +836,7 @@ class AgentOrchestrator {
 
       // A language-repair response is parsed through the same capped parser.
       noteTruncation(analysis);
-      if (analysis == null || validation == null || !validation.valid) {
+      if (analysis == null || validation == null || !validation.displayable) {
         final salvaged = analysis == null
             ? null
             : salvageAnalysis(
@@ -806,6 +882,7 @@ class AgentOrchestrator {
             analysis: salvaged.analysis,
             validation: AgentValidationResult(
               valid: false,
+              usable: _hasUsableAnalysis(salvaged.analysis),
               errors: errors,
               citationsUsed: salvageValidation.citationsUsed,
             ),
@@ -835,6 +912,7 @@ class AgentOrchestrator {
             onRichTextFormattingChanged: onRichTextFormattingChanged,
             notify: notify,
             uiLanguage: uiLanguage,
+            responseLanguage: request.responseLanguage,
             telemetry: telemetry,
           );
           _timing(
@@ -883,6 +961,7 @@ class AgentOrchestrator {
         onRichTextFormattingChanged: onRichTextFormattingChanged,
         notify: notify,
         uiLanguage: uiLanguage,
+        responseLanguage: request.responseLanguage,
         telemetry: telemetry,
       );
       checkCancelled();
@@ -999,6 +1078,7 @@ class AgentOrchestrator {
     required AgentRichTextFormattingCallback? onRichTextFormattingChanged,
     required void Function(AgentStage stage, String message) notify,
     required AgentUiLanguage uiLanguage,
+    required AgentResponseLanguage responseLanguage,
     required _RunTelemetryBuilder telemetry,
   }) async {
     if (!limits.enableRichTextPostProcess) return result;
@@ -1014,6 +1094,7 @@ class AgentOrchestrator {
     Future<AgentRichTextOutputs?> format() => _formatRichText(
       llm: llm,
       model: model,
+      responseLanguage: responseLanguage,
       originalSource: originalSource,
       segmentSources: segmentSources,
       cancellation: cancellation,
@@ -1054,12 +1135,20 @@ class AgentOrchestrator {
       final outputs = await format();
       if (outputs == null) return result;
       final updated = result.copyWithRichText(outputs);
-      if (outputs.formattingCalls <= 0) return updated;
       return updated.copyWithTelemetry(
         updated.telemetry.copyWith(
           llmCalls: updated.telemetry.llmCalls + outputs.formattingCalls,
           formattingCalls:
               updated.telemetry.formattingCalls + outputs.formattingCalls,
+          formattingAcceptedSections:
+              updated.telemetry.formattingAcceptedSections +
+              outputs.acceptedSections,
+          formattingRejectedSections:
+              updated.telemetry.formattingRejectedSections +
+              outputs.rejectedSections,
+          formattingRepairedSections:
+              updated.telemetry.formattingRepairedSections +
+              outputs.repairedSections,
         ),
       );
     } finally {
@@ -1074,6 +1163,7 @@ class AgentOrchestrator {
   Future<AgentRichTextOutputs?> _formatRichText({
     required LlmPort llm,
     required String model,
+    required AgentResponseLanguage responseLanguage,
     required String originalSource,
     required List<String> segmentSources,
     required AgentCancellation? cancellation,
@@ -1096,6 +1186,7 @@ class AgentOrchestrator {
         await RichTextPostProcessor(
           llm: llm,
           model: model,
+          responseLanguage: responseLanguage,
           onCall: telemetry.recordFormatting,
         ).processSections(
           sectionIds,
@@ -1126,10 +1217,19 @@ class AgentOrchestrator {
       0,
       (sum, text) => sum + text.length,
     );
+    final accepted = results.where((result) => result.accepted).length;
     return AgentRichTextOutputs(
       originalText: richOriginalText,
       segmentTexts: outputs,
       formattingCalls: totalChars <= limits.maxRichTextChars ? 1 : 0,
+      acceptedSections: accepted,
+      rejectedSections: results.length - accepted,
+      repairedSections: results
+          .where(
+            (result) =>
+                result.accepted && result.rejectionReason == 'tags_repaired',
+          )
+          .length,
     );
   }
 
@@ -1274,6 +1374,9 @@ class AgentOrchestrator {
               dictionaryProfiles: profiles,
               userRequest: userRequest,
               intentHint: intentHint,
+              maxTokenEntries: limits.maxPromptTokenEntries,
+              maxProfileCharsPerDictionary: limits.maxProfileCharsPerDictionary,
+              maxProfileTotalChars: limits.maxProfileTotalChars,
             ),
             cancellation,
             onTelemetry: telemetry.record,
@@ -1366,6 +1469,20 @@ class AgentOrchestrator {
     return hitRate < limits.coverageContentHitRateThreshold;
   }
 
+  /// A locally cleaned result is displayable when it still has one complete
+  /// user-facing product: a translation, at least one sentence interpretation,
+  /// or a standalone NO_ANALYSIS reason. Invalid citations/quotes have already
+  /// been removed by [salvageAnalysis], so this is the final usability gate.
+  bool _hasUsableAnalysis(AgentAnalysis analysis) {
+    if (analysis.noAnalysisReason.trim().isNotEmpty) return true;
+    if (analysis.translation.any((item) => item.text.trim().isNotEmpty)) {
+      return true;
+    }
+    return analysis.segments.any(
+      (segment) => segment.interpretation.trim().isNotEmpty,
+    );
+  }
+
   /// Content-word citation coverage used by coverage review and telemetry.
   /// Counts token occurrences, not every lookup target: particles/punctuation
   /// and grammar-pattern targets are excluded.
@@ -1413,6 +1530,7 @@ class AgentOrchestrator {
           userRequest: userRequest,
           maxTokens: limits.coverageReviewMaxTokens,
           maxSnippetChars: limits.coverageSnippetChars,
+          maxTokenEntries: limits.maxPromptTokenEntries,
         ),
         cancellation,
         onTelemetry: telemetry.record,
@@ -1461,6 +1579,7 @@ class AgentOrchestrator {
             errors: parsed.errors,
             maxTokens: limits.coverageReviewMaxTokens,
             maxSnippetChars: limits.coverageSnippetChars,
+            maxTokenEntries: limits.maxPromptTokenEntries,
           ),
           cancellation,
           onTelemetry: telemetry.record,
@@ -1513,11 +1632,11 @@ class AgentOrchestrator {
 
     var workingEvidence = evidence;
     var fallbackUsed = false;
-    // Coverage supplements are explicit follow-up lookups; they may add
-    // targeted entries beyond the short-text initial breadth cap, up to the
-    // global citation limit.
+    // Coverage must stay inside this run's effective citation limit. Using the
+    // global 60 here let a one-sentence run with a small short-text cap add up
+    // to 54 supplementary entries.
     var remainingSlots =
-        limits.maxEvidenceEntries - workingEvidence.citations.length;
+        workingEvidence.budget.maxCitations - workingEvidence.citations.length;
     if (remainingSlots < 0) remainingSlots = 0;
     var excludedKeys = const <String>{};
 
@@ -1681,7 +1800,7 @@ class AgentOrchestrator {
     required int elapsedMs,
   }) {
     if (onProvisionalResult == null || analysis == null) return null;
-    if (validation != null && validation.valid && formatErrors.isEmpty) {
+    if (validation != null && validation.displayable && formatErrors.isEmpty) {
       onProvisionalResult(
         _buildResult(
           envelope: envelope,
@@ -1728,6 +1847,7 @@ class AgentOrchestrator {
         analysis: salvaged.analysis,
         validation: AgentValidationResult(
           valid: false,
+          usable: _hasUsableAnalysis(salvaged.analysis),
           errors: errors,
           citationsUsed: salvageValidation.citationsUsed,
         ),
@@ -1953,9 +2073,7 @@ class AgentOrchestrator {
       sourceId: expectedSourceId ?? '',
       limits: limits,
     );
-    if (parsed == null ||
-        (parsed.noAnalysisReason.isEmpty &&
-            (parsed.translation.isEmpty || parsed.segments.isEmpty))) {
+    if (parsed == null) {
       if (kDebugMode) {
         debugPrint(
           '[AgentAnalysis] parse failed chars=${raw.length} '

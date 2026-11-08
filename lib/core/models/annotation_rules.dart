@@ -310,7 +310,7 @@ abstract final class AnnotationRuleSets {
 
   static const AnnotationRuleSet pitch = AnnotationRuleSet(
     id: pitchId,
-    name: '注音+音调',
+    name: '注音 + 音调',
     version: 1,
     targets: <AnnotationTarget>[
       AnnotationTarget.reader,
@@ -345,6 +345,14 @@ abstract final class AnnotationRuleSets {
     basic,
     pitch,
     none,
+  ];
+
+  /// The "none" set is kept for migration/internal fallback only. The visible
+  /// menu uses "显示注音" to turn annotations off, so listing "关闭标注" would
+  /// duplicate that control.
+  static const List<AnnotationRuleSet> selectable = <AnnotationRuleSet>[
+    basic,
+    pitch,
   ];
 
   static AnnotationRuleSet byId(String? id) {

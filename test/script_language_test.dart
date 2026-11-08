@@ -17,5 +17,10 @@ void main() {
     expect(shouldUseJapaneseTokenizer('何卒'), isTrue);
     expect(shouldUseJapaneseTokenizer('hello world'), isFalse);
     expect(shouldUseJapaneseTokenizer('何卒宜しく'), isTrue);
+    expect(isHanOnlyAmbiguous('何卒'), isTrue);
+    expect(isHanOnlyAmbiguous('何卒。'), isTrue);
+    expect(isHanOnlyAmbiguous('何卒宜しく'), isFalse);
+    expect(isHanOnlyAmbiguous('hello'), isFalse);
+    expect(isHanOnlyAmbiguous('12345'), isFalse);
   });
 }

@@ -5,11 +5,18 @@
 class AgentLimits {
   /// Default for [maxRichTextChars]. A static const (not the mutable
   /// `standard` instance field) is required for use as a default parameter.
-  static const int defaultMaxRichTextChars = 20000;
+  ///
+  /// Keep this below [richTextMaxTokens]: the formatter returns the complete
+  /// original text plus tags, and CJK output can approach one token per
+  /// character. 20k characters with a 12k output cap truncated long batches.
+  static const int defaultMaxRichTextChars = 12000;
 
   const AgentLimits({
     this.maxSourceChars = 6000,
     this.maxTargets = 120,
+    this.maxPromptTokenEntries = 600,
+    this.maxProfileCharsPerDictionary = 2000,
+    this.maxProfileTotalChars = 6000,
     this.maxEvidenceEntries = 60,
     this.maxEntriesPerDictionary = 3,
     this.maxSnippetChars = 400,
@@ -20,6 +27,7 @@ class AgentLimits {
     this.maxCoverageQueryChars = 100,
     this.maxCoverageCompoundTokens = 6,
     this.shortTextTargetThreshold = 15,
+    this.coverageCitationReserve = 6,
     this.coverageContentHitRateThreshold = 0.8,
     this.enableDepthPass = false,
     this.slowRequestWarningSeconds = 30,
@@ -45,6 +53,20 @@ class AgentLimits {
 
   final int maxSourceChars;
   final int maxTargets;
+
+  /// Hard cap on token evidence objects sent to one analysis/coverage prompt.
+  /// Source text remains complete; punctuation and uncited function words are
+  /// already filtered. This is the main input-size guard for long sources.
+  final int maxPromptTokenEntries;
+
+  /// Per-dictionary profile Markdown character cap. The design target was
+  /// 2000 characters but the prompt builder previously joined profiles
+  /// unbounded.
+  final int maxProfileCharsPerDictionary;
+
+  /// Total profile Markdown characters across all dictionaries in one prompt.
+  final int maxProfileTotalChars;
+
   final int maxEvidenceEntries;
   final int maxEntriesPerDictionary;
   final int maxSnippetChars;
@@ -64,11 +86,21 @@ class AgentLimits {
   /// known terms are accepted.
   final int maxCoverageCompoundTokens;
 
-  /// Below this selected-target count the breadth pass uses
-  /// `contentTargets × dictionaryCount` as the citation cap instead of the
-  /// global [maxEvidenceEntries]. This prevents a one-sentence input with two
-  /// dictionaries from prefetching the full 60-entry budget.
+  /// Below this content/pattern target count the run adds
+  /// [coverageCitationReserve] to the natural one-citation-per-target cap.
+  /// It no longer multiplies by dictionary count: one sentence with many
+  /// dictionaries must not prefetch the full 60-entry budget.
   final int shortTextTargetThreshold;
+
+  /// Extra citation slots reserved for a coverage follow-up on short text.
+  ///
+  /// Initial breadth gives one citation per content word/pattern. Without a
+  /// small reserve, a fully covered short sentence would leave no room for a
+  /// genuinely missing sense/usage, and coverage would be a no-op. The reserve
+  /// is part of the run's effective citation limit, never an extra global 60:
+  /// coverage cannot exceed `content/pattern targets + reserve` (capped by
+  /// [maxEvidenceEntries]) on short text.
+  final int coverageCitationReserve;
 
   /// Coverage is skipped when the content-word citation hit rate is at least
   /// this value (0..1). Non-content tokens, punctuation and particles are not
@@ -127,6 +159,10 @@ class AgentLimits {
   /// an OpenAI-compatible provider only sends it when the user configured
   /// `maxOutputTokens`.
   static const int analysisMaxTokens = 12000;
+
+  /// Output budget for one rich-text batch/single section. This covers the
+  /// complete source text plus display tags; keep [maxRichTextChars] below it.
+  static const int richTextMaxTokens = 16000;
 
   /// Optional rich-text formatting pass after a successful analysis. Tests
   /// that assert request sequences disable it explicitly.

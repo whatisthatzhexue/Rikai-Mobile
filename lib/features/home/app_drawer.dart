@@ -52,7 +52,7 @@ class AppDrawer extends ConsumerWidget {
                             ?.copyWith(color: AppColors.onHeader),
                       ),
                       Text(
-                        '离线日语阅读',
+                        '可扩充词典库的日语阅读工具',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.onHeader,
                         ),

@@ -68,9 +68,10 @@ bool isOpaqueDictionaryKey(String value) {
 /// Extracts a human-readable title from a raw MDict entry HTML fragment.
 ///
 /// Preference order:
-/// 1. a bracketed Japanese headword such as `【焼▽べる】`;
-/// 2. an element whose class/id marks a headword/entry title;
-/// 3. a heading/strong fallback.
+/// 1. the simplest word on the first cleaned HTML line (language-neutral);
+/// 2. a bracketed Japanese headword such as `【焼▽べる】` (legacy fallback);
+/// 3. an element whose class/id marks a headword/entry title;
+/// 4. a heading/strong fallback.
 ///
 /// Returns null when no reliable title is present.
 String? extractDictionaryEntryTitle(String html) {
@@ -109,6 +110,15 @@ String? extractDictionaryEntryTitle(String html) {
   }
 
   final text = fragment.text ?? '';
+  // Prefer a safe, language-neutral first-line word over a dictionary-specific
+  // bracket convention. Explicit headings are more reliable than a text line
+  // that may concatenate the title and its reading.
+  final hasHeading = fragment.querySelectorAll('h1, h2, h3').isNotEmpty;
+  if (!hasHeading) {
+    final firstLine = _firstLineSimplestWord(text);
+    if (firstLine != null) consider(firstLine, 13);
+  }
+
   var bracketCount = 0;
   for (final match in _bracketTitle.allMatches(text)) {
     final raw = match.group(1) ?? '';
@@ -128,6 +138,46 @@ String? extractDictionaryEntryTitle(String html) {
     return a.order.compareTo(b.order);
   });
   return candidates.first.value;
+}
+
+/// First visible line's simplest word. This is dictionary-format agnostic:
+/// it does not depend on `【...】`, which only some Japanese dictionaries use.
+String? _firstLineSimplestWord(String text) {
+  final lines = text.split(RegExp(r'[\r\n]+'));
+  var line = '';
+  for (final candidate in lines) {
+    if (candidate.trim().isNotEmpty) {
+      line = candidate.trim();
+      break;
+    }
+  }
+  if (line.isEmpty) return null;
+  line = line.replaceFirst(RegExp(r'^(?:［[^］]*］\s*)+'), '');
+  final definitionAt = line.indexOf(RegExp(r'[（(：:]'));
+  if (definitionAt > 0) line = line.substring(0, definitionAt);
+  final tokens = line
+      .split(RegExp(r'[\s\[\]【】（）()、。,.!?！？：:；;／/|]+'))
+      .map(_cleanTitle)
+      .where(_isUsableTitle)
+      .toList(growable: false);
+  if (tokens.isEmpty) return null;
+  final hasJapanese = tokens.any(
+    (token) => _cjk.hasMatch(token) || _kana.hasMatch(token),
+  );
+  if (!hasJapanese) return tokens.first;
+  // Japanese dictionary first lines often contain a reading/title variant;
+  // the shortest visible word is the least annotated form. Latin-script
+  // entries keep the first word because "a" in "apple a fruit" is not a title.
+  var best = tokens.first;
+  for (final token in tokens.skip(1)) {
+    final shorter = token.length < best.length;
+    final preferKanji =
+        token.length == best.length &&
+        _cjk.hasMatch(token) &&
+        !_cjk.hasMatch(best);
+    if (shorter || preferKanji) best = token;
+  }
+  return best;
 }
 
 /// Extracts a bracketed title from already-plain citation text/snippet.

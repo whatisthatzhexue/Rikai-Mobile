@@ -271,7 +271,7 @@ AgentEvidenceBundle pruneCoverageCitations({
       ),
       citations: citations.length,
       maxTargets: limits.maxTargets,
-      maxCitations: limits.maxEvidenceEntries,
+      maxCitations: evidence.budget.maxCitations,
     ),
   );
 }
@@ -351,7 +351,7 @@ AgentEvidenceBundle mergeCoverageEvidence({
       ),
       citations: mergedCitations.length,
       maxTargets: limits.maxTargets,
-      maxCitations: limits.maxEvidenceEntries,
+      maxCitations: evidence.budget.maxCitations,
     ),
   );
 }

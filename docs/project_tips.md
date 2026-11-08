@@ -1387,8 +1387,9 @@ entry key 是 `01570 03798`，大辞林重定向后是 `@daijirin2-...`，用户
 
 **正确做法**：
 
-- 新增 `lib/core/utils/dictionary_entry_title.dart`：优先从词条 HTML 的
-  `【...】` 提取标题，其次 `headword/entry-title` 类元素，再回退到
+- 新增 `lib/core/utils/dictionary_entry_title.dart`：先清洗 HTML，取第一行
+  内容的最简单词形式作为标题；`【...】` 仅作日语词典的兼容回退，避免把方框
+  匹配当成多语种通用规则。再回退到 `headword/entry-title` 类元素和
   `matchedKey`；去除 `▽▼△▲` 等词典标记。
 - `entryKey` 保留给查词、去重和 citation 导航；`AgentCitation.headword` 存
   显示标题。旧历史没有新标题时，从保存的 snippet 里提取 `【...】`。

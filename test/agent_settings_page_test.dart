@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
 import 'package:rikai_mobile/features/settings/agent_settings_page.dart';
+import 'package:rikai_mobile/core/models/agent/agent_tool.dart';
 import 'package:rikai_mobile/services/agent/agent_provider_tester.dart';
+import 'package:rikai_mobile/services/agent/ports/agent_capability_exception.dart';
 import 'package:rikai_mobile/services/agent/ports/llm_port.dart';
 import 'package:rikai_mobile/services/agent/ports/secret_port.dart';
 import 'package:rikai_mobile/state/agent_providers.dart';
@@ -30,6 +32,19 @@ class _TesterLlm implements LlmPort {
   }) async* {
     yield const LlmEvent(type: LlmEventType.textDelta, text: 'OK');
     yield LlmEvent.done();
+  }
+}
+
+class _FailingTesterLlm implements LlmPort {
+  @override
+  Stream<LlmEvent> stream(
+    LlmRequest request, {
+    LlmCancelToken? cancellation,
+  }) async* {
+    throw const AgentCapabilityException(
+      AgentToolErrorCode.providerUnavailable,
+      '模型服务暂时不可用',
+    );
   }
 }
 
@@ -68,7 +83,10 @@ void main() {
     expect(find.text('快速模型'), findsOneWidget);
     expect(find.text('高精度模型'), findsOneWidget);
     expect(find.text('最大输出 tokens（可选）'), findsOneWidget);
-    expect(find.textContaining('OpenAI-compatible 建议留空'), findsOneWidget);
+    expect(
+      find.textContaining('OpenAI-compatible 协议的模型，max_tokens 建议留空'),
+      findsOneWidget,
+    );
     expect(find.text('快速模型用于词典档案和资料检查。'), findsOneWidget);
     expect(find.text('高精度模型用于最终解析。'), findsOneWidget);
     expect(find.textContaining('API 的访问地址'), findsNothing);
@@ -136,7 +154,7 @@ void main() {
       find.byKey(const ValueKey('agent-provider-api-key')),
       'form-key',
     );
-    await tester.tap(find.text('测试连接'));
+    await tester.tap(find.text('测试快速模型连接'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('连接成功'), findsOneWidget);
@@ -148,6 +166,56 @@ void main() {
     );
     expect(container.read(agentProvidersProvider).asData?.value, isEmpty);
   });
+
+  testWidgets(
+    'quick setup fills DeepSeek and reveals models on non-auth error',
+    (tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final preferences = await SharedPreferences.getInstance();
+      final testerService = AgentProviderTester(
+        secrets: _TesterSecret(),
+        llmFactory: (config, secrets) => _FailingTesterLlm(),
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            agentProvidersProvider.overrideWith((ref) async => const []),
+            agentProviderTesterProvider.overrideWithValue(testerService),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const AgentSettingsPage(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('快捷配置'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('运营商'), findsOneWidget);
+      expect(find.textContaining('deepseek-chat'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('agent-quick-small-model')),
+        findsNothing,
+      );
+
+      await tester.enterText(
+        find.byKey(const ValueKey('agent-quick-api-key')),
+        'key',
+      );
+      await tester.tap(find.text('测试快速模型连接'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey('agent-quick-small-model')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('不是 API key 问题'), findsOneWidget);
+    },
+  );
 
   testWidgets('profile language changes immediately without a dialog', (
     tester,

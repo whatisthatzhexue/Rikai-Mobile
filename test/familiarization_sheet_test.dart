@@ -105,6 +105,41 @@ void main() {
     );
   });
 
+  testWidgets('profile preview remains scrollable in portrait', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final strings = AgentUiStrings.of(AgentUiLanguage.chinese);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showFamiliarizationSheet(
+                context,
+                profile: _profile,
+                markdown: profileToMarkdown(_profile),
+                strings: strings,
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('agent-profile-preview-toggle')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('修改'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('removing a detected pair updates the saved markdown', (
     tester,
   ) async {

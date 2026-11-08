@@ -71,8 +71,8 @@ class CopyrightPage extends StatelessWidget {
           Text('Rikai-Mobile', style: headingStyle),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            '离线日语阅读与查词应用。原创代码；仅读取用户提供的 UniDic 与 '
-            'MDict 词典。',
+            '可扩充词典库的日语阅读与查词工具。原创代码；仅读取用户提供的 '
+            'UniDic 与 MDict 词典。',
             style: bodyStyle,
           ),
           const Divider(height: AppSpacing.xxl),
@@ -93,7 +93,7 @@ class CopyrightPage extends StatelessWidget {
               onPressed: () => showLicensePage(
                 context: context,
                 applicationName: 'Rikai-Mobile',
-                applicationVersion: '1.0.0',
+                applicationVersion: '1.1',
                 applicationLegalese: 'Copyright 2026 Rikai-Mobile contributors',
               ),
               icon: const Icon(Icons.description_outlined, size: AppSizes.icon),

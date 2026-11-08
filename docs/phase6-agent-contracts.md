@@ -460,11 +460,14 @@ OcrVariantLookupPreview (local)
   70%+70%=140%，也不需要在 prompt 中要求模型输出概率。
 - 解析器会剥离正文中泄漏的 `context_inference`/`dictionary_fact`/
   `structural_analysis`、`(90%)`、`置信度: …` 和 `[source-N]` 标记。
-- 至少需要一条 TRANSLATION 和一条 SEGMENT。解析后还检查标签块完整性：未闭合、
-  结束标签错序/多余、根级标签被嵌套、`MEANING`/`WORD`/`GRAMMAR` 不在 `SEGMENT`
-  内、同一 `SEGMENT` 重复 `MEANING`。解析失败或完整性失败时发送一次格式纠错请求，
-  要求保持所有正文文字不变、只补齐标签；修复后仍不完整则 validation 不通过并进入
-  既有 salvage 路径。
+- 2026-11-08 P1：parser **允许部分结果**（只有 TRANSLATION 或只有 SEGMENT），
+  不再因缺少另一类而直接返回 null。契约级 `validation.valid` 仍要求译文和非空
+  segments；但本地 cleaning 后只要仍有非空译文或至少一个非空逐句理解（或独立
+  `NO_ANALYSIS`），结果即可显示：`validation.valid=false`、`validation.usable=true`，
+  UI 不显示格式 warning，也不重复调用格式修复。只有清洗后无可用内容时才进入修复。
+  解析后仍检查标签块完整性：未闭合、结束标签错序/多余、根级标签被嵌套、
+  `MEANING`/`WORD`/`GRAMMAR` 不在 `SEGMENT` 内、同一 `SEGMENT` 重复 `MEANING`。
+  完整性错误保留在 `validation.errors` 供调试/历史，不再阻止可用结果展示。
 - 旧的 JSON 输出回退已移除；模型必须返回标签文本。
 
 以下 JSON 结构仅作为内部 DTO/存储结构，不是模型响应格式：
@@ -520,6 +523,9 @@ OcrVariantLookupPreview (local)
 - `citations_used` 仅作提示；编排器从各 claim 的 `citation_ids` 重新汇总。
 - `model_supplements` 严格模式必须为空/隐藏；宽松模式必须带“模型补充”标签。
 - `reading` 必须匹配 token 读音或 citation 摘要；否则标 `未验证` 或移除。
+- `validation.valid` 是契约校验结果；`validation.usable` 是本地 cleaning 后是否
+  可展示。cleaned 结果可为 `valid=false, usable=true`；旧历史缺少 `usable` 时
+  按 `valid` 解释，UI 只对 `!displayable` 显示格式 warning。
 
 ### 5.1 覆盖审查 `[COVERAGE]` 标签（DTO `rikai.agent.coverage.v1`；F7，Wave 3 已实现）
 
@@ -597,9 +603,12 @@ COVERAGE 根块唯一、MISSING/DUPLICATE/NOTES 必须位于 COVERAGE 内、同�
   `AgentLimits.adaptiveCoverageReview=false` 可强制每次都审查。
 - 2026-11-03 去重：MISSING query 已被现有 citation 或带 citation_ids 的
   token/pattern 覆盖时跳过；重复 query 跳过。主证据采用 breadth-first
-  （每个 target 每词典先 1 条）；depth 默认关闭，只在显式多义/coverage 补查时
-  按需获取。Coverage MISSING 的 `sense`/`usage`/`example` 类允许补充查词每本
-  词典取 2 条；`word`/`grammar`/`reading` 类仍只取 1 条。
+  （2026-11-08 P0 起默认每个内容词/模式 target 全局 1 条，不再每词典复制；
+  `enableDictionaryFanOut` 的 per-dictionary 分析例外）；depth 默认关闭，只在
+  显式多义/coverage 补查时按需获取。短文本有效上限为
+  `content/pattern targets + coverageCitationReserve`（默认 6，最高 60），
+  coverage 补充受该上限约束。Coverage MISSING 的 `sense`/`usage`/`example`
+  类允许补充查词每本词典取 2 条；`word`/`grammar`/`reading` 类仍只取 1 条。
 - 运行时输出为标签文本（`stream:false`，不发 `response_format`/
   `json_schema`）；解析或标签块完整性失败只做一次“正文不变、只补标签”的格式
   修复。模型返回的 coverage 建议必须经过本地可追溯性/重复校验，不能直接删除或
@@ -757,6 +766,11 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
   只有 provider 错误、空响应、批量响应完全缺失 marker 或总字符超过
   `AgentLimits.maxRichTextChars` 才允许整批本地回退。见 `T-137`、
   `R-AGENT-LIMITS-001`。
+- 2026-11-08 P1 技术项：`maxRichTextChars=12000`、`richTextMaxTokens=16000`；
+  style tag 级修复（未闭合/错序/重复 BOLD/UNDERLINE 本地删除，保留合法标签与
+  原文；RUBY/YOMI 畸形仍回退）；`AgentRunTelemetry` 增加
+  `formatting_accepted_sections`/`rejected`/`repaired`；富文本 prompt 的解释
+  语言由 `AgentResponseLanguage` 决定。
 - 该后处理是 P7 任务解耦的增量原型（见
   `docs/agent_docs/p7-task-decomposition-plan.md`）；完整任务拆分/模型路由/
   并发流式仍待 P7。
@@ -883,9 +897,10 @@ UniDic 读音表，避免多读音误判；后处理 Prompt 明确要求只标�
 
 - `entry_key` 是 MDict 的内部定位 key（可能是 `01570 03798`、
   `@daijirin2-...`），只用于查词、去重和 citation 跳转，**不得直接展示**。
-- `headword` 是展示标题：orchestrator 从词条 HTML 的 `【...】`/headword 元素
-  提取；旧历史没有新标题时从保存的 `snippet` 回退。`matched_key` 也不保证可读，
-  不能单独作为显示标题。
+- `headword` 是展示标题：orchestrator 先清洗词条 HTML，取第一行内容的最简单
+  词形式；`【...】` 仅作日语词典兼容回退，随后才是 headword 元素。旧历史没有
+  新标题时从保存的 `snippet` 回退。`matched_key` 也不保证可读，不能单独作为
+  显示标题。
 
 ### 7.2 Quote
 
@@ -1033,6 +1048,11 @@ validate(analysis, evidence, quotes, mode):
   return ValidationResult(used_citations=used, errors=[...])
 ```
 
+- 2026-11-08 P1 容忍原则：`validate` 的 `valid=false` 只表示契约不完全满足；
+  调用方必须先 `salvageAnalysis`，若剩余翻译或逐句理解非空，则构造
+  `ValidationResult(valid=false, usable=true)` 并直接展示，不再发格式 repair、
+  不显示格式 warning。只有 salvage 后无可用内容时才发格式 repair/失败；语言
+  repair 仍按 §5.2 单独处理。语言、截断、覆盖、词典/无依据 warning 不受此抑制。
 - 严格模式拒绝无依据事实；不静默删除用户可见内容。**WORD/OPTION 的 citation
   要求写在 prompt 中**（无 citation 时省略该 WORD/OPTION 并改用 UNRESOLVED）；
   `dictionary_fact` 段中的 GRAMMAR 同样需要 citation。validator 与 prompt 必须
@@ -1042,8 +1062,10 @@ validate(analysis, evidence, quotes, mode):
   `citation_ids` 或其组成 token 的 `citation_ids`，否则校验失败。repair prompt 的
   `Available ids` 以 `token/pattern ... citations ...` 形式携带该映射，修复时不重发
   evidence。EvidenceBuilder 的 breadth/depth 与 coverage 补充检索按 target/query
-  序号轮转词典起点，避免第一本词典独占全局 citation 预算；选中词典最终 0 条
-  citation（且无查询错误）时写入 `AgentRunResult.warnings`。
+  序号轮转词典起点，避免第一本词典独占全局 citation 预算；2026-11-08 P0 起
+  target 在内容层内按 quote round-robin，citation 上限按本次有效 run 上限而非
+  固定 60；选中词典最终 0 条 citation（且无查询错误）时写入
+  `AgentRunResult.warnings`。
 - 修复：一次格式修复调用，使用 **small model + 紧凑 prompt**：只发送
   `availableIds`（quote/token/pattern/citation id 列表）、previous output
   （untrusted）和 validation errors（untrusted），不重发 input/evidence/
@@ -1385,7 +1407,8 @@ final AgentPitchAccent? pitchAccent;
 - 同一 target 的预览和正式渲染必须调用同一求值器；预览不得使用另一套模板。
 - **2026-11-08 v1 存储**：内置规则集以纯 Dart 常量提供，所选 id 存在
   `AppSettings.annotationRuleSetId`；不写 `annotation_rule_sets`，不做版本历史
-  UI，选择“关闭标注”或恢复默认作为回滚。该表保留给后续用户规则集/版本历史，
+  UI，选择基础注音/注音+音调或恢复默认作为回滚；“关闭标注”由“显示注音”
+  总开关承担，不再作为独立菜单项。该表保留给后续用户规则集/版本历史，
   当前不是活动存储格式。
 - 规则集无效、求值异常或超限：整份拒绝，保留当前内置选择；阅读器/照片集/语料
   不得空白或崩溃。

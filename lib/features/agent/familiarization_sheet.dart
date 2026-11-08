@@ -135,7 +135,10 @@ class _FamiliarizationSheetState extends State<_FamiliarizationSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final height = MediaQuery.sizeOf(context).height * 0.82;
+    final media = MediaQuery.sizeOf(context);
+    // Portrait screens need more vertical room for the preview; the language
+    // pair editor and the read-only body share the sheet.
+    final height = media.height * (media.height >= media.width ? 0.92 : 0.82);
     return SizedBox(
       height: height,
       child: Column(

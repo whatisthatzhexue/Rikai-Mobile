@@ -2,6 +2,7 @@ import '../../core/models/agent/agent_analysis.dart';
 import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
 import '../../core/models/agent/agent_quote.dart';
+import 'agent_validator.dart';
 import 'analysis_normalizer.dart';
 
 class AnalysisSalvageResult {
@@ -45,14 +46,15 @@ AnalysisSalvageResult salvageAnalysis({
   }
   final quoteIds = quotes.map((quote) => quote.id).toSet();
   final citationIds = evidence.citations.map((item) => item.id).toSet();
-  final tokenReadings = <String, String>{
+  final tokenMap = <String, AgentTokenEvidence>{
     for (final source in evidence.sources)
-      for (final token in source.tokens) token.id: token.reading,
+      for (final token in source.tokens) token.id: token,
   };
   final tokenCitations = <String, Set<String>>{
     for (final source in evidence.sources)
       for (final token in source.tokens) token.id: token.citationIds.toSet(),
   };
+  final quoteTokenIds = agentQuoteTokenIds(quotes: quotes, evidence: evidence);
   final patternIds = evidence.patterns.map((item) => item.id).toSet();
   final patternCitations = <String, Set<String>>{
     for (final pattern in evidence.patterns)
@@ -114,30 +116,39 @@ AnalysisSalvageResult salvageAnalysis({
     }
     final wordNotes = <AgentWordNote>[];
     for (final note in segment.wordNotes) {
-      if (!tokenReadings.containsKey(note.tokenId)) {
+      // The validator accepts a missing/wrong token id when exactly one token
+      // in the quote has the same surface/lemma. Salvage must use the same
+      // resolver, otherwise valid notes disappear after a failed validation.
+      final token = resolveAgentWordToken(
+        note,
+        segment.quoteId,
+        tokenMap,
+        quoteTokenIds,
+      );
+      if (token == null) {
         notes.add('已移除未知 token 的词注');
         continue;
       }
       final kept = keepCitations(
         note.citationIds,
         required: false,
-        allowed: tokenCitations[note.tokenId],
+        allowed: tokenCitations[token.id],
       );
       if (mode == AgentMode.strict && kept.isEmpty) {
         notes.add('已移除无词典依据的词注');
         continue;
       }
-      final tokenReading = tokenReadings[note.tokenId] ?? '';
       final reading =
           note.reading.isNotEmpty &&
-              tokenReading.isNotEmpty &&
-              note.reading != tokenReading
+              token.reading.isNotEmpty &&
+              normalizeAgentReading(note.reading) !=
+                  normalizeAgentReading(token.reading)
           ? ''
           : note.reading;
       if (reading != note.reading) notes.add('已清除与 UniDic 不一致的读音');
       wordNotes.add(
         AgentWordNote(
-          tokenId: note.tokenId,
+          tokenId: token.id,
           surface: note.surface,
           reading: reading,
           sense: note.sense,
@@ -147,15 +158,33 @@ AnalysisSalvageResult salvageAnalysis({
     }
     final grammarNotes = <AgentGrammarNote>[];
     for (final note in segment.grammarNotes) {
-      if (!patternIds.contains(note.patternId)) {
-        notes.add('已移除未知语法模式');
-        continue;
-      }
+      // An empty/unknown pattern id is a free grammar note, exactly as the
+      // validator treats it. Its citations may come from tokens overlapping
+      // the current quote; only the citation scope is restricted.
+      final patternId = patternIds.contains(note.patternId)
+          ? note.patternId
+          : null;
+      final allowed = patternId != null
+          ? patternCitations[patternId]
+          : <String>{
+              for (final tokenId
+                  in quoteTokenIds[segment.quoteId] ?? const <String>{})
+                ...?tokenCitations[tokenId],
+            };
       final kept = keepCitations(
         note.citationIds,
         required: false,
-        allowed: patternCitations[note.patternId],
+        allowed: allowed,
       );
+      final requiresCitation =
+          mode == AgentMode.strict &&
+          (segment.epistemic == AgentEpistemic.dictionaryFact ||
+              (segment.epistemic == AgentEpistemic.structuralAnalysis &&
+                  patternId == null));
+      if (requiresCitation && kept.isEmpty) {
+        notes.add('已移除无依据的语法注');
+        continue;
+      }
       grammarNotes.add(
         AgentGrammarNote(
           patternId: note.patternId,

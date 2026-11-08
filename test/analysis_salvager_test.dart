@@ -62,6 +62,61 @@ const _quotes = <AgentQuoteRef>[
 ];
 
 void main() {
+  test(
+    'salvage keeps free grammar notes and word fallbacks accepted by validator',
+    () {
+      final analysis = AgentAnalysis(
+        sourceId: 'src-1',
+        translation: const <AgentTranslation>[
+          AgentTranslation(quoteId: 'q1', text: '请多关照。'),
+        ],
+        segments: const <AgentSegment>[
+          AgentSegment(
+            id: 'seg-1',
+            quoteId: 'q1',
+            literal: '何卒',
+            interpretation: '正式请求',
+            epistemic: AgentEpistemic.structuralAnalysis,
+            wordNotes: <AgentWordNote>[
+              // No token id, but the surface is unique inside q1.
+              AgentWordNote(
+                tokenId: '',
+                surface: '何卒',
+                reading: 'ナニトゾ',
+                sense: '请务必',
+                citationIds: <String>['source-1'],
+              ),
+            ],
+            grammarNotes: <AgentGrammarNote>[
+              // Free grammar note: the whitelist did not match.
+              AgentGrammarNote(
+                patternId: '',
+                explanation: '礼貌请求的表达',
+                citationIds: <String>['source-1'],
+              ),
+            ],
+          ),
+        ],
+      );
+
+      final result = salvageAnalysis(
+        analysis: analysis,
+        evidence: _evidence,
+        quotes: _quotes,
+        mode: AgentMode.strict,
+      );
+
+      final segment = result.analysis.segments.single;
+      expect(segment.wordNotes, hasLength(1));
+      expect(segment.wordNotes.single.tokenId, 't1');
+      // UniDic reading is hiragana in the fixture; katakana is equivalent.
+      expect(segment.wordNotes.single.reading, 'ナニトゾ');
+      expect(segment.grammarNotes, hasLength(1));
+      expect(segment.grammarNotes.single.patternId, isEmpty);
+      expect(segment.grammarNotes.single.citationIds, <String>['source-1']);
+    },
+  );
+
   test('salvage drops citations that are not attributed to the token', () {
     final analysis = AgentAnalysis(
       sourceId: 'src-1',

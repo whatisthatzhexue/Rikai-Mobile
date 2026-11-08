@@ -112,6 +112,73 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
 - **仍待**：P6.7-4b 无障碍/200%/许可/签名与真机视觉验收、Wave 4
   真实 provider/arm64/大词典/secure storage 验收；完整 segment streaming 与
   P7 任务拆分保持暂缓。当前测试/设备数据以 `docs/project-data.md` 为准。
+- **1.1 UI/音调规则（2026-11-08）**：应用副标题改为“可扩充词典库的日语阅读
+  工具”，pubspec 1.1.0+2、Android versionName 1.1、著作权页 1.1；provider
+  测试按钮改为“测试快速模型连接”；新增 DeepSeek 快捷配置（自动填地址和
+  `deepseek-chat`，重名加 `(1)`/`(2)`，非 API key 失败时开放模型编辑）；
+  annotation 菜单移除“关闭标注”；“注音 + 音调”选择时提示音调来自 UniDic；
+  动词/い形容词活用形后接非标点 token 时隐藏音调（音便动词和原形除外）；
+  档案 Markdown 预览竖屏使用更高 sheet；provider 表单补充 API key 复用提示
+  和 max_tokens 文案。完整真机视觉/200% 验收仍未完成。
+
+## 2026-11-08 P0 证据预算/缓存修复
+
+- **证据分配**：默认 breadth 改为每个内容词/语法模式 target 全局只取 1 条
+  citation；不再按选中词典数复制。助詞/助動詞等功能词默认不进入 citation
+  target（token 证据与语法模式 citation 保留）；只有 `enableDictionaryFanOut`
+  的 per-dictionary 分析仍按每本词典 1 条取证据。
+- **句子公平**：target 在内容层内按 quote round-robin 排序；`maxTargets` 与
+  citation 上限不再由第一句按 token 顺序独占。
+- **coverage 上限**：短文本有效上限为 `content/pattern targets +
+  coverageCitationReserve`（新增 `AgentLimits.coverageCitationReserve=6`，最高
+  60）；coverage 的 `remainingSlots` 改用 `evidence.budget.maxCitations`，
+  prune/merge 保留该值，不再从短文本上限直接跳到全局 60。
+- **缓存**：`CitationRegistry.restore` 在缓存命中时恢复 citation map 和
+  `nextId`，coverage 补查不会从 `source-1` 重新发号覆盖缓存 citation。
+- **salvage**：与 validator 共用 quote-token 映射、WORD surface/lemma 回退和
+  读音归一化；free grammar note（空/未知 `patternId`）不再在 salvage 中被
+  无条件丢弃。
+- 回归测试覆盖：缓存命中 + coverage 补查、跨 quote target 交错、短文本有效
+  citation 上限、free grammar/WORD 回退/片假名读音 salvage。`flutter analyze`
+  无问题，完整 `flutter test` **622 passed**（声明 613）；全部 fake/local
+  provider，未使用付费 Key。真实 provider/arm64/设备验收仍未进行。
+
+## 2026-11-08 P1 技术项（按 P2 执行）
+
+- **富文本预算**：`maxRichTextChars` 20,000 → 12,000，新增
+  `richTextMaxTokens=16,000`；批量与单 section 共用，避免长 batch 输出截断。
+- **标签级接受**：未闭合/错序/重复的 BOLD/UNDERLINE 先本地删除，保留其余合法
+  标签与原文；RUBY/YOMI 畸形仍回退本地 RUBY 基线。新增
+  `formattingAcceptedSections`/`Rejected`/`Repaired` telemetry。
+- **prompt 预算**：未引用功能词不进入 token 证据；`maxPromptTokenEntries=600`，
+  优先 cited > content > pattern；profile 每词典 ≤2000、总计 ≤6000。source /
+  citation / snippet 上限共同构成输入预算。
+- **富文本语言**：`RichTextPostProcessor` / 两个 rich-text prompt builder 接收
+  `AgentResponseLanguage`；不再固定假设中文解释。
+- **Han-only**：`isHanOnlyAmbiguous` + `SCRIPT AMBIGUOUS` prompt；保留日语
+  tokenizer，但禁止把读音/结构当作确定事实。
+- 测试：budget/profile/token 截断、style-tag 修复、语言 prompt、telemetry
+  往返、Han-only 指令。`flutter analyze` 无问题，完整 `flutter test`
+  **631 passed**（声明 622）；fake/local provider，无付费 Key；真机/真实
+  provider 未验收。
+
+## 2026-11-08 P1 模型输出容忍
+
+- **原则**：模型输出不完美是常态。解析/校验失败后先本地 cleaning/salvage；
+  清洗后仍有非空译文或至少一个非空逐句理解（或独立 `NO_ANALYSIS`）时直接采用，
+  不再调用格式修复，也不显示“部分内容未通过校验”类格式 warning。只有清洗后
+  无可用内容才 repair/失败。
+- **parser**：允许只有 TRANSLATION 或只有 SEGMENT 的部分结果；不再因缺另一类
+  直接返回 null。契约级 `validation.valid` 仍可为 false，新增
+  `validation.usable` 表示可展示；历史/调试仍保留原始 errors。
+- **顺序**：先本地清洗，可清洗结果跳过 repair（少一次模型调用）；语言不一致仍
+  触发语言修复，语言/截断/覆盖/词典/无依据 warning 继续显示。
+- **UI**：`AgentResultView` 只对 `!validation.displayable` 显示格式 warning；
+  cleaned 结果静默展示。旧历史缺少 `usable` 时按 `valid` 兼容。
+- 测试：partial translation/segment adoption、tag 错误本地清洗不 repair、
+  可清洗结果不等待 repair、validation.usable JSON/历史、UI warning 抑制。
+  `flutter analyze` 无问题，完整 `flutter test` **624 passed**（声明 615）；
+  fake/local provider，无付费 Key；真机/真实 provider 未验收。
 
 ## 2026-11-07 短文本误报截断/校验与档案后台生成修复
 
@@ -141,8 +208,9 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
   返回持久化 future，`waitForAll` 先注册 completer 再入队，修复 cancel 竞态。
 - **依据卡片标题**：明镜、大辞林等词典的 MDX key 可能是内部索引
   （`01570 03798`、`@daijirin2-...`），不能直接展示。新增
-  `dictionary_entry_title.dart`：从词条 HTML 的 `【...】`/headword 元素提取标题，
-  内部 key 只保留给查词/跳转；旧历史没有新标题时从保存的 snippet 回退。依据卡片、
+  `dictionary_entry_title.dart`：先取清洗后词条 HTML 第一行的最简单词形式，
+  `【...】`/headword 元素仅作兼容回退；内部 key 只保留给查词/跳转；旧历史没有
+  新标题时从保存的 snippet 回退。依据卡片、
   语义标签、Markdown 导出、历史 fallback、点击后的词条页、查词结果列表和 P6.6
   依据预览都不再显示内部 key。
 - 测试：新增重复段合并、读音假名归一化、free grammar note、前台服务 lease 引用

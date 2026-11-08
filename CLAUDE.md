@@ -354,7 +354,8 @@ OCR 插件新增可选 `engine` 约束；版本 chip 左对齐/自动换行/固�
 provider 测试连接、受限 Markdown 预览、annotation v1、P6.8-lite 译文预览/证据
 缓存与 P7-lite 路由/遥测已实现（design §17.2、contracts §14、design-tokens
 P6.7 行、`agent-runtime-roadmap-2026-11-08.md`）；完整 text/group DSL 与发布/
-真机验收未完成。2026-11-06 另修复结果复核闪烁（稳定 summary
+真机验收未完成。2026-11-08 另将应用副标题/版本更新为 1.1，加入 DeepSeek
+快捷配置、测试快速模型连接文案、音调菜单精简与句法音调抑制；2026-11-06 另修复结果复核闪烁（稳定 summary
 槽位、final 不重播淡入）、ruby/音调 baseline 与读音重叠、尾高下降点、长下划线
 中途换行、历史详情复制、档案删除灰色锁定、provider 全局持久化、严格/宽松会话
 快照、启动后台预热（不阻塞主页）、Android 前台服务后台持续与流式中断自动续传；

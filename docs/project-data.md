@@ -4,11 +4,11 @@
 > 开发数据统计和固定 UI 文案以本文件为准。其他文档只引用本文件对应小节，不再
 > 复制具体数值；历史记录可以保留“当时值”，但必须标注为历史快照。
 >
-> - last_verified: 2026-11-06
-> - last_verified_code_commit: `a6a3185`（Phase 4 安全子集；采样截断显式化为
+> - last_verified: 2026-11-08
+> - last_verified_code_commit: `f79fe81`（P6.7/P6.8-lite/P7-lite 与 1.1 UI 为
 >   未提交工作区增量）
-> - last_doc_sync: 2026-11-06（Phase 4 安全子集 + 采样截断显式化；测试基线
->   523/514）
+> - last_doc_sync: 2026-11-08（P6.7 收尾 + P6.8-lite + P7-lite；测试基线
+>   619/610）
 > - 设备基线: `Medium_Phone_API_36.1`（x86_64 模拟器，API 36）；无 arm64 真机
 > - 维护规则：数据变化时只改本文件，并同步更新 `last_verified`/
 >   `last_verified_code_commit`；其他文档的引用链接不需要改。不要把本文件自身的
@@ -40,19 +40,17 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **604** |
+| 当前 test/testWidgets 声明数 | **622** |
 | 当前测试文件数 | **104** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | **613 passed**（声明 604；参数化/循环用例产生 613 个执行用例） |
-| 最近 `flutter build apk --debug` | success（2026-11-04 P6.6/P6.7 验证；2026-11-06 后台服务改动未做 APK 构建） |
+| 最近 `flutter test` | **631 passed**（声明 622；参数化/循环用例产生 631 个执行用例） |
+| 最近 `flutter build apk --debug` | success（2026-11-08，versionName 1.1） |
 | 最近 Android Kotlin 编译 | success（2026-11-06 `:app:compileDebugKotlin --offline`；含 AgentRunService/MainActivity） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
-> 该数字对应 2026-11-08 档案保存后 stale 标签即时刷新工作区（含档案失效缓存
-> revision key、刷新中间帧抑制、entry:// toast 根因/短文案、慢请求提示/prompt
-> 精简、重复段合并、读音归一化、free grammar note、档案后台生成 lease、Agent
-> UI/后台/续传、Phase 4 安全子集、Wave 3、P6.6、P7.0 富文本修正、Phase 1a–3）。
-> 新增/删除测试后只更新本节。
+> 该数字对应 2026-11-08 的 P6.7 收尾/P6.8-lite/P7-lite 工作区（provider 测试
+> 连接、受限 Markdown、annotation v1、译文预览/证据缓存、路由/遥测，以及 1.1
+> 快捷配置/音调规则/标题版本 UI）。新增/删除测试后只更新本节。
 
 ### 2.2 历史测试基线（不要当作当前值）
 
@@ -92,7 +90,11 @@
 | 失效档案保存刷新 fingerprint | 569（声明 560） | 编辑保存后重算 fingerprint/清 stale future；只显示另一本未编辑档案的“已失效” |
 | 短文本校验/档案后台修复 | 585（声明 576） | 重复 quote+type 段合并、读音假名归一化、free grammar note、WORD token 表面回退、档案后台生成持有前台服务 lease |
 | 档案保存后 stale 标签刷新 | 613（声明 604） | stale future key 加入 fingerprint/language；保存后用旧 fingerprint 抑制刷新中间帧；provider data 变化清空缓存 |
-| 当前 | **613（声明 604）** | 见 §2.1 |
+| P6.7 收尾/P6.8-lite/P7-lite + 1.1 UI | 619（声明 610） | provider 测试连接、受限 Markdown、annotation v1、译文预览/证据缓存、路由/遥测；快捷配置、音调抑制、标题/版本 |
+| P0 证据预算/缓存修复 | 622（声明 613） | 每词全局 1 条 + quote 轮转、coverage 有效上限、缓存 CitationRegistry 恢复、salvage 容忍度对齐 |
+| P1 模型输出容忍 | 624（声明 615） | parser 部分结果、先本地清洗后格式修复、usable 显示标记、保留语言/截断/覆盖/词典 warning；语言 repair 仍按需 |
+| P1 技术项（P2 执行） | 631（声明 622） | 富文本 12k/16k 预算、标签级修复、rejection 遥测；token/profile prompt 预算；富文本语言参数化；Han-only 歧义提示 |
+| 当前 | **631（声明 622）** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 
@@ -167,6 +169,7 @@ arm64 真机性能另需复测。
 
 | 类别 | 固定值 |
 |---|---|
+| 应用标题/版本 | 可扩充词典库的日语阅读工具；1.1 |
 | 主页五个按钮 | 拍照识别、查句子、查单词、历史记录、词典助手 |
 | 模式 | 严格模式、宽松模式 |
 | 结果区标题 | 原文、译文、逐句理解、可能的理解、未解决、词典依据 |
@@ -184,6 +187,10 @@ arm64 真机性能另需复测。
 | 档案删除锁定 | 分析进行中，暂不能删除档案（灰色锁图标） |
 | 隐私文案 | 图片只在本机 OCR，不会上传 |
 | 设置分组 | 词典助手设置、模型服务、服务商、接口地址、快速模型、高精度模型、接口密钥（API Key） |
+| 模型服务操作 | 快捷配置、添加模型服务、测试快速模型连接、保存、取消；运营商、DeepSeek |
+| 模型服务提示 | 若之前已填写过 API key 且 API key 仍然有效，无需再填写 API key。；OpenAI-compatible 协议的模型，max_tokens 建议留空 |
+| 阅读标注 | 显示注音、基础注音、注音 + 音调；单词音调数据来自UniDic，复合单词的音调请以词典为准。 |
+| 档案预览 | 预览、修改 |
 | 复制按钮 | 照片「复制文本」；语料卡片「复制」；语料详情「复制文本」；Agent 历史详情「复制结果为 Markdown」 |
 | 文本语料 | 文本语料（无照片占位的卡片/详情） |
 | 阅读工具栏 | 隐藏输入框 |
@@ -204,8 +211,9 @@ arm64 真机性能另需复测。
 |---|---:|---|
 | 单次分析源文本 | 6,000 字符 | `AgentLimits.maxSourceChars`；orchestrator 拒绝超限 |
 | 唯一检索目标 | 120 | `AgentLimits.maxTargets`；EvidenceBuilder |
-| citation 总数 | 全局 60；短文本动态 | `AgentLimits.maxEvidenceEntries`；selected target < 15 时上限为 `contentTargetCount × dictionaryCount`（再与 60 取小） |
-| 每词每典条数 | breadth 1；depth 3 | `AgentLimits.maxEntriesPerDictionary`；`enableDepthPass` 默认 false，只有显式多义/coverage 补查才补第 2/3 条 |
+| 单次 prompt token 证据行 | 600 | `AgentLimits.maxPromptTokenEntries`；优先 cited > pattern token > content；未引用功能词不发送 |
+| citation 总数 | 全局 60；短文本动态 | `AgentLimits.maxEvidenceEntries`；默认 breadth 每个内容词/模式 1 条；短文本有效上限为 `content/pattern targets + coverageCitationReserve`（默认 6，最高 60）；coverage 补充受本次有效上限约束 |
+| 每词每典条数 | 默认每词全局 1；fan-out 每典 1；depth 3 | `AgentLimits.maxEntriesPerDictionary`；默认不按词典数复制；`enableDictionaryFanOut` 时恢复每本词典 1 条；`enableDepthPass` 默认 false，只有显式多义/coverage 补查才补第 2/3 条 |
 | 摘要长度 | 400 字符 | `AgentLimits.maxSnippetChars`；citation 展示清洗另截断至 240 |
 | Coverage 摘要长度 | 240 字符 | `AgentLimits.coverageSnippetChars`；仅送 coverage 审查，分析证据仍用 400 |
 | 单个 source 的 quote 上限 | 40 | `quote_builder.dart` |
@@ -216,28 +224,30 @@ arm64 真机性能另需复测。
 | 分析请求 maxTokens | 12,000（仅 Anthropic 发送） | `analysis_prompts.dart`；provider 可选 `maxOutputTokens` 覆盖 |
 | Provider 最大输出 tokens | 可选，0=未设置 | Agent 设置页；存于 `capabilities_json.max_output_tokens` |
 | 模型额外工具调用 | 0 | 当前固定流水线、模型无工具 |
-| 每词典档案 Markdown | 2,000 字符 | **设计/契约目标；当前代码未强制** |
+| 每词典档案 Markdown | 2,000 字符；总计 6,000 | `AgentLimits.maxProfileCharsPerDictionary` / `maxProfileTotalChars`；prompt 构建时截断 |
 | 输入 variants / sources | 4 / 8 | Schema 契约上限；当前 UI 支持多图（最多 6），每图最多 4 个 `(engine, mode)` 变体（P6.6） |
 | 每次 run 图片数 | 6 | `AgentLimits.maxImagesPerRun`（F11 已实现） |
 | 覆盖审查 missing / duplicate / fallback | 20 / 10 / 1 | `AgentLimits`（F7 已实现，单次回退） |
 | 覆盖审查 query 字符上限 | 100 | `AgentLimits.maxCoverageQueryChars`；仅防超长字符串 |
 | 复合词补查 token 跨度 | 6 | `AgentLimits.maxCoverageCompoundTokens`；未知 word query；无 tokenizer 时只接受已知术语 |
-| 短文本 target 阈值 | 15 | `AgentLimits.shortTextTargetThreshold`；低于此值使用内容词动态 citation 上限 |
+| 短文本 target 阈值 | 15 | `AgentLimits.shortTextTargetThreshold`；内容词+模式 target 低于此值时，有效 citation 上限使用“targets + coverage reserve” |
+| coverage citation reserve | 6 | `AgentLimits.coverageCitationReserve`；只给短文本 coverage 补查留余量，不会把上限抬到全局 60 |
 | content-word coverage 命中率 | 80% | `AgentLimits.coverageContentHitRateThreshold`；≥80% 跳过 coverage |
 | coverage 按需 depth | sense/usage/example 每典 2 条 | 其他 missing kind 每典 1 条 |
 | 慢请求提示 | 30 秒（0/负数禁用） | `AgentLimits.slowRequestWarningSeconds`；从主分析 `reasoning` 起计时，达到阈值只显示橙色“本次处理时间较长，请耐心等待”，**不取消** provider/OCR；此前显示“任务已进行 X 秒”，此后“已思考 X 秒”，完成态“任务用时 X 秒” |
 | 首跑词典档案 | 非阻塞 | 当前 run 使用 `noProfileInstruction`；分析后后台生成；确认/不再询问后下次 run 生效 |
 | 档案后台生成服务 | 持有到入队完成 | `AgentBackgroundLease` 引用计数；analysis done 后不立即停前台服务；生成完成且 proposals 持久化后释放；手动重新生成共用同一 lease |
-| 覆盖审查自适应触发 | 默认开启 | `AgentLimits.adaptiveCoverageReview`；内容词 citation 命中率 < 80% 时运行；达到 60 条不再强制审查 |
+| 覆盖审查自适应触发 | 默认开启 | `AgentLimits.adaptiveCoverageReview`；内容词 citation 命中率 < 80% 时运行；达到本次有效 citation 上限时仍可运行，以便本地验证重复项后释放槽位 |
 | 覆盖审查触发口径 | 内容词命中率 | 2026-11-06 P0：只统计 `Token.isContentWord`；排除助词/标点/功能词；固定 quote≤2/文本<50 短路已删除 |
 | 词典 fan-out | 默认关闭 | `AgentLimits.enableDictionaryFanOut`；真实 provider/arm64 验收前不默认开启 |
 | fan-out 触发 | >8 词典或 >16,000 字符 | `dictionaryFanOutThreshold` / `dictionaryFanOutEvidenceChars`；source+citation 估算 |
 | fan-out 并发 | 2 | `AgentLimits.dictionaryFanOutConcurrency`；按用户词典顺序合并 |
 | 静态覆盖词表 | 3 包 ×21 项 | `assets/agent/word_lists/{ja,zh,en}.json`；tag 5/5/5/3/3；不进入档案指纹 |
-| 非日语源 | 跳过 UniDic | `script_language.dart`；拉丁/韩文/西里尔/泰/阿拉伯/希腊；Han-only 暂按日语 |
+| 非日语源 | 跳过 UniDic | `script_language.dart`；拉丁/韩文/西里尔/泰/阿拉伯/希腊；Han-only 暂按日语，但 prompt 增加 SCRIPT AMBIGUOUS，禁止把读音/结构当作确定事实 |
 | 富文本格式化并发 | 3 | `AgentLimits.richTextConcurrency`；同文本只请求一次 |
 | 富文本批量请求 | 原文+逐句 1 次 | 词注/词典事实解释本地 RUBY；按 section 独立解析/降级 |
-| 富文本批量最大字符 | 20,000 | `AgentLimits.maxRichTextChars`；超限整批本地回退 |
+| 富文本批量最大字符 | 12,000 | `AgentLimits.maxRichTextChars`；超限整批本地回退 |
+| 富文本输出 token | 16,000 | `AgentLimits.richTextMaxTokens`；批量与单 section 共用，避免 20k 字符配 12k 输出上限截断 |
 | 分析输出 SEGMENT 上限 | 40 | `AgentLimits.maxSegments`；parser 截断并设置 `truncated` |
 | 每 quote 每 type SEGMENT 上限 | 1 | `AgentLimits.maxSegmentsPerQuotePerType` |
 | OPTION 上限 | 8 | `AgentLimits.maxOptionsPerRun` |

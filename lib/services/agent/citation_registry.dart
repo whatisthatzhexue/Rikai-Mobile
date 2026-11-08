@@ -33,6 +33,24 @@ class CitationRegistry {
     _nextId = 1;
   }
 
+  /// Rehydrates a registry from a cached evidence bundle.
+  ///
+  /// Cached evidence keeps the IDs issued by the run that built it. A new
+  /// registry must know those IDs before coverage can issue supplements;
+  /// otherwise `issue` restarts at `source-1` and silently collides with the
+  /// cached citations. Existing IDs are never reused.
+  void restore(Iterable<AgentCitation> citations) {
+    _citations.clear();
+    var nextId = 1;
+    for (final citation in citations) {
+      _citations[citation.id] = citation;
+      final match = RegExp(r'^source-(\d+)$').firstMatch(citation.id);
+      final issued = match == null ? 0 : int.tryParse(match.group(1)!) ?? 0;
+      if (issued >= nextId) nextId = issued + 1;
+    }
+    _nextId = nextId;
+  }
+
   /// Removes citations that were pruned by local duplicate verification. IDs
   /// are never reused; later citations keep their existing numbers.
   void removeAll(Iterable<String> ids) {

@@ -850,4 +850,54 @@ void main() {
     expect(find.textContaining('01570'), findsNothing);
     expect(find.textContaining('@daijirin'), findsNothing);
   });
+
+  testWidgets('cleaned usable validation hides the partial warning', (
+    tester,
+  ) async {
+    Future<void> pump(AgentValidationResult validation) async {
+      final result = AgentRunResult(
+        input: _result.input,
+        evidence: _result.evidence,
+        quotes: _result.quotes,
+        analysis: _result.analysis,
+        validation: validation,
+        sources: _result.sources,
+        dictionaryProfiles: _result.dictionaryProfiles,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AgentResultView(
+                result: result,
+                onCitationTap: (_) {},
+                strings: AgentUiStrings.of(AgentUiLanguage.chinese),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await pump(
+      const AgentValidationResult(
+        valid: false,
+        usable: true,
+        errors: <String>['cleaned'],
+        citationsUsed: <String>['source-1'],
+      ),
+    );
+    expect(find.textContaining('部分内容未通过校验'), findsNothing);
+
+    await pump(
+      const AgentValidationResult(
+        valid: false,
+        errors: <String>['invalid'],
+        citationsUsed: <String>['source-1'],
+      ),
+    );
+    expect(find.textContaining('部分内容未通过校验'), findsOneWidget);
+  });
 }

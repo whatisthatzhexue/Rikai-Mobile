@@ -324,6 +324,8 @@ void main() {
     expect(stages, contains(AgentStage.coverage));
     expect(result.coverageFallbackUsed, isTrue);
     expect(result.evidence.citations, hasLength(2));
+    // One content target + the bounded coverage reserve, not the global 60.
+    expect(result.evidence.budget.maxCitations, 7);
     expect(
       result.evidence.sources.single.tokens.single.citationIds,
       hasLength(2),
@@ -340,7 +342,6 @@ void main() {
 
   test('flow C supplements a traceable compound query once', () async {
     final lookup = _LookupScript(<List<LookupEntry>>[
-      <LookupEntry>[],
       <LookupEntry>[],
       <LookupEntry>[_entry('ところが', 'しかし。ところが。')],
     ]);

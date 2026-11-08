@@ -2,6 +2,7 @@ import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
 import '../../core/models/agent/agent_limits.dart';
 import '../../core/models/agent/agent_pitch.dart';
+import '../../core/models/agent/agent_quote.dart';
 import '../../core/models/agent/agent_tool.dart';
 import '../../core/models/dict_info.dart';
 import '../../core/models/lookup_match_mode.dart';
@@ -60,6 +61,7 @@ class EvidenceBuilder {
   Future<AgentEvidenceBundle> build({
     required List<AgentSourceInput> sources,
     required List<DictionaryInfo> dictionaries,
+    List<AgentQuoteRef> quotes = const <AgentQuoteRef>[],
     int? maxSourceChars,
     bool Function()? isCancelled,
     void Function(int citations)? onProgress,
@@ -139,15 +141,23 @@ class EvidenceBuilder {
             ? <String>[token.surface]
             : token.lookupCandidates;
         final key = candidates.join('\u0000');
+        final quoteKey = _quoteIdForSpan(
+          sourceId: source.id,
+          start: token.start,
+          end: token.end,
+          quotes: quotes,
+        );
         final existing = tokenTargets[key];
         if (existing == null) {
           tokenTargets[key] = _TokenTarget(
             candidates: candidates,
             tokenIds: <String>[id],
             content: token.isContentWord,
+            quoteKey: quoteKey,
           );
         } else {
           existing.tokenIds.add(id);
+          existing.quoteKey ??= quoteKey;
         }
       }
 
@@ -168,6 +178,7 @@ class EvidenceBuilder {
                 candidates: candidates,
                 tokenIds: const <String>[],
                 content: true,
+                quoteKey: null,
               ),
             );
             if (rawTargets.length >= maxTargets) break;
@@ -193,6 +204,12 @@ class EvidenceBuilder {
           _PatternTarget(
             evidenceIndex: patternEvidence.length - 1,
             candidates: <String>[match.surface],
+            quoteKey: _quoteIdForSpan(
+              sourceId: source.id,
+              start: match.start,
+              end: match.end,
+              quotes: quotes,
+            ),
           ),
         );
       }
@@ -210,33 +227,71 @@ class EvidenceBuilder {
       for (final target in rawTargets)
         if (!tokenTargets.containsKey(_targetKey(target.candidates))) target,
     ];
-    // Content words first: the short-text citation cap is derived from their
-    // count, so grammar patterns/function words must not consume the budget
-    // before the words the user is reading.
+    // Content words first, but round-robin across quotes inside each tier.
+    // A plain token-order list let the first sentence consume every target and
+    // citation slot before later sentences were even queried.
     final targets = <_LookupTarget>[
       ...tokenTargets.values.where((target) => target.content),
       ...rawOnlyTargets,
       ...patternTargets,
       ...tokenTargets.values.where((target) => !target.content),
     ];
-    final selectedTargets = targets.take(maxTargets).toList(growable: false);
-    if (targets.length > selectedTargets.length) truncated = true;
+    final perDictionaryBreadth = limits.enableDictionaryFanOut;
+    final quoteOrder = <String>[for (final quote in quotes) quote.id];
+    final contentTargets = <_LookupTarget>[
+      for (final target in targets)
+        if (target.content) target,
+    ];
+    final otherTargets = <_LookupTarget>[
+      for (final target in targets)
+        if (!target.content) target,
+    ];
+    final fairTargets = <_LookupTarget>[
+      ..._roundRobinByQuote(contentTargets, quoteOrder),
+      ..._roundRobinByQuote(otherTargets, quoteOrder),
+    ];
+    // Default policy does not query function words for citations: their token
+    // evidence and grammar-pattern citations are enough, and letting them fill
+    // the coverage reserve brought back the one-sentence 60-entry problem.
+    // Dictionary fan-out keeps them because a per-dictionary subset analysis
+    // may use function-word citations.
+    final candidateTargets = perDictionaryBreadth
+        ? fairTargets
+        : <_LookupTarget>[
+            for (final target in fairTargets)
+              if (target.content) target,
+          ];
+    final selectedTargets = candidateTargets
+        .take(maxTargets)
+        .toList(growable: false);
+    if (candidateTargets.length > selectedTargets.length) truncated = true;
 
-    // Short inputs should not prefetch the full 60-entry budget. The breadth
-    // pass grants one entry per content-word target per dictionary; for a
-    // short text that is the natural ceiling. Function words/patterns may
-    // still be looked up, but they cannot push the bundle to 60 on their own.
+    // Breadth is one citation per content word/pattern, not one per dictionary.
+    // A small reserve lets coverage add a genuinely missing sense/usage on
+    // short text without reopening the 60-citation path. Dictionary fan-out is
+    // the exception: it needs evidence from every dictionary, so it keeps the
+    // per-dictionary breadth multiplier.
     final contentTargetCount = selectedTargets
         .whereType<_TokenTarget>()
         .where((target) => target.content)
         .length;
-    final shortText = selectedTargets.length < limits.shortTextTargetThreshold;
-    final shortTextTargetCount = contentTargetCount > 0
-        ? contentTargetCount
-        : selectedTargets.length;
-    final shortTextLimit = shortTextTargetCount * dictionaries.length;
-    final citationLimit = shortText
-        ? (shortTextLimit < maxCitations ? shortTextLimit : maxCitations)
+    final patternTargetCount = selectedTargets
+        .whereType<_PatternTarget>()
+        .length;
+    final breadthTargetCount = contentTargetCount + patternTargetCount;
+    final shortText = breadthTargetCount < limits.shortTextTargetThreshold;
+    final coverageReserve = shortText && breadthTargetCount > 0
+        ? (limits.coverageCitationReserve < 0
+              ? 0
+              : limits.coverageCitationReserve)
+        : 0;
+    final breadthMultiplier = limits.enableDictionaryFanOut
+        ? dictionaries.length
+        : 1;
+    final naturalLimit =
+        breadthTargetCount * breadthMultiplier + coverageReserve;
+    final citationLimit = naturalLimit < maxCitations
+        ? naturalLimit
         : maxCitations;
 
     void recordLookupFailure(DictionaryInfo dictionary, String message) {
@@ -256,9 +311,10 @@ class EvidenceBuilder {
       selectedTargets[index].ordinal = index;
     }
 
-    // Breadth pass: one best entry per target per dictionary. The default
-    // depth pass is off, so this is the complete initial evidence set; extra
-    // senses are only fetched by an explicit follow-up.
+    // Breadth pass: one best entry per target, or one per dictionary when
+    // dictionary fan-out needs per-dictionary evidence. The default depth pass
+    // is off, so this is the complete initial evidence set; extra senses are
+    // only fetched by an explicit follow-up.
     var capReached = false;
     final batchSize = limits.lookupBatchSize <= 0 ? 1 : limits.lookupBatchSize;
     final storedResults = <_StoredLookup>[];
@@ -279,14 +335,17 @@ class EvidenceBuilder {
         target.ordinal,
         dictionaryOrder,
       );
-      // Breadth = one best entry per dictionary for this target. Previously it
-      // stopped after the first dictionary, which made the first dictionary
-      // dominate short inputs once the depth pass filled the rest.
+      // Default policy: one best entry per content word/pattern. The dictionary
+      // rotation still decides which dictionary supplies that entry, so no
+      // single dictionary dominates. Fan-out keeps one entry per dictionary
+      // because each subset analysis needs its own evidence.
       for (final group in groups) {
-        var remaining =
-            maxEntriesPerDictionary -
-            (target.perDictionary[group.dictionary.id] ?? 0);
-        if (remaining <= 0) continue;
+        if (perDictionaryBreadth &&
+            (target.perDictionary[group.dictionary.id] ?? 0) >=
+                maxEntriesPerDictionary) {
+          continue;
+        }
+        var addedForGroup = false;
         for (final entry in group.entries) {
           final entryKey = entry.headword.isEmpty
               ? entry.matchedKey
@@ -297,6 +356,7 @@ class EvidenceBuilder {
             target.citationIds.add(existing.id);
             target.perDictionary[group.dictionary.id] =
                 (target.perDictionary[group.dictionary.id] ?? 0) + 1;
+            addedForGroup = true;
             break;
           }
           if (citations.count >= citationLimit) {
@@ -317,14 +377,17 @@ class EvidenceBuilder {
           target.citationIds.add(citation.id);
           target.perDictionary[group.dictionary.id] =
               (target.perDictionary[group.dictionary.id] ?? 0) + 1;
+          addedForGroup = true;
           onProgress?.call(citations.count);
           if (citations.count >= citationLimit) {
             if (citationLimit == maxCitations) truncated = true;
             return true;
           }
-          // One entry per dictionary; continue to the next dictionary.
+          // One entry per group; fan-out continues with the next dictionary,
+          // the default stops after the first usable dictionary.
           break;
         }
+        if (!perDictionaryBreadth && addedForGroup) return false;
       }
       return false;
     }
@@ -847,6 +910,10 @@ abstract class _LookupTarget {
   var toolCallId = '';
   var ordinal = 0;
 
+  /// Quote that first introduced this target. Used for per-quote round-robin;
+  /// null targets (raw fallback) run after the quoted groups.
+  String? quoteKey;
+
   final Set<String> citationIds = <String>{};
   final Map<String, int> perDictionary = <String, int>{};
 }
@@ -856,7 +923,10 @@ class _TokenTarget extends _LookupTarget {
     required this.candidates,
     required this.tokenIds,
     required this.content,
-  });
+    String? quoteKey,
+  }) {
+    this.quoteKey = quoteKey;
+  }
 
   @override
   final List<String> candidates;
@@ -866,7 +936,13 @@ class _TokenTarget extends _LookupTarget {
 }
 
 class _PatternTarget extends _LookupTarget {
-  _PatternTarget({required this.evidenceIndex, required this.candidates});
+  _PatternTarget({
+    required this.evidenceIndex,
+    required this.candidates,
+    String? quoteKey,
+  }) {
+    this.quoteKey = quoteKey;
+  }
 
   final int evidenceIndex;
   @override
@@ -877,6 +953,54 @@ class _PatternTarget extends _LookupTarget {
 }
 
 String _targetKey(List<String> candidates) => candidates.join('\u0000');
+
+/// Interleaves targets from each quote while preserving each quote's internal
+/// order. Targets without a quote (raw fallback) run last. If no quotes were
+/// supplied (direct unit tests), this is a no-op.
+List<_LookupTarget> _roundRobinByQuote(
+  List<_LookupTarget> targets,
+  List<String> quoteOrder,
+) {
+  if (targets.length < 2) return List<_LookupTarget>.of(targets);
+  final groups = <String?, List<_LookupTarget>>{};
+  for (final target in targets) {
+    groups.putIfAbsent(target.quoteKey, () => <_LookupTarget>[]).add(target);
+  }
+  final keys = <String?>[
+    for (final id in quoteOrder)
+      if (groups.containsKey(id)) id,
+    if (groups.containsKey(null)) null,
+    for (final key in groups.keys)
+      if (key != null && !quoteOrder.contains(key)) key,
+  ];
+  final indexes = <String?, int>{for (final key in keys) key: 0};
+  final result = <_LookupTarget>[];
+  var remaining = targets.length;
+  while (remaining > 0) {
+    for (final key in keys) {
+      final group = groups[key]!;
+      final index = indexes[key]!;
+      if (index >= group.length) continue;
+      result.add(group[index]);
+      indexes[key] = index + 1;
+      remaining--;
+    }
+  }
+  return result;
+}
+
+String? _quoteIdForSpan({
+  required String sourceId,
+  required int start,
+  required int end,
+  required List<AgentQuoteRef> quotes,
+}) {
+  for (final quote in quotes) {
+    if (quote.sourceId != sourceId) continue;
+    if (start < quote.end && end > quote.start) return quote.id;
+  }
+  return null;
+}
 
 /// Rank by the user-visible [DictionaryInfo.order], not by the caller's list
 /// position. The Agent UI supplies a sorted list, but tests and integrations

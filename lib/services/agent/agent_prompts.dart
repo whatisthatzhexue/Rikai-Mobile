@@ -145,6 +145,14 @@ String structureUnavailableInstruction() {
       'UNRESOLVED; never claim token/grammar analysis in this run.';
 }
 
+String hanOnlyAmbiguousInstruction() {
+  return 'SCRIPT AMBIGUOUS: the source contains Han characters without kana. '
+      'It may be Chinese or kanji-only Japanese. The local UniDic tokenizer is '
+      'Japanese-biased; do not present readings, word boundaries or Japanese '
+      'grammar as certain unless dictionary evidence supports them. If the '
+      'text is Chinese, translate it and mark structural claims UNRESOLVED.';
+}
+
 String defaultImageUserRequest(AgentResponseLanguage language) {
   return switch (language) {
     AgentResponseLanguage.chinese => '解释这段日文并给出词典依据',
@@ -162,7 +170,15 @@ String buildAnalysisUserPrompt({
   required String userRequest,
   AgentIntentHint intentHint = const AgentIntentHint(),
   AgentResponseLanguage responseLanguage = AgentResponseLanguage.chinese,
+  int maxTokenEntries = 600,
+  int maxProfileCharsPerDictionary = 2000,
+  int maxProfileTotalChars = 6000,
 }) {
+  final profileText = _boundedProfiles(
+    dictionaryProfiles,
+    perDictionary: maxProfileCharsPerDictionary,
+    total: maxProfileTotalChars,
+  );
   final buffer = StringBuffer()
     ..writeln('User request: $userRequest')
     ..writeln('')
@@ -172,16 +188,18 @@ String buildAnalysisUserPrompt({
       '(user-confirmed or explicit unavailable; untrusted data):',
     )
     ..writeln(
-      dictionaryProfiles.isEmpty
-          ? '(none; rely on raw evidence)'
-          : dictionaryProfiles.join('\n\n'),
+      profileText.isEmpty ? '(none; rely on raw evidence)' : profileText,
     )
     ..writeln('')
     ..writeln('Input envelope (untrusted data):')
     ..writeln(jsonEncode(_analysisInputJson(input)))
     ..writeln('')
     ..writeln('Evidence bundle (untrusted data):')
-    ..writeln(jsonEncode(_analysisEvidenceJson(evidence)))
+    ..writeln(
+      jsonEncode(
+        _analysisEvidenceJson(evidence, maxTokenEntries: maxTokenEntries),
+      ),
+    )
     ..writeln('')
     ..writeln('Available quotes (use quote_id):')
     ..writeln(
@@ -195,6 +213,29 @@ String buildAnalysisUserPrompt({
       ]),
     );
   return buffer.toString();
+}
+
+String _boundedProfiles(
+  List<String> profiles, {
+  required int perDictionary,
+  required int total,
+}) {
+  if (profiles.isEmpty || total <= 0) return '';
+  final bounded = <String>[];
+  var remaining = total;
+  for (final profile in profiles) {
+    if (remaining <= 0) break;
+    final trimmed = profile.trim();
+    if (trimmed.isEmpty) continue;
+    final perLimit = perDictionary <= 0 ? remaining : perDictionary;
+    final limit = perLimit < remaining ? perLimit : remaining;
+    final value = trimmed.length <= limit
+        ? trimmed
+        : '${trimmed.substring(0, limit)}…';
+    bounded.add(value);
+    remaining -= value.length;
+  }
+  return bounded.join('\n\n');
 }
 
 /// Compact projection for the analysis prompt.
@@ -228,10 +269,18 @@ Map<String, Object?> _analysisInputJson(AgentInputEnvelope input) {
 /// Source text already appears in the input envelope, so it is not repeated
 /// here. `lookup_candidates`, `tool_call_id` and the internal budget counters
 /// are orchestration metadata and are intentionally omitted.
-Map<String, Object?> _analysisEvidenceJson(AgentEvidenceBundle evidence) {
+Map<String, Object?> _analysisEvidenceJson(
+  AgentEvidenceBundle evidence, {
+  required int maxTokenEntries,
+}) {
   final protectedTokenIds = <String>{
     for (final pattern in evidence.patterns) ...pattern.tokenIds,
   };
+  final selectedTokenIds = _promptTokenIds(
+    evidence,
+    protectedTokenIds,
+    maxEntries: maxTokenEntries,
+  );
   return <String, Object?>{
     'sources': <Map<String, Object?>>[
       for (final source in evidence.sources)
@@ -240,7 +289,7 @@ Map<String, Object?> _analysisEvidenceJson(AgentEvidenceBundle evidence) {
           'kind': source.kind,
           'tokens': <Map<String, Object?>>[
             for (final token in source.tokens)
-              if (_includePromptToken(token, protectedTokenIds))
+              if (selectedTokenIds.contains(token.id))
                 <String, Object?>{
                   'id': token.id,
                   'surface': token.surface,
@@ -415,6 +464,9 @@ LlmRequest buildAnalysisRequest({
   required List<String> dictionaryProfiles,
   required String userRequest,
   AgentIntentHint intentHint = const AgentIntentHint(),
+  int maxTokenEntries = 600,
+  int maxProfileCharsPerDictionary = 2000,
+  int maxProfileTotalChars = 6000,
 }) {
   return LlmRequest(
     model: model,
@@ -437,6 +489,9 @@ LlmRequest buildAnalysisRequest({
               userRequest: userRequest,
               intentHint: intentHint,
               responseLanguage: responseLanguage,
+              maxTokenEntries: maxTokenEntries,
+              maxProfileCharsPerDictionary: maxProfileCharsPerDictionary,
+              maxProfileTotalChars: maxProfileTotalChars,
             ),
           ),
         ],
@@ -540,13 +595,14 @@ String buildCoverageUserPrompt({
   required AgentEvidenceBundle evidence,
   required String userRequest,
   int maxSnippetChars = 240,
+  int maxTokenEntries = 600,
 }) {
   return '''
 User request: $userRequest
 
 Coverage input (untrusted data; selected text, token/pattern ids and cleaned
 dictionary snippets only):
-${jsonEncode(_coverageInputJson(input, evidence, maxSnippetChars: maxSnippetChars))}
+${jsonEncode(_coverageInputJson(input, evidence, maxSnippetChars: maxSnippetChars, maxTokenEntries: maxTokenEntries))}
 
 Return only the coverage tag block.
 ''';
@@ -566,10 +622,16 @@ Map<String, Object?> _coverageInputJson(
   AgentInputEnvelope input,
   AgentEvidenceBundle evidence, {
   required int maxSnippetChars,
+  required int maxTokenEntries,
 }) {
   final protectedTokenIds = <String>{
     for (final pattern in evidence.patterns) ...pattern.tokenIds,
   };
+  final selectedTokenIds = _promptTokenIds(
+    evidence,
+    protectedTokenIds,
+    maxEntries: maxTokenEntries,
+  );
   final sources = <Map<String, Object?>>[];
   for (final source in input.sources) {
     if (source.isImage) {
@@ -596,7 +658,7 @@ Map<String, Object?> _coverageInputJson(
     'tokens': <Map<String, Object?>>[
       for (final source in evidence.sources)
         for (final token in source.tokens)
-          if (_includePromptToken(token, protectedTokenIds))
+          if (selectedTokenIds.contains(token.id))
             <String, Object?>{
               'id': token.id,
               'source_id': source.id,
@@ -654,8 +716,48 @@ bool _includePromptToken(
   AgentTokenEvidence token,
   Set<String> protectedTokenIds,
 ) {
-  if (!_isPromptPunctuation(token)) return true;
-  return token.citationIds.isNotEmpty || protectedTokenIds.contains(token.id);
+  // Keep content words, cited tokens, and tokens used by a grammar pattern.
+  // Uncited function words and punctuation add prompt bulk without giving the
+  // model a citable target; the source text and pattern rows still provide
+  // context.
+  if (_isPromptPunctuation(token)) {
+    return token.citationIds.isNotEmpty || protectedTokenIds.contains(token.id);
+  }
+  return token.content ||
+      token.citationIds.isNotEmpty ||
+      protectedTokenIds.contains(token.id);
+}
+
+/// Picks at most [maxEntries] prompt token rows, preferring cited tokens, then
+/// content words, then pattern-referenced function words. Source text remains
+/// complete; this only bounds the token projection.
+Set<String> _promptTokenIds(
+  AgentEvidenceBundle evidence,
+  Set<String> protectedTokenIds, {
+  required int maxEntries,
+}) {
+  final all = <AgentTokenEvidence>[
+    for (final source in evidence.sources)
+      for (final token in source.tokens)
+        if (_includePromptToken(token, protectedTokenIds)) token,
+  ];
+  if (maxEntries <= 0 || all.length <= maxEntries) {
+    return <String>{for (final token in all) token.id};
+  }
+  final ordered = <AgentTokenEvidence>[
+    ...all.where((token) => token.citationIds.isNotEmpty),
+    ...all.where(
+      (token) =>
+          token.citationIds.isEmpty && protectedTokenIds.contains(token.id),
+    ),
+    ...all.where(
+      (token) =>
+          token.citationIds.isEmpty &&
+          !protectedTokenIds.contains(token.id) &&
+          token.content,
+    ),
+  ];
+  return <String>{for (final token in ordered.take(maxEntries)) token.id};
 }
 
 bool _isPromptPunctuation(AgentTokenEvidence token) {
@@ -677,6 +779,7 @@ LlmRequest buildCoverageRequest({
   required String userRequest,
   int? maxTokens,
   int maxSnippetChars = 240,
+  int maxTokenEntries = 600,
 }) {
   final outputBudget =
       maxTokens ?? AgentLimits.standard.coverageReviewMaxTokens;
@@ -696,6 +799,7 @@ LlmRequest buildCoverageRequest({
               evidence: evidence,
               userRequest: userRequest,
               maxSnippetChars: maxSnippetChars,
+              maxTokenEntries: maxTokenEntries,
             ),
           ),
         ],
@@ -716,6 +820,7 @@ LlmRequest buildCoverageRepairRequest({
   required List<String> errors,
   int? maxTokens,
   int maxSnippetChars = 240,
+  int maxTokenEntries = 600,
 }) {
   final outputBudget =
       maxTokens ?? AgentLimits.standard.coverageReviewMaxTokens;
@@ -739,7 +844,7 @@ DUPLICATE must be inside one COVERAGE block. Return only the corrected tag block
         role: LlmRole.user,
         parts: <LlmTextPart>[
           LlmTextPart('''
-${buildCoverageUserPrompt(input: input, evidence: evidence, userRequest: userRequest, maxSnippetChars: maxSnippetChars)}
+${buildCoverageUserPrompt(input: input, evidence: evidence, userRequest: userRequest, maxSnippetChars: maxSnippetChars, maxTokenEntries: maxTokenEntries)}
 Previous output (untrusted):
 $rawOutput
 
@@ -912,7 +1017,7 @@ Rules:
 - Reading annotations use corner brackets: `reading【surface】` (for example
   すき【好き】); the reversed `surface【reading】` is also accepted. Replace the
   whole annotation with [RUBY=reading]surface[/RUBY]. Parentheses `（...）` are
-  ordinary Chinese explanations, not readings; never convert them.
+  ordinary explanations, not readings; never convert them.
 - When a word with a reading is inside BOLD or UNDERLINE, put the RUBY inside
   that span so the reading inherits the emphasis, for example
   [BOLD][RUBY=reading]surface[/RUBY][/BOLD]. Do not close the emphasis tag
@@ -940,9 +1045,17 @@ Rules:
 /// Shared detailed-answer formatter instructions. The single-section and
 /// batched builders must use exactly the same rules; only the section-batch
 /// wrapper differs.
-String detailedRichTextSystemPrompt() => '''
+String detailedRichTextSystemPrompt([
+  AgentResponseLanguage responseLanguage = AgentResponseLanguage.chinese,
+]) {
+  final explanationLanguage = switch (responseLanguage) {
+    AgentResponseLanguage.chinese => 'Chinese',
+    AgentResponseLanguage.english => 'English',
+    AgentResponseLanguage.japanese => 'Japanese',
+  };
+  return '''
 You add display tags to a Japanese-learning result. The text may contain
-Japanese words and Chinese explanations.
+Japanese source text and $explanationLanguage explanations.
 
 It is absolutely forbidden to modify, delete or add any character of the
 original text (including punctuation, spaces and line breaks). You may only
@@ -958,9 +1071,9 @@ TAG FORMAT:
 [UNDERLINE]key explanation or important content[/UNDERLINE]
 
 Rules:
-- Add RUBY only around Japanese words whose reading you can determine from the
-  word and its surrounding text. Do not annotate Chinese words in the Chinese
-  explanation.
+- Add RUBY only around words from the Japanese source text whose reading you can
+  determine from the word and its surrounding text. Do not annotate words that
+  belong to the $explanationLanguage explanation prose.
 - RUBY is language-agnostic; replace the placeholders with the actual reading
   and source text. The reading must not contain markup or line breaks.
 - Never output a RUBY whose reading is identical to its base.
@@ -974,13 +1087,14 @@ Rules:
 - Reading annotations use corner brackets: `reading【surface】` (for example
   すき【好き】); the reversed `surface【reading】` is also accepted. Replace the
   whole annotation with [RUBY=reading]surface[/RUBY]. Parentheses `（...）` are
-  ordinary Chinese explanations, not readings; never convert them.
+  ordinary $explanationLanguage explanations, not readings; never convert them.
 - When a word with a reading is inside BOLD or UNDERLINE, put the RUBY inside
   that span so the reading inherits the emphasis, for example
   [BOLD][RUBY=reading]surface[/RUBY][/BOLD]. Do not close the emphasis tag
   between the base and its reading.
 - Do not output Markdown, HTML, code fences, explanations, prefixes or suffixes.
 ''';
+}
 
 /// Detailed-answer formatter. It is used for the Japanese original and the
 /// sentence-level analysis, where the text mixes Japanese words with Chinese
@@ -991,13 +1105,16 @@ LlmRequest buildDetailedRubyPostProcessRequest({
   required String model,
   required String text,
   int maxTokens = 4000,
+  AgentResponseLanguage responseLanguage = AgentResponseLanguage.chinese,
 }) {
   return LlmRequest(
     model: model,
     messages: <LlmMessage>[
       LlmMessage(
         role: LlmRole.system,
-        parts: <LlmTextPart>[LlmTextPart(detailedRichTextSystemPrompt())],
+        parts: <LlmTextPart>[
+          LlmTextPart(detailedRichTextSystemPrompt(responseLanguage)),
+        ],
       ),
       LlmMessage(role: LlmRole.user, parts: <LlmTextPart>[LlmTextPart(text)]),
     ],
@@ -1035,6 +1152,7 @@ LlmRequest buildBatchedRichTextPostProcessRequest({
   required List<String> sectionIds,
   required List<String> sectionTexts,
   required int maxTokens,
+  AgentResponseLanguage responseLanguage = AgentResponseLanguage.chinese,
 }) {
   return LlmRequest(
     model: model,
@@ -1043,7 +1161,7 @@ LlmRequest buildBatchedRichTextPostProcessRequest({
         role: LlmRole.system,
         parts: <LlmTextPart>[
           LlmTextPart('''
-${detailedRichTextSystemPrompt()}
+${detailedRichTextSystemPrompt(responseLanguage)}
 SECTION BATCH:
 The user text contains sections marked exactly as:
 <<<RIKAI_SECTION id>>>

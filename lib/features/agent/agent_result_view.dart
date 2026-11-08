@@ -106,7 +106,7 @@ class AgentResultView extends StatelessWidget {
         ),
       );
     }
-    if (!result.validation.valid) {
+    if (!result.validation.displayable) {
       blocks.add(
         Text(
           strings.validationPartial,

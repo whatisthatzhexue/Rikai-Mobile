@@ -442,4 +442,19 @@ void main() {
     expect(unrelated.valid, isFalse);
     expect(unrelated.errors.any((error) => error.contains('原文范围内')), isTrue);
   });
+
+  test('usable survives JSON while contract validity stays false', () {
+    const validation = AgentValidationResult(
+      valid: false,
+      usable: true,
+      errors: <String>['cleaned locally'],
+      citationsUsed: <String>['source-1'],
+    );
+    final decoded = AgentValidationResult.fromJson(validation.toJson());
+
+    expect(decoded.valid, isFalse);
+    expect(decoded.usable, isTrue);
+    expect(decoded.displayable, isTrue);
+    expect(decoded.errors, <String>['cleaned locally']);
+  });
 }

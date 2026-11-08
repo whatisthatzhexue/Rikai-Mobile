@@ -60,6 +60,11 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
   文本；所有情况引用同一组依据时 chip 只在最后一个情况下方显示一次，不同则
   逐情况保留。RUBY 以 base 的基线对齐，读音继承 BOLD 但永不加下划线。注音由 AI
   判断，不读取 UniDic 读音表。（R-AGENT-23、T-135）
+- **模型输出容忍（R-AGENT-28）**：parser 允许只有译文或只有逐句；解析/校验失败
+  后先本地 cleaning/salvage。清洗后仍有非空译文或至少一个非空逐句理解时直接
+  采用，不再 repair、不显示“部分内容未通过校验”类格式 warning；`validation.valid`
+  保留契约语义，`validation.usable` 表示可展示。只有清洗后无可用内容才 repair。
+  语言不一致、截断/依据上限、覆盖/词典/无依据 warning 仍显示。
 - **P6.7 部分实现**：历史一条=一次 run、只读、不存图片/路径；声调只用 UniDic
   字段 24–26，只在词注/词典事实行；这两项已实现并有自动化测试。annotation DSL
   只接受安全 JSON AST，P6.7 先覆盖阅读器/照片集/语料；Markdown 只用于导出/

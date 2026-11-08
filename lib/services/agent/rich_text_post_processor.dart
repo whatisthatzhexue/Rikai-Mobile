@@ -1,4 +1,5 @@
 import '../../core/models/agent/agent_limits.dart';
+import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_tool.dart';
 import '../../core/utils/rich_text_tags.dart';
 import 'agent_prompts.dart';
@@ -26,12 +27,18 @@ class RichTextPostProcessor {
   const RichTextPostProcessor({
     required LlmPort llm,
     required String model,
+    this.responseLanguage = AgentResponseLanguage.chinese,
     this.onCall,
   }) : _llm = llm,
        _model = model;
 
   final LlmPort _llm;
   final String _model;
+
+  /// Language of the human-readable explanation. It only shapes prompt wording
+  /// (for example "Chinese explanations" vs "English explanations"); the
+  /// source text and tags are language-agnostic.
+  final AgentResponseLanguage responseLanguage;
 
   /// Content-free telemetry for the formatting request. The orchestrator uses
   /// it to keep `llmCalls` as the total provider call count.
@@ -163,12 +170,16 @@ class RichTextPostProcessor {
     // post-failure/retained-tag fallback, not part of its input.
     // The formatter returns the full text plus tags; a fixed 4000-token cap
     // truncates long originals on providers that honor request.maxTokens.
-    final maxTokens = (text.length + 2000).clamp(4000, 16000);
+    final maxTokens = (text.length + 2000).clamp(
+      4000,
+      AgentLimits.richTextMaxTokens,
+    );
     final request = detailed
         ? buildDetailedRubyPostProcessRequest(
             model: _model,
             text: text,
             maxTokens: maxTokens,
+            responseLanguage: responseLanguage,
           )
         : buildRichTextPostProcessRequest(
             model: _model,
@@ -232,13 +243,14 @@ class RichTextPostProcessor {
     }
     final maxTokens = (totalChars + 2000).clamp(
       4000,
-      AgentLimits.analysisMaxTokens,
+      AgentLimits.richTextMaxTokens,
     );
     final request = buildBatchedRichTextPostProcessRequest(
       model: _model,
       sectionIds: sectionIds,
       sectionTexts: sectionTexts,
       maxTokens: maxTokens,
+      responseLanguage: responseLanguage,
     );
     final buffer = StringBuffer();
     final watch = Stopwatch()..start();
@@ -335,11 +347,21 @@ class RichTextPostProcessor {
     if (!allowsYomiDeletion(text, candidate)) {
       return _localFallback(text, 'yomi_changed');
     }
-    if (!isWellFormedRichText(candidate)) {
-      return _localFallback(text, 'malformed_tags');
-    }
     var normalized = cleanRubyReadings(candidate);
     normalized = stripRedundantRubyTags(normalized);
+    var tagsRepaired = false;
+    if (!isWellFormedRichText(normalized)) {
+      // A formatter can emit valid content with one orphan/mis-nested
+      // BOLD/UNDERLINE tag. Drop only the broken style tags and keep the rest
+      // instead of discarding every emphasis in the section. Malformed RUBY or
+      // YOMI still falls back to the local reading baseline.
+      final repaired = _repairSimpleStyleTags(normalized);
+      if (!isWellFormedRichText(repaired)) {
+        return _localFallback(text, 'malformed_tags');
+      }
+      normalized = repaired;
+      tagsRepaired = true;
+    }
     // The analysis model may already have emitted display tags despite the
     // prompt (for example [RUBY=...]). They are formatting, not source text,
     // so both sides must be compared with their display tags removed.
@@ -367,8 +389,72 @@ class RichTextPostProcessor {
     if (local != normalized &&
         isWellFormedRichText(local) &&
         stripRichTextTags(local) == sourcePlain) {
-      return RichTextPostProcessResult(taggedText: local);
+      return RichTextPostProcessResult(
+        taggedText: local,
+        rejectionReason: tagsRepaired ? 'tags_repaired' : '',
+      );
     }
-    return RichTextPostProcessResult(taggedText: stripYomiTags(normalized));
+    return RichTextPostProcessResult(
+      taggedText: stripYomiTags(normalized),
+      rejectionReason: tagsRepaired ? 'tags_repaired' : '',
+    );
+  }
+
+  /// Drops orphan, duplicate or mis-nested BOLD/UNDERLINE tags while leaving
+  /// RUBY pairs and every base character untouched. It is deliberately
+  /// conservative: malformed RUBY/YOMI is not repaired here.
+  static String _repairSimpleStyleTags(String text) {
+    final matches = richTextTagPattern.allMatches(text).toList(growable: false);
+    if (matches.isEmpty) return text;
+    final output = <String>[];
+    final stack = <({String tag, int index})>[];
+    final skippedClosings = <String, int>{};
+    var cursor = 0;
+    var rubyDepth = 0;
+
+    for (final match in matches) {
+      output.add(text.substring(cursor, match.start));
+      cursor = match.end;
+      final tag = (match.group(1) ?? '').toLowerCase();
+      if (tag.startsWith('ruby=')) {
+        rubyDepth++;
+        output.add(match.group(0) ?? '');
+        continue;
+      }
+      if (tag == '/ruby') {
+        if (rubyDepth > 0) rubyDepth--;
+        output.add(match.group(0) ?? '');
+        continue;
+      }
+      // Style tags inside a RUBY base are invalid; drop them rather than
+      // invalidating the whole section.
+      if (rubyDepth > 0) continue;
+      if (tag == 'bold' || tag == 'underline') {
+        if (stack.any((entry) => entry.tag == tag)) {
+          skippedClosings[tag] = (skippedClosings[tag] ?? 0) + 1;
+          continue;
+        }
+        final index = output.length;
+        output.add(match.group(0) ?? '');
+        stack.add((tag: tag, index: index));
+        continue;
+      }
+      final closing = tag.startsWith('/') ? tag.substring(1) : tag;
+      final skipped = skippedClosings[closing] ?? 0;
+      if (skipped > 0) {
+        skippedClosings[closing] = skipped - 1;
+        continue;
+      }
+      if (stack.isNotEmpty && stack.last.tag == closing) {
+        stack.removeLast();
+        output.add(match.group(0) ?? '');
+      }
+      // Orphan or mis-nested closing tags are dropped.
+    }
+    output.add(text.substring(cursor));
+    for (final entry in stack) {
+      output[entry.index] = '';
+    }
+    return output.join();
   }
 }

@@ -24,7 +24,9 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        // Product-facing version for the 1.1 release; keep the build number
+        // from pubspec (1.1.0+2) as versionCode.
+        versionName = "1.1"
     }
 
     packaging {

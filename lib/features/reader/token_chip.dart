@@ -21,6 +21,7 @@ class TokenChip extends StatelessWidget {
     required this.showFurigana,
     this.annotationRules = AnnotationRuleSets.basic,
     this.annotationTarget = AnnotationTarget.reader,
+    this.suppressPitch = false,
     this.onTap,
   });
 
@@ -29,6 +30,10 @@ class TokenChip extends StatelessWidget {
   final bool showFurigana;
   final AnnotationRuleSet annotationRules;
   final AnnotationTarget annotationTarget;
+
+  /// A contextual UniDic sentence rule may suppress a single word's pitch
+  /// line even when the token itself has valid accent data.
+  final bool suppressPitch;
   final ValueChanged<Token>? onTap;
 
   @override
@@ -68,7 +73,8 @@ class TokenChip extends StatelessWidget {
         showFurigana && plan.ruby && !punctuation && token.hasDistinctReading
         ? token.reading
         : '';
-    final showPitch = showFurigana && plan.pitch && pitchCandidate;
+    final showPitch =
+        showFurigana && plan.pitch && pitchCandidate && !suppressPitch;
     final tap = punctuation ? null : onTap;
 
     // Avoid a Material + InkWell for every token. A long result can contain
