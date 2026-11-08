@@ -23,12 +23,20 @@ class RichTextPostProcessResult {
 /// that block into an equivalent RUBY pair; if no reading is available, the
 /// block is finally converted to the bracket display form (`reading【surface】`).
 class RichTextPostProcessor {
-  const RichTextPostProcessor({required LlmPort llm, required String model})
-    : _llm = llm,
-      _model = model;
+  const RichTextPostProcessor({
+    required LlmPort llm,
+    required String model,
+    this.onCall,
+  }) : _llm = llm,
+       _model = model;
 
   final LlmPort _llm;
   final String _model;
+
+  /// Content-free telemetry for the formatting request. The orchestrator uses
+  /// it to keep `llmCalls` as the total provider call count.
+  final void Function(LlmRequest request, int outputChars, int elapsedMs)?
+  onCall;
 
   static final RegExp _rubyBlockPattern = RegExp(
     r'\[RUBY=[^\]]*\][\s\S]*?\[/RUBY\]',
@@ -233,26 +241,31 @@ class RichTextPostProcessor {
       maxTokens: maxTokens,
     );
     final buffer = StringBuffer();
+    final watch = Stopwatch()..start();
     try {
-      await for (final event in _llm.stream(
-        request,
-        cancellation: cancellation,
-      )) {
-        if (cancellation?.isCancelled == true) {
-          throw const AgentCapabilityException(
-            AgentToolErrorCode.toolCancelled,
-            '已取消',
-          );
+      try {
+        await for (final event in _llm.stream(
+          request,
+          cancellation: cancellation,
+        )) {
+          if (cancellation?.isCancelled == true) {
+            throw const AgentCapabilityException(
+              AgentToolErrorCode.toolCancelled,
+              '已取消',
+            );
+          }
+          switch (event.type) {
+            case LlmEventType.textDelta:
+              buffer.write(event.text);
+            case LlmEventType.error:
+              return _fallbackAll(sectionTexts, 'provider_error');
+            case LlmEventType.reasoningDelta:
+            case LlmEventType.done:
+              break;
+          }
         }
-        switch (event.type) {
-          case LlmEventType.textDelta:
-            buffer.write(event.text);
-          case LlmEventType.error:
-            return _fallbackAll(sectionTexts, 'provider_error');
-          case LlmEventType.reasoningDelta:
-          case LlmEventType.done:
-            break;
-        }
+      } finally {
+        onCall?.call(request, buffer.length, watch.elapsedMilliseconds);
       }
     } on AgentCapabilityException catch (error) {
       if (error.code == AgentToolErrorCode.toolCancelled) rethrow;

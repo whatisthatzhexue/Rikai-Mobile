@@ -1,8 +1,16 @@
 # P6.7 之后：任务级流式（Task-level Streaming）规划
 
-> 状态：**规划中，尚未实现**。P6.7（annotation DSL、Markdown/ruby/pitch、会话历史
-> 与发布打磨）完成并通过门禁后再启动；不要在当前 Wave 4 / P6.7 中提前改动
-> Orchestrator 的流式协议。本文件是独立规划，不改变 `docs/project-rules.md` 的
+> **2026-11-08 修正**：实施范围已收窄为
+> [agent-runtime-roadmap-2026-11-08.md](agent-runtime-roadmap-2026-11-08.md)
+> 的 **P6.8-lite**：先做主分析流中的译文预览与可选证据缓存；完整 segment
+> streaming/块级 validator 暂缓。本文保留完整设计作为后续参考，但与 roadmap
+> 冲突时以 roadmap 为准。
+>
+> 另外，当前代码**已经实现流式续传**（`agent_orchestrator.dart` 的 `_collect`），
+> 本文“非目标/不做断点续生成”的描述已过时；完整 `AgentValidator` 也要求至少
+> 一条译文和一条 SEGMENT，不能直接用于单块校验。
+>
+> 状态：**完整任务级流式未实现**。本文件不改变 `docs/project-rules.md` 的
 > 隐私/Agent 边界，也不把未实现能力写成已支持。
 
 ## 1. 问题陈述

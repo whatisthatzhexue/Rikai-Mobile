@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/models/agent/agent_profile.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/ui/restricted_markdown.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../services/agent/familiarization/dictionary_familiarization_service.dart';
 import '../../services/agent/familiarization/dictionary_profile_markdown.dart';
@@ -50,6 +51,7 @@ class _FamiliarizationSheetState extends State<_FamiliarizationSheet> {
   late final List<DictionaryLanguagePair> _pairs;
   late String _newSource;
   late String _newTarget;
+  bool _preview = false;
 
   static const List<String> _commonLanguages = <String>['ja', 'zh', 'en', 'ko'];
 
@@ -278,25 +280,56 @@ class _FamiliarizationSheetState extends State<_FamiliarizationSheet> {
             ),
           ),
           const Divider(height: 1, color: AppColors.divider),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: TextField(
-                controller: _controller,
-                expands: true,
-                maxLines: null,
-                minLines: null,
-                textAlignVertical: TextAlignVertical.top,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  fontSize: AgentTokens.body,
-                ),
-                decoration: InputDecoration(
-                  filled: false,
-                  hintText: widget.strings.profileHint,
-                  border: const OutlineInputBorder(),
-                ),
-              ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.xs,
+              AppSpacing.lg,
+              0,
             ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton.icon(
+                  key: const ValueKey('agent-profile-preview-toggle'),
+                  onPressed: () => setState(() => _preview = !_preview),
+                  icon: Icon(
+                    _preview ? Icons.edit_outlined : Icons.visibility_outlined,
+                    size: AppSizes.iconSmall,
+                  ),
+                  label: Text(
+                    _preview
+                        ? widget.strings.edit
+                        : widget.strings.profilePreview,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _preview
+                ? SingleChildScrollView(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: RestrictedMarkdown(text: _controller.text),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: TextField(
+                      controller: _controller,
+                      expands: true,
+                      maxLines: null,
+                      minLines: null,
+                      textAlignVertical: TextAlignVertical.top,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontSize: AgentTokens.body,
+                      ),
+                      decoration: InputDecoration(
+                        filled: false,
+                        hintText: widget.strings.profileHint,
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
           ),
           SafeArea(
             top: false,

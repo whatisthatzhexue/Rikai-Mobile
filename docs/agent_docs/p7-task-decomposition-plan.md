@@ -1,13 +1,20 @@
 # P7 — Agent 任务解耦、模型路由与并发/流式规划
 
-> 状态：**规划中，尚未整体实现**。P7.0（结果摘要的富文本后处理）已作为
-> 2026-11-03 的增量实现；其余任务拆分、模型路由和并发/流式仍待 P6.7 完成、
-> Wave 4 设备验收通过后再启动。
+> **2026-11-08 修正**：实施顺序与范围以
+> [agent-runtime-roadmap-2026-11-08.md](agent-runtime-roadmap-2026-11-08.md)
+> 为准。当前先做 **P7-lite**（任务路由表 + 任务级遥测 + 预算）；P7.1 翻译/语法
+> 任务拆分、P7.3 多任务并发、P7.4 额外审查任务暂缓。保留主分析单次调用和
+> 默认关闭的词典 fan-out；只有真实 provider 数据证明单次分析不可接受且支持
+> prompt cache 时才重新评估拆分。
+>
+> 本文的“不做断点续生成”描述已过时：当前 `_collect` 已实现流式续传。
+>
+> 状态：**P7.0 已增量实现；P7.1–P7.4 未实现（按 roadmap 暂缓）**。
 >
 > 本规划不改变固定流水线、模型无工具、citation 由 orchestrator 发放、图片只在本机
 > OCR 的既有边界。相关文档：
 > - P6.7：annotation DSL、安全富文本/ruby/UniDic 声调、会话历史；
-> - P6.8：[任务级流式规划](task-level-streaming-plan.md)；
+> - P6.8：[任务级流式规划](task-level-streaming-plan.md)（已收窄为 P6.8-lite）；
 > - 契约：[phase6-agent-contracts.md](../phase6-agent-contracts.md)；
 > - 安全规则：[project-rules.md](../project-rules.md) R-SEC/R-AGENT。
 

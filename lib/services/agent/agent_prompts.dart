@@ -478,6 +478,7 @@ LlmRequest buildStreamContinuationRequest(LlmRequest original, String prefix) {
     ],
     maxTokens: original.maxTokens,
     stream: original.stream,
+    maxHttpAttempts: original.maxHttpAttempts,
     onHttpAttempt: original.onHttpAttempt,
   );
 }

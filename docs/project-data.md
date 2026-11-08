@@ -40,18 +40,19 @@
 
 | 项 | 值 |
 |---|---:|
-| 当前 test/testWidgets 声明数 | **576** |
-| 当前测试文件数 | **98** |
+| 当前 test/testWidgets 声明数 | **604** |
+| 当前测试文件数 | **104** |
 | 最近 `flutter analyze` | No issues found |
-| 最近 `flutter test` | **585 passed**（声明 576；参数化/循环用例产生 585 个执行用例） |
+| 最近 `flutter test` | **613 passed**（声明 604；参数化/循环用例产生 613 个执行用例） |
 | 最近 `flutter build apk --debug` | success（2026-11-04 P6.6/P6.7 验证；2026-11-06 后台服务改动未做 APK 构建） |
 | 最近 Android Kotlin 编译 | success（2026-11-06 `:app:compileDebugKotlin --offline`；含 AgentRunService/MainActivity） |
 
 > 统计口径：`test/**/*.dart` 中的 `test(` + `testWidgets(`；不含 integration_test。
-> 该数字对应 2026-11-07 档案失效刷新/短文本校验/后台生成工作区（含 entry://
-> toast 根因/短文案、慢请求提示/prompt 精简、重复段合并、读音归一化、free
-> grammar note、档案后台生成 lease、Agent UI/后台/续传、Phase 4 安全子集、
-> Wave 3、P6.6、P7.0 富文本修正、Phase 1a–3）。新增/删除测试后只更新本节。
+> 该数字对应 2026-11-08 档案保存后 stale 标签即时刷新工作区（含档案失效缓存
+> revision key、刷新中间帧抑制、entry:// toast 根因/短文案、慢请求提示/prompt
+> 精简、重复段合并、读音归一化、free grammar note、档案后台生成 lease、Agent
+> UI/后台/续传、Phase 4 安全子集、Wave 3、P6.6、P7.0 富文本修正、Phase 1a–3）。
+> 新增/删除测试后只更新本节。
 
 ### 2.2 历史测试基线（不要当作当前值）
 
@@ -90,7 +91,8 @@
 | entry:// toast 根因与短文案 | 568（声明 559） | RikaiToast 的 NavigatorState context 兜底、entryLinkMissMessage 回归、样本上限短文案 |
 | 失效档案保存刷新 fingerprint | 569（声明 560） | 编辑保存后重算 fingerprint/清 stale future；只显示另一本未编辑档案的“已失效” |
 | 短文本校验/档案后台修复 | 585（声明 576） | 重复 quote+type 段合并、读音假名归一化、free grammar note、WORD token 表面回退、档案后台生成持有前台服务 lease |
-| 当前 | **585（声明 576）** | 见 §2.1 |
+| 档案保存后 stale 标签刷新 | 613（声明 604） | stale future key 加入 fingerprint/language；保存后用旧 fingerprint 抑制刷新中间帧；provider data 变化清空缓存 |
+| 当前 | **613（声明 604）** | 见 §2.1 |
 
 > 历史 phase 文档保留当时值；需要当前值以本文件 §2.1 为准。
 

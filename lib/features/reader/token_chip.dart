@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../core/models/annotation_rules.dart';
 import '../../core/models/token.dart';
 import '../../core/theme/app_tokens.dart';
+import '../../core/ui/pitch_accent_overlay.dart';
 import '../../core/utils/rich_text_tags.dart';
+import '../../services/mecab/unidic_accent_parser.dart';
 import 'furigana_text.dart';
 
 /// One tappable word in the reader.
@@ -16,12 +19,16 @@ class TokenChip extends StatelessWidget {
     required this.token,
     required this.fontSize,
     required this.showFurigana,
+    this.annotationRules = AnnotationRuleSets.basic,
+    this.annotationTarget = AnnotationTarget.reader,
     this.onTap,
   });
 
   final Token token;
   final double fontSize;
   final bool showFurigana;
+  final AnnotationRuleSet annotationRules;
+  final AnnotationTarget annotationTarget;
   final ValueChanged<Token>? onTap;
 
   @override
@@ -43,9 +50,25 @@ class TokenChip extends StatelessWidget {
       foreground = scheme.onSurface;
     }
 
-    final reading = showFurigana && !punctuation && token.hasDistinctReading
+    final accent = parseUnidicAccent(
+      accentType: token.accentTypeRaw,
+      reading: token.reading,
+    );
+    final pitchCandidate = shouldDisplayPitch(
+      surface: token.surface,
+      reading: token.reading,
+      accent: accent,
+    );
+    final plan = annotationRules.evaluate(
+      token,
+      annotationTarget,
+      hasPitch: pitchCandidate,
+    );
+    final reading =
+        showFurigana && plan.ruby && !punctuation && token.hasDistinctReading
         ? token.reading
         : '';
+    final showPitch = showFurigana && plan.pitch && pitchCandidate;
     final tap = punctuation ? null : onTap;
 
     // Avoid a Material + InkWell for every token. A long result can contain
@@ -68,14 +91,28 @@ class TokenChip extends StatelessWidget {
               horizontal: punctuation ? 0 : AppSpacing.xs,
               vertical: AppSpacing.xxs,
             ),
-            child: _TokenSurface(
-              surface: token.surface,
-              reading: reading,
-              fontSize: fontSize,
-              foreground: foreground,
-              readingColor: scheme.primary,
-              contentWord: contentWord,
-            ),
+            child: showPitch
+                ? PitchAccentOverlay(
+                    accent: accent!,
+                    child: _TokenSurface(
+                      surface: token.surface,
+                      reading: reading,
+                      fontSize: fontSize,
+                      foreground: foreground,
+                      readingColor: scheme.primary,
+                      bold: contentWord || plan.bold,
+                      underline: plan.underline,
+                    ),
+                  )
+                : _TokenSurface(
+                    surface: token.surface,
+                    reading: reading,
+                    fontSize: fontSize,
+                    foreground: foreground,
+                    readingColor: scheme.primary,
+                    bold: contentWord || plan.bold,
+                    underline: plan.underline,
+                  ),
           ),
         ),
       ),
@@ -96,7 +133,8 @@ class _TokenSurface extends StatelessWidget {
     required this.fontSize,
     required this.foreground,
     required this.readingColor,
-    required this.contentWord,
+    required this.bold,
+    required this.underline,
   });
 
   final String surface;
@@ -104,7 +142,8 @@ class _TokenSurface extends StatelessWidget {
   final double fontSize;
   final Color foreground;
   final Color readingColor;
-  final bool contentWord;
+  final bool bold;
+  final bool underline;
 
   @override
   Widget build(BuildContext context) {
@@ -112,7 +151,8 @@ class _TokenSurface extends StatelessWidget {
       fontSize: fontSize,
       height: 1.15,
       color: foreground,
-      fontWeight: contentWord ? FontWeight.w600 : FontWeight.w400,
+      fontWeight: bold ? FontWeight.w600 : FontWeight.w400,
+      decoration: underline ? TextDecoration.underline : null,
     );
     if (reading.isEmpty) {
       return Column(

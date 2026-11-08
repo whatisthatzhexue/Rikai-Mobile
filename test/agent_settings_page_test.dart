@@ -4,9 +4,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
 import 'package:rikai_mobile/features/settings/agent_settings_page.dart';
+import 'package:rikai_mobile/services/agent/agent_provider_tester.dart';
+import 'package:rikai_mobile/services/agent/ports/llm_port.dart';
+import 'package:rikai_mobile/services/agent/ports/secret_port.dart';
 import 'package:rikai_mobile/state/agent_providers.dart';
 import 'package:rikai_mobile/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+class _TesterSecret implements SecretPort {
+  @override
+  Future<String?> read(String key) async => '';
+
+  @override
+  Future<void> write(String key, String value) async {}
+
+  @override
+  Future<void> delete(String key) async {}
+}
+
+class _TesterLlm implements LlmPort {
+  @override
+  Stream<LlmEvent> stream(
+    LlmRequest request, {
+    LlmCancelToken? cancellation,
+  }) async* {
+    yield const LlmEvent(type: LlmEventType.textDelta, text: 'OK');
+    yield LlmEvent.done();
+  }
+}
 
 void main() {
   testWidgets('provider form uses Chinese labels and fills DeepSeek address', (
@@ -74,6 +99,54 @@ void main() {
     await tester.tap(find.text('Claude（Anthropic）').last);
     await tester.pumpAndSettle();
     expect(baseUrl.controller?.text, 'https://example.com/v1');
+  });
+
+  testWidgets('provider dialog tests the connection without saving', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final preferences = await SharedPreferences.getInstance();
+    final testerService = AgentProviderTester(
+      secrets: _TesterSecret(),
+      llmFactory: (config, secrets) => _TesterLlm(),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(preferences),
+          agentProvidersProvider.overrideWith((ref) async => const []),
+          agentProviderTesterProvider.overrideWithValue(testerService),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const AgentSettingsPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('添加模型服务'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-provider-small-model')),
+      'deepseek-chat',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('agent-provider-api-key')),
+      'form-key',
+    );
+    await tester.tap(find.text('测试连接'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('连接成功'), findsOneWidget);
+    expect(find.textContaining('deepseek-chat'), findsWidgets);
+    // Testing must not close the dialog or persist a provider.
+    expect(find.byType(AlertDialog), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(AgentSettingsPage)),
+    );
+    expect(container.read(agentProvidersProvider).asData?.value, isEmpty);
   });
 
   testWidgets('profile language changes immediately without a dialog', (

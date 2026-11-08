@@ -30,15 +30,9 @@
       "additionalProperties": false,
       "properties": {
         "type": {
-          "enum": ["text", "ruby", "pitch", "bold", "underline", "group", "when"]
+          "enum": ["ruby", "pitch", "bold", "underline"]
         },
-        "value": {"type": "string", "maxLength": 1000},
-        "when": {"$ref": "#/$defs/when"},
-        "children": {
-          "type": "array",
-          "maxItems": 64,
-          "items": {"$ref": "#/$defs/rule"}
-        }
+        "when": {"$ref": "#/$defs/when"}
       }
     },
     "when": {

@@ -248,11 +248,12 @@ void main() {
 
   test('run telemetry round-trips content-free counters', () {
     const telemetry = AgentRunTelemetry(
-      llmCalls: 2,
+      llmCalls: 3,
       analysisCalls: 1,
       coverageCalls: 1,
       repairCalls: 1,
       languageRepairCalls: 0,
+      formattingCalls: 1,
       inputChars: 100,
       outputChars: 40,
       reasoningChars: 5,
@@ -268,10 +269,11 @@ void main() {
     );
 
     final restored = AgentRunTelemetry.fromJson(telemetry.toJson());
-    expect(restored.llmCalls, 2);
+    expect(restored.llmCalls, 3);
     expect(restored.analysisCalls, 1);
     expect(restored.coverageCalls, 1);
     expect(restored.repairCalls, 1);
+    expect(restored.formattingCalls, 1);
     expect(restored.inputChars, 100);
     expect(restored.outputChars, 40);
     expect(restored.httpAttempts, 3);

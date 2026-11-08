@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rikai_mobile/core/models/annotation_rules.dart';
 import 'package:rikai_mobile/core/models/token.dart';
 import 'package:rikai_mobile/core/theme/app_tokens.dart';
+import 'package:rikai_mobile/core/ui/pitch_accent_overlay.dart';
 import 'package:rikai_mobile/features/reader/token_chip.dart';
 
 Token _token({
@@ -55,6 +57,67 @@ void main() {
     expect(find.text('んでも'), findsOneWidget);
     expect(find.text('悩んでも'), findsNothing);
     expect(find.text('なやんでも'), findsNothing);
+  });
+
+  testWidgets('annotation rule sets control ruby and pitch', (tester) async {
+    final features = List<String>.filled(Token.expectedFeatureCount, '*');
+    features[0] = '名詞';
+    features[20] = 'トウキョウ';
+    features[24] = '0';
+    final token = Token.fromFeatures(
+      surface: '東京',
+      features: features,
+      start: 0,
+      end: 2,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: TokenChip(
+            token: token,
+            fontSize: 20,
+            showFurigana: true,
+            annotationRules: AnnotationRuleSets.basic,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('とうきょう'), findsOneWidget);
+    expect(find.byType(PitchAccentOverlay), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: TokenChip(
+            token: token,
+            fontSize: 20,
+            showFurigana: true,
+            annotationRules: AnnotationRuleSets.pitch,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('とうきょう'), findsOneWidget);
+    expect(find.byType(PitchAccentOverlay), findsOneWidget);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: TokenChip(
+            token: token,
+            fontSize: 20,
+            showFurigana: true,
+            annotationRules: AnnotationRuleSets.none,
+          ),
+        ),
+      ),
+    );
+    expect(find.text('とうきょう'), findsNothing);
+    expect(find.byType(PitchAccentOverlay), findsNothing);
   });
 
   testWidgets('function words and punctuation use black, not grey', (

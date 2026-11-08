@@ -592,6 +592,7 @@ class AgentUiStrings {
   String get profileUnavailableDictionary =>
       _pick('词典当前不可用', 'Dictionary currently unavailable', '辞書は現在利用できません');
   String get profileEdit => _pick('修改', 'Edit', '編集');
+  String get profilePreview => _pick('预览', 'Preview', 'プレビュー');
   String get profileRegenerate => _pick('重新生成', 'Regenerate', '再生成');
   String get profileDelete => _pick('删除', 'Delete', '削除');
   String get profileDeleteLocked => _pick(
@@ -733,6 +734,14 @@ class AgentUiStrings {
   String get providerApiKey => _pick('接口密钥（API Key）', 'API key', 'API キー');
   String get providerApiKeyKeep =>
       _pick('留空则不修改', 'Leave blank to keep', '空欄なら変更しません');
+  String get providerTestConnection =>
+      _pick('测试连接', 'Test connection', '接続テスト');
+  String get providerTesting => _pick('正在测试…', 'Testing…', 'テスト中…');
+  String providerTestSuccess(int latencyMs, String model) => _pick(
+    '连接成功 · ${latencyMs}ms · $model',
+    'Connected · ${latencyMs}ms · $model',
+    '接続成功 · ${latencyMs}ms · $model',
+  );
   String get providerSmallModelHelp => _pick(
     '快速模型用于词典档案和资料检查。',
     'The fast model is used for dictionary profiles and evidence checks.',

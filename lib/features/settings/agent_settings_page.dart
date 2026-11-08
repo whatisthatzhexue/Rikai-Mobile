@@ -374,17 +374,17 @@ class AgentProviderDraft {
   final String apiKey;
 }
 
-class _ProviderDialog extends StatefulWidget {
+class _ProviderDialog extends ConsumerStatefulWidget {
   const _ProviderDialog({this.initial, required this.strings});
 
   final AgentProviderConfig? initial;
   final AgentUiStrings strings;
 
   @override
-  State<_ProviderDialog> createState() => _ProviderDialogState();
+  ConsumerState<_ProviderDialog> createState() => _ProviderDialogState();
 }
 
-class _ProviderDialogState extends State<_ProviderDialog> {
+class _ProviderDialogState extends ConsumerState<_ProviderDialog> {
   late AgentProviderPreset _preset;
   late final TextEditingController _name;
   late final TextEditingController _baseUrl;
@@ -394,6 +394,9 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   late final TextEditingController _apiKey;
   String? _baseUrlError;
   String? _maxOutputTokensError;
+  bool _testing = false;
+  String? _testStatus;
+  bool _testOk = false;
 
   @override
   void initState() {
@@ -436,6 +439,52 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         _baseUrl.text = next.defaultBaseUrl;
       }
       _baseUrlError = null;
+    });
+  }
+
+  Future<void> _testConnection() async {
+    final error = agentBaseUrlError(_baseUrl.text);
+    if (error != null) {
+      setState(() => _baseUrlError = error);
+      return;
+    }
+    var maxOutputTokens = 0;
+    final rawMaxOutputTokens = _maxOutputTokens.text.trim();
+    if (rawMaxOutputTokens.isNotEmpty) {
+      final parsed = int.tryParse(rawMaxOutputTokens);
+      if (parsed == null || parsed <= 0) {
+        setState(
+          () => _maxOutputTokensError =
+              widget.strings.providerMaxOutputTokensInvalid,
+        );
+        return;
+      }
+      maxOutputTokens = parsed;
+    }
+    setState(() {
+      _testing = true;
+      _testStatus = null;
+    });
+    final config = AgentProviderConfig(
+      id: widget.initial?.id ?? 'provider-test',
+      kind: _preset.kind,
+      displayName: _name.text.trim(),
+      baseUrl: _baseUrl.text.trim(),
+      smallModel: _smallModel.text.trim(),
+      complexModel: _complexModel.text.trim(),
+      supportsStreaming: true,
+      maxOutputTokens: maxOutputTokens,
+    );
+    final result = await ref
+        .read(agentProviderTesterProvider)
+        .test(config: config, apiKey: _apiKey.text);
+    if (!mounted) return;
+    setState(() {
+      _testing = false;
+      _testOk = result.ok;
+      _testStatus = result.ok
+          ? widget.strings.providerTestSuccess(result.latencyMs, result.model)
+          : widget.strings.errorMessageFor(result.errorCode, result.message);
     });
   }
 
@@ -549,6 +598,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               ),
               const SizedBox(height: AppSpacing.sm),
               TextField(
+                key: const ValueKey('agent-provider-api-key'),
                 controller: _apiKey,
                 obscureText: true,
                 decoration: InputDecoration(
@@ -557,6 +607,36 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                   isDense: true,
                 ),
               ),
+              const SizedBox(height: AppSpacing.xs),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: _testing ? null : _testConnection,
+                  icon: _testing
+                      ? const SizedBox(
+                          width: AppSizes.iconSmall,
+                          height: AppSizes.iconSmall,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.wifi_tethering, size: AppSizes.icon),
+                  label: Text(
+                    _testing
+                        ? widget.strings.providerTesting
+                        : widget.strings.providerTestConnection,
+                  ),
+                ),
+              ),
+              if (_testStatus != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.xs),
+                  child: Text(
+                    _testStatus!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: AppTypography.helper,
+                      color: _testOk ? AppColors.success : AppColors.error,
+                    ),
+                  ),
+                ),
               const SizedBox(height: AppSpacing.sm),
               TextField(
                 key: const ValueKey('agent-provider-max-output-tokens'),

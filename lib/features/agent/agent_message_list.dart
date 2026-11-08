@@ -149,6 +149,7 @@ class AgentMessageList extends ConsumerWidget {
               uiLanguage: uiLanguage,
               strings: strings,
               result: result,
+              translationPreview: run.translationPreview,
               resultRetainedAfterFailure: run.resultRetainedAfterFailure,
               onRetry: providers.isEmpty ? null : onRetry,
               onLooseRetry:

@@ -45,7 +45,17 @@ class AgentProfilesPage extends ConsumerStatefulWidget {
 class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
   bool _selecting = false;
   final Set<String> _selected = <String>{};
+
+  /// Stale check futures keyed by dictionary + profile revision + language.
+  /// A dictionary-id-only key reused the old `true` result after a save and
+  /// kept “已失效” visible until the page was reopened.
   final Map<String, Future<bool>> _staleFutures = <String, Future<bool>>{};
+
+  /// Old fingerprints that were just re-confirmed by an edit save. The
+  /// refreshed profile list can briefly still contain these old revisions
+  /// (Riverpod keeps previous data while the SQLite reload is in flight), so
+  /// suppress their stale badge until the new revision reaches the page.
+  final Map<String, String> _revalidatedOldFingerprints = <String, String>{};
 
   AgentUiStrings _strings() {
     final run = ref.read(agentRunControllerProvider);
@@ -75,8 +85,25 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
         );
     ref.listen(appSettingsProvider, (previous, next) {
       if (previous?.agentProfileLanguage != next.agentProfileLanguage) {
-        _staleFutures.clear();
+        _clearStaleCache();
       }
+    });
+    ref.listen(agentProfilesProvider, (previous, next) {
+      final profiles = next.asData?.value;
+      if (profiles == null) return;
+      final fingerprints = <String, String>{
+        for (final profile in profiles)
+          profile.dictionaryId: profile.fingerprint,
+      };
+      // Drop the optimistic suppression once the refreshed list no longer
+      // shows the old revision (or the profile disappeared).
+      _revalidatedOldFingerprints.removeWhere(
+        (dictionaryId, oldFingerprint) =>
+            fingerprints[dictionaryId] != oldFingerprint,
+      );
+      // The list revision changed; old futures must not be reused even if a
+      // dictionary id is unchanged.
+      _staleFutures.clear();
     });
     ref.listen(agentProfileRegenerationProvider, (previous, next) {
       final error = next.error;
@@ -400,13 +427,25 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
       );
     }
 
+    final language = AgentProfileLanguage.fromWire(profileLanguage);
+    final oldFingerprint = _revalidatedOldFingerprints[profile.dictionaryId];
+    if (oldFingerprint != null && oldFingerprint == profile.fingerprint) {
+      // The edit was just saved. The list refresh may still be serving the
+      // previous revision for a frame; never show the stale badge for it.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [card, ?coverageWarning],
+      );
+    }
+
+    final staleKey = _staleKey(profile, language);
+    _staleFutures.removeWhere(
+      (key, _) =>
+          key != staleKey && key.startsWith('${profile.dictionaryId}\u0000'),
+    );
     final future = _staleFutures.putIfAbsent(
-      profile.dictionaryId,
-      () => _isStale(
-        dictionaryForFingerprint,
-        profile,
-        AgentProfileLanguage.fromWire(profileLanguage),
-      ),
+      staleKey,
+      () => _isStale(dictionaryForFingerprint, profile, language),
     );
     return FutureBuilder<bool>(
       future: future,
@@ -429,6 +468,18 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
         ],
       ),
     );
+  }
+
+  String _staleKey(
+    StoredDictionaryProfile profile,
+    AgentProfileLanguage language,
+  ) =>
+      '${profile.dictionaryId}\u0000${profile.fingerprint}\u0000'
+      '${language.wireName}';
+
+  void _clearStaleCache() {
+    _staleFutures.clear();
+    _revalidatedOldFingerprints.clear();
   }
 
   Future<bool> _isStale(
@@ -510,7 +561,16 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
             schemaVersion: dictionaryProfileSchemaVersion,
           ),
         );
-    _staleFutures.clear();
+    void markRevalidated() {
+      _revalidatedOldFingerprints[profile.dictionaryId] = profile.fingerprint;
+      _staleFutures.clear();
+    }
+
+    if (mounted) {
+      setState(markRevalidated);
+    } else {
+      markRevalidated();
+    }
     ref.invalidate(agentProfilesProvider);
     if (mounted) RikaiToast.show(context, strings.profileUpdated);
   }
@@ -525,7 +585,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
       strings,
       proposal: proposal,
     );
-    _staleFutures.clear();
+    _clearStaleCache();
     ref.invalidate(agentProfilesProvider);
   }
 
@@ -589,7 +649,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
       RikaiToast.show(context, strings.profileRegenerateNeedsProvider);
       return;
     }
-    _staleFutures.clear();
+    _clearStaleCache();
     await ref
         .read(agentProfileRegenerationProvider.notifier)
         .start(dictionaries: targets, provider: providers.first);
@@ -635,7 +695,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
       for (final profile in profiles) profile.dictionaryId,
     ]);
     ref.invalidate(agentProfilesProvider);
-    _staleFutures.clear();
+    _clearStaleCache();
     if (!mounted) return;
     setState(() {
       _selected.clear();

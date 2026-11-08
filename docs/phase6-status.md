@@ -1,6 +1,6 @@
 # Phase 6 status — dictionary assistant core
 
-Date: 2026-11-07
+Date: 2026-11-08
 Base: Phase 5 complete (`docs/phase5-status.md`)
 Design: `docs/phase6-agent-design.md` v2
 Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
@@ -93,6 +93,26 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
   fake/local provider，未使用付费 Key；真实 provider 等待时长与 arm64/设备
   仍未验收。
 
+## 2026-11-08 修正版执行路线
+
+- 新增 `docs/agent_docs/agent-runtime-roadmap-2026-11-08.md`，作为 P6.7 收尾、
+  P6.8-lite 与 P7-lite 的唯一实施顺序。范围：P6.7-3 只做装饰规则 v1；
+  P6.8 先做译文预览/可选证据缓存；P7 只做路由表/任务遥测/预算，P7.1/P7.3/
+  P7.4 暂缓。旧 P6.8/P7 规划已加修正头注；R-AGENT-26/契约 §14.3/设计 §17.2.4
+  已按 v1 收窄。真实 provider/arm64/真机验收仍按 Wave 4 单独执行。
+- **已实现**：
+  - provider 设置“测试连接”（单次非流式请求、不写历史、不自动重试）；
+  - 词典档案受限 Markdown 预览（白名单，不执行 HTML/JS/外链）；
+  - annotation v1 装饰规则（ruby/pitch/bold/underline + when，内置规则，
+    阅读器/照片集/语料，恢复默认式选择）；
+  - P6.8-lite 译文预览（完整 `[TRANSLATION]` 块、续传去重、assistant summary
+    稳定槽位；不写历史、不增加 provider 请求）；
+  - P7-lite 路由表 + `formattingCalls` 遥测（`llmCalls` 现包含富文本调用）；
+  - 文本 run 的内存 LRU 证据缓存（图片 run 暂不缓存）。
+- **仍待**：P6.7-4b 无障碍/200%/许可/签名与真机视觉验收、Wave 4
+  真实 provider/arm64/大词典/secure storage 验收；完整 segment streaming 与
+  P7 任务拆分保持暂缓。当前测试/设备数据以 `docs/project-data.md` 为准。
+
 ## 2026-11-07 短文本误报截断/校验与档案后台生成修复
 
 - **短文本“已按上限缩减输出”根因**：样本 `2026-11-07-21-24.txt` 只有 3 个可见
@@ -129,6 +149,25 @@ Contracts: `docs/phase6-agent-contracts.md` / `docs/schemas/agent/`
   计数、生成中保持服务/完成后释放；依据标题提取/卡片/查词列表回归。`flutter
   analyze` 无问题，完整 `flutter test` **585 项通过**。全部 fake/local provider，
   未使用付费 Key；真实 DeepSeek 复测、arm64 后台与设备验收仍未进行。
+
+## 2026-11-08 档案保存后“已失效”即时刷新
+
+- **根因**：保存编辑后的档案已经写入当前 fingerprint，但档案页的 stale 检查
+  future 只按 `dictionaryId` 缓存。`ref.invalidate(agentProfilesProvider)` 后，
+  `AsyncValue.when` 默认 `skipLoadingOnRefresh=true`，会先用**旧 profile 列表**
+  重建一次；这次重建把旧 revision 的 `Future(true)` 重新写入缓存，等新列表到达时
+  `putIfAbsent` 继续复用旧结果，导致“已失效”一直存在，直到离开页面/切换语言等
+  再次清空缓存。
+- **修复**：`_staleFutures` key 改为
+  `dictionaryId + fingerprint + profileLanguage`；provider data 变化时清空 stale
+  future；编辑保存成功后记录旧 fingerprint，在刷新中间帧抑制该旧 revision 的
+  stale badge，并用 `setState` 先让标签立即消失；新 revision 到达后清理抑制。
+  `_clearStaleCache` 统一在删除、重新生成、语言切换、resolve proposal 时清理
+  stale 与抑制状态。
+- **测试**：新增“刷新被阻塞时，保存后 stale 标签立即从 2 个降为 1 个（仅未编辑
+  词典保留）”回归；原“editing a stale profile clears its stale label
+  immediately”继续通过。`flutter analyze` 无问题；完整 `flutter test`
+  **613 项通过**。真实 SQLite 设备上的视觉确认仍未做。
 
 ## 2026-11-06 词典/阅读器/历史 UI 修正
 
@@ -1135,8 +1174,9 @@ plus pitch cases in `evidence_builder_test.dart` and `agent_result_view_test.dar
   executed, 470 declarations in 86 files) and debug APK built; the workspace
   also contains concurrent rich-text changes from another workstream.
   `docs/project-data.md` was synced with user consent.
-- **Still pending**: P6.7 annotation DSL, provider test connection,
-  accessibility/release polish; real-device/visual acceptance.
+- **Still pending**: full text/group annotation DSL/user editor,
+  accessibility/release polish; real-device/visual acceptance. Provider test
+  connection, restricted Markdown preview and annotation v1 shipped 2026-11-08.
 
 ## Not implemented / next
 
@@ -1150,10 +1190,12 @@ plus pitch cases in `evidence_builder_test.dart` and `agent_result_view_test.dar
    failed-run entry and per-variant lookup previews implemented 2026-11-03;
    all variant texts are persisted by P6.7 history. Remaining: real-device
    visual/OCR/dictionary acceptance.
-3. **P6.7**: history/persistence and UniDic pitch are implemented (2026-11-03).
-   Remaining: annotation DSL (safe AST, built-in rules, preview/rollback),
-   provider test-connection, accessibility/empty/error polish and release
-   packaging/licence review; real-device/visual acceptance still pending.
+3. **P6.7**: history/persistence and UniDic pitch are implemented (2026-11-03);
+   provider test connection, restricted Markdown preview and annotation v1
+   (decoration subset) are implemented (2026-11-08).
+   Remaining: full text/group annotation DSL/user editor,
+   accessibility/empty/error polish and release packaging/licence review;
+   real-device/visual acceptance still pending.
 4. Real device verification: provider network calls with a real key, MDict
    `sample`/`suggest` against the 463k-entry dictionary, Agent end-to-end on
    arm64, and secure-storage read/write/clear on device.

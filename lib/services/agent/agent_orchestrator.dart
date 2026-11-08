@@ -21,6 +21,7 @@ import 'agent_language_validator.dart';
 import 'agent_messages.dart';
 import 'agent_prompts.dart';
 import 'agent_run.dart';
+import 'agent_task_route.dart';
 import 'agent_validator.dart';
 import 'analysis_normalizer.dart';
 import 'analysis_salvager.dart';
@@ -28,12 +29,14 @@ import 'coverage_support.dart';
 import 'analysis_tag_parser.dart';
 import 'citation_registry.dart';
 import 'evidence_builder.dart';
+import 'evidence_cache.dart';
 import 'familiarization/dictionary_familiarization_service.dart';
 import 'familiarization/unidic_familiarization_service.dart';
 import 'grammar_patterns.dart';
 import 'ocr_consensus.dart';
 import 'ports/agent_capability_exception.dart';
 import 'ports/llm_port.dart';
+import 'streaming_translation_assembler.dart';
 import 'ports/lookup_port.dart';
 import 'ports/ocr_port.dart';
 import 'ports/tokenize_port.dart';
@@ -57,6 +60,7 @@ class AgentOrchestrator {
     this.validator = const AgentValidator(),
     this.languageValidator = const AgentLanguageValidator(),
     this.limits = AgentLimits.standard,
+    this.evidenceCache,
   }) : _ocrPort = ocrPort,
        _tokenizePort = tokenizePort,
        _lookupPort = lookupPort,
@@ -75,6 +79,7 @@ class AgentOrchestrator {
   final AgentValidator validator;
   final AgentLanguageValidator languageValidator;
   final AgentLimits limits;
+  final AgentEvidenceCache? evidenceCache;
 
   static const int _maxOcrVariants = 4;
 
@@ -88,6 +93,7 @@ class AgentOrchestrator {
     AgentProfileReviewCallback? onProfilesGenerated,
     AgentStageCallback? onStage,
     AgentProvisionalResultCallback? onProvisionalResult,
+    AgentTranslationPreviewCallback? onTranslationPreview,
     AgentCancellation? cancellation,
     AgentRichTextCallback? onRichTextReady,
     AgentRichTextFormattingCallback? onRichTextFormattingChanged,
@@ -135,9 +141,10 @@ class AgentOrchestrator {
           message: '请先选择至少一本可用词典',
         );
       }
-      final analysisModel = request.provider.complexModel.trim().isEmpty
-          ? request.provider.smallModel.trim()
-          : request.provider.complexModel.trim();
+      final analysisModel = AgentTaskRoute.resolve(
+        AgentTaskKind.analysis,
+        request.provider,
+      ).model;
       if (analysisModel.isEmpty) {
         throw AgentRunFailure(
           stage: stage,
@@ -277,14 +284,21 @@ class AgentOrchestrator {
         quotes.addAll(sourceQuotes);
         quoteIndex += sourceQuotes.length;
       }
+      final translationAssembler = onTranslationPreview == null
+          ? null
+          : StreamingTranslationAssembler(
+              quoteIds: quotes.map((quote) => quote.id).toSet(),
+              onPreview: onTranslationPreview,
+            );
 
       final llm = _llmFactory(request.provider);
       final requestedUser = request.images.isNotEmpty && userText.isNotEmpty
           ? userText
           : defaultImageUserRequest(request.responseLanguage);
-      final smallModel = request.provider.smallModel.trim().isEmpty
-          ? analysisModel
-          : request.provider.smallModel.trim();
+      final smallModel = AgentTaskRoute.resolve(
+        AgentTaskKind.coverage,
+        request.provider,
+      ).model;
 
       notify(
         AgentStage.tokenizing,
@@ -298,13 +312,26 @@ class AgentOrchestrator {
         citations: _citations,
         limits: limits,
       );
-      var evidence = await evidenceBuilder.build(
-        sources: envelope.sources,
-        dictionaries: request.dictionaries,
-        maxSourceChars: maxSourceChars,
-        isCancelled: () => cancellation?.isCancelled == true,
-        onProgress: onEvidenceProgress,
-      );
+      final cacheKey = evidenceCache == null
+          ? null
+          : agentEvidenceCacheKey(request, limits);
+      final cachedEvidence = cacheKey == null
+          ? null
+          : evidenceCache!.get(cacheKey);
+      var evidence =
+          cachedEvidence ??
+          await evidenceBuilder.build(
+            sources: envelope.sources,
+            dictionaries: request.dictionaries,
+            maxSourceChars: maxSourceChars,
+            isCancelled: () => cancellation?.isCancelled == true,
+            onProgress: onEvidenceProgress,
+          );
+      if (cachedEvidence != null) {
+        onEvidenceProgress?.call(cachedEvidence.citations.length);
+      } else if (cacheKey != null && evidence.dictionaryIssues.isEmpty) {
+        evidenceCache!.put(cacheKey, evidence);
+      }
       checkCancelled();
       for (final issue in evidence.dictionaryIssues) {
         profiles.add(
@@ -461,6 +488,7 @@ class AgentOrchestrator {
             onRichTextFormattingChanged: onRichTextFormattingChanged,
             notify: notify,
             uiLanguage: uiLanguage,
+            telemetry: telemetry,
           );
           checkCancelled();
           notify(
@@ -493,6 +521,7 @@ class AgentOrchestrator {
         onReasoningDelta: onReasoningDelta,
         onTelemetry: telemetry.record,
         label: 'analysis',
+        translationAssembler: translationAssembler,
       );
       notify(
         AgentStage.validating,
@@ -806,6 +835,7 @@ class AgentOrchestrator {
             onRichTextFormattingChanged: onRichTextFormattingChanged,
             notify: notify,
             uiLanguage: uiLanguage,
+            telemetry: telemetry,
           );
           _timing(
             'result_ready salvage=true elapsed=${runWatch.elapsedMilliseconds}ms',
@@ -853,6 +883,7 @@ class AgentOrchestrator {
         onRichTextFormattingChanged: onRichTextFormattingChanged,
         notify: notify,
         uiLanguage: uiLanguage,
+        telemetry: telemetry,
       );
       checkCancelled();
       notify(AgentStage.done, agentStageMessage(AgentStage.done, uiLanguage));
@@ -968,6 +999,7 @@ class AgentOrchestrator {
     required AgentRichTextFormattingCallback? onRichTextFormattingChanged,
     required void Function(AgentStage stage, String message) notify,
     required AgentUiLanguage uiLanguage,
+    required _RunTelemetryBuilder telemetry,
   }) async {
     if (!limits.enableRichTextPostProcess) return result;
     final originalSource = agentOriginalSource(result.quotes);
@@ -985,6 +1017,7 @@ class AgentOrchestrator {
       originalSource: originalSource,
       segmentSources: segmentSources,
       cancellation: cancellation,
+      telemetry: telemetry,
     );
 
     final richCallback = onRichTextReady;
@@ -1019,7 +1052,16 @@ class AgentOrchestrator {
     onRichTextFormattingChanged?.call(true);
     try {
       final outputs = await format();
-      return outputs == null ? result : result.copyWithRichText(outputs);
+      if (outputs == null) return result;
+      final updated = result.copyWithRichText(outputs);
+      if (outputs.formattingCalls <= 0) return updated;
+      return updated.copyWithTelemetry(
+        updated.telemetry.copyWith(
+          llmCalls: updated.telemetry.llmCalls + outputs.formattingCalls,
+          formattingCalls:
+              updated.telemetry.formattingCalls + outputs.formattingCalls,
+        ),
+      );
     } finally {
       onRichTextFormattingChanged?.call(false);
     }
@@ -1035,6 +1077,7 @@ class AgentOrchestrator {
     required String originalSource,
     required List<String> segmentSources,
     required AgentCancellation? cancellation,
+    required _RunTelemetryBuilder telemetry,
   }) async {
     final sectionIds = <String>[];
     final sectionTexts = <String>[];
@@ -1049,8 +1092,12 @@ class AgentOrchestrator {
       sectionTexts.add(source);
     }
     if (sectionTexts.isEmpty) return null;
-    final results = await RichTextPostProcessor(llm: llm, model: model)
-        .processSections(
+    final results =
+        await RichTextPostProcessor(
+          llm: llm,
+          model: model,
+          onCall: telemetry.recordFormatting,
+        ).processSections(
           sectionIds,
           sectionTexts,
           cancellation: cancellation,
@@ -1075,9 +1122,14 @@ class AgentOrchestrator {
         _logRichText('segment', source, rich);
       }
     }
+    final totalChars = sectionTexts.fold<int>(
+      0,
+      (sum, text) => sum + text.length,
+    );
     return AgentRichTextOutputs(
       originalText: richOriginalText,
       segmentTexts: outputs,
+      formattingCalls: totalChars <= limits.maxRichTextChars ? 1 : 0,
     );
   }
 
@@ -1940,6 +1992,7 @@ class AgentOrchestrator {
     )?
     onTelemetry,
     String label = 'request',
+    StreamingTranslationAssembler? translationAssembler,
   }) async {
     final buffer = StringBuffer();
     final reasoning = StringBuffer();
@@ -1980,6 +2033,7 @@ class AgentOrchestrator {
         buffer.clear();
         buffer.write(safe);
       }
+      translationAssembler?.reset(buffer.toString());
       onTextDelta?.call(buffer.length);
     }
 
@@ -2024,6 +2078,7 @@ class AgentOrchestrator {
             case LlmEventType.textDelta:
               if (firstTextAt < 0) firstTextAt = watch.elapsedMilliseconds;
               buffer.write(event.text);
+              translationAssembler?.add(event.text);
               // Only the accumulated length is published. Converting the
               // whole buffer to a String on every delta is O(n²) for
               // reasoning models that emit thousands of tiny events, and the
@@ -2121,6 +2176,7 @@ class AgentOrchestrator {
         detail: _debugHead(reasoning.toString()),
       );
     }
+    translationAssembler?.flush();
     // Tail flush: the controller may have throttled the last delta. Emitting
     // the final accumulated length here guarantees the progress counter is
     // complete before validation starts.
@@ -2179,6 +2235,7 @@ class _RunTelemetryBuilder {
   int coverageCalls = 0;
   int repairCalls = 0;
   int languageRepairCalls = 0;
+  int formattingCalls = 0;
   int inputChars = 0;
   int outputChars = 0;
   int reasoningChars = 0;
@@ -2219,6 +2276,17 @@ class _RunTelemetryBuilder {
     if (label == 'language_repair') languageRepairCalls++;
   }
 
+  void recordFormatting(LlmRequest request, int outputChars, int elapsedMs) {
+    llmCalls++;
+    formattingCalls++;
+    inputChars += request.messages.fold<int>(
+      0,
+      (sum, message) => sum + message.text.length,
+    );
+    this.outputChars += outputChars;
+    llmElapsedMs += elapsedMs;
+  }
+
   AgentRunTelemetry build({
     required int elapsedMs,
     required int citationCount,
@@ -2232,6 +2300,7 @@ class _RunTelemetryBuilder {
       coverageCalls: coverageCalls,
       repairCalls: repairCalls,
       languageRepairCalls: languageRepairCalls,
+      formattingCalls: formattingCalls,
       inputChars: inputChars,
       outputChars: outputChars,
       reasoningChars: reasoningChars,

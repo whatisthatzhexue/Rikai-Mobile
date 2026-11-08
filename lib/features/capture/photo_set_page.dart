@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
 
+import '../../core/models/annotation_rules.dart';
 import '../../core/models/capture_photo.dart';
 import '../../core/models/token.dart';
 import '../../core/theme/app_tokens.dart';
@@ -910,6 +911,10 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
               tokens: line.tokens,
               fontSize: settings.readerFontSize,
               showFurigana: settings.showFurigana,
+              annotationRules: AnnotationRuleSets.byId(
+                settings.annotationRuleSetId,
+              ),
+              annotationTarget: AnnotationTarget.photo,
               onTokenTap: (token) => showTokenLookupSheet(context, token),
             ),
           );

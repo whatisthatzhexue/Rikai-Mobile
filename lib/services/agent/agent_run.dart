@@ -100,11 +100,16 @@ class AgentRichTextOutputs {
     this.originalText,
     this.segmentTexts = const <String>[],
     this.segmentNotes = const <String>[],
+    this.formattingCalls = 0,
   });
 
   final String? originalText;
   final List<String> segmentTexts;
   final List<String> segmentNotes;
+
+  /// One for a batched formatting request, zero when the local fallback was
+  /// used without contacting the provider.
+  final int formattingCalls;
 }
 
 /// Per-run, content-free execution telemetry.
@@ -119,6 +124,7 @@ class AgentRunTelemetry {
     this.coverageCalls = 0,
     this.repairCalls = 0,
     this.languageRepairCalls = 0,
+    this.formattingCalls = 0,
     this.inputChars = 0,
     this.outputChars = 0,
     this.reasoningChars = 0,
@@ -138,6 +144,10 @@ class AgentRunTelemetry {
   final int coverageCalls;
   final int repairCalls;
   final int languageRepairCalls;
+
+  /// Rich-text display-formatting requests. These are included in [llmCalls]
+  /// so it remains the total provider call count.
+  final int formattingCalls;
   final int inputChars;
   final int outputChars;
   final int reasoningChars;
@@ -160,6 +170,35 @@ class AgentRunTelemetry {
   /// requests after a reconnect.
   final int analysisPrefillChars;
 
+  AgentRunTelemetry copyWith({
+    int? llmCalls,
+    int? formattingCalls,
+    int? inputChars,
+    int? outputChars,
+    int? llmElapsedMs,
+  }) {
+    return AgentRunTelemetry(
+      llmCalls: llmCalls ?? this.llmCalls,
+      analysisCalls: analysisCalls,
+      coverageCalls: coverageCalls,
+      repairCalls: repairCalls,
+      languageRepairCalls: languageRepairCalls,
+      formattingCalls: formattingCalls ?? this.formattingCalls,
+      inputChars: inputChars ?? this.inputChars,
+      outputChars: outputChars ?? this.outputChars,
+      reasoningChars: reasoningChars,
+      llmElapsedMs: llmElapsedMs ?? this.llmElapsedMs,
+      elapsedMs: elapsedMs,
+      citationCount: citationCount,
+      adoptedCitationCount: adoptedCitationCount,
+      targetsWithCitations: targetsWithCitations,
+      targetCount: targetCount,
+      httpAttempts: httpAttempts,
+      analysisTtftMs: analysisTtftMs,
+      analysisPrefillChars: analysisPrefillChars,
+    );
+  }
+
   /// Content-word targets that received at least one citation, divided by
   /// content-word targets. Particles, punctuation and grammar patterns are
   /// excluded.
@@ -175,6 +214,7 @@ class AgentRunTelemetry {
     'coverage_calls': coverageCalls,
     'repair_calls': repairCalls,
     'language_repair_calls': languageRepairCalls,
+    'formatting_calls': formattingCalls,
     'input_chars': inputChars,
     'output_chars': outputChars,
     'reasoning_chars': reasoningChars,
@@ -196,6 +236,7 @@ class AgentRunTelemetry {
       coverageCalls: agentInt(json['coverage_calls']),
       repairCalls: agentInt(json['repair_calls']),
       languageRepairCalls: agentInt(json['language_repair_calls']),
+      formattingCalls: agentInt(json['formatting_calls']),
       inputChars: agentInt(json['input_chars']),
       outputChars: agentInt(json['output_chars']),
       reasoningChars: agentInt(json['reasoning_chars']),
@@ -319,6 +360,30 @@ class AgentRunResult {
         richSegmentNotes,
         rich.segmentNotes,
       ),
+      telemetry: telemetry,
+    );
+  }
+
+  /// Returns a copy with a refreshed content-free telemetry snapshot, used
+  /// after an asynchronous display-formatting call completes.
+  AgentRunResult copyWithTelemetry(AgentRunTelemetry telemetry) {
+    return AgentRunResult(
+      input: input,
+      evidence: evidence,
+      quotes: quotes,
+      analysis: analysis,
+      validation: validation,
+      sources: sources,
+      dictionaryProfiles: dictionaryProfiles,
+      profileWarnings: profileWarnings,
+      unavailableProfiles: unavailableProfiles,
+      warnings: warnings,
+      coverageFallbackUsed: coverageFallbackUsed,
+      ocrQuality: ocrQuality,
+      pitchAccents: pitchAccents,
+      richOriginalText: richOriginalText,
+      richSegmentTexts: richSegmentTexts,
+      richSegmentNotes: richSegmentNotes,
       telemetry: telemetry,
     );
   }
@@ -532,6 +597,10 @@ typedef AgentRichTextFormattingCallback = void Function(bool active);
 /// this value when those checks complete.
 typedef AgentProvisionalResultCallback = void Function(AgentRunResult result);
 
+/// Display-only translation preview from a complete `[TRANSLATION]` block.
+/// It is not persisted and must not be treated as a validated final result.
+typedef AgentTranslationPreviewCallback = void Function(String text);
+
 /// Resolves every generated profile as a batch. The app-level inbox holds the
 /// proposals until the user acts, so an absent page never implies a skip.
 typedef AgentProfileReviewCallback =
@@ -573,6 +642,7 @@ class AgentRunSnapshot {
     this.richTextFormatting = false,
     this.result,
     this.provisionalResult,
+    this.translationPreview,
     this.retainedResult,
     this.resultRetainedAfterFailure = false,
     this.resultReplaced = false,
@@ -625,6 +695,11 @@ class AgentRunSnapshot {
   /// language repair) finish. It is replaced by [result] when the run
   /// completes, and never sent back to the provider.
   final AgentRunResult? provisionalResult;
+
+  /// Display-only translation from a complete `[TRANSLATION]` block in the
+  /// current stream. Cleared when a provisional/final result arrives; never
+  /// persisted or sent back to the provider.
+  final String? translationPreview;
 
   /// Previous result kept visible while a regeneration runs. It is never sent
   /// to the provider again and is replaced only by a successful new run.
@@ -684,6 +759,7 @@ class AgentRunSnapshot {
       isRunning ||
       result != null ||
       provisionalResult != null ||
+      (translationPreview?.isNotEmpty ?? false) ||
       errorMessage != null;
 
   AgentRunSnapshot copyWith({
@@ -700,6 +776,7 @@ class AgentRunSnapshot {
     bool? richTextFormatting,
     Object? result = _unset,
     Object? provisionalResult = _unset,
+    Object? translationPreview = _unset,
     Object? retainedResult = _unset,
     bool? resultRetainedAfterFailure,
     bool? resultReplaced,
@@ -739,6 +816,9 @@ class AgentRunSnapshot {
       provisionalResult: identical(provisionalResult, _unset)
           ? this.provisionalResult
           : provisionalResult as AgentRunResult?,
+      translationPreview: identical(translationPreview, _unset)
+          ? this.translationPreview
+          : translationPreview as String?,
       retainedResult: identical(retainedResult, _unset)
           ? this.retainedResult
           : retainedResult as AgentRunResult?,

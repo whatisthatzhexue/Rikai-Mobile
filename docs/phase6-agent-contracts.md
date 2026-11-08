@@ -26,8 +26,9 @@
 
 - 状态：**P6.1–P6.5 核心、Wave 1–3 与 P6.6 多 OCR 核心（含失败态入口与逐版本
   依据预览）已实现，P6.6 自动化收尾于 2026-11-03 完成；P6.7-1 历史/持久化与
-  P6.7-2 UniDic 声调已于 2026-11-03 实现；P6.7 DSL/发布契约仍为设计；P6.6
-  真机验收与 Wave 4 设备验收仍未完成**；
+  P6.7-2 UniDic 声调已于 2026-11-03 实现；provider 测试连接、受限 Markdown
+  预览与 annotation v1 装饰子集已于 2026-11-08 实现；完整 text/group DSL/
+  发布契约仍为后续；P6.6 真机验收与 Wave 4 设备验收仍未完成**；
   与 `docs/phase6-agent-design.md` v2 配套。实现状态见 `docs/phase6-status.md`。
   **2026-10-31 实机反馈的 F1–F17 修正计划见
   `docs/agent_docs/device-feedback-2026-10-31.md`；Wave 1–3 已实现（应用级档案
@@ -1134,15 +1135,16 @@ validate(analysis, evidence, quotes, mode):
 - Fake provider 捕获请求体；断言无图片/路径/Key。
 - 真实 MDict/UniDic 设备测试复用现有 integration_test 的 `--dart-define` 方式。
 - P6.7 测试：历史 codec/store/recorder/UI、DB v2→v3 迁移、profile inbox 持久化、
-  UniDic 声调真实样例与本地-only 请求体断言已实现；annotation DSL 夹具/测试仍
-  待建。
+  UniDic 声调真实样例与本地-only 请求体断言已实现；annotation v1 schema/求值/
+  注入/恢复默认测试、受限 Markdown 预览测试与 provider 测试连接测试已实现；
+  完整 text/group DSL 夹具/测试仍待后续。
 
 ## 14. P6.7 契约（2026-11-03）
 
-> §14.1 历史/持久化、§14.2 UniDic 声调与 §14.6 P6.6 遗留（失败态入口/逐版本
-> 依据预览）已实现并有自动化测试；§14.3 annotation DSL、§14.4 的受限 Markdown
-> 预览、§14.5 provider 测试连接仍待实现。与 `docs/phase6-agent-design.md`
-> §17.2 配套；Wave 4 由另一工作流继续。
+> §14.1 历史/持久化、§14.2 UniDic 声调、§14.3 annotation v1 装饰子集、
+> §14.4 受限 Markdown 预览、§14.5 provider 测试连接与 §14.6 P6.6 遗留在
+> 2026-11-08 前已实现并有自动化测试；完整 text/group DSL 与用户规则编辑器列
+> 后续。与 `docs/phase6-agent-design.md` §17.2 配套；Wave 4 由另一工作流继续。
 
 ### 14.1 历史与持久化
 
@@ -1368,32 +1370,35 @@ final AgentPitchAccent? pitchAccent;
 
 - `targets` 只允许 `reader`、`photo`、`corpus`；P6.7 不允许 `agent`。
 - `version` 为单调递增整数；同一 target 只有一个启用版本。
-- 规则节点白名单：`text`、`ruby`、`pitch`、`bold`、`underline`、`group`、
-  `when`。`when` 只允许对 token 字段做相等/包含判断（`pos1`–`pos4`、`lemma`、
-  `surface`、`hasReading`、`hasPitch`、`target`）。
+- **2026-11-08 v1 范围**：规则节点白名单只允许 **`ruby`、`pitch`、`bold`、
+  `underline`、`when`**；`text`/`group`、用户编辑器、完整版本历史 UI 列后续，
+  不算已支持。`when` 只允许对 token 字段做相等/包含判断（`pos1`–`pos4`、
+  `lemma`、`surface`、`hasReading`、`hasPitch`、`target`）。
 - 禁止：函数调用、循环、递归、变量赋值、任意表达式、HTML、JavaScript、URL、
   `http(s)://`、`file://`、`data:`、图片、iframe、style、事件属性、外部链接。
-- 边界：最多 64 条规则、嵌套 8 层、单目标 10,000 输出字符、每 token 最多 2 个
-  标注；超限整份拒绝，不部分应用。
+- 边界：最多 64 条规则；v1 无嵌套节点、单目标输出有界；内置规则每 token 最多
+  2 个装饰（ruby + pitch）；超限/未知节点整份拒绝，不部分应用。
 
 #### 14.3.2 求值与存储
 
 - 求值器为纯 Dart、确定性、无网络/文件/模型调用；只使用本地 token/UniDic 数据。
 - 同一 target 的预览和正式渲染必须调用同一求值器；预览不得使用另一套模板。
-- `annotation_rule_sets` 保存 `id/name/version/rules_json/enabled/builtin/
-  schema_version/updated_at`；切换/回滚写新版本，不覆盖历史。
-- 规则集无效、求值异常或超限：保留上一个有效版本，显示可读错误；阅读器/照片集/
-  语料不得空白或崩溃。
-- P6.7 只提供内置规则集的选择/启用/预览/回滚，不开放自由文本或 JSON 编辑器；
+- **2026-11-08 v1 存储**：内置规则集以纯 Dart 常量提供，所选 id 存在
+  `AppSettings.annotationRuleSetId`；不写 `annotation_rule_sets`，不做版本历史
+  UI，选择“关闭标注”或恢复默认作为回滚。该表保留给后续用户规则集/版本历史，
+  当前不是活动存储格式。
+- 规则集无效、求值异常或超限：整份拒绝，保留当前内置选择；阅读器/照片集/语料
+  不得空白或崩溃。
+- P6.7 只提供内置规则集的选择/预览/恢复默认，不开放自由文本或 JSON 编辑器；
   后续用户编辑器必须复用同一 AST/求值器。
 - Agent 结果 P6.7 不接入；未来接入时不得新增 HTML/Markdown 渲染路径。
 
 #### 14.3.3 测试
 
 - schema/节点白名单/边界拒绝；HTML/JS/URL/图片/链接注入不生效。
-- 同一规则集预览与正式渲染逐字一致；版本切换/回滚可复现。
-- 无效规则集不覆盖上一个有效版本；不崩溃。
-- Agent 结果路径不经过 DSL（P6.7）。
+- 同一规则集预览与正式渲染逐字一致；基础/注音+音调/关闭三套内置规则可复现。
+- 无效规则集整份拒绝，保留当前内置选择；不崩溃。
+- Agent 结果路径不经过 annotation v1（P6.7）。
 
 ### 14.4 Markdown 使用边界
 

@@ -13,6 +13,7 @@ import 'package:rikai_mobile/core/models/token.dart';
 import 'package:rikai_mobile/services/agent/agent_orchestrator.dart';
 import 'package:rikai_mobile/services/agent/agent_run.dart';
 import 'package:rikai_mobile/services/agent/citation_registry.dart';
+import 'package:rikai_mobile/services/agent/evidence_cache.dart';
 import 'package:rikai_mobile/services/agent/grammar_patterns.dart';
 import 'package:rikai_mobile/services/agent/ports/llm_port.dart';
 import 'package:rikai_mobile/services/agent/ports/lookup_port.dart';
@@ -225,8 +226,11 @@ class _OneDictionaryLookup implements LookupPort {
 }
 
 class _FakeLookup implements LookupPort {
+  int calls = 0;
+
   @override
   Future<LookupResult> lookup(LookupRequest request) async {
+    calls++;
     return LookupResult(
       query: request.query,
       candidates: request.rawCandidates,
@@ -288,6 +292,7 @@ AgentOrchestrator _orchestrator({
     maxCoverageFallback: 0,
     enableRichTextPostProcess: false,
   ),
+  AgentEvidenceCache? evidenceCache,
 }) {
   return AgentOrchestrator(
     ocrPort: ocr ?? _FakeOcr(),
@@ -298,6 +303,7 @@ AgentOrchestrator _orchestrator({
     llmFactory: (_) => provider,
     // Most tests isolate analysis; F7 coverage/rich-text tests opt in.
     limits: limits,
+    evidenceCache: evidenceCache,
   );
 }
 
@@ -327,6 +333,59 @@ void main() {
         .join('\n');
     expect(requestText.contains('何卒'), isTrue);
     expect(requestText.contains('/sdcard'), isFalse);
+  });
+
+  test('emits a translation preview before final validation', () async {
+    final events = <LlmEvent>[
+      for (var i = 0; i < _analysisTagged.length; i += 11)
+        LlmEvent(
+          type: LlmEventType.textDelta,
+          text: _analysisTagged.substring(
+            i,
+            i + 11 < _analysisTagged.length ? i + 11 : _analysisTagged.length,
+          ),
+        ),
+      LlmEvent.done(),
+    ];
+    final provider = FakeProvider(events: events);
+    final previews = <String>[];
+
+    final result = await _orchestrator(provider: provider).run(
+      const AgentRunRequest(
+        sessionId: 's1',
+        mode: AgentMode.strict,
+        dictionaries: <DictionaryInfo>[_dictionary],
+        provider: _provider,
+        userText: '何卒',
+      ),
+      onTranslationPreview: previews.add,
+    );
+
+    expect(previews, <String>['请多关照。']);
+    expect(result.validation.valid, isTrue);
+  });
+
+  test('reuses text evidence from the in-memory cache', () async {
+    final provider = FakeProvider(responseText: _analysisTagged);
+    final lookup = _FakeLookup();
+    final cache = AgentEvidenceCache();
+    final orchestrator = _orchestrator(
+      provider: provider,
+      lookup: lookup,
+      evidenceCache: cache,
+    );
+    const request = AgentRunRequest(
+      sessionId: 's1',
+      mode: AgentMode.strict,
+      dictionaries: <DictionaryInfo>[_dictionary],
+      provider: _provider,
+      userText: '何卒',
+    );
+
+    await orchestrator.run(request);
+    await orchestrator.run(request);
+
+    expect(lookup.calls, 1);
   });
 
   test('warns when a selected dictionary produced no citation', () async {

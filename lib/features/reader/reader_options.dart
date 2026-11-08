@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/models/annotation_rules.dart';
 import '../../state/providers.dart';
 
 /// Shared reading options menu: furigana visibility and reading font size.
@@ -19,7 +20,16 @@ class ReaderOptionsMenu extends ConsumerWidget {
       onSelected: (value) {
         final notifier = ref.read(appSettingsProvider.notifier);
         if (value == 'furigana') {
-          notifier.setShowFurigana(!settings.showFurigana);
+          final next = !settings.showFurigana;
+          notifier.setShowFurigana(next);
+          if (next &&
+              settings.annotationRuleSetId == AnnotationRuleSets.noneId) {
+            notifier.setAnnotationRuleSet(AnnotationRuleSets.basicId);
+          }
+        } else if (value.startsWith('style:')) {
+          final id = value.substring('style:'.length);
+          notifier.setAnnotationRuleSet(id);
+          notifier.setShowFurigana(id != AnnotationRuleSets.noneId);
         } else if (value.startsWith('size:')) {
           notifier.setReaderFontSize(
             double.parse(value.substring('size:'.length)),
@@ -32,6 +42,13 @@ class ReaderOptionsMenu extends ConsumerWidget {
           checked: settings.showFurigana,
           child: const Text('显示注音'),
         ),
+        const PopupMenuDivider(),
+        for (final ruleSet in AnnotationRuleSets.all)
+          CheckedPopupMenuItem<String>(
+            value: 'style:${ruleSet.id}',
+            checked: settings.annotationRuleSetId == ruleSet.id,
+            child: Text(ruleSet.name),
+          ),
         const PopupMenuDivider(),
         for (final size in const [16.0, 20.0, 24.0, 28.0])
           CheckedPopupMenuItem<String>(

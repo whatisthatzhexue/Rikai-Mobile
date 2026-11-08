@@ -15,6 +15,7 @@ void main() {
     expect(settings.maxEntriesPerDictionary, 0);
     expect(settings.lookupMatchMode, LookupMatchMode.exact);
     expect(settings.showFurigana, isTrue);
+    expect(settings.annotationRuleSetId, 'furigana');
     expect(settings.readerFontSize, 20);
     expect(settings.ocrMirror, '');
     expect(settings.ocrModelsDirectory, '');
@@ -38,10 +39,12 @@ void main() {
         onboardingCompleted: true,
         autoSaveOcr: true,
         agentProfilesAutoAccept: true,
+        annotationRuleSetId: 'furigana_pitch',
       ),
     );
     final restored = SettingsStore(preferences).load();
 
+    expect(restored.annotationRuleSetId, 'furigana_pitch');
     expect(restored.fontFamily, AppFonts.system);
     expect(restored.maxEntriesPerDictionary, 5);
     expect(restored.lookupMatchMode, LookupMatchMode.prefix);

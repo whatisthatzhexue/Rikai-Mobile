@@ -1,0 +1,239 @@
+# Agent 运行路线修正版（2026-11-08）
+
+> 状态：**执行中**。本文是 2026-11-08 之后 P6.7 收尾、P6.7 后续（P6.8）
+> 与 P7 的实施顺序和范围唯一入口；不改变 `docs/project-rules.md` 的隐私/Agent
+> 边界。与旧规划冲突时以本文为准，并同步修正旧规划中的过时描述。
+>
+> 相关文档：`docs/phase6-agent-design.md`、`docs/phase6-agent-contracts.md`、
+> `docs/phase6-status.md`、`docs/project-rules.md` R-AGENT-24–27；
+> 旧规划：[p7-task-decomposition-plan.md](p7-task-decomposition-plan.md)、
+> [task-level-streaming-plan.md](task-level-streaming-plan.md)。
+
+## 1. 为什么需要修正
+
+当前实现已经偏离两份旧规划的前提：
+
+1. **流式续传已经实现**：`agent_orchestrator.dart` 在
+   `providerUnavailable`/`providerRateLimited`/`toolTimeout` 或流没有 `done`
+   时保留完整前缀并续传；旧 P6.8 文档仍写“不做断点续生成”。
+2. **完整 validator 不能做块级校验**：`AgentValidator` 强制要求至少一条译文与
+   至少一条 SEGMENT；旧 P6.8 的“把单块包装成最小 analysis 复用 validator”不可行。
+3. **单次主分析是当前架构结论**：`AgentRefactor` 的结论是“档案是编译产物，
+   分析是单次查询”；P7 的“翻译/语法拆成两次并发调用”会重复 prefill、增加
+   限流/成本，并需要新的 merge/revalidate。
+4. **P7.0 已经证明正确的拆分方向**：只把显示后处理拆成异步小模型任务，核心
+   分析保持原子性；富文本调用目前还没有进入 `AgentRunTelemetry`。
+5. **P6.7-3 完整 DSL 性价比低**：当前只有阅读器/照片集/语料三个目标，已有
+   “显示注音”开关；完整 `text/group` AST、用户编辑器、版本历史 UI 的成本远高于
+   当前收益。
+6. **内部 MDict key 不能当标题**：`01570 03798`、`@daijirin2-...` 只是定位 key；
+   展示层必须从词条 HTML/保存 snippet 提取标题。
+
+## 2. 范围决议
+
+### 2.1 P6.7-3：内置装饰规则 v1（不做完整 DSL）
+
+- 只实现安全 JSON AST 的装饰子集：`ruby`、`pitch`、`bold`、`underline` +
+  `when`。
+- 不做 `text`/`group` 节点、不做自由文本/JSON 编辑器、不做用户导入。
+- 内置 2–3 套规则集：基础注音、注音+音调、关闭；先覆盖 `reader`、`photo`、
+  `corpus`，**不接入 Agent 结果**。
+- 预览使用当前阅读页/照片集/语料页的实时渲染；版本回滚先实现“恢复默认”
+  （内置规则集版本化仍保留在 schema 中），不新增版本历史管理界面。
+- `R-AGENT-26`、契约 §14.3、设计 §17.2.4 按本范围修订；完整 `text/group`/
+  用户编辑器列为后续项，不写成已支持。
+
+### 2.2 P6.7 后续：P6.8-lite
+
+- **做**：主分析流中完整闭合 `[TRANSLATION]` 的译文预览；只校验 quote id，
+  不显示未校验 segment；不写历史。
+- **做**：可选的内存证据缓存，用于用户重试/重新分析时跳过 OCR/分词/查词；
+  只缓存结构化 `AgentInputEnvelope` + `AgentEvidenceBundle`，不落盘。
+- **暂不做**：完整 `StreamingAnalysisAssembler` 的 segment 级流式、块级
+  validator、最终 partial result 对账 UI。等译文预览和真机数据证明需要后再做。
+
+### 2.3 P7：P7-lite
+
+- 做：`AgentTaskKind`/`AgentTaskRoute` 路由表，把现在隐式路由固化：
+  analysis=complex、coverage/repair/richText=small、languageRepair=complex，
+  空模型回退。
+- 做：`formattingCalls` 等任务级遥测，补齐 `llmCalls` 漏计的富文本调用。
+- 做：任务级预算只引用统一 policy。
+- 暂不做：P7.1 翻译/语法任务拆分、P7.3 多任务并发、P7.4 额外审查任务。
+- 保留条件：只有真实 provider 实测显示单次分析 p95/成本/截断不可接受，且
+  provider 支持 prompt cache 时，才重新评估任务拆分。
+
+### 2.4 明确保留
+
+- 固定流水线、模型无工具、citation 由 orchestrator 发放、词典顺序/严格语义。
+- 图片只在本机 OCR；provider 请求只发文本。
+- `dictionaryFanOut` 默认关闭；不在移动端做无界并发。
+- 主分析默认单次调用；一次 run 核心调用 ≤4（analysis + coverage + repair +
+  language repair），富文本最多 1 次。
+
+## 3. 修正版运行时管线
+
+```text
+输入/OCR → 档案缓存（缺失不阻塞） → UniDic/四模式查词
+→ 可选 coverage 审查（small，≤1）
+→ 单次主分析（complex，流式）
+   ├─ 流中：完整 [TRANSLATION] 闭合 → 译文预览（只校验 quote）
+   └─ 流末：完整解析 → 本地 validator
+→ provisional 结果
+→ 格式修复 ≤1（small）→ 语言修复 ≤1（complex）→ 本地 salvage
+→ final + 本地 RUBY 基线
+→ 异步富文本（small，失败保留基线）
+→ 历史只存结构化结果/OCR 文本
+```
+
+模型路由表：
+
+| 任务 | 主模型 | 回退 | 预算 |
+|---|---|---|---|
+| analysis | `complexModel` | `smallModel` | `analysisMaxTokens` |
+| coverage | `smallModel` | `complexModel` | `coverageReviewMaxTokens` |
+| repair | `smallModel` | `complexModel` | 按输入长度派生 |
+| languageRepair | `complexModel` | `smallModel` | 按输入长度派生 |
+| richText | `smallModel` | `complexModel` | `maxRichTextChars` |
+| providerTest | 用户选择 | — | 单次最小请求，不重试 |
+
+## 4. 实施阶段
+
+| 阶段 | 内容 | 主要交付 | 退出条件 |
+|---|---|---|---|
+| 0 | 文档校正 | 本文 + 旧规划/规则/契约/status 同步 | 文档不再与实现冲突 |
+| 1 | P6.7 快速收尾 | provider 测试连接；受限 Markdown 档案预览 | 有 widget/unit 测试；无真实 Key |
+| 2 | P6.7-3 v1 | 装饰规则 AST + 内置规则 + 阅读器/照片集/语料 + 恢复默认 | 三目标一致；200%；Agent 不接入 |
+| 3 | P6.7-4b | 200%/空态/错误态/无障碍/许可/签名清单；P6.7 真机视觉 | 设备清单通过；签名外置 |
+| 4 | P6.8-lite | 译文预览；可选证据缓存 | 首译文早于 provisional；续传无重复；不增调用 |
+| 5 | P7-lite | 路由表 + 任务遥测 + 预算 | 调用数不变；路由 fallback 测试 |
+| 6 | 条件启动 | 完整 segment streaming / P7 任务拆分 | 有真实 provider p95/成本证据 |
+
+### Phase 0：文档校正
+
+- 修正 `p7-task-decomposition-plan.md`：删除“不做断点续生成”的过时描述，
+  标记 P7.1/P7.3/P7.4 暂缓，指向本文。
+- 修正 `task-level-streaming-plan.md`：说明续传已实现、完整 validator 不能
+  复用、先做 P6.8-lite。
+- 更新 `README.md`、`CLAUDE.md`、`phase6-status.md` 的入口与状态。
+- 修订 `R-AGENT-26`、契约 §14.3、设计 §17.2.4 的 P6.7-3 v1 范围。
+
+### Phase 1：P6.7 快速收尾
+
+**1a Provider 测试连接**
+
+- 新增 `AgentProviderTester`，复用 `createLlmProvider`/错误码映射。
+- 请求：最小非流式文本，`maxTokens` 小，单次 HTTP 尝试；不写历史、不改配置、
+  不自动重试、不记录 Key。
+- 为 `LlmRequest` 增加可选 `maxHttpAttempts`（默认保持现状 3），测试连接设为 1。
+- 设置在 provider 编辑对话框内就地显示成功/失败；成功显示延迟与模型。
+- 测试：fake provider/本地 HTTP；断言无图片/路径/Key、失败分类、单次尝试。
+
+**1b 受限 Markdown 档案预览**
+
+- 新增不依赖第三方 Markdown 库的白名单渲染：段落、标题、列表、粗体/斜体、
+  行内代码；禁止 HTML/JS/图片/外链/自动 URL；未知语法按纯文本。
+- 档案 sheet 增加“预览/编辑”切换；预览只读，长度有界。
+- 测试：`<script>`/`<img>`/`http://` 不执行、不加载、不自动链接；未知语法原样。
+- 不改 `docs/project-data.md` 的既有 Agent 数值/文案；新增固定文案按治理流程
+  补录前先征得用户同意。
+
+### Phase 2：P6.7-3 v1
+
+- 新模型/求值器：安全 AST 只含 `ruby`/`pitch`/`bold`/`underline` + `when`；
+  纯 Dart、确定性、无网络/文件/模型调用；超限/未知节点整份拒绝。
+- 内置规则：基础注音、注音+音调、关闭；按 `reader`/`photo`/`corpus` 目标过滤。
+- 渲染：`ReaderBlock` 接收标注 plan；`TokenChip` 按 plan 显示 ruby/pitch/bold/
+  underline；抽取共享 `PitchAccentText`，避免 Agent/阅读器两套布局。
+- 设置：`AppSettings` 保存所选内置规则集；“恢复默认”回滚到基础注音。
+- 测试：schema/节点白名单/边界拒绝；三目标一致；200% 不溢出；Agent 结果路径
+  不经过 DSL；pitch 只在合法数据时显示。
+
+### Phase 3：P6.7-4b 与验收
+
+- 200% 字号、窄屏、空态/错误态；档案 sheet 预览无障碍。
+- P6.7 历史/声调/档案/annotation 真机视觉验收。
+- 许可/签名：签名若缺用户 keystore，保持外部阻塞，不伪造发布验收。
+- 真机项不能由自动化测试替代。
+
+### Phase 4：P6.8-lite
+
+- `StreamingTranslationAssembler`：只识别完整闭合的 `[TRANSLATION]` 块；
+  校验 quote 存在；按 `(quoteId, text)` 去重；续传 trim 后 reset。
+- orchestrator 只在主分析 `_collect` 挂 preview 回调，不用于 repair/coverage/
+  rich text；不写历史、不进 provider 请求。
+- controller/snapshot 增加 translation preview 字段；UI 复用 assistant summary
+  稳定槽位；provisional/final/error/cancel 时清理。
+- 可选证据缓存：文本 run 先行，内存 LRU；key 只含输入、词典 id/顺序、UniDic
+  指纹、limits 版本；不把 profile/language/provider/mode 放进 key（不影响证据）。
+- 测试：chunk 边界、未闭合块、续传重复、final 对账/闪烁、无额外 provider 调用；
+  缓存命中时 OCR/分词/查词为 0。
+
+### Phase 5：P7-lite
+
+- 新增 `AgentTaskKind`/`AgentTaskRoute`；把现有隐式路由集中到一处。
+- `AgentRunTelemetry` 增加 `formattingCalls`（以及必要的任务计数），修正
+  `llmCalls` 漏计富文本的问题。
+- 任务预算统一从 policy 读取；不新增调用、不改严格/宽松语义。
+- 测试：路由表、空模型 fallback、调用数不增加、telemetry 含富文本调用。
+
+### Phase 6：条件启动
+
+只有满足以下条件才启动完整 P6.8/P7：
+
+- 真机/真实 provider 的 p95 延迟、成本、截断数据表明单次分析不可接受；
+- provider 支持 prompt cache，能抵消双份 prefill；
+- 有明确的 block validator、partial result 契约、最终对账和回滚方案。
+
+## 5. 实施进度（2026-11-08）
+
+已完成：
+
+- Phase 0：本文、旧 P6.8/P7 规划、README/CLAUDE/status、R-AGENT-26、契约
+  §14.3、设计 §17.2.4 已同步。
+- Phase 1a：`AgentProviderTester` + 设置对话框“测试连接”；单次 HTTP、不写
+  历史、不落 Key；`LlmRequest.maxHttpAttempts` 支持测试连接不自动重试。
+- Phase 1b：`RestrictedMarkdown` + 档案 sheet 预览/编辑切换；HTML/JS/图片/
+  外链/自动 URL 不执行；未知语法按纯文本。
+- Phase 2：annotation v1 装饰规则模型/求值器、内置规则、阅读器/照片集/语料
+  接入、`TokenChip` ruby/pitch/bold/underline、共享 `PitchAccentOverlay`、
+  设置持久化与“恢复默认”式内置选择；`text`/`group` 和用户编辑器未实现。
+- Phase 4：`StreamingTranslationAssembler` + orchestrator 预览回调 +
+  controller/snapshot `translationPreview` + assistant summary 稳定槽位；
+  续传去重；不写历史、不增加 provider 请求。文本 run 的内存 LRU
+  `AgentEvidenceCache` 已接入 orchestrator；key 不含 profile/language/provider/
+  mode，图片 run 暂不缓存。
+- Phase 5：`AgentTaskRoute` 路由表；`AgentRunTelemetry.formattingCalls`，
+  `llmCalls` 现包含富文本调用；路由测试完成。
+
+仍待完成：
+
+- P6.7-4b 无障碍/200%/空错误态/许可/签名与真机视觉验收。
+- 真实 provider、arm64、大词典、secure storage 的 Wave 4 设备验收。
+- 完整 P6.8 segment streaming 与 P7 任务拆分（条件启动，见 Phase 6）。
+
+## 6. 验收指标
+
+- 核心调用数：analysis 1；coverage ≤1；repair ≤1；languageRepair ≤1；
+  richText ≤1；P7-lite 不增加调用。
+- 译文预览首现早于 provisional；provisional 不被富文本阻塞。
+- 所有展示 citation 都属于本次 run 且通过 validator；严格模式不显示未校验事实。
+- 缓存命中时 OCR/分词/查词调用为 0；缓存/日志无图片/路径/Key/HTML。
+- P6.7-3：三个目标渲染一致；200% 不覆盖文字/读音/下划线；Agent 不接入。
+- 真机：Wave 4 的真实 provider、arm64、大词典、secure storage、200% 视觉验收
+  仍单独完成，自动化测试不能替代。
+
+## 7. 隐私与安全
+
+- 继续遵守 `R-SEC`/`R-AGENT`：图片只在本机 OCR；provider 请求只发文本；
+  Key 只在 secure storage；日志不记录正文/路径/Key/完整请求体。
+- 测试连接不发送图片、tools、schema、历史或 citation；不写历史。
+- Markdown 预览不执行 HTML/JS/外链；不引入通用 Markdown 渲染依赖。
+- 证据缓存只在内存，不落盘、不跨进程恢复；不缓存图片字节/路径/base64。
+
+## 8. 不做什么
+
+- 不恢复自由 ReAct/工具循环/多 Agent 辩论。
+- 不在 P6.7-3 v1 中做用户自由编辑 DSL/完整版本历史 UI。
+- 不在 P7-lite 中拆翻译/语法任务或新增审查调用。
+- 不把未实现能力写成已支持；未完成真机验收的项不写成已验证。

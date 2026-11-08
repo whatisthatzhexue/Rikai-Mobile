@@ -62,6 +62,7 @@ class LlmRequest {
     required this.messages,
     this.maxTokens = 16000,
     this.stream = true,
+    this.maxHttpAttempts = 3,
     this.onHttpAttempt,
   });
 
@@ -69,6 +70,11 @@ class LlmRequest {
   final List<LlmMessage> messages;
   final int maxTokens;
   final bool stream;
+
+  /// Total HTTP attempts allowed by the provider adapter, including the first
+  /// one. Normal Agent runs keep the historical 3-attempt retry; a connectivity
+  /// test sets this to 1 so it never retries automatically.
+  final int maxHttpAttempts;
 
   /// Called by provider adapters for every HTTP attempt, including retries.
   /// Used only for content-free telemetry; it must never receive prompt text.
@@ -78,6 +84,7 @@ class LlmRequest {
     List<LlmMessage>? messages,
     int? maxTokens,
     bool? stream,
+    int? maxHttpAttempts,
     void Function(int attempt, bool retry)? onHttpAttempt,
   }) {
     return LlmRequest(
@@ -85,6 +92,7 @@ class LlmRequest {
       messages: messages ?? this.messages,
       maxTokens: maxTokens ?? this.maxTokens,
       stream: stream ?? this.stream,
+      maxHttpAttempts: maxHttpAttempts ?? this.maxHttpAttempts,
       onHttpAttempt: onHttpAttempt ?? this.onHttpAttempt,
     );
   }

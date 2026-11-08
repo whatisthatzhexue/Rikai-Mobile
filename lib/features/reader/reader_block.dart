@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/models/annotation_rules.dart';
 import '../../core/models/token.dart';
 import '../../core/theme/app_tokens.dart';
 import 'token_chip.dart';
@@ -11,12 +12,16 @@ class ReaderBlock extends StatelessWidget {
     required this.tokens,
     required this.fontSize,
     required this.showFurigana,
+    this.annotationRules = AnnotationRuleSets.basic,
+    this.annotationTarget = AnnotationTarget.reader,
     this.onTokenTap,
   });
 
   final List<Token> tokens;
   final double fontSize;
   final bool showFurigana;
+  final AnnotationRuleSet annotationRules;
+  final AnnotationTarget annotationTarget;
   final ValueChanged<Token>? onTokenTap;
 
   @override
@@ -31,6 +36,8 @@ class ReaderBlock extends StatelessWidget {
             token: token,
             fontSize: fontSize,
             showFurigana: showFurigana,
+            annotationRules: annotationRules,
+            annotationTarget: annotationTarget,
             onTap: onTokenTap,
           ),
       ],

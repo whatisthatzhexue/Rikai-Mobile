@@ -17,8 +17,9 @@
 
 - 状态：**设计 v2；P6.1–P6.5 核心、2026-10-31 反馈 Wave 1–3 与 P6.6 多 OCR
   核心已实现，P6.6 自动化收尾于 2026-11-03 完成；P6.7-1 历史/持久化与 P6.7-2
-  UniDic 声调已于 2026-11-03 实现；P6.7 annotation DSL、provider 测试连接和发布
-  打磨仍未完成；P6.6 真机验收与 Wave 4 设备验收仍由另一工作流处理。
+  UniDic 声调已于 2026-11-03 实现；provider 测试连接、受限 Markdown 档案预览与
+  annotation v1 装饰规则已于 2026-11-08 实现；完整 text/group DSL、无障碍/发布
+  验收与真机视觉仍未完成；P6.6 真机验收与 Wave 4 设备验收仍由另一工作流处理。
   Agent 重构 Phase 1a–3 于 2026-11-06 实现；Phase 4 的安全子集（静态词表包、
   非日语脚本降级）已实现，词表 UI/导入/生成与非日语 tokenizer 未实现**
 - 日期：2026-10-30（P6.6 核心实现更新：2026-11-02；自动化收尾：2026-11-03；
@@ -32,9 +33,10 @@
   `docs/phase6-agent-contracts.md`；机器可读 schema 见 `docs/schemas/agent/`。
 - 实现状态：见 `docs/phase6-status.md`。当前已接入 Agent 页、Provider 设置、
   熟悉期、证据/引用/校验、主页第五按钮、P6.6 多 OCR 对比/词典候选修复、P6.7
-  助手历史与 UniDic 声调；多 OCR 真机验收、annotation DSL、provider 测试连接、
-  无障碍/发布验收仍待完成。P6.7 的设计边界与决议见 §17.2；历史/声调已实现，
-  DSL/Markdown 受限预览仍待实现。Wave 4 设备验收由另一工作流继续。
+  助手历史、UniDic 声调、provider 测试连接、受限 Markdown 档案预览与
+  annotation v1；多 OCR 真机验收、无障碍/发布验收仍待完成。P6.7 的设计边界与
+  决议见 §17.2；完整 text/group DSL/用户规则编辑器列后续。Wave 4 设备验收由
+  另一工作流继续。
 
 ## 0. v2 变更摘要
 
@@ -53,7 +55,7 @@
 8. 明确 Provider：OpenAI-compatible + Anthropic 双适配，API Key 用
    `flutter_secure_storage`；无图片 DTO + 请求体断言。
 9. 重排实施顺序：Ports/Tools → Provider/Secret → 熟悉期 → Orchestrator/Validator →
-   UI → 多 OCR → DSL/发布。
+   UI → 多 OCR → annotation v1/发布。
 
 ## 1. 目标与边界
 
@@ -1031,9 +1033,10 @@ P6.7 历史复用上述表，不新增图片字段：`agent_runs.result_json` �
   变体文本。**不保存图片/缩略图/路径**；详情明确“原图未保存”。citation 失效时
   只显示保存摘要。删除单条或进入“多选”批量删除（支持全选）；不自动删除。
   详见 §17.2.2。
-- 标注 DSL（P6.7 设计，未实现）：安全 JSON AST + 内置规则 + 预览/版本回滚；
-  先阅读器/照片集/语料，Agent 结果后续接入。P6.7 不开放自由文本规则编辑器；
-  详见 §17.2.4。
+- 标注 DSL v1（2026-11-08 实现装饰子集）：安全 JSON AST 的
+  ruby/pitch/bold/underline + when、内置规则、实时预览/恢复默认；先覆盖
+  阅读器/照片集/语料，Agent 结果不接入。P6.7 不开放自由文本规则编辑器；
+  完整 text/group AST/版本历史 UI 列后续，详见 §17.2.4。
 - 空态/错误态：未配置 provider、网络/限流/超时/模型拒绝/工具失败；错误不含 Key/
   完整请求体；严格模式无依据 + 切换宽松；可重试/取消。
 - 无障碍：正文 16sp、辅助 14sp、12sp 仅短标签；icon/chip/操作行有 `Semantics`；
@@ -1110,15 +1113,17 @@ Phase 6 实施后至少覆盖：
 - **对话式 Agent UI v2 基础布局已实现（气泡/流式/折叠依据/固定输入区），但
   状态条、无障碍 200% 等完整 v2 验收项仍待补；历史与声调已实现（§17.2.2/3）。**
 - P6.6 多 OCR 核心已实现（2026-11-02，自动化测试）；P6.6 真机视觉/OCR/词典
-  质量验收未完成；P6.7-1 历史与 P6.7-2 UniDic 声调已实现（2026-11-03），DSL/
-  发布仍待做；真实 provider/API Key 与真实词典 `sample` 设备验证仍待做。详见
+  质量验收未完成；P6.7-1 历史、P6.7-2 UniDic 声调、provider 测试连接、受限
+  Markdown 预览与 annotation v1 已实现（2026-11-03/08），完整 DSL/发布验收仍
+  待做；真实 provider/API Key 与真实词典 `sample` 设备验证仍待做。详见
   `docs/phase6-status.md`。
 
 ## 16. 实施顺序（Phase 6）
 
 Phase 6 已在 Phase 5 完成后开始；P6.1–P6.5 核心已完成，P6.6 多 OCR 核心已完成
-（2026-11-02），P6.6 真机验收待做；P6.7-1 历史/P6.7-2 声调已实现
-（2026-11-03），P6.7 DSL/发布仍待做。
+（2026-11-02），P6.6 真机验收待做；P6.7-1 历史/P6.7-2 声调、provider 测试
+连接、受限 Markdown 预览与 annotation v1 已实现（2026-11-03/08），完整 DSL/
+发布验收仍待做。
 以下不是时间估算：
 
 1. **6.1 能力 Ports**：`lib/services/agent/ports/`、DTO 序列化、`LookupGateway`、
@@ -1137,17 +1142,18 @@ Phase 6 已在 Phase 5 完成后开始；P6.1–P6.5 核心已完成，P6.6 多 
    按钮、设计 token；先结构化组件 + 安全纯文本，不引入完整 Markdown/ruby。
 6. **6.6 多 OCR（核心已实现，2026-11-02）**：`ocr_consensus.dart`、变体差异/
    修复建议 UI；默认单版本；真机视觉/OCR/词典质量验收仍待完成。
-7. **6.7 安全富文本/历史/DSL/发布（2026-11-03 部分实现）**：历史/持久化与
-   UniDic 声调已实现；annotation DSL、provider 测试连接、许可证/性能/发布验收
-   仍待做。设计决议见 §17.2。
+7. **6.7 安全富文本/历史/DSL/发布（2026-11-03/08 部分实现）**：历史/持久化、
+   UniDic 声调、provider 测试连接、受限 Markdown 预览与 annotation v1 已实现；
+   完整 text/group DSL、许可证/性能/发布/真机视觉验收仍待做。设计决议见 §17.2。
 
 ## 17. 已定事项、默认值与开放问题
 
 **已定：**
 
 - Phase 6 已在 Phase 5 后开始；P6.1–P6.5 核心已实现，P6.6 多 OCR 核心已实现
-  （2026-11-02），P6.6 真机验收待做；P6.7-1 历史与 P6.7-2 UniDic 声调已实现
-  （2026-11-03），DSL/发布仍待做。
+  （2026-11-02），P6.6 真机验收待做；P6.7-1 历史、P6.7-2 UniDic 声调、
+  provider 测试连接、受限 Markdown 预览与 annotation v1 已实现
+  （2026-11-03/08），完整 text/group DSL/发布验收仍待做。
 - 固定流水线；模型无工具（2026-10-31 决策；tool loop 为未来扩展）。
 - OpenAI-compatible + Anthropic 双适配；`flutter_secure_storage`。
 - 多 OCR 按需；默认单版本。
@@ -1182,8 +1188,9 @@ RUBY 化（预览首帧可见）+ 失败保留本地 RUBY 基线；P7.1–P7.4 �
 
 ## 17.2 P6.7 设计决议与实现状态（2026-11-03）
 
-> 状态：P6.7-1 历史/持久化与 P6.7-2 UniDic 声调已实现（自动化测试 + debug
-> build）；P6.7-3 annotation DSL 与 P6.7-4 provider 测试连接/发布仍为设计。
+> 状态：P6.7-1 历史/持久化、P6.7-2 UniDic 声调、provider 测试连接、受限
+> Markdown 档案预览与 P6.7-3 annotation v1（装饰规则）已实现（自动化测试）；
+> 完整 text/group DSL/用户编辑器与 P6.7-4b 无障碍/发布验收仍待做。
 > F1–F17 / Wave 4 设备验收由另一工作流继续，P6.7 真机/视觉验收仍待完成。
 
 ### 17.2.1 交付边界
@@ -1196,8 +1203,10 @@ RUBY 化（预览首帧可见）+ 失败保留本地 RUBY 基线；P7.1–P7.4 �
 - **P6.7-2 安全富文本 / ruby / 声调（UniDic 声调已实现）**：保留已实现的详细
   解析 AI 注音范围；新增 UniDic 声调高低线，只在词注/词典事实行显示；无可靠
   数据不显示，不用 AI 猜。AI 气泡摘要本地 RUBY 化，不加载模型强调标签。
-- **P6.7-3 标注 DSL**：安全 JSON AST + 内置规则 + 预览/版本回滚；先覆盖阅读器、
-  照片集、语料；Agent 结果后续接入；P6.7 不开放自由文本规则编辑器。
+- **P6.7-3 标注 DSL v1（已实现装饰子集）**：安全 JSON AST 的
+  ruby/pitch/bold/underline + when + 内置规则 + 实时预览/恢复默认；先覆盖
+  阅读器、照片集、语料；Agent 结果不接入；不开放自由文本规则编辑器。完整
+  text/group AST/版本历史 UI 列后续。
 - **P6.7-4 发布打磨**：provider 测试连接、空态/错误态、无障碍/200% 字号、
   许可/签名/发布验收；真实设备验收按 Wave 4 执行。
 - **P6.6 遗留**：失败态多 OCR 入口、选版本前依据预览，纳入 P6.7 设计，Wave 4
@@ -1290,10 +1299,15 @@ AI 推测声调；把图片、路径、base64 或 Key 写入历史或 provider �
 
 ### 17.2.4 标注 DSL
 
-- **P6.7 交付**：安全 JSON AST + 纯 Dart 求值器 + 内置规则集 + 预览 + 版本/
-  回滚；先覆盖阅读器、照片集、语料。普通用户只能选择/启用内置规则和预览效果，
-  **不开放自由文本 DSL 编辑器**；不执行任意代码、HTML、JavaScript、网络请求、
-  文件访问或外部链接。
+> **2026-11-08 范围收窄**：P6.7-3 v1 只实现装饰规则（`ruby`/`pitch`/`bold`/
+> `underline` + `when`），不做 `text`/`group`、不做用户规则编辑器、不做完整
+> 版本历史 UI；预览为实时渲染，“恢复默认”作为回滚。完整 AST 与用户编辑器列
+> 后续，详见 `docs/agent_docs/agent-runtime-roadmap-2026-11-08.md`。
+
+- **P6.7 交付**：安全 JSON AST（装饰子集）+ 纯 Dart 求值器 + 内置规则集 +
+  实时预览 + 恢复默认；先覆盖阅读器、照片集、语料。普通用户只能选择/启用内置
+  规则和预览效果，**不开放自由文本 DSL 编辑器**；不执行任意代码、HTML、
+  JavaScript、网络请求、文件访问或外部链接。
 - **Schema**：`rikai.annotation.rules.v1`；规则集包含 `id/name/version/targets/
   rules`，`targets` 只允许 `reader`、`photo`、`corpus`。节点白名单：
   `text`、`ruby`、`pitch`、`bold`、`underline`、`group`、`when`；禁止函数调用、
@@ -1356,8 +1370,10 @@ AI 推测声调；把图片、路径、base64 或 Key 写入历史或 provider �
    已实现（2026-11-03）。
 3. P6.6 遗留（失败态入口、逐版本依据预览）——已实现（2026-11-03）。
 4. P6.7-2 安全富文本/ruby/声调——UniDic 声调已实现（2026-11-03）。
-5. P6.7-3 annotation DSL（阅读器/照片集/语料）——待实现。
-6. P6.7-4 provider 测试连接、无障碍/空错误态、许可/签名/发布验收——待实现。
+5. P6.7-3 annotation v1（阅读器/照片集/语料）——已实现（2026-11-08）；
+   完整 text/group DSL/用户规则编辑器列后续。
+6. P6.7-4 provider 测试连接与受限 Markdown 预览——已实现（2026-11-08）；
+   无障碍/空错误态、许可/签名/发布与真机视觉验收仍待做。
 
 ## 18. 需求追踪
 

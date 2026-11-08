@@ -209,6 +209,7 @@ class AgentAssistantBubble extends StatelessWidget {
     required this.uiLanguage,
     required this.strings,
     required this.result,
+    this.translationPreview,
     required this.onRetry,
     required this.onLooseRetry,
     required this.onSettings,
@@ -240,6 +241,10 @@ class AgentAssistantBubble extends StatelessWidget {
   final AgentUiLanguage uiLanguage;
   final AgentUiStrings strings;
   final AgentRunResult? result;
+
+  /// Display-only translation from a complete stream block. It must not be
+  /// confused with a validated [result].
+  final String? translationPreview;
   final VoidCallback? onRetry;
   final VoidCallback? onLooseRetry;
   final VoidCallback onSettings;
@@ -252,14 +257,17 @@ class AgentAssistantBubble extends StatelessWidget {
     final modelLabel =
         '${providerLabel.isEmpty ? strings.model : providerLabel} · '
         '${mode == AgentMode.strict ? strings.strictShort : strings.looseShort}';
-    final summarySource = result == null
+    final resultSummary = result == null
         ? ''
         : stripYomiTags(
             localReadingsToRuby(agentSummarySource(result!.analysis)),
           );
+    final preview = translationPreview?.trim() ?? '';
+    final summarySource = resultSummary.isNotEmpty ? resultSummary : preview;
     final summary = summarySource.isEmpty
         ? strings.assistantFallback
         : summarySource;
+    final showPreview = result == null && running && preview.isNotEmpty;
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -295,7 +303,7 @@ class AgentAssistantBubble extends StatelessWidget {
             // subtree for a differently-structured one: doing so rebuilt the
             // whole answer and read as a page flash when the "reviewing"
             // phase ended.
-            if (result != null)
+            if (result != null || showPreview)
               AgentRichText(
                 key: const ValueKey<String>('agent-assistant-summary'),
                 text: summary,

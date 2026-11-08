@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/models/annotation_rules.dart';
 import '../core/models/dict_info.dart';
 import '../core/models/corpus_entry.dart';
 import '../core/models/lookup_match_mode.dart';
@@ -136,6 +137,12 @@ class AppSettingsNotifier extends Notifier<AppSettings> {
 
   void setShowFurigana(bool value) {
     _update(state.copyWith(showFurigana: value));
+  }
+
+  void setAnnotationRuleSet(String id) {
+    _update(
+      state.copyWith(annotationRuleSetId: AnnotationRuleSets.byId(id).id),
+    );
   }
 
   void setReaderFontSize(double value) {

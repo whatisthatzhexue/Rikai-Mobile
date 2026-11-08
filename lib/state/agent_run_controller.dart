@@ -241,6 +241,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
         dictionaryFamiliarizer: dictionaryFamiliarizer,
         unidicFamiliarizer: unidicFamiliarizer,
         limits: limits,
+        evidenceCache: ref.read(agentEvidenceCacheProvider),
       );
 
       final pendingProfileIds = ref
@@ -288,6 +289,13 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
             );
           });
         },
+        onTranslationPreview: (text) {
+          if (!_isActive(token) || text.trim().isEmpty) return;
+          _update(
+            token,
+            (snapshot) => snapshot.copyWith(translationPreview: text),
+          );
+        },
         onProvisionalResult: (provisional) {
           if (kDebugMode) {
             debugPrint(
@@ -297,7 +305,10 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
           }
           _update(
             token,
-            (snapshot) => snapshot.copyWith(provisionalResult: provisional),
+            (snapshot) => snapshot.copyWith(
+              provisionalResult: provisional,
+              translationPreview: null,
+            ),
           );
         },
         onEvidenceProgress: (count) {
@@ -321,7 +332,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
           _update(token, (snapshot) {
             final current = snapshot.result;
             if (current == null) return snapshot;
-            return snapshot.copyWith(result: current.copyWithRichText(rich));
+            return snapshot.copyWith(result: _applyRichText(current, rich));
           });
         },
         onRichTextFormattingChanged: (active) {
@@ -361,12 +372,13 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       _pendingRichText = null;
       final finalResult = pendingRichText == null
           ? result
-          : result.copyWithRichText(pendingRichText);
+          : _applyRichText(result, pendingRichText);
       state = state.copyWith(
         status: AgentRunStatus.done,
         stageMessage: agentStageMessage(AgentStage.done, _uiLanguage),
         result: finalResult,
         provisionalResult: null,
+        translationPreview: null,
         // The user already saw the provisional answer; replaying the result
         // block entrance animation on the final replacement looks like a
         // page flash.
@@ -483,6 +495,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       stageMessage: agentStageMessage(AgentStage.cancelled, _uiLanguage),
       result: state.provisionalResult ?? state.retainedResult,
       provisionalResult: null,
+      translationPreview: null,
       retainedResult: null,
       resultReplaced: state.provisionalResult != null,
       pendingProfileCount: ref.read(agentProfileInboxProvider).pendingCount,
@@ -509,6 +522,21 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
     _pendingRichText = null;
     ref.read(agentProfileInboxProvider.notifier).clearAll();
     state = AgentRunSnapshot.idle;
+  }
+
+  AgentRunResult _applyRichText(
+    AgentRunResult result,
+    AgentRichTextOutputs rich,
+  ) {
+    final updated = result.copyWithRichText(rich);
+    if (rich.formattingCalls <= 0) return updated;
+    return updated.copyWithTelemetry(
+      updated.telemetry.copyWith(
+        llmCalls: updated.telemetry.llmCalls + rich.formattingCalls,
+        formattingCalls:
+            updated.telemetry.formattingCalls + rich.formattingCalls,
+      ),
+    );
   }
 
   bool _isActive(AgentCancellation token) =>
@@ -595,6 +623,7 @@ class AgentRunController extends Notifier<AgentRunSnapshot> {
       errorDetail: detail,
       result: fallback,
       provisionalResult: null,
+      translationPreview: null,
       retainedResult: null,
       resultRetainedAfterFailure: fallback != null,
       resultReplaced: hadProvisional,

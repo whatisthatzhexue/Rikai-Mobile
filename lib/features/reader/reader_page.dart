@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/models/token.dart';
+import '../../core/models/annotation_rules.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/ui/no_scrollbar_behavior.dart';
 import '../../core/ui/rikai_toast.dart';
@@ -450,6 +451,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
               tokens: line.tokens,
               fontSize: settings.readerFontSize,
               showFurigana: settings.showFurigana,
+              annotationRules: AnnotationRuleSets.byId(
+                settings.annotationRuleSetId,
+              ),
+              annotationTarget: AnnotationTarget.reader,
               onTokenTap: _showTokenLookup,
             ),
           );

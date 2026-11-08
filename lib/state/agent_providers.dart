@@ -9,6 +9,8 @@ import '../core/models/agent/agent_provider.dart';
 import '../core/models/dict_info.dart';
 import '../services/agent/agent_background_service.dart';
 import '../services/agent/agent_image_picker.dart';
+import '../services/agent/agent_provider_tester.dart';
+import '../services/agent/evidence_cache.dart';
 import '../services/agent/familiarization/profile_fingerprint.dart';
 import '../services/agent/familiarization/profile_repository.dart';
 import '../services/agent/grammar_patterns.dart';
@@ -36,6 +38,18 @@ final secretStoreProvider = Provider<SecretPort>((ref) {
 final agentProvidersProvider = FutureProvider<List<AgentProviderConfig>>(
   (ref) => ref.watch(agentStoreProvider).listProviders(),
   retry: (retryCount, error) => null,
+);
+
+/// Explicit provider connectivity test. Injectable so widget tests never open
+/// a real HTTP connection or read a real API key.
+final agentProviderTesterProvider = Provider<AgentProviderTester>(
+  (ref) => AgentProviderTester(secrets: ref.watch(secretStoreProvider)),
+);
+
+/// App-scoped text-run evidence cache. It is memory-only and survives page
+/// navigation but not process death.
+final agentEvidenceCacheProvider = Provider<AgentEvidenceCache>(
+  (ref) => AgentEvidenceCache(),
 );
 
 final agentProfilesProvider = FutureProvider<List<StoredDictionaryProfile>>(

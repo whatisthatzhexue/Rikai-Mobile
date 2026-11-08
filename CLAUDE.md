@@ -115,16 +115,23 @@ Agent 改动前。**今后的误区只在该文件新增。**
 队列。
 何时查看：开发 Agent 或安排下一步前；决定 Wave 顺序时。
 
+`docs/agent_docs/agent-runtime-roadmap-2026-11-08.md`：
+内容：2026-11-08 修正版执行路线：P6.7 收尾（provider 测试/Markdown 预览/
+装饰规则 v1）、P6.8-lite（译文预览/可选证据缓存）、P7-lite（路由/遥测/预算）；
+与旧 P6.8/P7 规划冲突时以本文为准。
+何时查看：安排 P6.7 后续/P6.8/P7 工作前；决定暂缓或启动任务拆分时。
+
 `docs/agent_docs/task-level-streaming-plan.md`：
-内容：P6.7 之后的任务级流式（Task-level Streaming）独立规划：标签块增量渲染、
-局部校验、证据缓存重试、进度增强；明确不做断点续生成。
-何时查看：规划 P6.7 后续工作、实现流式渲染/重试缓存前。
+内容：任务级流式完整设计（标签块增量渲染、局部校验、证据缓存重试）；已被
+2026-11-08 roadmap 收窄为 P6.8-lite，完整 segment streaming 暂缓；当前代码
+已有流式续传，文档中“不做断点续生成”为过时描述。
+何时查看：需要完整设计参考时；实现前先看 roadmap。
 
 `docs/agent_docs/p7-task-decomposition-plan.md`：
-内容：P7 任务解耦规划：核心翻译/语法解析/富文本后处理拆分、模型路由、
-`Future.wait` 并发与 P6.8 任务级流式、单向数据流与严格标签协议；P7.0 富文本
-后处理为已落地增量，其余未实现。
-何时查看：规划 P7、拆分 Agent 任务、评估模型路由/并发/成本前。
+内容：P7 任务解耦完整规划（翻译/语法拆分、模型路由、`Future.wait` 并发）；
+已被 2026-11-08 roadmap 收窄为 P7-lite，P7.1/P7.3/P7.4 暂缓；P7.0 富文本
+后处理已落地。
+何时查看：评估未来任务拆分时；当前实施以 roadmap 为准。
 
 `docs/agent_docs/agent-refactor-idea-plan.md`：
 内容：Agent 重构实施计划（Agent-Refactor-Idea）：档案编译器、单次分析、
@@ -343,9 +350,11 @@ OCR 插件新增可选 `engine` 约束；版本 chip 左对齐/自动换行/固�
 存于 `docs/agent_output/YYYY-MM-DD-HH-mm.txt`。流式结束后先渲染已解析/校验的主
 结果（“结果已出，正在复核…”），不等待格式/语言/富文本后置调用；provider 在
 `finish_reason`/`[DONE]`/`message_stop` 到达时立即停止读取。P6.6 真机验收仍待
-另一工作流；P6.7-1 历史/持久化、P6.7-2 UniDic 声调与 P6.6 失败态/逐版本预览
-已实现（design §17.2、contracts §14、design-tokens P6.7 行），annotation DSL、
-provider 测试连接与发布打磨未完成。2026-11-06 另修复结果复核闪烁（稳定 summary
+另一工作流；P6.7-1 历史/持久化、P6.7-2 UniDic 声调、P6.6 失败态/逐版本预览、
+provider 测试连接、受限 Markdown 预览、annotation v1、P6.8-lite 译文预览/证据
+缓存与 P7-lite 路由/遥测已实现（design §17.2、contracts §14、design-tokens
+P6.7 行、`agent-runtime-roadmap-2026-11-08.md`）；完整 text/group DSL 与发布/
+真机验收未完成。2026-11-06 另修复结果复核闪烁（稳定 summary
 槽位、final 不重播淡入）、ruby/音调 baseline 与读音重叠、尾高下降点、长下划线
 中途换行、历史详情复制、档案删除灰色锁定、provider 全局持久化、严格/宽松会话
 快照、启动后台预热（不阻塞主页）、Android 前台服务后台持续与流式中断自动续传；
@@ -376,14 +385,17 @@ provider 测试连接与发布打磨未完成。2026-11-06 另修复结果复核
   secure storage 设备 I/O）；Wave 1–3 的自动化测试不能替代设备验收。
 - P6.6 多 OCR 版本/词典辅助修复：核心已实现（显式多版本、质量/diff、词典候选、
   用户确认后重新分析）；剩余真机视觉/OCR/词典质量验收，不能把图片发给模型。
-- P6.7：历史/持久化、UniDic 声调与 P6.6 失败态多 OCR 入口/逐版本依据预览已实现
-  （`docs/phase6-agent-design.md` §17.2、`docs/phase6-agent-contracts.md` §14、
-  `docs/design-tokens.md` P6.7 行、`docs/project-rules.md` R-AGENT-24–27）。
-  剩余：annotation DSL（先阅读器/照片集/语料）、provider 测试连接、无障碍/
-  发布验收；真机/视觉验收未完成。Wave 4 由另一工作流继续。
-- P7 任务解耦/模型路由/并发流式为规划项（
-  `docs/agent_docs/p7-task-decomposition-plan.md`）；P7.0 富文本后处理已增量
-  实现，P7.1–P7.4 未实现，不得写成已支持。
+- P6.7：历史/持久化、UniDic 声调、P6.6 失败态多 OCR 入口/逐版本依据预览、
+  provider 测试连接、受限 Markdown 档案预览、annotation v1（装饰规则，阅读器/
+  照片集/语料）已实现（`docs/phase6-agent-design.md` §17.2、契约 §14、
+  `docs/project-rules.md` R-AGENT-24–27、`agent-runtime-roadmap-2026-11-08.md`）。
+  剩余：P6.7-4b 无障碍/200%/许可/签名与真机视觉验收；完整 `text/group` DSL 与
+  用户规则编辑器列后续，不写成已支持。Wave 4 由另一工作流继续。
+- P6.8-lite：译文预览（完整 `[TRANSLATION]` 块、续传去重）与文本 run 的内存
+  LRU 证据缓存已实现；完整 segment streaming/块级 validator 未实现，图片 run
+  暂不缓存。
+- P7：P7.0 富文本后处理、P7-lite 路由表与 `formattingCalls` 遥测已实现；
+  P7.1/P7.3/P7.4 任务拆分/并发/额外审查按 roadmap 暂缓，不得写成已支持。
 
 设备验收项见下文「真机/网络验收」；禁止事项（图片/密钥/未实现能力）见
 `docs/project-rules.md` R-AGENT/R-SEC。

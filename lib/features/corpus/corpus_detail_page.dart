@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/models/annotation_rules.dart';
 import '../../core/models/corpus_entry.dart';
 import '../../core/models/token.dart';
 import '../../core/theme/app_tokens.dart';
@@ -386,6 +387,10 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
                     tokens: line.tokens,
                     fontSize: settings.readerFontSize,
                     showFurigana: settings.showFurigana,
+                    annotationRules: AnnotationRuleSets.byId(
+                      settings.annotationRuleSetId,
+                    ),
+                    annotationTarget: AnnotationTarget.corpus,
                     onTokenTap: (token) => showTokenLookupSheet(context, token),
                   ),
                 );

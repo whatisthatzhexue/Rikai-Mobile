@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -463,4 +465,73 @@ void main() {
     expect(find.text('已失效'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3));
   });
+
+  testWidgets(
+    'stale label disappears before the refreshed profile list arrives',
+    (tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final preferences = await SharedPreferences.getInstance();
+      final repository = _MutableProfileRepository(<StoredDictionaryProfile>[
+        _stored,
+        _storedB,
+      ]);
+      final refresh = Completer<void>();
+      var loads = 0;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sharedPreferencesProvider.overrideWithValue(preferences),
+            agentProfilesProvider.overrideWith((ref) async {
+              loads++;
+              if (loads == 1) return repository.list();
+              // Keep the previous list visible while the real SQLite reload
+              // would be in flight.
+              await refresh.future;
+              return repository.list();
+            }),
+            agentProfileRepositoryProvider.overrideWithValue(repository),
+            dictionaryProfileFingerprintProvider.overrideWithValue(
+              (
+                dictionary, {
+                required promptVersion,
+                required schemaVersion,
+                required language,
+              }) async => 'current-fingerprint',
+            ),
+            enabledDictionariesProvider.overrideWithValue(<DictionaryInfo>[
+              _dictionary,
+              _dictionaryB,
+            ]),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.light(),
+            home: const AgentProfilesPage(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('已失效'), findsNWidgets(2));
+
+      await tester.tap(
+        find.widgetWithIcon(IconButton, Icons.edit_outlined).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('保存'));
+      await tester.tap(find.text('保存'));
+      await tester.pumpAndSettle();
+
+      // The new revision is persisted, but the provider refresh is still
+      // deliberately blocked. A's stale badge must be gone immediately; B was
+      // not edited and remains stale.
+      expect(loads, greaterThanOrEqualTo(2));
+      expect(find.text('已失效'), findsOneWidget);
+
+      refresh.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('已失效'), findsOneWidget);
+      // Let the save toast timer expire before the widget tree is disposed.
+      await tester.pump(const Duration(seconds: 3));
+    },
+  );
 }

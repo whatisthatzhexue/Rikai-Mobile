@@ -95,12 +95,16 @@ Agent 相关设计与契约仍以 `docs/phase6-agent-design.md`、
   [non-agent-regression-review.md](non-agent-regression-review.md)。
 - 当前实现进度与测试/构建记录：[../phase6-status.md](../phase6-status.md)。
 - 当前测试/设备/性能数字：[../project-data.md](../project-data.md)。
+- **2026-11-08 修正版执行路线**：
+  [agent-runtime-roadmap-2026-11-08.md](agent-runtime-roadmap-2026-11-08.md)
+  （P6.7 收尾 + P6.8-lite + P7-lite 的唯一实施顺序；旧两份规划与其冲突时以
+  本文为准）。
 - P6.7 之后的任务级流式规划：
-  [task-level-streaming-plan.md](task-level-streaming-plan.md)（规划中，未实现；
-  不要当作当前任务）。
+  [task-level-streaming-plan.md](task-level-streaming-plan.md)（已被 roadmap
+  修正为 P6.8-lite；完整 segment streaming 暂缓）。
 - P7 任务解耦/模型路由/并发流式规划：
-  [p7-task-decomposition-plan.md](p7-task-decomposition-plan.md)（整体规划中；
-  P7.0 富文本后处理已增量实现，其余未实现）。
+  [p7-task-decomposition-plan.md](p7-task-decomposition-plan.md)（已被 roadmap
+  修正为 P7-lite；P7.0 富文本后处理已增量实现，P7.1/P7.3/P7.4 暂缓）。
 
 ## Agent 重构（Phase 0 提案）
 

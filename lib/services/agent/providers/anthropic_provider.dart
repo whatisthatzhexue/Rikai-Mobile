@@ -76,6 +76,7 @@ class AnthropicProvider implements LlmPort {
         data: payload,
         options: options,
         cancelToken: cancelToken,
+        maxAttempts: request.maxHttpAttempts,
         onAttempt: request.onHttpAttempt,
       );
       if (!useStream) {

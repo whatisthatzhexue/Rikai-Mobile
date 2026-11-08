@@ -57,6 +57,54 @@ void main() {
     expect(result?.markdown, contains('- 语言: ja→zh'));
   });
 
+  testWidgets('profile preview shows unsafe syntax as plain text', (
+    tester,
+  ) async {
+    final strings = AgentUiStrings.of(AgentUiLanguage.chinese);
+    const markdown =
+        '# 词典档案\n'
+        '**要点**\n'
+        '- 列表\n'
+        '<script>alert(1)</script>\n'
+        '[链接](http://example.com)';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showFamiliarizationSheet(
+                context,
+                profile: _profile,
+                markdown: markdown,
+                strings: strings,
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('agent-profile-preview-toggle')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('修改'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    expect(
+      find.textContaining('<script>alert(1)</script>', findRichText: true),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('[链接](http://example.com)', findRichText: true),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('removing a detected pair updates the saved markdown', (
     tester,
   ) async {

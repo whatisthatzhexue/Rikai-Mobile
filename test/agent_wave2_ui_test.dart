@@ -240,6 +240,46 @@ void main() {
     expect(copied, 1);
   });
 
+  testWidgets('translation preview appears before the final result', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: AgentAssistantBubble(
+              theme: AppTheme.light(),
+              providerLabel: 'DeepSeek',
+              mode: AgentMode.strict,
+              running: true,
+              cancelled: false,
+              error: null,
+              errorDetail: '',
+              stageMessage: '正在生成逐句解析',
+              startedAt: DateTime(2026, 1, 1),
+              thinkingStartedAt: DateTime(2026, 1, 1, 0, 0, 1),
+              finishedAt: null,
+              progressStep: 2,
+              evidenceCount: 1,
+              citationCount: 1,
+              uiLanguage: AgentUiLanguage.chinese,
+              strings: _strings,
+              result: null,
+              translationPreview: '请多关照。',
+              onRetry: null,
+              onLooseRetry: null,
+              onSettings: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('请多关照。'), findsOneWidget);
+    expect(find.text('正在生成逐句解析'), findsOneWidget);
+  });
+
   testWidgets('provisional result is visible before post-checks finish', (
     tester,
   ) async {

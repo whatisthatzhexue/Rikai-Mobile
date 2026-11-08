@@ -9,6 +9,7 @@ class AppSettings {
   const AppSettings({
     this.unidicPath = '',
     this.showFurigana = true,
+    this.annotationRuleSetId = 'furigana',
     this.readerFontSize = 20,
     this.fontFamily = AppFonts.harmony,
     this.maxEntriesPerDictionary = 0,
@@ -24,6 +25,10 @@ class AppSettings {
 
   final String unidicPath;
   final bool showFurigana;
+
+  /// Built-in annotation rule set id (`furigana`, `furigana_pitch`, `none`).
+  /// P6.7 v1 has no user-editable rule text.
+  final String annotationRuleSetId;
   final double readerFontSize;
 
   /// [AppFonts.harmony] or [AppFonts.system] (empty string).
@@ -63,6 +68,7 @@ class AppSettings {
   AppSettings copyWith({
     String? unidicPath,
     bool? showFurigana,
+    String? annotationRuleSetId,
     double? readerFontSize,
     String? fontFamily,
     int? maxEntriesPerDictionary,
@@ -78,6 +84,7 @@ class AppSettings {
     return AppSettings(
       unidicPath: unidicPath ?? this.unidicPath,
       showFurigana: showFurigana ?? this.showFurigana,
+      annotationRuleSetId: annotationRuleSetId ?? this.annotationRuleSetId,
       readerFontSize: readerFontSize ?? this.readerFontSize,
       fontFamily: fontFamily ?? this.fontFamily,
       maxEntriesPerDictionary:
@@ -105,6 +112,7 @@ class SettingsStore {
 
   static const _unidicPathKey = 'unidic_path';
   static const _showFuriganaKey = 'reader_show_furigana';
+  static const _annotationRuleSetKey = 'reader_annotation_rule_set';
   static const _readerFontSizeKey = 'reader_font_size';
   static const _fontFamilyKey = 'app_font_family';
   static const _maxEntriesKey = 'mdict_max_entries_per_dictionary';
@@ -132,6 +140,8 @@ class SettingsStore {
     return AppSettings(
       unidicPath: storedUnidicPath,
       showFurigana: _preferences.getBool(_showFuriganaKey) ?? true,
+      annotationRuleSetId:
+          _preferences.getString(_annotationRuleSetKey) ?? 'furigana',
       readerFontSize: _preferences.getDouble(_readerFontSizeKey) ?? 20,
       fontFamily: storedFont == null
           ? AppFonts.harmony
@@ -158,6 +168,10 @@ class SettingsStore {
   Future<void> save(AppSettings settings) async {
     await _preferences.setString(_unidicPathKey, settings.unidicPath);
     await _preferences.setBool(_showFuriganaKey, settings.showFurigana);
+    await _preferences.setString(
+      _annotationRuleSetKey,
+      settings.annotationRuleSetId,
+    );
     await _preferences.setDouble(_readerFontSizeKey, settings.readerFontSize);
     await _preferences.setString(_fontFamilyKey, settings.fontFamily);
     await _preferences.setInt(_maxEntriesKey, settings.maxEntriesPerDictionary);

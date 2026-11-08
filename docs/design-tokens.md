@@ -229,8 +229,9 @@
 > **Phase 6 状态**：P6.5 已把主页改为五个按钮（拍照识别、查句子、查单词、
 > 历史记录、词典助手），并接入 Agent 页、严格/宽松选择、来源 chip 和 provider
 > 设置。下方“四按钮”历史规则只用于理解旧版；当前以“Phase 6 Agent UI”与自查清单
-> 为准。P6.6 多 OCR token 与 P6.7 历史/声调 token 已实现；DSL/Markdown 受限
-> 预览的规则已记录（仍待实现）。P7.0 的详细解析富文本（原文/逐句理解/词典
+> 为准。P6.6 多 OCR token、P6.7 历史/声调 token、annotation v1 装饰规则与
+> 受限 Markdown 档案预览已实现；完整 text/group DSL 与用户规则编辑器列后续。
+> P7.0 的详细解析富文本（原文/逐句理解/词典
 > 事实解释的 RUBY/BOLD/UNDERLINE）已按本节 ruby token 实现；AI 气泡摘要使用
 > 本地 RUBY（不加载模型强调标签），仍需真机视觉验收。
 
@@ -311,7 +312,7 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
   `docs/agent_docs/device-feedback-2026-10-31.md` 的 F1/F17。结果字段语言后校验
   仍待 F1b（Wave 3）。
 
-**P6.7 历史/声调已实现；DSL/Markdown 受限预览待实现**
+**P6.7 历史/声调、annotation v1 与受限 Markdown 档案预览已实现；完整 text/group DSL 待后续**
 
 - 历史列表/详情使用现有 Agent 语义 token；不新增缩略图、卡片或时间线样式。
   列表行只显示文字元数据；详情顶部固定只读提示，图片会话显示“图片 N 张（历史
@@ -512,8 +513,9 @@ composer 最大行数等）已落入 `lib/core/theme/app_tokens.dart`，页面�
       citation 失效只显示保存摘要；单条/多选删除有二次确认（全选后删除等价清空）。
 - [ ] （P6.7）声调只用 UniDic 字段 24–26；只在词注/词典事实行；无数据/越界
       不画线，不用 AI 猜；200% 字号不重叠；音调词行带“音调信息”红色徽标。
-- [ ] （P6.7）DSL 只渲染白名单；HTML/JS/图片/外链不执行；预览=正式渲染；
-      版本/回滚可复现；Agent 结果不接入。
+- [ ] （P6.7）annotation v1 只渲染 ruby/pitch/bold/underline 白名单；
+      HTML/JS/图片/外链不执行；预览=正式渲染；恢复默认可复现；Agent 结果不接入。
+      完整 text/group DSL、用户规则编辑器和版本历史 UI 列后续。
 - [ ] （P6.7）Markdown 只用于导出/受限档案预览；主结果不是 Markdown；
       未知语法按纯文本。
 
@@ -823,8 +825,8 @@ Phase 1 及之前的页面（首页、文本阅读、设置、TokenChip、底部
 > Agent UI v2 的基础 token/布局已落地，状态条、历史、无障碍 200% 等验收项
 > 待补。P6.6 多 OCR 核心及失败态入口/逐版本预览已按既有 Agent token 实现
 > （版本 chip 28/12sp、差异高亮、修复候选、选中版本词典预览），真机视觉/200%
-> 字号验收待做；P6.7 历史/声调 token 已实现，
-> DSL/Markdown 受限预览规则仍待实现。实现状态见 `docs/phase6-status.md`；
+> 字号验收待做；P6.7 历史/声调 token、annotation v1 与受限 Markdown 档案预览
+> 已实现，完整 text/group DSL 待后续。实现状态见 `docs/phase6-status.md`；
 > 未通过验收前不要把真机/视觉项写成已支持。
 
 - [ ] 没有硬编码 `Color(0x...)` 或 `Colors.xxx`（除透明/白色数据占位）。
