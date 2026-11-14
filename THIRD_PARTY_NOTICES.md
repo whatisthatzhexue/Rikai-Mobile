@@ -23,7 +23,7 @@ in-app license page shows a summary).
 | PP-LCNet orientation models | Apache-2.0 | Downloaded at runtime, not in git |
 | manga-ocr ONNX (l0wgear) | Not declared | Downloaded at runtime, not redistributed; local import supported |
 | dict_reader | MIT | Pure-Dart MDict parser |
-| Kiyosuna Sans (KT Kiyosuna Sans) | SIL OFL 1.1 | Bundled Light/Bold fonts; Copyright (c) 2024 WATANABE Reiya; see `app/assets/fonts/KiyosunaSans/README.md` |
+| Kiyosuna Sans (KT Kiyosuna Sans) | SIL OFL 1.1 | Bundled Light/Bold fonts; Copyright (c) 2024 WATANABE Reiya; OFL README is bundled in the APK and shown in the in-app license page (`app/assets/fonts/KiyosunaSans/README.md`) |
 | Flutter packages | Various | Listed by Flutter's license page |
 
 ## User-supplied, not distributed

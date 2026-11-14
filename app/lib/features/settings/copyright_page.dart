@@ -34,8 +34,8 @@ class CopyrightPage extends StatelessWidget {
     (
       'Kiyosuna Sans',
       'SIL Open Font License 1.1，Copyright 2024 WATANABE Reiya。'
-          '应用内置 KT Kiyosuna Sans Light/Bold；完整许可见 '
-          'assets/fonts/KiyosunaSans/README.md。',
+          '应用内置 KT Kiyosuna Sans Light/Bold；完整 OFL 文本见下方'
+          '“查看开源许可证”。',
     ),
     ('UniDic', '用户自备；GPL v2 / LGPL v2.1 / 修正 BSD 三选一，Copyright NINJAL。'),
     ('MDict 词典', '用户自备；词条内容的原始许可由词典提供方决定，本项目不再分发。'),

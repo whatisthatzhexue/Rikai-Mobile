@@ -88,10 +88,13 @@ flutter:
   assets:
     - assets/models/
     - assets/LexiCandy_Icon.jpg
+    # Bundled so the full OFL text is available in the in-app license page.
+    - assets/fonts/KiyosunaSans/README.md
 
   # assets/licenses/ is intentionally not bundled: the in-app license page shows
   # a summary, and the authoritative texts stay in the repository for
-  # attribution/distribution (see THIRD_PARTY_NOTICES.md).
+  # attribution/distribution (see THIRD_PARTY_NOTICES.md). The Kiyosuna Sans
+  # README is the exception and is registered as a bundled font license.
 
   # KT Kiyosuna Sans is bundled under SIL OFL 1.1. The Light file is registered
   # as 400 so body text uses the light face by default; Bold is registered as 700.

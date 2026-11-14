@@ -47,7 +47,8 @@ dart tool/spike_mdict.dart             # App 专用 spike
   编排。
 - 设备端测试、模拟器、`adb push`、Gradle/网络排障：见
   [`docs/05-参考/开发环境与构建.md`](docs/05-参考/开发环境与构建.md)。
-- 构建前按 [`app/assets/fonts/README.md`](app/assets/fonts/README.md) 放置字体；
+- 字体已内置：见
+  [`app/assets/fonts/KiyosunaSans/README.md`](app/assets/fonts/KiyosunaSans/README.md)；
   模型/字体/词典/UniDic/Key 不入库。
 
 ## 4. 禁令指针

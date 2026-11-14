@@ -1,6 +1,7 @@
 # Kiyosuna Sans / KT Kiyosuna Sans
 
-LexiCandy 内置 **KT Kiyosuna Sans** 的两个字重，用于界面默认字体：
+LexiCandy 内置 **KT Kiyosuna Sans** 的两个字重，用于界面默认字体。本文件同时
+作为 APK asset 打包，并在应用内“查看开源许可证”页显示，确保 OFL 文本随应用分发。
 
 | 文件 | 字重 | Flutter 注册 | 用途 |
 |---|---|---|---|

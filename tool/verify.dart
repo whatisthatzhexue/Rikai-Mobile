@@ -23,6 +23,10 @@ void main(List<String> args) {
       exit(1);
     }
   }
+  if (!File('app/assets/fonts/KiyosunaSans/README.md').existsSync()) {
+    stderr.writeln('Missing bundled Kiyosuna Sans OFL README.');
+    exit(1);
+  }
   if (!File('app/android/local.properties').existsSync()) {
     stderr.writeln(
       'Missing app/android/local.properties; run `flutter pub get` in app/ first.',
