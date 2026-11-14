@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/services/mecab/mecab_output_parser.dart';
+import 'package:lexicandy/services/mecab/mecab_output_parser.dart';
 
 // Real MeCab/UniDic 2025.12 output captured on the Android emulator.
 const String _taLine =

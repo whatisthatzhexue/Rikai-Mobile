@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/utils/dictionary_entry_title.dart';
+import 'package:lexicandy/core/utils/dictionary_entry_title.dart';
 
 void main() {
   test('extracts the Japanese headword from bracketed entry content', () {

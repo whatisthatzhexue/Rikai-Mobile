@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/services/agent/streaming_translation_assembler.dart';
+import 'package:lexicandy/services/agent/streaming_translation_assembler.dart';
 
 void main() {
   test('emits only complete translations and tolerates chunk boundaries', () {

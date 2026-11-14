@@ -7,7 +7,7 @@ import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/dict_info.dart';
 import '../../core/theme/app_tokens.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../core/utils/date_format.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../services/agent/familiarization/dictionary_familiarization_service.dart';
@@ -111,7 +111,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
       final message = error == 'profile_regenerate_failed'
           ? strings.profileRegenerateFailed
           : error;
-      RikaiToast.show(context, message);
+      LexiCandyToast.show(context, message);
       ref.read(agentProfileRegenerationProvider.notifier).clearError();
     });
 
@@ -509,7 +509,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
   ) async {
     final draft = profile.profile;
     if (draft == null) {
-      RikaiToast.show(context, strings.profileMarkdownMissing);
+      LexiCandyToast.show(context, strings.profileMarkdownMissing);
       return;
     }
     final decision = await showFamiliarizationSheet(
@@ -572,7 +572,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
       markRevalidated();
     }
     ref.invalidate(agentProfilesProvider);
-    if (mounted) RikaiToast.show(context, strings.profileUpdated);
+    if (mounted) LexiCandyToast.show(context, strings.profileUpdated);
   }
 
   Future<void> _resolveProposal(
@@ -646,7 +646,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
         ref.read(agentProvidersProvider).asData?.value ??
         const <AgentProviderConfig>[];
     if (providers.isEmpty) {
-      RikaiToast.show(context, strings.profileRegenerateNeedsProvider);
+      LexiCandyToast.show(context, strings.profileRegenerateNeedsProvider);
       return;
     }
     _clearStaleCache();
@@ -670,7 +670,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
   ) async {
     if (profiles.isEmpty) return;
     if (ref.read(agentRunControllerProvider).profilesInUse) {
-      RikaiToast.show(context, strings.profileActionsDisabledWhileRunning);
+      LexiCandyToast.show(context, strings.profileActionsDisabledWhileRunning);
       return;
     }
     final confirmed = await showDialog<bool>(
@@ -701,7 +701,7 @@ class _AgentProfilesPageState extends ConsumerState<AgentProfilesPage> {
       _selected.clear();
       _selecting = false;
     });
-    RikaiToast.show(context, strings.profileDeleted);
+    LexiCandyToast.show(context, strings.profileDeleted);
   }
 }
 

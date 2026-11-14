@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/features/agent/agent_rich_text.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/features/agent/agent_rich_text.dart';
 
 void main() {
   testWidgets(

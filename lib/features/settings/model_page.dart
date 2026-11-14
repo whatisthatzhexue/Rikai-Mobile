@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/ocr_model.dart';
 import '../../core/models/ocr_model_copy.dart';
 import '../../core/theme/app_tokens.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../core/utils/format_bytes.dart';
 import '../../services/ocr/model_manager.dart';
 import '../../state/ocr_model_download.dart';
@@ -122,7 +122,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
   void _saveMirror() {
     if (!_persistMirror()) return;
     FocusScope.of(context).unfocus();
-    RikaiToast.show(context, '模型镜像设置已保存');
+    LexiCandyToast.show(context, '模型镜像设置已保存');
   }
 
   Future<void> _download(OcrModelSet set) async {
@@ -160,13 +160,13 @@ class _ModelPageState extends ConsumerState<ModelPage> {
       await _load(showLoading: false);
       if (mounted) {
         final message = '${set.displayName} 下载完成';
-        RikaiToast.show(context, message);
+        LexiCandyToast.show(context, message);
         // The toast owns its normal timer, but adding a screen-scoped fallback
         // keeps a stale completion bubble from surviving a route rebuild.
         unawaited(
           Future<void>.delayed(
             const Duration(seconds: 2),
-            () => RikaiToast.dismissIf(message),
+            () => LexiCandyToast.dismissIf(message),
           ),
         );
       }
@@ -200,7 +200,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
       }
       await _load(showLoading: false);
       if (!mounted) return;
-      RikaiToast.show(context, '${set.displayName} 导入完成');
+      LexiCandyToast.show(context, '${set.displayName} 导入完成');
     } on OcrModelException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
@@ -312,7 +312,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
       ref.read(appSettingsProvider.notifier).setOcrModelsDirectory(trimmed);
       await _load(showLoading: false);
       if (!mounted) return;
-      RikaiToast.show(context, hasModels && migrate ? '模型已迁移到新目录' : '模型目录已切换');
+      LexiCandyToast.show(context, hasModels && migrate ? '模型已迁移到新目录' : '模型目录已切换');
     } on OcrModelException catch (error) {
       if (!mounted) return;
       setState(() {

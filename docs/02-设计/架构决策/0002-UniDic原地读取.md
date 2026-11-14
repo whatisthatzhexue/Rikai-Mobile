@@ -13,7 +13,7 @@ Android scoped storage makes arbitrary filesystem paths unreliable.
 
 ## Decision
 
-The user supplies a UniDic directory path. Rikai-Mobile reads the five required
+The user supplies a UniDic directory path. LexiCandy reads the five required
 files in place and never writes to that directory. On Android 11+, the app asks
 for All Files Access (`MANAGE_EXTERNAL_STORAGE`); if the user declines, they can
 place UniDic under the app-specific external directory and enter that path.

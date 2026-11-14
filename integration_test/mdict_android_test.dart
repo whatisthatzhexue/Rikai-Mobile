@@ -7,11 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:rikai_mobile/app.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/services/mdict/entry_renderer.dart';
-import 'package:rikai_mobile/services/mdict/mdict_worker.dart';
-import 'package:rikai_mobile/state/providers.dart';
+import 'package:lexicandy/app.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/services/mdict/entry_renderer.dart';
+import 'package:lexicandy/services/mdict/mdict_worker.dart';
+import 'package:lexicandy/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const String _mdxPath = String.fromEnvironment(
@@ -283,7 +283,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
-        child: const RikaiApp(),
+        child: const LexiCandyApp(),
       ),
     );
     await tester.pumpAndSettle();

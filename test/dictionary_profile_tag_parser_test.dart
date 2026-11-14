@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
-import 'package:rikai_mobile/services/agent/familiarization/dictionary_profile_tag_parser.dart';
+import 'package:lexicandy/core/models/agent/agent_profile.dart';
+import 'package:lexicandy/services/agent/familiarization/dictionary_profile_tag_parser.dart';
 
 void main() {
   test('parses flat profile tags for multiple dictionaries', () {

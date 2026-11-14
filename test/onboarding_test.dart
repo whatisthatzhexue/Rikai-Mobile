@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/app.dart';
-import 'package:rikai_mobile/state/providers.dart';
+import 'package:lexicandy/app.dart';
+import 'package:lexicandy/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const MethodChannel _storageChannel = MethodChannel('rikai/storage_permission');
+const MethodChannel _storageChannel = MethodChannel('lexicandy/storage_permission');
 
 Future<void> _pumpApp(WidgetTester tester, {required bool completed}) async {
   SharedPreferences.setMockInitialValues({
@@ -16,7 +16,7 @@ Future<void> _pumpApp(WidgetTester tester, {required bool completed}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
-      child: const RikaiApp(),
+      child: const LexiCandyApp(),
     ),
   );
   await tester.pumpAndSettle();
@@ -52,7 +52,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await _pumpApp(tester, completed: false);
 
-    expect(find.text('欢迎使用 Rikai'), findsOneWidget);
+    expect(find.text('欢迎使用 LexiCandy'), findsOneWidget);
     expect(find.text('准备清单'), findsOneWidget);
     expect(find.text('UniDic 分词词典'), findsOneWidget);
 

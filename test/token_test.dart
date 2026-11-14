@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/token.dart';
+import 'package:lexicandy/core/models/token.dart';
 
 List<String> _features({
   String pos1 = '名詞',

@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/services/agent/familiarization/profile_fingerprint.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/services/agent/familiarization/profile_fingerprint.dart';
 
 void main() {
   test('dictionary fingerprint changes when the MDX stat changes', () async {

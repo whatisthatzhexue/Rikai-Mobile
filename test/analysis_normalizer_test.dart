@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_analysis.dart';
-import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
-import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
-import 'package:rikai_mobile/services/agent/analysis_normalizer.dart';
+import 'package:lexicandy/core/models/agent/agent_analysis.dart';
+import 'package:lexicandy/core/models/agent/agent_evidence.dart';
+import 'package:lexicandy/core/models/agent/agent_quote.dart';
+import 'package:lexicandy/services/agent/analysis_normalizer.dart';
 
 void main() {
   test('restores literal from the quote and drops unknown pattern ids', () {

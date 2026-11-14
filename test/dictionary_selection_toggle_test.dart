@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/features/lookup/dictionary_filter_bar.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/features/lookup/dictionary_filter_bar.dart';
 
 void main() {
   testWidgets('unselected mode labels are white on the blue AppBar', (

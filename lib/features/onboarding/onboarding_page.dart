@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/theme/app_branding.dart';
 import '../../core/theme/app_tokens.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../services/storage/permission_service.dart';
 import '../../state/providers.dart';
 
@@ -60,7 +61,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage>
       await _refreshPermissions();
     } catch (error) {
       if (!mounted) return;
-      RikaiToast.show(context, '无法打开权限设置：$error');
+      LexiCandyToast.show(context, '无法打开权限设置：$error');
     }
   }
 
@@ -88,7 +89,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage>
     return Scaffold(
       backgroundColor: AppColors.surface,
       appBar: AppBar(
-        title: const Text('欢迎使用 Rikai'),
+        title: Text('欢迎使用 ${AppBranding.name}'),
         actions: [
           TextButton(
             onPressed: _finishing ? null : _finish,
@@ -114,7 +115,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage>
                 ClipRRect(
                   borderRadius: BorderRadius.circular(AppRadius.lg),
                   child: Image.asset(
-                    'assets/Rikai_Icon.jpg',
+                    'assets/LexiCandy_Icon.jpg',
                     width: AppSizes.heroIcon,
                     height: AppSizes.heroIcon,
                     fit: BoxFit.cover,

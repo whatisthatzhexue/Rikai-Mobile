@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/core/models/lookup_match_mode.dart';
-import 'package:rikai_mobile/core/models/lookup_models.dart';
-import 'package:rikai_mobile/core/models/lookup_request.dart';
-import 'package:rikai_mobile/services/agent/familiarization/built_in_word_lists.dart';
-import 'package:rikai_mobile/services/agent/familiarization/word_list_coverage.dart';
-import 'package:rikai_mobile/services/agent/ports/lookup_port.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/core/models/lookup_match_mode.dart';
+import 'package:lexicandy/core/models/lookup_models.dart';
+import 'package:lexicandy/core/models/lookup_request.dart';
+import 'package:lexicandy/services/agent/familiarization/built_in_word_lists.dart';
+import 'package:lexicandy/services/agent/familiarization/word_list_coverage.dart';
+import 'package:lexicandy/services/agent/ports/lookup_port.dart';
 
 const _dictionary = DictionaryInfo(
   id: 'dict_a',

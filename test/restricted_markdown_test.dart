@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/core/ui/restricted_markdown.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/core/ui/restricted_markdown.dart';
 
 void main() {
   testWidgets('renders whitelisted Markdown and leaves unsafe syntax literal', (

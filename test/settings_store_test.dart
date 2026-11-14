@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/lookup_match_mode.dart';
-import 'package:rikai_mobile/core/theme/app_fonts.dart';
-import 'package:rikai_mobile/services/storage/settings_store.dart';
+import 'package:lexicandy/core/models/lookup_match_mode.dart';
+import 'package:lexicandy/core/theme/app_fonts.dart';
+import 'package:lexicandy/services/storage/settings_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

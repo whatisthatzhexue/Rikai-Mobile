@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
-import 'package:rikai_mobile/core/models/dictionary_scan.dart';
-import 'package:rikai_mobile/services/mdict/dictionary_scanner.dart';
+import 'package:lexicandy/core/models/dictionary_scan.dart';
+import 'package:lexicandy/services/mdict/dictionary_scanner.dart';
 
 void main() {
   test('recursively scans mdx files and discovers siblings', () async {

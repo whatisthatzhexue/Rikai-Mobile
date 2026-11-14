@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/services/agent/ports/agent_capability_exception.dart';
-import 'package:rikai_mobile/services/agent/ports/llm_port.dart';
-import 'package:rikai_mobile/services/agent/providers/provider_http.dart';
-import 'package:rikai_mobile/services/agent/providers/provider_payload.dart';
+import 'package:lexicandy/services/agent/ports/agent_capability_exception.dart';
+import 'package:lexicandy/services/agent/ports/llm_port.dart';
+import 'package:lexicandy/services/agent/providers/provider_http.dart';
+import 'package:lexicandy/services/agent/providers/provider_payload.dart';
 
 void main() {
   test('text-only provider payloads pass the guard', () {

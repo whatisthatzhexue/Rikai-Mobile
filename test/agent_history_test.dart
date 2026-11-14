@@ -2,16 +2,16 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
-import 'package:rikai_mobile/core/models/agent/agent_analysis.dart';
-import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
-import 'package:rikai_mobile/core/models/agent/agent_history.dart';
-import 'package:rikai_mobile/core/models/agent/agent_input.dart';
-import 'package:rikai_mobile/core/models/agent/agent_ocr.dart';
-import 'package:rikai_mobile/core/models/agent/agent_pitch.dart';
-import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
-import 'package:rikai_mobile/services/agent/agent_run.dart';
-import 'package:rikai_mobile/services/agent/agent_validator.dart';
-import 'package:rikai_mobile/services/storage/agent_store.dart';
+import 'package:lexicandy/core/models/agent/agent_analysis.dart';
+import 'package:lexicandy/core/models/agent/agent_evidence.dart';
+import 'package:lexicandy/core/models/agent/agent_history.dart';
+import 'package:lexicandy/core/models/agent/agent_input.dart';
+import 'package:lexicandy/core/models/agent/agent_ocr.dart';
+import 'package:lexicandy/core/models/agent/agent_pitch.dart';
+import 'package:lexicandy/core/models/agent/agent_quote.dart';
+import 'package:lexicandy/services/agent/agent_run.dart';
+import 'package:lexicandy/services/agent/agent_validator.dart';
+import 'package:lexicandy/services/storage/agent_store.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 AgentRunResult _sampleResult({String userText = '何卒'}) {

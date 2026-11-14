@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/utils/rich_text_tags.dart';
-import 'package:rikai_mobile/features/agent/agent_rich_text.dart';
+import 'package:lexicandy/core/utils/rich_text_tags.dart';
+import 'package:lexicandy/features/agent/agent_rich_text.dart';
 
 void main() {
   test('trims known okurigana from the ruby range', () {

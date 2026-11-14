@@ -180,7 +180,7 @@ class AgentUserBubble extends StatelessWidget {
 
 void openAgentImageViewer(BuildContext context, String path) {
   Navigator.of(context).push(
-    RikaiPageRoute<void>(
+    LexiCandyPageRoute<void>(
       builder: (context) => PhotoViewerPage(imagePath: path),
     ),
   );

@@ -1,15 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_input.dart';
-import 'package:rikai_mobile/core/models/agent/agent_limits.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/core/models/lookup_models.dart';
-import 'package:rikai_mobile/core/models/lookup_request.dart';
-import 'package:rikai_mobile/core/models/token.dart';
-import 'package:rikai_mobile/services/agent/citation_registry.dart';
-import 'package:rikai_mobile/services/agent/evidence_builder.dart';
-import 'package:rikai_mobile/services/agent/grammar_patterns.dart';
-import 'package:rikai_mobile/services/agent/ports/lookup_port.dart';
-import 'package:rikai_mobile/services/agent/ports/tokenize_port.dart';
+import 'package:lexicandy/core/models/agent/agent_input.dart';
+import 'package:lexicandy/core/models/agent/agent_limits.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/core/models/lookup_models.dart';
+import 'package:lexicandy/core/models/lookup_request.dart';
+import 'package:lexicandy/core/models/token.dart';
+import 'package:lexicandy/services/agent/citation_registry.dart';
+import 'package:lexicandy/services/agent/evidence_builder.dart';
+import 'package:lexicandy/services/agent/grammar_patterns.dart';
+import 'package:lexicandy/services/agent/ports/lookup_port.dart';
+import 'package:lexicandy/services/agent/ports/tokenize_port.dart';
 
 const _dictionary = DictionaryInfo(
   id: 'dict_a',

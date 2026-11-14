@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/services/mecab/unidic_validator.dart';
+import 'package:lexicandy/services/mecab/unidic_validator.dart';
 
 const int _headerSize = 72;
 const int _doubleArraySize = 24;

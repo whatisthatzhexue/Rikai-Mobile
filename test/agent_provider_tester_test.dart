@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
-import 'package:rikai_mobile/core/models/agent/agent_tool.dart';
-import 'package:rikai_mobile/services/agent/agent_provider_tester.dart';
-import 'package:rikai_mobile/services/agent/ports/agent_capability_exception.dart';
-import 'package:rikai_mobile/services/agent/ports/llm_port.dart';
-import 'package:rikai_mobile/services/agent/ports/secret_port.dart';
+import 'package:lexicandy/core/models/agent/agent_provider.dart';
+import 'package:lexicandy/core/models/agent/agent_tool.dart';
+import 'package:lexicandy/services/agent/agent_provider_tester.dart';
+import 'package:lexicandy/services/agent/ports/agent_capability_exception.dart';
+import 'package:lexicandy/services/agent/ports/llm_port.dart';
+import 'package:lexicandy/services/agent/ports/secret_port.dart';
 
 const _config = AgentProviderConfig(
   id: 'p1',

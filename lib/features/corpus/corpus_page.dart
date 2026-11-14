@@ -7,7 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/models/corpus_entry.dart';
 import '../../core/theme/app_tokens.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../core/utils/date_format.dart';
 import '../../state/providers.dart';
 import '../capture/capture_buttons.dart';
@@ -136,7 +136,7 @@ class CorpusPage extends ConsumerWidget {
     if (text.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) return;
-    RikaiToast.show(context, '已复制全文');
+    LexiCandyToast.show(context, '已复制全文');
   }
 
   Future<void> _delete(
@@ -196,7 +196,7 @@ class CorpusPage extends ConsumerWidget {
     final removed = await ref.read(historyStoreProvider).clear();
     if (!context.mounted) return;
     ref.invalidate(corpusEntriesProvider);
-    RikaiToast.show(context, '已清空 $removed 条语料');
+    LexiCandyToast.show(context, '已清空 $removed 条语料');
   }
 }
 

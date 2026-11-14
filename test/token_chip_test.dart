@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/annotation_rules.dart';
-import 'package:rikai_mobile/core/models/token.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/core/ui/pitch_accent_overlay.dart';
-import 'package:rikai_mobile/features/reader/reader_block.dart';
-import 'package:rikai_mobile/features/reader/token_chip.dart';
+import 'package:lexicandy/core/models/annotation_rules.dart';
+import 'package:lexicandy/core/models/token.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/core/ui/pitch_accent_overlay.dart';
+import 'package:lexicandy/features/reader/reader_block.dart';
+import 'package:lexicandy/features/reader/token_chip.dart';
 
 Token _token({
   required String surface,

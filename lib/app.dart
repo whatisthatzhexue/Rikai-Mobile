@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/theme/app_branding.dart';
 import 'core/theme/app_tokens.dart';
 import 'core/theme/unfocus_route_observer.dart';
 import 'state/providers.dart';
@@ -150,14 +151,14 @@ GoRouter _createRouter({String initialLocation = '/'}) {
   );
 }
 
-class RikaiApp extends ConsumerStatefulWidget {
-  const RikaiApp({super.key});
+class LexiCandyApp extends ConsumerStatefulWidget {
+  const LexiCandyApp({super.key});
 
   @override
-  ConsumerState<RikaiApp> createState() => _RikaiAppState();
+  ConsumerState<LexiCandyApp> createState() => _LexiCandyAppState();
 }
 
-class _RikaiAppState extends ConsumerState<RikaiApp> {
+class _LexiCandyAppState extends ConsumerState<LexiCandyApp> {
   late final GoRouter _router;
 
   @override
@@ -180,7 +181,7 @@ class _RikaiAppState extends ConsumerState<RikaiApp> {
     );
 
     return MaterialApp.router(
-      title: 'Rikai',
+      onGenerateTitle: (context) => AppBranding.name,
       debugShowCheckedModeBanner: false,
       // Canonical v1 design is light blue/white; see docs/01-规范/设计规范.md.
       theme: AppTheme.light(fontFamily: fontFamily),

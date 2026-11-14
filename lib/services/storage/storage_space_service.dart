@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 class StorageSpaceService {
   const StorageSpaceService();
 
-  static const MethodChannel _channel = MethodChannel('rikai/storage_space');
+  static const MethodChannel _channel = MethodChannel('lexicandy/storage_space');
 
   Future<int?> availableBytes(String path) async {
     try {

@@ -6,7 +6,7 @@ import '../../core/models/lookup_match_mode.dart';
 import '../../core/models/lookup_models.dart';
 import '../../core/models/lookup_request.dart';
 import '../../core/theme/page_route.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../services/lookup/lookup_gateway.dart';
 import '../../services/mdict/mdict_worker.dart';
 import '../../state/providers.dart';
@@ -116,14 +116,14 @@ Future<void> lookupAndOpenEntry(
   if (navigator.mounted) navigator.pop(); // close the progress dialog
   if (!navigator.mounted || !context.mounted) return;
   if (error != null) {
-    RikaiToast.show(context, '查询失败：${_shortError(error)}');
+    LexiCandyToast.show(context, '查询失败：${_shortError(error)}');
     return;
   }
   final hitGroups = result?.hitGroups ?? const [];
   if (hitGroups.isEmpty) {
     // An entry:// link stays inside the dictionary being read. Make the
     // per-dictionary miss explicit instead of leaving the user on a blank page.
-    RikaiToast.show(context, entryLinkMissMessage(word));
+    LexiCandyToast.show(context, entryLinkMissMessage(word));
     return;
   }
 
@@ -131,7 +131,7 @@ Future<void> lookupAndOpenEntry(
   // when a dictionary has several homographs.
   final firstGroup = hitGroups.first;
   navigator.push(
-    RikaiPageRoute<void>(
+    LexiCandyPageRoute<void>(
       builder: (context) => EntryPage(
         word: word,
         groups: [

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/word_list_pack.dart';
-import 'package:rikai_mobile/services/agent/familiarization/built_in_word_lists.dart';
+import 'package:lexicandy/core/models/agent/word_list_pack.dart';
+import 'package:lexicandy/services/agent/familiarization/built_in_word_lists.dart';
 
 void main() {
   test('built-in word list packs are static, valid and tagged', () {

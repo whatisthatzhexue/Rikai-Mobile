@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/utils/text_normalizer.dart';
+import 'package:lexicandy/core/utils/text_normalizer.dart';
 
 void main() {
   test('NFKC normalizes full-width ASCII and half-width katakana', () {

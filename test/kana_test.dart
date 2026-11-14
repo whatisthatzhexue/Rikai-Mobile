@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/utils/kana.dart';
+import 'package:lexicandy/core/utils/kana.dart';
 
 void main() {
   group('katakanaToHiragana', () {

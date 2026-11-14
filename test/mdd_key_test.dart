@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/services/mdict/mdd_key.dart';
+import 'package:lexicandy/services/mdict/mdd_key.dart';
 
 void main() {
   test('adds a leading backslash for root MDD keys', () {

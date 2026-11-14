@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/services/agent/ports/llm_port.dart';
-import 'package:rikai_mobile/services/agent/providers/fake_provider.dart';
-import 'package:rikai_mobile/services/security/secret_store.dart';
+import 'package:lexicandy/services/agent/ports/llm_port.dart';
+import 'package:lexicandy/services/agent/providers/fake_provider.dart';
+import 'package:lexicandy/services/security/secret_store.dart';
 
 const _request = LlmRequest(
   model: 'small',

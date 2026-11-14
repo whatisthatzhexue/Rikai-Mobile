@@ -1,6 +1,6 @@
 # Fonts
 
-Rikai-Mobile uses **HarmonyOS Sans SC Regular** as its UI font. The font file is
+LexiCandy uses **HarmonyOS Sans SC Regular** as its UI font. The font file is
 **not distributed in this repository** (and is excluded by `.gitignore`); each
 developer or user must download it themselves before building the app.
 

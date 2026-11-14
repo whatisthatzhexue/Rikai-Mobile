@@ -3,16 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/features/agent/agent_profiles_page.dart';
-import 'package:rikai_mobile/services/agent/agent_run.dart';
-import 'package:rikai_mobile/services/agent/familiarization/profile_repository.dart';
-import 'package:rikai_mobile/state/agent_profile_manager.dart';
-import 'package:rikai_mobile/state/agent_providers.dart';
-import 'package:rikai_mobile/state/agent_run_controller.dart';
-import 'package:rikai_mobile/state/providers.dart';
+import 'package:lexicandy/core/models/agent/agent_profile.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/features/agent/agent_profiles_page.dart';
+import 'package:lexicandy/services/agent/agent_run.dart';
+import 'package:lexicandy/services/agent/familiarization/profile_repository.dart';
+import 'package:lexicandy/state/agent_profile_manager.dart';
+import 'package:lexicandy/state/agent_providers.dart';
+import 'package:lexicandy/state/agent_run_controller.dart';
+import 'package:lexicandy/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _dictionary = DictionaryInfo(

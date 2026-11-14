@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/features/lookup/dictionary_filter_bar.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/features/lookup/dictionary_filter_bar.dart';
 
 const _dictionaries = [
   DictionaryInfo(id: 'a', title: '大修館明鏡', mdxPath: '/a.mdx'),

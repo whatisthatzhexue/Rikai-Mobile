@@ -1,12 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_analysis.dart';
-import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
-import 'package:rikai_mobile/core/models/agent/agent_input.dart';
-import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
-import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
-import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
-import 'package:rikai_mobile/core/models/dictionary_sample.dart';
-import 'package:rikai_mobile/services/agent/agent_run.dart';
+import 'package:lexicandy/core/models/agent/agent_analysis.dart';
+import 'package:lexicandy/core/models/agent/agent_evidence.dart';
+import 'package:lexicandy/core/models/agent/agent_input.dart';
+import 'package:lexicandy/core/models/agent/agent_profile.dart';
+import 'package:lexicandy/core/models/agent/agent_provider.dart';
+import 'package:lexicandy/core/models/agent/agent_quote.dart';
+import 'package:lexicandy/core/models/dictionary_sample.dart';
+import 'package:lexicandy/services/agent/agent_run.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
 
 void main() {

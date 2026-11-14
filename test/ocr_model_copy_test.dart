@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/ocr_model.dart';
-import 'package:rikai_mobile/core/models/ocr_model_copy.dart';
+import 'package:lexicandy/core/models/ocr_model.dart';
+import 'package:lexicandy/core/models/ocr_model_copy.dart';
 
 void main() {
   test('manifest has no display copy and every set has trilingual copy', () {

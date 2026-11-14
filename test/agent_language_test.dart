@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_input.dart';
-import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
-import 'package:rikai_mobile/services/agent/agent_messages.dart';
-import 'package:rikai_mobile/services/agent/agent_run.dart';
-import 'package:rikai_mobile/services/agent/agent_ui_strings.dart';
-import 'package:rikai_mobile/services/agent/agent_prompts.dart';
-import 'package:rikai_mobile/services/storage/settings_store.dart';
+import 'package:lexicandy/core/models/agent/agent_input.dart';
+import 'package:lexicandy/core/models/agent/agent_profile.dart';
+import 'package:lexicandy/services/agent/agent_messages.dart';
+import 'package:lexicandy/services/agent/agent_run.dart';
+import 'package:lexicandy/services/agent/agent_ui_strings.dart';
+import 'package:lexicandy/services/agent/agent_prompts.dart';
+import 'package:lexicandy/services/storage/settings_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

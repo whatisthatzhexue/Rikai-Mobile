@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
-import 'package:rikai_mobile/services/agent/agent_task_route.dart';
+import 'package:lexicandy/core/models/agent/agent_provider.dart';
+import 'package:lexicandy/services/agent/agent_task_route.dart';
 
 const _provider = AgentProviderConfig(
   id: 'p1',

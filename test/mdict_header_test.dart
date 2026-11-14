@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/services/mdict/mdict_header.dart';
-import 'package:rikai_mobile/services/mdict/mdict_worker.dart';
+import 'package:lexicandy/services/mdict/mdict_header.dart';
+import 'package:lexicandy/services/mdict/mdict_worker.dart';
 
 void main() {
   test(

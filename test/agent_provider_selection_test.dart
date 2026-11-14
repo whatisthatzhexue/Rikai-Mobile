@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/state/agent_providers.dart';
-import 'package:rikai_mobile/state/providers.dart';
+import 'package:lexicandy/state/agent_providers.dart';
+import 'package:lexicandy/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

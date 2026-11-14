@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/core/models/dictionary_sample.dart';
-import 'package:rikai_mobile/services/agent/familiarization/dictionary_familiarization_service.dart';
-import 'package:rikai_mobile/services/agent/familiarization/dictionary_profile_markdown.dart';
-import 'package:rikai_mobile/services/agent/familiarization/profile_repository.dart';
-import 'package:rikai_mobile/services/agent/ports/agent_capability_exception.dart';
-import 'package:rikai_mobile/services/agent/ports/dictionary_sample_port.dart';
-import 'package:rikai_mobile/services/agent/providers/fake_provider.dart';
+import 'package:lexicandy/core/models/agent/agent_profile.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/core/models/dictionary_sample.dart';
+import 'package:lexicandy/services/agent/familiarization/dictionary_familiarization_service.dart';
+import 'package:lexicandy/services/agent/familiarization/dictionary_profile_markdown.dart';
+import 'package:lexicandy/services/agent/familiarization/profile_repository.dart';
+import 'package:lexicandy/services/agent/ports/agent_capability_exception.dart';
+import 'package:lexicandy/services/agent/ports/dictionary_sample_port.dart';
+import 'package:lexicandy/services/agent/providers/fake_provider.dart';
 
 const _dictionary = DictionaryInfo(
   id: 'dict_a',

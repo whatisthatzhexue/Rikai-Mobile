@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_analysis.dart';
-import 'package:rikai_mobile/core/models/agent/agent_limits.dart';
-import 'package:rikai_mobile/services/agent/analysis_tag_parser.dart';
+import 'package:lexicandy/core/models/agent/agent_analysis.dart';
+import 'package:lexicandy/core/models/agent/agent_limits.dart';
+import 'package:lexicandy/services/agent/analysis_tag_parser.dart';
 
 void main() {
   test('parses tagged claims and strips leaked internal markers', () {

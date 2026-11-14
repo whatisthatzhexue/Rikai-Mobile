@@ -9,7 +9,7 @@ import '../../core/models/agent/agent_evidence.dart';
 import '../../core/models/agent/agent_input.dart';
 import '../../core/models/agent/agent_profile.dart';
 import '../../core/theme/app_tokens.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../core/utils/rich_text_tags.dart';
 import '../../services/agent/agent_result_markdown.dart';
 import '../../services/agent/agent_run.dart';
@@ -61,7 +61,7 @@ class _AgentHistoryDetailPageState
     await Clipboard.setData(
       ClipboardData(text: buildAgentResultMarkdown(result, strings)),
     );
-    if (mounted) RikaiToast.show(context, strings.copyDone);
+    if (mounted) LexiCandyToast.show(context, strings.copyDone);
   }
 
   AgentUiStrings _strings() {
@@ -97,11 +97,11 @@ class _AgentHistoryDetailPageState
           .read(agentHistoryRepositoryProvider)
           .deleteHistoryRun(widget.runId);
     } catch (_) {
-      if (mounted) RikaiToast.show(context, strings.historyLoadFailed);
+      if (mounted) LexiCandyToast.show(context, strings.historyLoadFailed);
       return;
     }
     if (!mounted) return;
-    RikaiToast.show(context, strings.historyDeleted);
+    LexiCandyToast.show(context, strings.historyDeleted);
     context.pop();
   }
 

@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
-import 'package:rikai_mobile/services/capture/capture_storage.dart';
+import 'package:lexicandy/services/capture/capture_storage.dart';
 
 void main() {
   late Directory root;

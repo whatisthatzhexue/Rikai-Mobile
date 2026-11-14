@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/services/agent/analysis_tag_parser.dart';
-import 'package:rikai_mobile/services/agent/familiarization/dictionary_profile_tag_parser.dart';
+import 'package:lexicandy/services/agent/analysis_tag_parser.dart';
+import 'package:lexicandy/services/agent/familiarization/dictionary_profile_tag_parser.dart';
 
 void main() {
   group('analysis tag integrity', () {

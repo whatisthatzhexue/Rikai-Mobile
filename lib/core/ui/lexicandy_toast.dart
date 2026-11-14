@@ -8,7 +8,7 @@ import '../theme/app_tokens.dart';
 ///
 /// Unlike a [SnackBar], the toast is wrapped in an [IgnorePointer], so controls
 /// underneath it remain tappable while the message is visible.
-abstract final class RikaiToast {
+abstract final class LexiCandyToast {
   static OverlayEntry? _entry;
   static Timer? _timer;
   static String _message = '';

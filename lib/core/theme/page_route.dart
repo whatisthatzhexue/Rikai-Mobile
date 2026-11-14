@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 /// default. Platform views (WebView, camera) can drop frames during long
 /// transitions on some devices; 220 ms keeps the same visual language without
 /// the visible stutter.
-class RikaiPageRoute<T> extends MaterialPageRoute<T> {
-  RikaiPageRoute({
+class LexiCandyPageRoute<T> extends MaterialPageRoute<T> {
+  LexiCandyPageRoute({
     required super.builder,
     super.settings,
     super.fullscreenDialog,

@@ -4,8 +4,8 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_tool.dart';
-import 'package:rikai_mobile/services/agent/providers/provider_http.dart';
+import 'package:lexicandy/core/models/agent/agent_tool.dart';
+import 'package:lexicandy/services/agent/providers/provider_http.dart';
 
 void main() {
   test('parses SSE data from Dio-style Uint8List chunks', () async {

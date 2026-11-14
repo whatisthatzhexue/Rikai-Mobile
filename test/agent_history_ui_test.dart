@@ -2,21 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/app.dart';
-import 'package:rikai_mobile/core/models/agent/agent_analysis.dart';
-import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
-import 'package:rikai_mobile/core/models/agent/agent_history.dart';
-import 'package:rikai_mobile/core/models/agent/agent_input.dart';
-import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/features/agent/agent_history_detail_page.dart';
-import 'package:rikai_mobile/features/agent/agent_history_page.dart';
-import 'package:rikai_mobile/services/agent/agent_run.dart';
-import 'package:rikai_mobile/services/agent/agent_validator.dart';
-import 'package:rikai_mobile/services/storage/agent_history_store.dart';
-import 'package:rikai_mobile/state/agent_history_recorder.dart';
-import 'package:rikai_mobile/state/agent_providers.dart';
-import 'package:rikai_mobile/state/providers.dart';
+import 'package:lexicandy/app.dart';
+import 'package:lexicandy/core/models/agent/agent_analysis.dart';
+import 'package:lexicandy/core/models/agent/agent_evidence.dart';
+import 'package:lexicandy/core/models/agent/agent_history.dart';
+import 'package:lexicandy/core/models/agent/agent_input.dart';
+import 'package:lexicandy/core/models/agent/agent_quote.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/features/agent/agent_history_detail_page.dart';
+import 'package:lexicandy/features/agent/agent_history_page.dart';
+import 'package:lexicandy/services/agent/agent_run.dart';
+import 'package:lexicandy/services/agent/agent_validator.dart';
+import 'package:lexicandy/services/storage/agent_history_store.dart';
+import 'package:lexicandy/state/agent_history_recorder.dart';
+import 'package:lexicandy/state/agent_providers.dart';
+import 'package:lexicandy/state/providers.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -343,7 +343,7 @@ void main() {
             _FakeHistoryRepository(entries: <AgentHistoryEntry>[entry]),
           ),
         ],
-        child: RikaiApp(key: UniqueKey()),
+        child: LexiCandyApp(key: UniqueKey()),
       ),
     );
     await tester.pumpAndSettle();
@@ -412,7 +412,7 @@ void main() {
             ),
           ),
         ],
-        child: RikaiApp(key: UniqueKey()),
+        child: LexiCandyApp(key: UniqueKey()),
       ),
     );
     await tester.pumpAndSettle();

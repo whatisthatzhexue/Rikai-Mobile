@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/app.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/state/providers.dart';
+import 'package:lexicandy/app.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const MethodChannel _storageChannel = MethodChannel('rikai/storage_permission');
+const MethodChannel _storageChannel = MethodChannel('lexicandy/storage_permission');
 
 Future<void> _pumpApp(
   WidgetTester tester, {
@@ -21,7 +21,7 @@ Future<void> _pumpApp(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
-      child: RikaiApp(key: UniqueKey()),
+      child: LexiCandyApp(key: UniqueKey()),
     ),
   );
   await tester.pumpAndSettle();

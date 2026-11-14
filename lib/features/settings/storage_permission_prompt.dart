@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../state/providers.dart';
 
 /// True when [path] is outside the app's private external directory and
@@ -15,8 +15,8 @@ bool pathNeedsAllFilesAccess(String path) {
       !normalized.startsWith('/mnt/')) {
     return false;
   }
-  return !normalized.contains('/Android/data/com.rikai.mobile/') &&
-      !normalized.contains('/Android/obb/com.rikai.mobile/');
+  return !normalized.contains('/Android/data/com.lexicandy.mobile/') &&
+      !normalized.contains('/Android/obb/com.lexicandy.mobile/');
 }
 
 /// Asks the user to grant storage access before a selected path is used.
@@ -67,11 +67,11 @@ Future<bool> ensurePathAccess(
     }
   } on PlatformException catch (error) {
     if (context.mounted) {
-      RikaiToast.show(context, '无法打开授权页面：${error.message ?? error.code}');
+      LexiCandyToast.show(context, '无法打开授权页面：${error.message ?? error.code}');
     }
   }
   if (context.mounted) {
-    RikaiToast.show(context, '授权后请返回并重试');
+    LexiCandyToast.show(context, '授权后请返回并重试');
   }
   return false;
 }

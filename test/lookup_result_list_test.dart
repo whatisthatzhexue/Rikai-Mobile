@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/core/models/lookup_models.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/features/lookup/lookup_result_list.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/core/models/lookup_models.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/features/lookup/lookup_result_list.dart';
 
 const DictionaryInfo _dictionary = DictionaryInfo(
   id: 'dict',

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/dictionary_sample.dart';
-import 'package:rikai_mobile/services/agent/familiarization/dictionary_sample_analysis.dart';
+import 'package:lexicandy/core/models/dictionary_sample.dart';
+import 'package:lexicandy/services/agent/familiarization/dictionary_sample_analysis.dart';
 
 DictionarySampleEntry _entry(
   String headword,

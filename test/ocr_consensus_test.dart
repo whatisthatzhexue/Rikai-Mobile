@@ -1,15 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
-import 'package:rikai_mobile/core/models/agent/agent_input.dart';
-import 'package:rikai_mobile/core/models/agent/agent_ocr.dart';
-import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/core/models/lookup_models.dart';
-import 'package:rikai_mobile/core/models/lookup_request.dart';
-import 'package:rikai_mobile/core/models/token.dart';
-import 'package:rikai_mobile/services/agent/ocr_consensus.dart';
-import 'package:rikai_mobile/services/agent/ports/lookup_port.dart';
-import 'package:rikai_mobile/services/agent/ports/tokenize_port.dart';
+import 'package:lexicandy/core/models/agent/agent_evidence.dart';
+import 'package:lexicandy/core/models/agent/agent_input.dart';
+import 'package:lexicandy/core/models/agent/agent_ocr.dart';
+import 'package:lexicandy/core/models/agent/agent_quote.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/core/models/lookup_models.dart';
+import 'package:lexicandy/core/models/lookup_request.dart';
+import 'package:lexicandy/core/models/token.dart';
+import 'package:lexicandy/services/agent/ocr_consensus.dart';
+import 'package:lexicandy/services/agent/ports/lookup_port.dart';
+import 'package:lexicandy/services/agent/ports/tokenize_port.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
 
 const _dictionary = DictionaryInfo(

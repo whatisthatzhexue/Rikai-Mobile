@@ -5,7 +5,7 @@ import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/agent/agent_tool.dart';
 import '../../core/theme/app_tokens.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../services/security/secret_store.dart';
 import '../../state/agent_providers.dart';
@@ -254,7 +254,7 @@ class AgentSettingsPage extends ConsumerWidget {
     }
     ref.read(selectedAgentProviderProvider.notifier).select(id);
     ref.invalidate(agentProvidersProvider);
-    if (context.mounted) RikaiToast.show(context, strings.providerSaved);
+    if (context.mounted) LexiCandyToast.show(context, strings.providerSaved);
   }
 
   Future<void> _quickConfig(
@@ -317,7 +317,7 @@ class AgentSettingsPage extends ConsumerWidget {
       ref.read(selectedAgentProviderProvider.notifier).select(null);
     }
     ref.invalidate(agentProvidersProvider);
-    if (context.mounted) RikaiToast.show(context, strings.providerDeleted);
+    if (context.mounted) LexiCandyToast.show(context, strings.providerDeleted);
   }
 }
 

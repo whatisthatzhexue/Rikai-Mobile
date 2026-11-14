@@ -24,7 +24,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <!-- CameraX declares RECORD_AUDIO for video; Rikai only takes stills. -->
+    <!-- CameraX declares RECORD_AUDIO for video; LexiCandy only takes stills. -->
     <uses-permission
         android:name="android.permission.RECORD_AUDIO"
         tools:node="remove" />
@@ -34,7 +34,7 @@
         android:required="false" />
 
     <application
-        android:label="Rikai"
+        android:label="@string/app_name"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true"

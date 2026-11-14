@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/token.dart';
-import 'package:rikai_mobile/services/agent/grammar_patterns.dart';
-import 'package:rikai_mobile/services/agent/grammar_patterns_ja.dart';
+import 'package:lexicandy/core/models/token.dart';
+import 'package:lexicandy/services/agent/grammar_patterns.dart';
+import 'package:lexicandy/services/agent/grammar_patterns_ja.dart';
 
 Token _token(String surface, int start, {String lemma = ''}) {
   final features = List<String>.filled(Token.expectedFeatureCount, '*');

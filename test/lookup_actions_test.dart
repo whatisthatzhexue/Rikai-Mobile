@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/core/models/lookup_match_mode.dart';
-import 'package:rikai_mobile/features/lookup/lookup_actions.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/core/models/lookup_match_mode.dart';
+import 'package:lexicandy/features/lookup/lookup_actions.dart';
 
 void main() {
   test('entry links stay in the current dictionary and use exact matching', () {

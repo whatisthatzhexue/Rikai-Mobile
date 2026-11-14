@@ -39,7 +39,7 @@ class PermissionService {
   const PermissionService();
 
   static const MethodChannel _channel = MethodChannel(
-    'rikai/storage_permission',
+    'lexicandy/storage_permission',
   );
 
   Future<StorageAccessStatus> getStatus() async {

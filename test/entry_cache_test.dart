@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/services/mdict/entry_cache.dart';
-import 'package:rikai_mobile/services/mdict/entry_renderer.dart';
+import 'package:lexicandy/services/mdict/entry_cache.dart';
+import 'package:lexicandy/services/mdict/entry_renderer.dart';
 
 void main() {
   test('get refreshes LRU order and evicts the oldest entry', () {

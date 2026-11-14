@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
-import 'package:rikai_mobile/core/utils/rich_text_tags.dart';
-import 'package:rikai_mobile/services/agent/providers/fake_provider.dart';
-import 'package:rikai_mobile/services/agent/rich_text_post_processor.dart';
+import 'package:lexicandy/core/models/agent/agent_profile.dart';
+import 'package:lexicandy/core/utils/rich_text_tags.dart';
+import 'package:lexicandy/services/agent/providers/fake_provider.dart';
+import 'package:lexicandy/services/agent/rich_text_post_processor.dart';
 
 const _plain = '何卒宜しくお願いします。';
 const _tagged =

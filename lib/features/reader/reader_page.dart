@@ -7,7 +7,7 @@ import '../../core/models/token.dart';
 import '../../core/models/annotation_rules.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/ui/no_scrollbar_behavior.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../services/mecab/mecab_service.dart';
 import '../../services/storage/settings_store.dart';
 import '../../state/providers.dart';
@@ -142,7 +142,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
     if (text.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    RikaiToast.show(context, '已复制全文');
+    LexiCandyToast.show(context, '已复制全文');
   }
 
   Future<void> _saveToCorpus() async {
@@ -151,7 +151,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         ? (_analysedText ?? '')
         : _textController.text;
     if (text.trim().isEmpty) {
-      RikaiToast.show(context, '没有可保存的文本');
+      LexiCandyToast.show(context, '没有可保存的文本');
       return;
     }
     setState(() => _saving = true);
@@ -166,10 +166,10 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
           );
       if (!mounted) return;
       ref.invalidate(corpusEntriesProvider);
-      RikaiToast.show(context, '已保存到语料');
+      LexiCandyToast.show(context, '已保存到语料');
     } catch (error) {
       if (!mounted) return;
-      RikaiToast.show(context, '保存失败：$error');
+      LexiCandyToast.show(context, '保存失败：$error');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

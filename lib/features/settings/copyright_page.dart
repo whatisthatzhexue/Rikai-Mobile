@@ -68,7 +68,7 @@ class CopyrightPage extends StatelessWidget {
           AppSpacing.xxl,
         ),
         children: [
-          Text('Rikai-Mobile', style: headingStyle),
+          Text('LexiCandy', style: headingStyle),
           const SizedBox(height: AppSpacing.sm),
           Text(
             '可扩充词典库的日语阅读与查词工具。原创代码；仅读取用户提供的 '
@@ -92,9 +92,9 @@ class CopyrightPage extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: () => showLicensePage(
                 context: context,
-                applicationName: 'Rikai-Mobile',
+                applicationName: 'LexiCandy',
                 applicationVersion: '1.1',
-                applicationLegalese: 'Copyright 2026 Rikai-Mobile contributors',
+                applicationLegalese: 'Copyright 2026 LexiCandy contributors',
               ),
               icon: const Icon(Icons.description_outlined, size: AppSizes.icon),
               label: const Text('查看开源许可证'),

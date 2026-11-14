@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/token.dart';
-import 'package:rikai_mobile/services/agent/familiarization/profile_repository.dart';
-import 'package:rikai_mobile/services/agent/familiarization/unidic_familiarization_service.dart';
-import 'package:rikai_mobile/services/agent/ports/tokenize_port.dart';
+import 'package:lexicandy/core/models/token.dart';
+import 'package:lexicandy/services/agent/familiarization/profile_repository.dart';
+import 'package:lexicandy/services/agent/familiarization/unidic_familiarization_service.dart';
+import 'package:lexicandy/services/agent/ports/tokenize_port.dart';
 
 class _FakeTokenizePort implements TokenizePort {
   int calls = 0;

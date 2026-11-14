@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/lookup_match_mode.dart';
+import 'package:lexicandy/core/models/lookup_match_mode.dart';
 
 void main() {
   test('labels cover all four lookup modes', () {

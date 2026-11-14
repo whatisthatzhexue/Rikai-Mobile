@@ -99,7 +99,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     FocusScope.of(context).unfocus();
     final word = ref.read(lookupSearchProvider).lastQuery;
     Navigator.of(context).push(
-      RikaiPageRoute<void>(
+      LexiCandyPageRoute<void>(
         builder: (context) => EntryPage(
           word: word,
           groups: [
@@ -118,7 +118,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
     FocusScope.of(context).unfocus();
     final word = ref.read(lookupSearchProvider).lastQuery;
     Navigator.of(context).push(
-      RikaiPageRoute<void>(
+      LexiCandyPageRoute<void>(
         builder: (context) => EntryPage(
           word: word,
           groups: [group],

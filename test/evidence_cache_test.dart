@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
-import 'package:rikai_mobile/core/models/agent/agent_input.dart';
-import 'package:rikai_mobile/core/models/agent/agent_limits.dart';
-import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/services/agent/agent_run.dart';
-import 'package:rikai_mobile/services/agent/evidence_cache.dart';
+import 'package:lexicandy/core/models/agent/agent_evidence.dart';
+import 'package:lexicandy/core/models/agent/agent_input.dart';
+import 'package:lexicandy/core/models/agent/agent_limits.dart';
+import 'package:lexicandy/core/models/agent/agent_provider.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/services/agent/agent_run.dart';
+import 'package:lexicandy/services/agent/evidence_cache.dart';
 
 const _dictionary = DictionaryInfo(
   id: 'dict-a',

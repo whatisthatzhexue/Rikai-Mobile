@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:rikai_mobile/services/ocr/ocr_text_composer.dart';
+import 'package:lexicandy/services/ocr/ocr_text_composer.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
 
 const String _modelDir = String.fromEnvironment(

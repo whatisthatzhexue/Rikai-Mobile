@@ -4,9 +4,9 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:rikai_ocr/rikai_ocr.dart';
-import 'package:rikai_mobile/core/models/capture_photo.dart';
-import 'package:rikai_mobile/features/capture/capture_corpus.dart';
-import 'package:rikai_mobile/services/storage/history_store.dart';
+import 'package:lexicandy/core/models/capture_photo.dart';
+import 'package:lexicandy/features/capture/capture_corpus.dart';
+import 'package:lexicandy/services/storage/history_store.dart';
 
 void main() {
   test('photo blocks are serialized for the corpus record', () {

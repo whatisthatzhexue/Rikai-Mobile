@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../services/agent/familiarization/dictionary_familiarization_service.dart';
 import '../../state/agent_profile_inbox.dart';
@@ -105,7 +105,7 @@ class _AgentProfileInboxHostState extends ConsumerState<AgentProfileInboxHost> {
         .claimSavedNotice(notice.id)) {
       return;
     }
-    RikaiToast.show(context, widget.strings.profilesGenerated(notice.titles));
+    LexiCandyToast.show(context, widget.strings.profilesGenerated(notice.titles));
   }
 
   void _schedule() {

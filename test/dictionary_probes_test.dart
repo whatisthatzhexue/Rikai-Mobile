@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/services/agent/familiarization/dictionary_probes.dart';
+import 'package:lexicandy/services/agent/familiarization/dictionary_probes.dart';
 
 void main() {
   test('probe JSON overrides the bounded fallback', () {

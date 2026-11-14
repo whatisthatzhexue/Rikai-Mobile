@@ -6,7 +6,7 @@ import '../../core/models/agent/agent_history.dart';
 import '../../core/models/agent/agent_input.dart';
 import '../../core/models/agent/agent_profile.dart';
 import '../../core/theme/app_tokens.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../core/utils/date_format.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../state/agent_history_recorder.dart';
@@ -97,11 +97,11 @@ class _AgentHistoryPageState extends ConsumerState<AgentHistoryPage> {
           .read(agentHistoryRepositoryProvider)
           .deleteHistoryRun(entry.runId);
     } catch (_) {
-      if (mounted) RikaiToast.show(context, strings.historyLoadFailed);
+      if (mounted) LexiCandyToast.show(context, strings.historyLoadFailed);
       return;
     }
     if (!mounted) return;
-    RikaiToast.show(context, strings.historyDeleted);
+    LexiCandyToast.show(context, strings.historyDeleted);
     _reload();
   }
 
@@ -159,7 +159,7 @@ class _AgentHistoryPageState extends ConsumerState<AgentHistoryPage> {
           .read(agentHistoryRepositoryProvider)
           .deleteHistoryRuns(selected);
     } catch (_) {
-      if (mounted) RikaiToast.show(context, strings.historyLoadFailed);
+      if (mounted) LexiCandyToast.show(context, strings.historyLoadFailed);
       return;
     }
     if (!mounted) return;
@@ -168,7 +168,7 @@ class _AgentHistoryPageState extends ConsumerState<AgentHistoryPage> {
       _selecting = false;
       _entries = _load();
     });
-    RikaiToast.show(context, strings.historyDeleted);
+    LexiCandyToast.show(context, strings.historyDeleted);
   }
 
   @override

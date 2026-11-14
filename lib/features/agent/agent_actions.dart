@@ -7,7 +7,7 @@ import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/dict_info.dart';
 import '../../core/models/lookup_models.dart';
 import '../../core/theme/page_route.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../services/agent/adapters/dictionary_sample_port_adapter.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../services/agent/familiarization/dictionary_familiarization_service.dart';
@@ -84,7 +84,7 @@ Future<void> openAgentCitation(
         ? strings.citationTitleFallback
         : citation.displayTitle;
     Navigator.of(context).push(
-      RikaiPageRoute<void>(
+      LexiCandyPageRoute<void>(
         builder: (context) => EntryPage(
           word: displayTitle,
           groups: <DictionaryLookupGroup>[
@@ -120,7 +120,7 @@ Future<void> _showCitationFallback(
   required bool unavailable,
 }) async {
   if (fallbackSnippet.trim().isEmpty) {
-    RikaiToast.show(
+    LexiCandyToast.show(
       context,
       unavailable ? strings.dictionaryUnavailable : strings.entryNotFound,
     );
@@ -172,7 +172,7 @@ Future<void> retryAgentDictionaryProfile(
     }
   }
   if (dictionary == null) {
-    RikaiToast.show(context, strings.dictionaryUnavailable);
+    LexiCandyToast.show(context, strings.dictionaryUnavailable);
     return;
   }
   final selectedDictionary = dictionary;
@@ -223,13 +223,13 @@ Future<void> retryAgentDictionaryProfile(
     );
     if (!context.mounted) return;
     if (batch.issues.isNotEmpty) {
-      RikaiToast.show(context, batch.issues.first.reason);
+      LexiCandyToast.show(context, batch.issues.first.reason);
     } else {
-      RikaiToast.show(context, strings.profileUpdatedRestart);
+      LexiCandyToast.show(context, strings.profileUpdatedRestart);
     }
   } catch (_) {
     if (context.mounted) {
-      RikaiToast.show(context, strings.profileRegenerateFailed);
+      LexiCandyToast.show(context, strings.profileRegenerateFailed);
     }
   }
 }

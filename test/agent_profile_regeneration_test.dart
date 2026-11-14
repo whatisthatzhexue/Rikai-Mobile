@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/services/agent/familiarization/dictionary_familiarization_service.dart';
-import 'package:rikai_mobile/state/agent_profile_manager.dart';
-import 'package:rikai_mobile/state/providers.dart';
+import 'package:lexicandy/core/models/agent/agent_provider.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/services/agent/familiarization/dictionary_familiarization_service.dart';
+import 'package:lexicandy/state/agent_profile_manager.dart';
+import 'package:lexicandy/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _dictionaryA = DictionaryInfo(

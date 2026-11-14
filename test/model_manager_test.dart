@@ -6,8 +6,8 @@ import 'package:cross_file/cross_file.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/ocr_model.dart';
-import 'package:rikai_mobile/services/ocr/model_manager.dart';
+import 'package:lexicandy/core/models/ocr_model.dart';
+import 'package:lexicandy/services/ocr/model_manager.dart';
 
 final class _TestPlatformFile extends PlatformFile {
   _TestPlatformFile(this._file, this.name, this._length);

@@ -1,11 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/services/agent/familiarization/dictionary_familiarization_service.dart';
-import 'package:rikai_mobile/services/agent/familiarization/profile_repository.dart';
-import 'package:rikai_mobile/state/agent_profile_inbox.dart';
-import 'package:rikai_mobile/state/agent_providers.dart';
+import 'package:lexicandy/core/models/agent/agent_profile.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/services/agent/familiarization/dictionary_familiarization_service.dart';
+import 'package:lexicandy/services/agent/familiarization/profile_repository.dart';
+import 'package:lexicandy/state/agent_profile_inbox.dart';
+import 'package:lexicandy/state/agent_providers.dart';
 
 const _profile = DictionaryProfile(
   dictionaryId: 'dict-a',

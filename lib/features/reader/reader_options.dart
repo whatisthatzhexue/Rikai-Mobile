@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/annotation_rules.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../state/providers.dart';
 
 /// Shared reading options menu: furigana visibility and reading font size.
@@ -35,7 +35,7 @@ class ReaderOptionsMenu extends ConsumerWidget {
           notifier.setAnnotationRuleSet(id);
           notifier.setShowFurigana(id != AnnotationRuleSets.noneId);
           if (showPitchHint) {
-            RikaiToast.show(context, '单词音调数据来自UniDic，复合单词的音调请以词典为准。');
+            LexiCandyToast.show(context, '单词音调数据来自UniDic，复合单词的音调请以词典为准。');
           }
         } else if (value.startsWith('size:')) {
           notifier.setReaderFontSize(

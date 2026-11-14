@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/utils/script_language.dart';
+import 'package:lexicandy/core/utils/script_language.dart';
 
 void main() {
   test('detects Japanese, Latin and non-Japanese scripts', () {

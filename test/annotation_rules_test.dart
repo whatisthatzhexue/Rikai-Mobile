@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/annotation_rules.dart';
-import 'package:rikai_mobile/core/models/token.dart';
+import 'package:lexicandy/core/models/annotation_rules.dart';
+import 'package:lexicandy/core/models/token.dart';
 
 Token _token(String surface, String kana, String pos1) {
   final features = List<String>.filled(Token.expectedFeatureCount, '*');

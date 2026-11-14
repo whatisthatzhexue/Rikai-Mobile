@@ -8,7 +8,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/models/dict_info.dart';
 import '../../core/theme/app_tokens.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../services/mdict/mdict_worker.dart';
 import '../../state/providers.dart';
 import 'dictionary_import_page.dart';
@@ -53,7 +53,7 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
       ),
     );
     if (!mounted || info == null) return;
-    RikaiToast.show(
+    LexiCandyToast.show(
       context,
       '已添加 ${info.title}（${_formatCount(info.entryCount)} 条）',
     );
@@ -76,7 +76,7 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
     } else {
       message = '已取消导入';
     }
-    RikaiToast.show(context, message);
+    LexiCandyToast.show(context, message);
   }
 
   Future<void> _revalidate(DictionaryInfo dictionary) async {
@@ -84,7 +84,7 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
         .read(dictionaryRepositoryProvider.notifier)
         .revalidate(dictionary.id);
     if (!mounted || updated == null) return;
-    RikaiToast.show(
+    LexiCandyToast.show(
       context,
       updated.isAvailable
           ? '校验通过：${_formatCount(updated.entryCount)} 条'
@@ -119,7 +119,7 @@ class _DictionaryPageState extends ConsumerState<DictionaryPage> {
         .read(dictionaryRepositoryProvider.notifier)
         .removeDictionary(dictionary.id);
     if (!mounted) return;
-    RikaiToast.show(context, '已移除「${dictionary.title}」');
+    LexiCandyToast.show(context, '已移除「${dictionary.title}」');
   }
 
   @override

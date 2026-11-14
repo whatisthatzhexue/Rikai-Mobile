@@ -9,7 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/models/corpus_entry.dart';
 import '../../core/theme/app_tokens.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../core/utils/format_bytes.dart';
 import '../../services/mecab/unidic_validator.dart';
 import '../../services/storage/permission_service.dart';
@@ -84,7 +84,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
       ref.invalidate(mecabServiceProvider);
     } on PlatformException catch (error) {
       if (!mounted) return;
-      RikaiToast.show(context, '无法打开权限设置：${error.message ?? error.code}');
+      LexiCandyToast.show(context, '无法打开权限设置：${error.message ?? error.code}');
     } finally {
       if (mounted) setState(() => _permissionBusy = false);
     }
@@ -95,7 +95,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     setState(() => _validation = null);
     ref.read(appSettingsProvider.notifier).setUnidicPath('');
     ref.invalidate(mecabServiceProvider);
-    RikaiToast.show(context, '已清除 UniDic 路径');
+    LexiCandyToast.show(context, '已清除 UniDic 路径');
   }
 
   Future<void> _validateAndSave() async {
@@ -150,7 +150,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     if (result.isValid) {
       ref.read(appSettingsProvider.notifier).setUnidicPath(result.path);
       ref.invalidate(mecabServiceProvider);
-      RikaiToast.show(context, 'UniDic 校验通过，路径已保存');
+      LexiCandyToast.show(context, 'UniDic 校验通过，路径已保存');
     }
   }
 
@@ -349,7 +349,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
     final removed = await history.clear();
     if (!mounted) return;
     ref.invalidate(corpusEntriesProvider);
-    RikaiToast.show(
+    LexiCandyToast.show(
       context,
       bytes > 0
           ? '已清空 $removed 条语料，释放 ${formatBytes(bytes)}'
@@ -385,10 +385,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
       }
       if (!mounted) return;
       ref.invalidate(entryRenderCacheProvider);
-      RikaiToast.show(context, '已清除 ${formatBytes(bytes)} 词典资源缓存');
+      LexiCandyToast.show(context, '已清除 ${formatBytes(bytes)} 词典资源缓存');
     } catch (error) {
       if (!mounted) return;
-      RikaiToast.show(context, '清除失败：$error');
+      LexiCandyToast.show(context, '清除失败：$error');
     }
   }
 
@@ -434,10 +434,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
           .read(ocrModelManagerProvider)
           .clearPartialDownloads();
       if (!mounted) return;
-      RikaiToast.show(context, '已清除 ${formatBytes(bytes)} 临时文件');
+      LexiCandyToast.show(context, '已清除 ${formatBytes(bytes)} 临时文件');
     } catch (error) {
       if (!mounted) return;
-      RikaiToast.show(context, '清除失败：$error');
+      LexiCandyToast.show(context, '清除失败：$error');
     }
   }
 
@@ -610,10 +610,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
       await _validateAndSave();
     } on PlatformException catch (error) {
       if (!mounted) return;
-      RikaiToast.show(context, '无法打开文件管理器：${error.message ?? error.code}');
+      LexiCandyToast.show(context, '无法打开文件管理器：${error.message ?? error.code}');
     } catch (error) {
       if (!mounted) return;
-      RikaiToast.show(context, '选择目录失败：$error');
+      LexiCandyToast.show(context, '选择目录失败：$error');
     }
   }
 
@@ -624,7 +624,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage>
         Text('应用外部私有目录', style: theme.textTheme.titleMedium),
         const SizedBox(height: AppSpacing.xs),
         const SelectableText(
-          '/sdcard/Android/data/com.rikai.mobile/files/',
+          '/sdcard/Android/data/com.lexicandy.mobile/files/',
           style: TextStyle(
             fontSize: AppTypography.headline,
             fontFamily: 'monospace',

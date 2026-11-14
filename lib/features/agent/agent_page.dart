@@ -12,7 +12,7 @@ import '../../core/models/agent/agent_profile.dart';
 import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/dict_info.dart';
 import '../../core/theme/app_tokens.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../services/agent/agent_run.dart';
 import '../../services/agent/agent_ui_strings.dart';
 import '../../state/agent_dictionary_preferences.dart';
@@ -134,7 +134,7 @@ class _AgentPageState extends ConsumerState<AgentPage> {
     final limit = AgentLimits.standard.maxImagesPerRun;
     final remaining = limit - _images.length;
     if (remaining <= 0) {
-      RikaiToast.show(context, strings.imageLimitReached(limit));
+      LexiCandyToast.show(context, strings.imageLimitReached(limit));
       return;
     }
     try {
@@ -151,10 +151,10 @@ class _AgentPageState extends ConsumerState<AgentPage> {
         }
       });
       if (picked.length > remaining) {
-        RikaiToast.show(context, strings.imageLimitReached(limit));
+        LexiCandyToast.show(context, strings.imageLimitReached(limit));
       }
     } catch (_) {
-      if (mounted) RikaiToast.show(context, strings.pickImageFailed);
+      if (mounted) LexiCandyToast.show(context, strings.pickImageFailed);
     }
   }
 
@@ -176,21 +176,21 @@ class _AgentPageState extends ConsumerState<AgentPage> {
       AgentResponseLanguage.fromWire(settings.agentResponseLanguage),
     );
     if (ref.read(agentOcrVariantsProvider).loading) {
-      RikaiToast.show(context, strings.ocrVariantsLoading);
+      LexiCandyToast.show(context, strings.ocrVariantsLoading);
       return;
     }
     FocusScope.of(context).unfocus();
     final text = _input.text.trim();
     final imagePaths = _images.map((image) => image.path).toList();
     if (text.isEmpty && imagePaths.isEmpty) {
-      RikaiToast.show(context, strings.inputRequired);
+      LexiCandyToast.show(context, strings.inputRequired);
       return;
     }
     final enabled = ref.read(enabledDictionariesProvider);
     final preferences = ref.read(agentDictionaryPreferencesProvider);
     final dictionaries = _selectedDictionaries(enabled, preferences);
     if (dictionaries.isEmpty) {
-      RikaiToast.show(context, strings.dictionaryRequired);
+      LexiCandyToast.show(context, strings.dictionaryRequired);
       return;
     }
     final providers =
@@ -201,7 +201,7 @@ class _AgentPageState extends ConsumerState<AgentPage> {
       ref.read(selectedAgentProviderProvider),
     );
     if (provider == null) {
-      RikaiToast.show(context, strings.modelRequired);
+      LexiCandyToast.show(context, strings.modelRequired);
       return;
     }
     final started = _runController.start(

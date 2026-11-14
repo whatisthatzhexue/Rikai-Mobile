@@ -17,7 +17,7 @@ abstract interface class AgentBackgroundPort {
 class PlatformAgentBackgroundService implements AgentBackgroundPort {
   const PlatformAgentBackgroundService();
 
-  static const MethodChannel _channel = MethodChannel('rikai/agent_background');
+  static const MethodChannel _channel = MethodChannel('lexicandy/agent_background');
 
   @override
   Future<void> start() async {

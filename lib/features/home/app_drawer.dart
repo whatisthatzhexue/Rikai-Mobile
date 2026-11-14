@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_branding.dart';
 import '../../core/theme/app_fonts.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/page_route.dart';
@@ -34,7 +35,7 @@ class AppDrawer extends ConsumerWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(AppRadius.md),
                   child: Image.asset(
-                    'assets/Rikai_Icon.jpg',
+                    'assets/LexiCandy_Icon.jpg',
                     width: 52,
                     height: 52,
                     fit: BoxFit.cover,
@@ -47,7 +48,7 @@ class AppDrawer extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Rikai',
+                        AppBranding.name,
                         style: Theme.of(context).textTheme.headlineSmall
                             ?.copyWith(color: AppColors.onHeader),
                       ),
@@ -88,6 +89,6 @@ class AppDrawer extends ConsumerWidget {
   void _push(BuildContext context, Widget page) {
     final navigator = Navigator.of(context);
     navigator.pop();
-    navigator.push(RikaiPageRoute<void>(builder: (_) => page));
+    navigator.push(LexiCandyPageRoute<void>(builder: (_) => page));
   }
 }

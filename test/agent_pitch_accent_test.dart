@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_pitch.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/features/agent/agent_pitch_accent.dart';
+import 'package:lexicandy/core/models/agent/agent_pitch.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/features/agent/agent_pitch_accent.dart';
 
 Finder _pitchLayout() => find.byWidgetPredicate(
   (widget) => widget.runtimeType.toString() == '_PitchAccentLayout',

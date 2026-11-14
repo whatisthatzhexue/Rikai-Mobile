@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
-import 'package:rikai_mobile/services/agent/ports/llm_port.dart';
-import 'package:rikai_mobile/services/agent/providers/openai_compatible_provider.dart';
-import 'package:rikai_mobile/services/security/secret_store.dart';
+import 'package:lexicandy/core/models/agent/agent_provider.dart';
+import 'package:lexicandy/services/agent/ports/llm_port.dart';
+import 'package:lexicandy/services/agent/providers/openai_compatible_provider.dart';
+import 'package:lexicandy/services/security/secret_store.dart';
 
 void main() {
   test('retries a 429 once and then succeeds', () async {

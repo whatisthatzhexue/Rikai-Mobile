@@ -1,13 +1,13 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_coverage.dart';
-import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
-import 'package:rikai_mobile/core/models/agent/agent_input.dart';
-import 'package:rikai_mobile/core/models/agent/agent_limits.dart';
-import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
-import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
-import 'package:rikai_mobile/services/agent/agent_coverage_parser.dart';
-import 'package:rikai_mobile/services/agent/agent_prompts.dart';
-import 'package:rikai_mobile/services/agent/coverage_support.dart';
+import 'package:lexicandy/core/models/agent/agent_coverage.dart';
+import 'package:lexicandy/core/models/agent/agent_evidence.dart';
+import 'package:lexicandy/core/models/agent/agent_input.dart';
+import 'package:lexicandy/core/models/agent/agent_limits.dart';
+import 'package:lexicandy/core/models/agent/agent_profile.dart';
+import 'package:lexicandy/core/models/agent/agent_quote.dart';
+import 'package:lexicandy/services/agent/agent_coverage_parser.dart';
+import 'package:lexicandy/services/agent/agent_prompts.dart';
+import 'package:lexicandy/services/agent/coverage_support.dart';
 
 const _input = AgentInputEnvelope(
   sessionId: 's1',

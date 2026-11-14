@@ -1,4 +1,4 @@
-package com.rikai.mobile
+package com.lexicandy.mobile
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -21,9 +21,9 @@ import android.os.PowerManager
  */
 class AgentRunService : Service() {
     companion object {
-        const val ACTION_START = "com.rikai.mobile.action.AGENT_RUN_START"
-        const val ACTION_STOP = "com.rikai.mobile.action.AGENT_RUN_STOP"
-        private const val CHANNEL_ID = "rikai_agent_run"
+        const val ACTION_START = "com.lexicandy.mobile.action.AGENT_RUN_START"
+        const val ACTION_STOP = "com.lexicandy.mobile.action.AGENT_RUN_STOP"
+        private const val CHANNEL_ID = "lexicandy_agent_run"
         private const val NOTIFICATION_ID = 7301
         private const val WAKE_LOCK_TIMEOUT_MS = 15 * 60 * 1000L
     }
@@ -107,7 +107,7 @@ class AgentRunService : Service() {
         if (wakeLock?.isHeld == true) return
         val power = getSystemService(PowerManager::class.java)
         wakeLock =
-            power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Rikai:AgentRun").apply {
+            power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "LexiCandy:AgentRun").apply {
                 setReferenceCounted(false)
                 acquire(WAKE_LOCK_TIMEOUT_MS)
             }

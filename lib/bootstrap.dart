@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app.dart';
+import 'core/theme/app_branding.dart';
 import 'core/theme/app_tokens.dart';
 import 'state/agent_profile_inbox.dart';
 import 'state/agent_providers.dart';
@@ -143,12 +144,12 @@ class _BootstrapAppState extends State<BootstrapApp> {
     if (_ready && container != null) {
       return UncontrolledProviderScope(
         container: container,
-        child: const RikaiApp(),
+        child: const LexiCandyApp(),
       );
     }
 
     return MaterialApp(
-      title: 'Rikai',
+      onGenerateTitle: (context) => AppBranding.name,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.light(),
@@ -186,7 +187,7 @@ class SplashPage extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(AppRadius.xl),
                 child: Image.asset(
-                  'assets/Rikai_Icon.jpg',
+                  'assets/LexiCandy_Icon.jpg',
                   width: 160,
                   height: 160,
                   fit: BoxFit.cover,
@@ -205,7 +206,7 @@ class SplashPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.xl),
-              Text('Rikai', style: theme.textTheme.headlineSmall),
+              Text(AppBranding.name, style: theme.textTheme.headlineSmall),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 hasError ? '启动失败' : status,

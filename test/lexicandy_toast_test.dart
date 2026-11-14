@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/core/ui/rikai_toast.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/core/ui/lexicandy_toast.dart';
 
 void main() {
   testWidgets('a toast does not block controls underneath it', (tester) async {
@@ -15,7 +15,7 @@ void main() {
               children: [
                 Center(
                   child: FilledButton(
-                    onPressed: () => RikaiToast.show(context, '已保存'),
+                    onPressed: () => LexiCandyToast.show(context, '已保存'),
                     child: const Text('显示'),
                   ),
                 ),
@@ -61,7 +61,7 @@ void main() {
 
     // NavigatorState.context sits above the Overlay it creates; this was the
     // entry:// failure path and must fall back to the navigator's overlay.
-    RikaiToast.show(navigatorKey.currentState!.context, '查询失败');
+    LexiCandyToast.show(navigatorKey.currentState!.context, '查询失败');
     await tester.pump();
     expect(find.text('查询失败'), findsOneWidget);
 

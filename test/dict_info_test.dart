@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
 
 void main() {
   test('normalizes paths and derives a stable id', () {

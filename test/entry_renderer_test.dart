@@ -2,9 +2,9 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/core/models/lookup_models.dart';
-import 'package:rikai_mobile/services/mdict/entry_renderer.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/core/models/lookup_models.dart';
+import 'package:lexicandy/services/mdict/entry_renderer.dart';
 
 DictionaryInfo _dictionary({List<String> cssPaths = const []}) {
   return DictionaryInfo(

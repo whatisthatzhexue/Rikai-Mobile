@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/features/settings/agent_settings_page.dart';
-import 'package:rikai_mobile/core/models/agent/agent_tool.dart';
-import 'package:rikai_mobile/services/agent/agent_provider_tester.dart';
-import 'package:rikai_mobile/services/agent/ports/agent_capability_exception.dart';
-import 'package:rikai_mobile/services/agent/ports/llm_port.dart';
-import 'package:rikai_mobile/services/agent/ports/secret_port.dart';
-import 'package:rikai_mobile/state/agent_providers.dart';
-import 'package:rikai_mobile/state/providers.dart';
+import 'package:lexicandy/core/models/agent/agent_provider.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/features/settings/agent_settings_page.dart';
+import 'package:lexicandy/core/models/agent/agent_tool.dart';
+import 'package:lexicandy/services/agent/agent_provider_tester.dart';
+import 'package:lexicandy/services/agent/ports/agent_capability_exception.dart';
+import 'package:lexicandy/services/agent/ports/llm_port.dart';
+import 'package:lexicandy/services/agent/ports/secret_port.dart';
+import 'package:lexicandy/state/agent_providers.dart';
+import 'package:lexicandy/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _TesterSecret implements SecretPort {

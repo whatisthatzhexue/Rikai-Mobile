@@ -1,4 +1,4 @@
-# CLAUDE.md — Rikai-Mobile handoff
+# CLAUDE.md — LexiCandy handoff
 
 > 给下一个 agent 的工作交接。本文件只保留项目摘要、架构决策、当前状态、关键文件与
 > 构建/验证命令；文档用途和查阅时机统一在 §0 维护。
@@ -237,8 +237,10 @@ OCR，禁止视觉上云（固定隐私文案见 `docs/01-规范/项目数据.md
 该文档执行，不要在 P6.7 上叠加功能。**
 
 - 项目根目录：`C:\Projects\Rikai-Mobile`（ASCII 路径，旧的 `E:\MyData\大工\...` 已不存在）
-- 包名/applicationId/namespace：`com.rikai.mobile`
-- Flutter 工程名：`rikai_mobile`
+- 包名/applicationId/namespace：`com.lexicandy.mobile`
+- Flutter 工程名：`lexicandy`
+- 应用显示名：简体中文系统显示“释书糖”，其他语言显示“LexiCandy”
+  （`lib/core/theme/app_branding.dart` + Android `values-zh`）。
 - 环境/版本/SDK/NDK/模拟器基线见 `docs/01-规范/项目数据.md` §1；本文件不重复具体值。
 - 仅 Android；不做 iOS、不做云 OCR/云翻译。阶段 6 可选 Agent 允许用户配置的
   **文本 LLM**（不是云 OCR/视觉）；未实现前不得默认联网或把图片发给模型。
@@ -265,7 +267,7 @@ OCR，禁止视觉上云（固定隐私文案见 `docs/01-规范/项目数据.md
 3. **UniDic/MDict 原地读取，不复制**：
    - 用户提供目录/文件路径；应用不写入用户目录。
    - Android 11+ 使用 `MANAGE_EXTERNAL_STORAGE`（所有文件访问）；拒绝时引导放到
-     `/sdcard/Android/data/com.rikai.mobile/files/`。
+     `/sdcard/Android/data/com.lexicandy.mobile/files/`。
    - 不实现“导入时复制大型 UniDic”作为默认行为；数据规模见
      `docs/01-规范/项目数据.md` §6。不要在用户 UniDic 目录创建 `mecabrc`。
 4. **MeCab**：vendored `mecab_for_dart` 2.0.5（BSD-3）在 `packages/mecab_for_dart`，
@@ -368,7 +370,7 @@ P6.7 行、`agent-runtime-roadmap-2026-11-08.md`）；完整 text/group DSL 与�
 同日又修复词典内 entry:// 检索失败气泡、批量导入词典名统一取 MDX 标题、历史
 错误码本地化与返回滚动位置保持、音调尾降对齐、Agent/阅读器最小 Ruby（只标注未知
 部分）、样本上限文案去“探针”术语、档案语言对可在确认/编辑 sheet 修正并持久化；
-2026-11-07 定位 entry:// 未命中提示不显示的原因为 `RikaiToast.show` 使用
+2026-11-07 定位 entry:// 未命中提示不显示的原因为 `LexiCandyToast.show` 使用
 `navigator.context` 时找不到其下方 Overlay，已改用页面 context 并加
 `NavigatorState.overlay` 兜底，样本上限文案缩短为“词典样本达上限，N 项检查未覆盖”；
 同日修复档案编辑保存后“已失效”不消失：保存时用当前词典 stat/prompt/schema/语言
@@ -462,7 +464,7 @@ lib/core/theme/app_tokens.dart                                # UI token / AppTh
 lib/core/theme/app_fonts.dart                                 # 字体选项
 lib/features/home/home_page.dart, app_drawer.dart             # 首页 / 抽屉
 lib/features/settings/{help_page,copyright_page,font_dialog}.dart
-assets/Rikai_Icon.jpg                                         # 图标/启动页源图
+assets/LexiCandy_Icon.jpg                                         # 图标/启动页源图
 android/app/src/main/res/drawable-nodpi/launch_icon.png       # 原生启动图标
 android/app/src/main/res/mipmap-*/                            # launcher icons
 lib/core/models/token.dart                                    # Token / 29 字段映射
@@ -505,7 +507,7 @@ lib/features/lookup/lookup_mode_menu.dart                     # 标题栏书籍�
 lib/state/lookup_preferences.dart                             # 全局词典选择（持久化）
 lib/state/lookup_search.dart                                  # 应用生命周期查词状态
 lib/core/models/dictionary_selection.dart                     # 单选/多选枚举
-lib/core/ui/rikai_toast.dart                                  # 非阻塞底部提示
+lib/core/ui/lexicandy_toast.dart                                  # 非阻塞底部提示
 lib/core/ui/no_scrollbar_behavior.dart                        # 长 token 列表去滚动条
 lib/core/theme/unfocus_route_observer.dart                    # 路由退出清焦点
 lib/core/utils/date_format.dart                               # 语料日期 09.12/2025.09.12
@@ -526,8 +528,8 @@ packages/rikai_ocr/                                           # OCR 插件 + ORT
 assets/models/manifest.json                                   # 模型清单（不含模型本体）
 build/ocr-models/                                             # 本地模型测试下载（已忽略）
 integration_test/ocr_android_test.dart                        # 横向/倾斜/竖向/90°/270°/180° OCR 设备测试
-android/app/src/main/kotlin/com/rikai/mobile/MainActivity.kt  # 权限/后台服务 MethodChannel 原生侧
-android/app/src/main/kotlin/com/rikai/mobile/AgentRunService.kt # dataSync 前台服务 + wake lock
+android/app/src/main/kotlin/com/lexicandy/mobile/MainActivity.kt  # 权限/后台服务 MethodChannel 原生侧
+android/app/src/main/kotlin/com/lexicandy/mobile/AgentRunService.kt # dataSync 前台服务 + wake lock
 android/app/src/main/AndroidManifest.xml                      # 文件权限
 android/app/build.gradle.kts                                  # SDK/NDK 见 project-data §1
 tool/spike_mdict.dart                                         # MDict 主机 spike
@@ -613,7 +615,7 @@ mecab_for_dart 的 native build hook）。
   数据、网络与 Gradle 缓存排障、字体/图标生成、release `--config-only` 步骤，
   全部见 `docs/05-参考/开发环境与构建.md`；不要在常规代码工作中展开这些长命令。
 - 构建前必须按 `assets/fonts/README.md` 放置 HarmonyOS Sans SC 字体；字体与模型
-  文件不入库。修改 `assets/Rikai_Icon.jpg` 后运行
+  文件不入库。修改 `assets/LexiCandy_Icon.jpg` 后运行
   `dart run flutter_launcher_icons`。
 - 阶段 6 自动化测试只用 fake provider；不得用真实 API Key 跑测试。P6.6 多 OCR
   已有 quality/diff/ranking/repair、controller、prepared-variant orchestrator 与

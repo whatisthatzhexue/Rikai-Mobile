@@ -11,7 +11,7 @@ import '../../core/models/token.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/page_route.dart';
 import '../../core/ui/no_scrollbar_behavior.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../services/mecab/mecab_service.dart';
 import '../../services/storage/settings_store.dart';
 import '../../state/providers.dart';
@@ -187,7 +187,7 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
   void _openPhoto(CorpusEntry entry) {
     if (entry.imagePath.isEmpty) return;
     Navigator.of(context).push(
-      RikaiPageRoute<void>(
+      LexiCandyPageRoute<void>(
         builder: (context) => PhotoViewerPage(imagePath: entry.imagePath),
       ),
     );
@@ -197,7 +197,7 @@ class _CorpusDetailPageState extends ConsumerState<CorpusDetailPage> {
     if (text.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    RikaiToast.show(context, '已复制全文');
+    LexiCandyToast.show(context, '已复制全文');
   }
 
   @override

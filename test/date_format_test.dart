@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/utils/date_format.dart';
+import 'package:lexicandy/core/utils/date_format.dart';
 
 void main() {
   test('current-year dates omit the year', () {

@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/capture_photo.dart';
-import 'package:rikai_mobile/state/capture_session.dart';
+import 'package:lexicandy/core/models/capture_photo.dart';
+import 'package:lexicandy/state/capture_session.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
 
 CapturePhoto _photo(String id) => CapturePhoto(

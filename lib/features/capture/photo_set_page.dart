@@ -13,7 +13,7 @@ import '../../core/models/token.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/theme/page_route.dart';
 import '../../core/ui/no_scrollbar_behavior.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../services/mecab/mecab_service.dart';
 import '../../services/ocr/model_manager.dart';
 import '../../services/ocr/ocr_text_composer.dart';
@@ -340,7 +340,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     if (text.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    RikaiToast.show(context, '已复制全文');
+    LexiCandyToast.show(context, '已复制全文');
   }
 
   Future<void> _changeMode(OcrMode mode) async {
@@ -454,7 +454,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       );
       if (!mounted) return;
       ref.invalidate(corpusEntriesProvider);
-      RikaiToast.show(context, '已保存到语料库');
+      LexiCandyToast.show(context, '已保存到语料库');
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = '保存失败：$error');
@@ -508,7 +508,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
       return;
     }
     if (!originalDeleted) {
-      RikaiToast.show(context, '无法删除设备原图，已仅从照片集移除');
+      LexiCandyToast.show(context, '无法删除设备原图，已仅从照片集移除');
     }
     await _refreshCurrent();
   }
@@ -517,7 +517,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     final photo = ref.read(captureSessionProvider).current;
     if (photo == null) return;
     Navigator.of(context).push(
-      RikaiPageRoute<void>(
+      LexiCandyPageRoute<void>(
         builder: (context) => PhotoViewerPage(imagePath: photo.filePath),
       ),
     );
@@ -527,7 +527,7 @@ class _PhotoSetPageState extends ConsumerState<PhotoSetPage> {
     await _cancelRecognition();
     if (!mounted) return;
     await Navigator.of(context).push(
-      RikaiPageRoute<void>(
+      LexiCandyPageRoute<void>(
         builder: (context) =>
             PhotoMultiSelectPage(initialFingerprint: _fingerprint),
       ),

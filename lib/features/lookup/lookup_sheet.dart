@@ -122,7 +122,7 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
     // Keep the lookup sheet below the entry page. Closing it here made users
     // lose the result list and forced another word lookup after returning.
     Navigator.of(context).push(
-      RikaiPageRoute<void>(
+      LexiCandyPageRoute<void>(
         builder: (context) => EntryPage(
           word: _query,
           groups: [
@@ -139,7 +139,7 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
 
   void _openAll(DictionaryLookupGroup group) {
     Navigator.of(context).push(
-      RikaiPageRoute<void>(
+      LexiCandyPageRoute<void>(
         builder: (context) => EntryPage(
           word: _query,
           groups: [group],
@@ -153,7 +153,7 @@ class _LookupSheetState extends ConsumerState<LookupSheet> {
     final navigator = Navigator.of(context);
     navigator.pop();
     navigator.push(
-      RikaiPageRoute<void>(builder: (context) => const DictionaryPage()),
+      LexiCandyPageRoute<void>(builder: (context) => const DictionaryPage()),
     );
   }
 

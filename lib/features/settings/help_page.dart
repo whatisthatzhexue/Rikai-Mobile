@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_tokens.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 
 class HelpPage extends StatelessWidget {
   const HelpPage({super.key});
@@ -155,11 +155,11 @@ class _HelpLinkTile extends StatelessWidget {
     try {
       final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!opened && context.mounted) {
-        RikaiToast.show(context, '无法打开浏览器，请手动访问：${link.url}');
+        LexiCandyToast.show(context, '无法打开浏览器，请手动访问：${link.url}');
       }
     } catch (_) {
       if (context.mounted) {
-        RikaiToast.show(context, '无法打开浏览器，请手动访问：${link.url}');
+        LexiCandyToast.show(context, '无法打开浏览器，请手动访问：${link.url}');
       }
     }
   }

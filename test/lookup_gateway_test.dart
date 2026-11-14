@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/core/models/lookup_match_mode.dart';
-import 'package:rikai_mobile/core/models/lookup_models.dart';
-import 'package:rikai_mobile/core/models/lookup_request.dart';
-import 'package:rikai_mobile/services/lookup/lookup_gateway.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/core/models/lookup_match_mode.dart';
+import 'package:lexicandy/core/models/lookup_models.dart';
+import 'package:lexicandy/core/models/lookup_request.dart';
+import 'package:lexicandy/services/lookup/lookup_gateway.dart';
 
 class _FakeBackend implements LookupBackend {
   List<DictionaryInfo>? dictionaries;

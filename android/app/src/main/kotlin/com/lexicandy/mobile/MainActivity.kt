@@ -1,4 +1,4 @@
-package com.rikai.mobile
+package com.lexicandy.mobile
 
 import android.Manifest
 import android.content.Intent
@@ -15,7 +15,7 @@ import io.flutter.plugin.common.MethodChannel
 /**
  * Hosts Flutter plus the native storage-permission bridge.
  *
- * Rikai-Mobile reads a user-supplied UniDic directory and MDict files in place.
+ * LexiCandy reads a user-supplied UniDic directory and MDict files in place.
  * On Android 11+ that requires MANAGE_EXTERNAL_STORAGE ("All files access");
  * on Android 10 and below it uses READ_EXTERNAL_STORAGE. permission_handler was
  * removed because its Kotlin DSL does not compile with this toolchain.
@@ -28,7 +28,7 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rikai/storage_permission")
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "lexicandy/storage_permission")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "getStorageAccessStatus" -> result.success(storageAccessStatus())
@@ -47,7 +47,7 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rikai/storage_space")
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "lexicandy/storage_space")
             .setMethodCallHandler { call, result ->
                 if (call.method != "getAvailableBytes") {
                     result.notImplemented()
@@ -65,7 +65,7 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rikai/agent_background")
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "lexicandy/agent_background")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "start" -> {
@@ -80,7 +80,7 @@ class MainActivity : FlutterActivity() {
                                     PackageManager.PERMISSION_GRANTED
                             ) {
                                 val preferences =
-                                    getSharedPreferences("rikai_prefs", MODE_PRIVATE)
+                                    getSharedPreferences("lexicandy_prefs", MODE_PRIVATE)
                                 if (!preferences.getBoolean(
                                         "agent_notification_permission_requested",
                                         false,

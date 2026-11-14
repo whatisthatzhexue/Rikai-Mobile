@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_analysis.dart';
-import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
-import 'package:rikai_mobile/core/models/agent/agent_input.dart';
-import 'package:rikai_mobile/core/models/agent/agent_ocr.dart';
-import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/features/agent/agent_message_list.dart';
-import 'package:rikai_mobile/features/agent/agent_ocr_variants_panel.dart';
-import 'package:rikai_mobile/services/agent/agent_run.dart';
-import 'package:rikai_mobile/services/agent/agent_ui_strings.dart';
-import 'package:rikai_mobile/services/agent/agent_validator.dart';
-import 'package:rikai_mobile/services/agent/ocr_consensus.dart';
-import 'package:rikai_mobile/state/agent_ocr_variants.dart';
-import 'package:rikai_mobile/state/agent_run_controller.dart';
+import 'package:lexicandy/core/models/agent/agent_analysis.dart';
+import 'package:lexicandy/core/models/agent/agent_evidence.dart';
+import 'package:lexicandy/core/models/agent/agent_input.dart';
+import 'package:lexicandy/core/models/agent/agent_ocr.dart';
+import 'package:lexicandy/core/models/agent/agent_quote.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/features/agent/agent_message_list.dart';
+import 'package:lexicandy/features/agent/agent_ocr_variants_panel.dart';
+import 'package:lexicandy/services/agent/agent_run.dart';
+import 'package:lexicandy/services/agent/agent_ui_strings.dart';
+import 'package:lexicandy/services/agent/agent_validator.dart';
+import 'package:lexicandy/services/agent/ocr_consensus.dart';
+import 'package:lexicandy/state/agent_ocr_variants.dart';
+import 'package:lexicandy/state/agent_run_controller.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
 
 const _baseline = AgentOcrVariant(

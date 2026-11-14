@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:rikai_mobile/services/ocr/ocr_text_composer.dart';
+import 'package:lexicandy/services/ocr/ocr_text_composer.dart';
 import 'package:rikai_ocr/rikai_ocr.dart';
 
 const String _imageRoot = '/sdcard/Download/rikai-test-images';

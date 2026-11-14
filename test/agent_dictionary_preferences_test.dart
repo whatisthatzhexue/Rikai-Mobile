@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/core/models/dictionary_selection.dart';
-import 'package:rikai_mobile/state/agent_dictionary_preferences.dart';
-import 'package:rikai_mobile/state/lookup_preferences.dart';
-import 'package:rikai_mobile/state/providers.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/core/models/dictionary_selection.dart';
+import 'package:lexicandy/state/agent_dictionary_preferences.dart';
+import 'package:lexicandy/state/lookup_preferences.dart';
+import 'package:lexicandy/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _dictionaries = <DictionaryInfo>[

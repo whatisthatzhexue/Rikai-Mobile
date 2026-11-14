@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.rikai.mobile"
+    namespace = "com.lexicandy.mobile"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.rikai.mobile"
+        applicationId = "com.lexicandy.mobile"
         minSdk = 26
         targetSdk = 36
         // Single source: pubspec.yaml `version:` supplies both values.

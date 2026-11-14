@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
-import 'package:rikai_mobile/features/agent/familiarization_sheet.dart';
-import 'package:rikai_mobile/services/agent/agent_ui_strings.dart';
-import 'package:rikai_mobile/services/agent/familiarization/dictionary_familiarization_service.dart';
-import 'package:rikai_mobile/services/agent/familiarization/dictionary_profile_markdown.dart';
+import 'package:lexicandy/core/models/agent/agent_profile.dart';
+import 'package:lexicandy/features/agent/familiarization_sheet.dart';
+import 'package:lexicandy/services/agent/agent_ui_strings.dart';
+import 'package:lexicandy/services/agent/familiarization/dictionary_familiarization_service.dart';
+import 'package:lexicandy/services/agent/familiarization/dictionary_profile_markdown.dart';
 
 const _profile = DictionaryProfile(
   dictionaryId: 'dict-a',

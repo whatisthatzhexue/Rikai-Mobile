@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'app_fonts.dart';
 
-/// Normative design tokens for Rikai-Mobile.
+/// Normative design tokens for LexiCandy.
 ///
 /// See `docs/01-规范/设计规范.md`. All UI (existing and new) must use these
 /// tokens through [ThemeData]/`AppTheme` instead of hard-coded values.

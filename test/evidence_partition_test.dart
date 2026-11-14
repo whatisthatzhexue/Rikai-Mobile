@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
-import 'package:rikai_mobile/services/agent/evidence_partition.dart';
+import 'package:lexicandy/core/models/agent/agent_evidence.dart';
+import 'package:lexicandy/services/agent/evidence_partition.dart';
 
 AgentCitation _citation(String id, String dictionaryId) {
   return AgentCitation(

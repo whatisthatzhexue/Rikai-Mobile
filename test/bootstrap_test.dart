@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/bootstrap.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
+import 'package:lexicandy/bootstrap.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

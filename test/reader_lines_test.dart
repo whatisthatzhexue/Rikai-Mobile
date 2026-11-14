@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/token.dart';
-import 'package:rikai_mobile/features/reader/reader_lines.dart';
+import 'package:lexicandy/core/models/token.dart';
+import 'package:lexicandy/features/reader/reader_lines.dart';
 
 Token _token(String surface, int start, int end) {
   return Token.fromFeatures(

@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/app.dart';
-import 'package:rikai_mobile/core/models/agent/agent_input.dart';
-import 'package:rikai_mobile/core/models/agent/agent_profile.dart';
-import 'package:rikai_mobile/core/models/agent/agent_provider.dart';
-import 'package:rikai_mobile/core/models/dict_info.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/features/agent/agent_page.dart';
-import 'package:rikai_mobile/services/agent/agent_image_picker.dart';
-import 'package:rikai_mobile/services/agent/agent_run.dart';
-import 'package:rikai_mobile/state/agent_providers.dart';
-import 'package:rikai_mobile/state/agent_run_controller.dart';
-import 'package:rikai_mobile/state/providers.dart';
+import 'package:lexicandy/app.dart';
+import 'package:lexicandy/core/models/agent/agent_input.dart';
+import 'package:lexicandy/core/models/agent/agent_profile.dart';
+import 'package:lexicandy/core/models/agent/agent_provider.dart';
+import 'package:lexicandy/core/models/dict_info.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/features/agent/agent_page.dart';
+import 'package:lexicandy/services/agent/agent_image_picker.dart';
+import 'package:lexicandy/services/agent/agent_run.dart';
+import 'package:lexicandy/state/agent_providers.dart';
+import 'package:lexicandy/state/agent_run_controller.dart';
+import 'package:lexicandy/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _provider = AgentProviderConfig(
@@ -159,7 +159,7 @@ void main() {
           sharedPreferencesProvider.overrideWithValue(preferences),
           agentProvidersProvider.overrideWith((ref) async => const []),
         ],
-        child: RikaiApp(key: UniqueKey()),
+        child: LexiCandyApp(key: UniqueKey()),
       ),
     );
     await tester.pumpAndSettle();

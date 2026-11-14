@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/ocr_model.dart';
+import 'package:lexicandy/core/models/ocr_model.dart';
 
 void main() {
   test('parses the checked-in OCR manifest', () {

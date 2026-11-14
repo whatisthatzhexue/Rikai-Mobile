@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_pitch.dart';
-import 'package:rikai_mobile/services/mecab/unidic_accent_parser.dart';
+import 'package:lexicandy/core/models/agent/agent_pitch.dart';
+import 'package:lexicandy/services/mecab/unidic_accent_parser.dart';
 
 void main() {
   group('real UniDic accent samples', () {

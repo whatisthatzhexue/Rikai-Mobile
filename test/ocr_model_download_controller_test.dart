@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/ocr_model.dart';
-import 'package:rikai_mobile/services/ocr/model_manager.dart';
-import 'package:rikai_mobile/state/ocr_model_download.dart';
-import 'package:rikai_mobile/state/providers.dart';
+import 'package:lexicandy/core/models/ocr_model.dart';
+import 'package:lexicandy/services/ocr/model_manager.dart';
+import 'package:lexicandy/state/ocr_model_download.dart';
+import 'package:lexicandy/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _set = OcrModelSet(

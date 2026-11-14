@@ -2,21 +2,21 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/core/models/agent/agent_analysis.dart';
-import 'package:rikai_mobile/core/models/agent/agent_evidence.dart';
-import 'package:rikai_mobile/core/models/agent/agent_input.dart';
-import 'package:rikai_mobile/core/models/agent/agent_quote.dart';
-import 'package:rikai_mobile/core/theme/app_tokens.dart';
-import 'package:rikai_mobile/services/agent/agent_result_markdown.dart';
-import 'package:rikai_mobile/services/agent/agent_run.dart';
-import 'package:rikai_mobile/services/agent/agent_ui_strings.dart';
-import 'package:rikai_mobile/services/agent/agent_validator.dart';
-import 'package:rikai_mobile/services/agent/familiarization/dictionary_familiarization_service.dart';
-import 'package:rikai_mobile/features/agent/agent_composer.dart';
-import 'package:rikai_mobile/features/agent/agent_message_widgets.dart';
-import 'package:rikai_mobile/features/agent/agent_rich_text.dart';
-import 'package:rikai_mobile/features/agent/agent_result_view.dart';
-import 'package:rikai_mobile/features/capture/photo_viewer_page.dart';
+import 'package:lexicandy/core/models/agent/agent_analysis.dart';
+import 'package:lexicandy/core/models/agent/agent_evidence.dart';
+import 'package:lexicandy/core/models/agent/agent_input.dart';
+import 'package:lexicandy/core/models/agent/agent_quote.dart';
+import 'package:lexicandy/core/theme/app_tokens.dart';
+import 'package:lexicandy/services/agent/agent_result_markdown.dart';
+import 'package:lexicandy/services/agent/agent_run.dart';
+import 'package:lexicandy/services/agent/agent_ui_strings.dart';
+import 'package:lexicandy/services/agent/agent_validator.dart';
+import 'package:lexicandy/services/agent/familiarization/dictionary_familiarization_service.dart';
+import 'package:lexicandy/features/agent/agent_composer.dart';
+import 'package:lexicandy/features/agent/agent_message_widgets.dart';
+import 'package:lexicandy/features/agent/agent_rich_text.dart';
+import 'package:lexicandy/features/agent/agent_result_view.dart';
+import 'package:lexicandy/features/capture/photo_viewer_page.dart';
 
 const _citation = AgentCitation(
   id: 'source-1',

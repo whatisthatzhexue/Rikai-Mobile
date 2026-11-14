@@ -12,7 +12,7 @@ import '../../core/models/agent/agent_provider.dart';
 import '../../core/models/agent/agent_tool.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/ui/no_scrollbar_behavior.dart';
-import '../../core/ui/rikai_toast.dart';
+import '../../core/ui/lexicandy_toast.dart';
 import '../../services/agent/agent_result_markdown.dart';
 import '../../services/agent/agent_run.dart';
 import '../../services/agent/agent_ui_strings.dart';
@@ -176,7 +176,7 @@ class AgentMessageList extends ConsumerWidget {
               onRetryProfile: (issue) async {
                 final selectedProvider = provider;
                 if (selectedProvider == null) {
-                  RikaiToast.show(context, strings.modelRequired);
+                  LexiCandyToast.show(context, strings.modelRequired);
                   return;
                 }
                 await retryAgentDictionaryProfile(
@@ -254,7 +254,7 @@ class AgentMessageList extends ConsumerWidget {
     if (!context.mounted) return;
     if (action == 'copy') {
       await Clipboard.setData(ClipboardData(text: text));
-      if (context.mounted) RikaiToast.show(context, strings.copyDone);
+      if (context.mounted) LexiCandyToast.show(context, strings.copyDone);
     } else if (action == 'edit') {
       onEdit();
     }
@@ -267,7 +267,7 @@ class AgentMessageList extends ConsumerWidget {
   ) async {
     final markdown = buildAgentResultMarkdown(result, strings);
     await Clipboard.setData(ClipboardData(text: markdown));
-    if (context.mounted) RikaiToast.show(context, strings.copyDone);
+    if (context.mounted) LexiCandyToast.show(context, strings.copyDone);
   }
 }
 

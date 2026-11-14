@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:rikai_mobile/app.dart';
-import 'package:rikai_mobile/core/models/corpus_entry.dart';
-import 'package:rikai_mobile/services/storage/history_store.dart';
-import 'package:rikai_mobile/state/providers.dart';
+import 'package:lexicandy/app.dart';
+import 'package:lexicandy/core/models/corpus_entry.dart';
+import 'package:lexicandy/services/storage/history_store.dart';
+import 'package:lexicandy/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeHistoryStore extends HistoryStore {
@@ -47,7 +47,7 @@ void main() {
           sharedPreferencesProvider.overrideWithValue(preferences),
           historyStoreProvider.overrideWithValue(store),
         ],
-        child: const RikaiApp(),
+        child: const LexiCandyApp(),
       ),
     );
     await tester.pumpAndSettle();

@@ -5,10 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:rikai_mobile/app.dart';
-import 'package:rikai_mobile/services/mecab/mecab_service.dart';
-import 'package:rikai_mobile/services/storage/permission_service.dart';
-import 'package:rikai_mobile/state/providers.dart';
+import 'package:lexicandy/app.dart';
+import 'package:lexicandy/services/mecab/mecab_service.dart';
+import 'package:lexicandy/services/storage/permission_service.dart';
+import 'package:lexicandy/state/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// On CI/emulator runs the app is installed right before the test starts, so
@@ -187,7 +187,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [sharedPreferencesProvider.overrideWithValue(preferences)],
-        child: const RikaiApp(),
+        child: const LexiCandyApp(),
       ),
     );
     await tester.pumpAndSettle();
