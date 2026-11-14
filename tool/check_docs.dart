@@ -1,15 +1,13 @@
-// Documentation guard for Rikai-Mobile.
+// Documentation guard for LexiCandy.
 //
-// Usage:
-//   dart run tool/check_docs.dart              # full check
-//   dart run tool/check_docs.dart --links-only # links + old-path bans only
+// Usage (from the repository root):
+//   dart tool/check_docs.dart              # full check
+//   dart tool/check_docs.dart --links-only # links + old-path bans only
 //
-// Pure dart:io plus package:path; no Flutter imports. It is intentionally a
-// single-file script so it can run before `flutter pub get` refreshes tooling.
+// Pure dart:io: no package dependencies, so it can run before `flutter pub get`
+// and from a repository root that has no pubspec.yaml of its own.
 
 import 'dart:io';
-
-import 'package:path/path.dart' as p;
 
 const _rootDocs = 'docs';
 
@@ -19,6 +17,7 @@ const _currentDirs = <String>[
   'docs/03-进度',
   'docs/05-参考',
   'docs/07-维护',
+  'docs/performance',
 ];
 
 const _chineseCurrentDirs = <String>[
@@ -27,6 +26,7 @@ const _chineseCurrentDirs = <String>[
   'docs/02-设计/接口模式',
   'docs/03-进度',
   'docs/07-维护',
+  'docs/performance',
 ];
 
 const _historyDir = 'docs/04-历史';
@@ -141,6 +141,8 @@ bool _isCurrentDoc(String rawPath) {
   final path = _posix(rawPath);
   if (path == 'README.md' || path == 'CLAUDE.md') return true;
   if (path == 'docs/07-维护/版本命名.md') return false;
+  // External reference samples are not current docs.
+  if (path.endsWith('_sample.md')) return false;
   for (final dir in _currentDirs) {
     if (path.startsWith('$dir/')) return true;
   }
@@ -152,6 +154,7 @@ bool _isBannerExempt(String rawPath) {
   if (path == 'README.md' || path == 'CLAUDE.md') return true;
   if (path.startsWith('$_historyDir/')) return true;
   if (path.startsWith('$_sampleDir/')) return true;
+  if (path.endsWith('_sample.md')) return true;
   if (path.endsWith('.txt')) return true;
   return false;
 }
@@ -185,8 +188,8 @@ void _checkLinks(File file, List<String> issues) {
         decoded = withoutAnchor;
       }
       final resolved = decoded.startsWith('/')
-          ? p.normalize(p.join('.', decoded.substring(1)))
-          : p.normalize(p.join(p.dirname(file.path), decoded));
+          ? _normalize(decoded.substring(1))
+          : _normalize('${_dirname(file.path)}/$decoded');
       if (!File(resolved).existsSync() && !Directory(resolved).existsSync()) {
         issues.add('${file.path}:${i + 1} broken link -> $target');
       }
@@ -222,7 +225,7 @@ void _checkRegistration(List<File> files, List<String> issues) {
         !path.endsWith('.md')) {
       continue;
     }
-    final relative = p.posix.relative(path, from: _rootDocs);
+    final relative = _relative(path, _rootDocs);
     if (!readme.contains(relative)) {
       issues.add('${file.path}: not registered in docs/README.md');
     }
@@ -237,7 +240,7 @@ void _checkNaming(List<File> files, List<String> issues) {
         path.startsWith('$_sampleDir/')) {
       continue;
     }
-    final name = p.basename(path);
+    final name = _basename(path);
     if (name == 'README.md' || name == 'CLAUDE.md') continue;
     for (final token in _fullWidthPunctuation) {
       if (name.contains(token)) {
@@ -273,7 +276,8 @@ void _checkVersionLabels(List<File> files, List<String> issues) {
   for (final file in files) {
     final path = _posix(file.path);
     if (path == 'docs/07-维护/版本命名.md' ||
-        path.endsWith('Review目标.txt')) {
+        path.endsWith('Review目标.txt') ||
+        path.endsWith('_sample.md')) {
       continue;
     }
     final isChineseCurrent = path == 'CLAUDE.md' ||
@@ -308,3 +312,54 @@ void _checkVersionLabels(List<File> files, List<String> issues) {
 String _read(File file) => file.readAsStringSync();
 
 String _posix(String path) => path.replaceAll('\\', '/');
+
+String _normalize(String path) {
+  final posix = _posix(path);
+  final absolute = posix.startsWith('/');
+  final parts = posix.split('/');
+  final out = <String>[];
+  for (final part in parts) {
+    if (part.isEmpty || part == '.') continue;
+    if (part == '..') {
+      if (out.isNotEmpty && out.last != '..') {
+        out.removeLast();
+      } else if (!absolute) {
+        out.add('..');
+      }
+    } else {
+      out.add(part);
+    }
+  }
+  final joined = out.join('/');
+  if (absolute) return '/$joined';
+  return joined.isEmpty ? '.' : joined;
+}
+
+String _dirname(String path) {
+  final posix = _posix(path);
+  final index = posix.lastIndexOf('/');
+  if (index < 0) return '.';
+  if (index == 0) return '/';
+  return posix.substring(0, index);
+}
+
+String _basename(String path) {
+  final posix = _posix(path);
+  final index = posix.lastIndexOf('/');
+  return index < 0 ? posix : posix.substring(index + 1);
+}
+
+String _relative(String path, String from) {
+  final target = _normalize(path).split('/');
+  final base = _normalize(from).split('/');
+  var common = 0;
+  while (common < target.length &&
+      common < base.length &&
+      target[common] == base[common]) {
+    common++;
+  }
+  final up = List<String>.filled(base.length - common, '..');
+  final rest = target.sublist(common);
+  final result = <String>[...up, ...rest].join('/');
+  return result.isEmpty ? '.' : result;
+}

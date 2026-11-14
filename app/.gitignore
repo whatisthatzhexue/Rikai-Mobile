@@ -1,0 +1,16 @@
+# App-local generated files. Repository-wide patterns stay in ../.gitignore.
+/build/
+/.dart_tool/
+.flutter-plugins-dependencies
+/android/local.properties
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+
+# User-supplied fonts; see assets/fonts/README.md.
+/assets/fonts/*.ttf
+/assets/fonts/*.otf
+/assets/fonts/*.ttc
+
+# Vendored package build outputs.
+/packages/mecab_for_dart/emcc_out/

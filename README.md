@@ -155,28 +155,46 @@ Python Worker（轻量调度 + 云端 OCR + 配置分发）
 输入法、Community、成长曲线、Supabase、Python Worker、插件系统、多语种。
 这些是 LexiCandy 方向，不是当前能力。
 
-## 7. 快速开始
+## 7. 仓库结构与快速开始
+
+### 7.1 仓库结构
+
+```text
+app/          # Flutter 客户端；唯一 App 构建入口
+supabase/     # [planned] 鉴权/社区/术语表
+worker/       # [planned] Python Worker
+docs/         # 跨子项目权威文档
+tool/         # 仓库级编排；不实现 Flutter 逻辑
+third_party/  # 来源/许可/修改记录；不参与构建
+data/         # [ignored] 本地开发/用户数据
+```
+
+Flutter 命令在 `app/` 下执行；根目录不直接跑 Flutter。详细结构见
+[项目结构](docs/07-维护/项目结构.md)。
+
+### 7.2 快速开始
 
 构建前必须放置 HarmonyOS Sans SC Regular 字体（字体不入库）：
 
 ```text
-assets/fonts/HarmonyOS_Sans_SC_Regular.ttf
+app/assets/fonts/HarmonyOS_Sans_SC_Regular.ttf
 ```
 
 然后：
 
 ```powershell
-cd C:\Projects\Rikai-Mobile
+cd C:\Projects\Rikai-Mobile\app
 flutter pub get
-dart tool/verify.dart              # docs + analyze + test
-dart tool/verify.dart --build      # 再加 debug APK
-flutter build apk --debug
+cd ..
+
+dart tool/verify.dart              # docs + app analyze + app test
+dart tool/verify.dart --build      # 再加 app debug APK
 ```
 
 环境/版本/SDK/NDK/模拟器基线见
 [项目数据](docs/01-规范/项目数据.md) §1；设备测试、模拟器、adb、网络与 Gradle
 排障见 [开发环境与构建](docs/05-参考/开发环境与构建.md)。UI 必须遵循
-[设计规范](docs/01-规范/设计规范.md) 与 `lib/core/theme/app_tokens.dart`。
+[设计规范](docs/01-规范/设计规范.md) 与 `app/lib/core/theme/app_tokens.dart`。
 
 ## 8. 文档
 

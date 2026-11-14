@@ -1,11 +1,11 @@
-// Local verification gate for Rikai-Mobile.
+// Local verification gate for LexiCandy.
 //
-// Usage:
-//   dart tool/verify.dart            # docs + analyze + test
+// Usage (from the repository root):
+//   dart tool/verify.dart            # docs + app analyze + app test
 //   dart tool/verify.dart --build    # also build a debug APK
 //
-// Pure dart:io. Runs check_docs.dart directly (not `dart run`) so the
-// mecab_for_dart native build hook is not triggered by the docs script.
+// Pure dart:io. Flutter commands run with `workingDirectory: app`; this file
+// only orchestrates and does not contain app/business logic.
 
 import 'dart:io';
 
@@ -13,26 +13,47 @@ void main(List<String> args) {
   final build = args.contains('--build');
   final failures = <String>[];
 
-  if (!File('assets/fonts/HarmonyOS_Sans_SC_Regular.ttf').existsSync()) {
+  if (!File('app/assets/fonts/HarmonyOS_Sans_SC_Regular.ttf').existsSync()) {
     stderr.writeln(
-      'Missing assets/fonts/HarmonyOS_Sans_SC_Regular.ttf; see assets/fonts/README.md.',
+      'Missing app/assets/fonts/HarmonyOS_Sans_SC_Regular.ttf; '
+      'see app/assets/fonts/README.md.',
     );
     exit(1);
   }
-  if (!File('android/local.properties').existsSync()) {
-    stderr.writeln('Missing android/local.properties; run `flutter pub get` first.');
+  if (!File('app/android/local.properties').existsSync()) {
+    stderr.writeln(
+      'Missing app/android/local.properties; run `flutter pub get` in app/ first.',
+    );
     exit(1);
   }
 
-  _run('docs', Platform.resolvedExecutable, <String>['tool/check_docs.dart'], failures);
-  _run('analyze', 'flutter', <String>['analyze'], failures);
-  _run('test', 'flutter', <String>['test'], failures);
+  _run(
+    'docs',
+    Platform.resolvedExecutable,
+    <String>['tool/check_docs.dart'],
+    failures,
+  );
+  _run(
+    'analyze',
+    'flutter',
+    <String>['analyze'],
+    failures,
+    workingDirectory: 'app',
+  );
+  _run(
+    'test',
+    'flutter',
+    <String>['test'],
+    failures,
+    workingDirectory: 'app',
+  );
   if (build) {
     _run(
       'build',
       'flutter',
       <String>['build', 'apk', '--debug'],
       failures,
+      workingDirectory: 'app',
     );
   }
 
@@ -48,12 +69,14 @@ void _run(
   String label,
   String executable,
   List<String> args,
-  List<String> failures,
-) {
+  List<String> failures, {
+  String? workingDirectory,
+}) {
   stdout.writeln('==> $label: $executable ${args.join(' ')}');
   final result = Process.runSync(
     executable,
     args,
+    workingDirectory: workingDirectory,
     runInShell: true,
     stdoutEncoding: systemEncoding,
     stderrEncoding: systemEncoding,

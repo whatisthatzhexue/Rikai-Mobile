@@ -1,24 +1,26 @@
 # ---------------------------------------------------------------------------
-# Rikai-Mobile
+# LexiCandy repository
 # ---------------------------------------------------------------------------
 
-# User-supplied / development data. Never commit dictionaries or UniDic.
-/unidic/
+# Local development/user data. Never commit dictionaries, UniDic or test images.
+/data/
 /mdicts/
 /test_images/
+/unidic/
 
-# Upstream reference clones (their own .git). Adapted code lives in
-# packages/ and third_party/.
+# Upstream reference clones (their own .git). Buildable vendored code lives in
+# app/packages/ or worker/src/_vendor/; third_party/ only records provenance.
+/third_party/upstream/
 /overlay-translator/
 /PaddleOCR4Android/
 
 # User-supplied fonts. HarmonyOS Sans is not redistributed with the app; see
-# assets/fonts/README.md for the download instructions.
-/assets/fonts/*.ttf
-/assets/fonts/*.otf
-/assets/fonts/*.ttc
+# app/assets/fonts/README.md.
+/app/assets/fonts/*.ttf
+/app/assets/fonts/*.otf
+/app/assets/fonts/*.ttc
 
-# Model binaries are downloaded at runtime (see assets/models/manifest.json).
+# Model binaries are downloaded at runtime (see app/assets/models/manifest.json).
 **/*.onnx
 **/*.nb
 **/*.pdmodel
@@ -29,7 +31,7 @@
 **/*.part
 
 # Vendored package build outputs / WASM artifacts.
-/packages/mecab_for_dart/emcc_out/
+/app/packages/mecab_for_dart/emcc_out/
 **/build/
 **/.dart_tool/
 **/.gradle/
@@ -39,7 +41,7 @@
 
 # Signing and local machine configuration.
 local.properties
-android/local.properties
+app/android/local.properties
 key.properties
 *.jks
 *.keystore
@@ -89,11 +91,11 @@ app.*.map.json
 *.apk
 *.aab
 
-/android/app/debug
-/android/app/profile
-/android/app/release
+/app/android/app/debug
+/app/android/app/profile
+/app/android/app/release
 # Gradle wrapper copies kept out of the index; the tracked wrapper itself is
-# re-included by android/.gitignore so a fresh clone can still run ./gradlew.
-/android/gradlew
-/android/gradlew.bat
-/android/**/gradle-wrapper.jar
+# re-included by app/android/.gitignore so a fresh clone can still run ./gradlew.
+/app/android/gradlew
+/app/android/gradlew.bat
+/app/android/**/gradle-wrapper.jar
