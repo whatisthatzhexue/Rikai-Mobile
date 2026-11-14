@@ -5,13 +5,13 @@ import 'package:lexicandy/services/storage/settings_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  test('defaults use HarmonyOS and unlimited dictionary entries', () async {
+  test('defaults use Kiyosuna and unlimited dictionary entries', () async {
     SharedPreferences.setMockInitialValues({});
     final preferences = await SharedPreferences.getInstance();
 
     final settings = SettingsStore(preferences).load();
 
-    expect(settings.fontFamily, AppFonts.harmony);
+    expect(settings.fontFamily, AppFonts.kiyosuna);
     expect(settings.maxEntriesPerDictionary, 0);
     expect(settings.lookupMatchMode, LookupMatchMode.exact);
     expect(settings.showFurigana, isTrue);
@@ -75,7 +75,18 @@ void main() {
 
     final restored = SettingsStore(preferences).load();
 
-    expect(restored.fontFamily, AppFonts.harmony);
+    expect(restored.fontFamily, AppFonts.kiyosuna);
     expect(restored.maxEntriesPerDictionary, 0);
+  });
+
+  test('legacy HarmonyOS font preference falls back to Kiyosuna', () async {
+    SharedPreferences.setMockInitialValues({
+      'flutter.app_font_family': 'HarmonyOS Sans SC',
+    });
+    final preferences = await SharedPreferences.getInstance();
+
+    final restored = SettingsStore(preferences).load();
+
+    expect(restored.fontFamily, AppFonts.kiyosuna);
   });
 }

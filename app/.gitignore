@@ -7,7 +7,8 @@
 /android/app/profile/
 /android/app/release/
 
-# User-supplied fonts; see assets/fonts/README.md.
+# Optional user-supplied fonts at the top level; bundled Kiyosuna Sans lives in
+# assets/fonts/KiyosunaSans/ and is tracked with its OFL README.
 /assets/fonts/*.ttf
 /assets/fonts/*.otf
 /assets/fonts/*.ttc

@@ -14,8 +14,8 @@
 /overlay-translator/
 /PaddleOCR4Android/
 
-# User-supplied fonts. HarmonyOS Sans is not redistributed with the app; see
-# app/assets/fonts/README.md.
+# Optional user-supplied fonts at the top level. Bundled Kiyosuna Sans lives
+# under app/assets/fonts/KiyosunaSans/ and is tracked with its OFL README.
 /app/assets/fonts/*.ttf
 /app/assets/fonts/*.otf
 /app/assets/fonts/*.ttc

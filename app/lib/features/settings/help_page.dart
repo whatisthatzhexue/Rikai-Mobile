@@ -53,7 +53,7 @@ class HelpPage extends StatelessWidget {
     _HelpSection(
       '显示与字体',
       '阅读界面可切换注音与字号；每本词典的词条上限在“阅读显示”中设置。'
-          '左侧菜单“自定义字体”可切换 HarmonyOS Sans 或系统字体。',
+          '左侧菜单“自定义字体”可切换 Kiyosuna Sans 或系统字体。',
     ),
     _HelpSection(
       '拍照识别',

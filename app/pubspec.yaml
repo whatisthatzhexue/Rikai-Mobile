@@ -93,14 +93,16 @@ flutter:
   # a summary, and the authoritative texts stay in the repository for
   # attribution/distribution (see THIRD_PARTY_NOTICES.md).
 
-  # HarmonyOS Sans SC is NOT distributed with this repository. Download it and
-  # place it at assets/fonts/HarmonyOS_Sans_SC_Regular.ttf before building.
-  # See assets/fonts/README.md and docs/01-规范/设计规范.md.
+  # KT Kiyosuna Sans is bundled under SIL OFL 1.1. The Light file is registered
+  # as 400 so body text uses the light face by default; Bold is registered as 700.
+  # See assets/fonts/KiyosunaSans/README.md and docs/01-规范/设计规范.md.
   fonts:
-    - family: HarmonyOS Sans SC
+    - family: KT Kiyosuna Sans
       fonts:
-        - asset: assets/fonts/HarmonyOS_Sans_SC_Regular.ttf
+        - asset: assets/fonts/KiyosunaSans/KiyosunaSans-L-1.0.1.otf
           weight: 400
+        - asset: assets/fonts/KiyosunaSans/KiyosunaSans-B-1.0.1.otf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

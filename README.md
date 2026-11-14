@@ -174,11 +174,10 @@ Flutter 命令在 `app/` 下执行；根目录不直接跑 Flutter。详细结�
 
 ### 7.2 快速开始
 
-构建前必须放置 HarmonyOS Sans SC Regular 字体（字体不入库）：
-
-```text
-app/assets/fonts/HarmonyOS_Sans_SC_Regular.ttf
-```
+应用内置 **Kiyosuna Sans（KT Kiyosuna Sans Light/Bold）**，无需手动放置字体。
+字体以 SIL OFL 1.1 随仓库分发，来源与许可见
+[`app/assets/fonts/KiyosunaSans/README.md`](app/assets/fonts/KiyosunaSans/README.md)；
+如需重新获取，可从 <https://booth.pm/zh-cn/items/5389901> 下载。
 
 然后：
 

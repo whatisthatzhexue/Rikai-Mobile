@@ -23,13 +23,13 @@ void main() {
     expect(theme.textTheme.bodySmall?.fontSize, 12);
     expect(theme.textTheme.labelLarge?.fontSize, 16);
     expect(theme.textTheme.labelSmall?.fontSize, 12);
-    expect(theme.textTheme.bodyMedium?.fontFamily, 'HarmonyOS Sans SC');
+    expect(theme.textTheme.bodyMedium?.fontFamily, 'KT Kiyosuna Sans');
   });
 
-  test('system font override clears the HarmonyOS family', () {
+  test('system font override clears the Kiyosuna family', () {
     final theme = AppTheme.light(fontFamily: AppFonts.system);
 
-    expect(theme.textTheme.bodyMedium?.fontFamily, isNot('HarmonyOS Sans SC'));
+    expect(theme.textTheme.bodyMedium?.fontFamily, isNot('KT Kiyosuna Sans'));
   });
 
   test('home brand header and action buttons follow the revision', () {

@@ -17,8 +17,9 @@ flutter analyze
 flutter build apk --debug
 ```
 
-构建前按 `assets/fonts/README.md` 放置 HarmonyOS Sans SC Regular 字体。修改
-`assets/LexiCandy_Icon.jpg` 后运行：
+应用内置 Kiyosuna Sans（KT Kiyosuna Sans Light/Bold，SIL OFL 1.1），无需手动
+放置字体；来源与许可见 [`assets/fonts/KiyosunaSans/README.md`](assets/fonts/KiyosunaSans/README.md)
+或 <https://booth.pm/zh-cn/items/5389901>。修改 `assets/LexiCandy_Icon.jpg` 后运行：
 
 ```powershell
 dart run flutter_launcher_icons

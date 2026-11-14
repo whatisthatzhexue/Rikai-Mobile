@@ -68,10 +68,13 @@ Institute for Japanese Language and Linguistics). MDict dictionaries are
 supplied by the user; their original content licenses apply and they are not
 redistributed by this project.
 
-The HarmonyOS Sans SC UI font is supplied by the user (downloaded from Huawei's
-HarmonyOS design resources) and is not distributed with Rikai-Mobile. It is
-used under the HarmonyOS Sans Fonts License Agreement; Copyright Huawei Device
-Co., Ltd.
+The UI font is **KT Kiyosuna Sans** (Light and Bold), distributed with
+LexiCandy under the SIL Open Font License 1.1. Copyright (c) 2024 WATANABE
+Reiya, with Reserved Font Name "KT Kiyosuna Sans" and "KTきよすなゴシック".
+The font files are unmodified and are not sold separately. Attribution and the
+full license text are in
+`app/assets/fonts/KiyosunaSans/README.md`; the source download page is
+<https://booth.pm/zh-cn/items/5389901>.
 
 Model binaries, UniDic files, MDict files and user data are intentionally
 excluded from the repository by .gitignore.

@@ -91,7 +91,7 @@ void main() {
     final homeContext = tester.element(find.text('主页'));
     expect(
       Theme.of(homeContext).textTheme.bodyMedium?.fontFamily,
-      isNot('HarmonyOS Sans SC'),
+      isNot('KT Kiyosuna Sans'),
     );
 
     await tester.tap(find.text('帮助'));

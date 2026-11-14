@@ -23,15 +23,13 @@ in-app license page shows a summary).
 | PP-LCNet orientation models | Apache-2.0 | Downloaded at runtime, not in git |
 | manga-ocr ONNX (l0wgear) | Not declared | Downloaded at runtime, not redistributed; local import supported |
 | dict_reader | MIT | Pure-Dart MDict parser |
+| Kiyosuna Sans (KT Kiyosuna Sans) | SIL OFL 1.1 | Bundled Light/Bold fonts; Copyright (c) 2024 WATANABE Reiya; see `app/assets/fonts/KiyosunaSans/README.md` |
 | Flutter packages | Various | Listed by Flutter's license page |
 
 ## User-supplied, not distributed
 
 - **UniDic** — GPL v2 / LGPL v2.1 / modified BSD; Copyright NINJAL.
 - **MDict dictionaries** — original content licenses apply.
-- **HarmonyOS Sans SC font** — Copyright Huawei Device Co., Ltd.; HarmonyOS
-  Sans Fonts License Agreement. Downloaded by the user into
-  `assets/fonts/`; not redistributed in this repository.
 
 ## Modifications
 

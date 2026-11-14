@@ -11,7 +11,7 @@ class AppSettings {
     this.showFurigana = true,
     this.annotationRuleSetId = 'furigana',
     this.readerFontSize = 20,
-    this.fontFamily = AppFonts.harmony,
+    this.fontFamily = AppFonts.kiyosuna,
     this.maxEntriesPerDictionary = 0,
     this.lookupMatchMode = LookupMatchMode.exact,
     this.ocrMirror = '',
@@ -31,7 +31,7 @@ class AppSettings {
   final String annotationRuleSetId;
   final double readerFontSize;
 
-  /// [AppFonts.harmony] or [AppFonts.system] (empty string).
+  /// [AppFonts.kiyosuna] or [AppFonts.system] (empty string).
   final String fontFamily;
 
   /// 0 means unlimited entries per dictionary.
@@ -144,7 +144,7 @@ class SettingsStore {
           _preferences.getString(_annotationRuleSetKey) ?? 'furigana',
       readerFontSize: _preferences.getDouble(_readerFontSizeKey) ?? 20,
       fontFamily: storedFont == null
-          ? AppFonts.harmony
+          ? AppFonts.kiyosuna
           : AppFonts.sanitize(storedFont),
       maxEntriesPerDictionary: maxEntries < 0 ? 0 : maxEntries,
       lookupMatchMode: _lookupModeFromName(

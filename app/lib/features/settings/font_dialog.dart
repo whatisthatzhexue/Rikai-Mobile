@@ -5,7 +5,7 @@ import '../../core/theme/app_fonts.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../state/providers.dart';
 
-/// Lets the user switch between the bundled HarmonyOS Sans and the system font.
+/// Lets the user switch between the bundled Kiyosuna Sans and the system font.
 Future<void> showFontDialog(BuildContext context, WidgetRef ref) async {
   final current = ref.read(appSettingsProvider).fontFamily;
 
@@ -32,7 +32,7 @@ Future<void> showFontDialog(BuildContext context, WidgetRef ref) async {
                 subtitle: Text(
                   family == AppFonts.system
                       ? '使用 Android 系统字体'
-                      : '应用内置的 HarmonyOS Sans',
+                      : '应用内置的 Kiyosuna Sans',
                 ),
                 onTap: () {
                   ref.read(appSettingsProvider.notifier).setFontFamily(family);

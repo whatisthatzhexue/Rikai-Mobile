@@ -13,12 +13,15 @@ void main(List<String> args) {
   final build = args.contains('--build');
   final failures = <String>[];
 
-  if (!File('app/assets/fonts/HarmonyOS_Sans_SC_Regular.ttf').existsSync()) {
-    stderr.writeln(
-      'Missing app/assets/fonts/HarmonyOS_Sans_SC_Regular.ttf; '
-      'see app/assets/fonts/README.md.',
-    );
-    exit(1);
+  const fontFiles = <String>[
+    'app/assets/fonts/KiyosunaSans/KiyosunaSans-L-1.0.1.otf',
+    'app/assets/fonts/KiyosunaSans/KiyosunaSans-B-1.0.1.otf',
+  ];
+  for (final font in fontFiles) {
+    if (!File(font).existsSync()) {
+      stderr.writeln('Missing $font; see app/assets/fonts/KiyosunaSans/README.md.');
+      exit(1);
+    }
   }
   if (!File('app/android/local.properties').existsSync()) {
     stderr.writeln(

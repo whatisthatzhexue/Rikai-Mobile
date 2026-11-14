@@ -32,9 +32,10 @@ class CopyrightPage extends StatelessWidget {
           '本项目评估后未编译其 Paddle-Lite 模块。',
     ),
     (
-      'HarmonyOS Sans SC',
-      'HarmonyOS Sans Fonts License Agreement，Copyright Huawei Device Co., Ltd.。'
-          '字体由用户自行取得并遵守其许可。',
+      'Kiyosuna Sans',
+      'SIL Open Font License 1.1，Copyright 2024 WATANABE Reiya。'
+          '应用内置 KT Kiyosuna Sans Light/Bold；完整许可见 '
+          'assets/fonts/KiyosunaSans/README.md。',
     ),
     ('UniDic', '用户自备；GPL v2 / LGPL v2.1 / 修正 BSD 三选一，Copyright NINJAL。'),
     ('MDict 词典', '用户自备；词条内容的原始许可由词典提供方决定，本项目不再分发。'),

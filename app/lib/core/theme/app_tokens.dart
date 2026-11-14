@@ -50,7 +50,7 @@ abstract final class AppColors {
 }
 
 abstract final class AppTypography {
-  static const String fontFamily = AppFonts.harmony;
+  static const String fontFamily = AppFonts.kiyosuna;
   static const List<String> fontFamilyFallback = [
     'Noto Sans CJK SC',
     'Noto Sans SC',
