@@ -5,7 +5,7 @@ import 'app_fonts.dart';
 
 /// Normative design tokens for Rikai-Mobile.
 ///
-/// See `docs/design-tokens.md`. All UI (existing and new) must use these
+/// See `docs/01-规范/设计规范.md`. All UI (existing and new) must use these
 /// tokens through [ThemeData]/`AppTheme` instead of hard-coded values.
 abstract final class AppColors {
   // Blue / white brand palette (TDesign-compatible brand blue).

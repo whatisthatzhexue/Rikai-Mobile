@@ -1,3 +1,5 @@
+import 'ocr_model_copy.dart';
+
 /// OCR model catalog parsed from `assets/models/manifest.json`.
 class OcrModelManifest {
   const OcrModelManifest({
@@ -70,10 +72,10 @@ class OcrModelSet {
     }
     return OcrModelSet(
       id: id,
-      displayName: (json['displayName'] as String?) ?? id,
+      displayName: OcrModelCopy.displayName(id),
       license: (json['license'] as String?) ?? 'UNKNOWN',
       licenseUrl: (json['licenseUrl'] as String?) ?? '',
-      licenseNote: (json['licenseNote'] as String?) ?? '',
+      licenseNote: OcrModelCopy.licenseNote(id),
       requiresAcceptance: (json['requiresAcceptance'] as bool?) ?? false,
       files: files,
     );

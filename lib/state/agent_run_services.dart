@@ -57,7 +57,7 @@ final agentRunServicesProvider = Provider<AgentRunServicesLoader>((ref) {
     final ocrService = ref.read(ocrServiceProvider);
     final mdict = await ref.read(mdictServiceProvider.future);
     if (cancelled()) return null;
-    final grammar = await ref.read(agentGrammarCatalogProvider.future);
+    final grammar = ref.read(agentGrammarCatalogProvider);
     if (cancelled()) return null;
 
     TokenizePort tokenizePort;

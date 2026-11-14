@@ -6,182 +6,182 @@
 
 ## 0. 文档导航（先读这里）
 
-> **权威层级**：规则 → `docs/project-rules.md`；当前数据/文案 →
-> `docs/project-data.md`；视觉数值 → `docs/design-tokens.md`；误区/踩坑 →
-> `docs/project_tips.md`；Agent 字段/错误码 → `docs/phase6-agent-contracts.md` +
-> `docs/schemas/agent/`；架构决策 → `docs/adr/`；历史阶段 →
-> `docs/project-history.md`（流水）+ `docs/phase*-status.md`（详细快照）。
+> **权威层级**：规则 → `docs/01-规范/项目规则.md`；当前数据/文案 →
+> `docs/01-规范/项目数据.md`；视觉数值 → `docs/01-规范/设计规范.md`；误区/踩坑 →
+> `docs/01-规范/误区与踩坑.md`；Agent 字段/错误码 → `docs/02-设计/助手/助手契约.md` +
+> `docs/02-设计/接口模式/agent/`；架构决策 → `docs/02-设计/架构决策/`；历史阶段 →
+> `docs/04-历史/项目历史.md`（流水）+ `docs/04-历史/阶段*状态.md`（详细快照）。
 > 冲突时按此层级修正低权威文档。正文只保留具体小节指针（如
-> `docs/project-data.md` §6），不重复文档用途说明。
+> `docs/01-规范/项目数据.md` §6），不重复文档用途说明。
 >
 > **导航约定**：文档用途与查阅时机只在本索引维护；规则、数据、设计 token、
 > 误区、历史、开发环境六份文档之间不写相互引用。
 >
-> **Agent 开发门禁**：开发/修改 Phase 6 词典助手前，按
-> `docs/agent_docs/README.md` 的必读顺序阅读；2026-10-31 的 F1–F17/Wave 4 未关闭
+> **Agent 开发门禁**：开发/修改 阶段 6 词典助手前，按
+> `docs/02-设计/助手/助手文档索引.md` 的必读顺序阅读；2026-10-31 的 F1–F17/反馈波次 4 未关闭
 > 前，原则上不在 P6.7 上继续叠加新功能，也不把未实现能力写成已支持。2026-11-03
-> 用户明确允许本工作流在另一工作流继续 Wave 4 时开始 P6.7；P6.6 多 OCR 核心已于
+> 用户明确允许本工作流在另一工作流继续 反馈波次 4 时开始 P6.7；P6.6 多 OCR 核心已于
 > 2026-11-02 实现，P6.7 历史/持久化与 UniDic 声调已于 2026-11-03 实现，但真机/
 > 视觉验收仍未完成，不能写成已验证。
 
-`docs/project-rules.md`：
+`docs/01-规范/项目规则.md`：
 内容：正面/反面 MUST/MUST NOT 规则的单一权威源，按 `R-<域>-<序号>` 编号；
 覆盖产品/隐私/架构/Agent/UI/开发/文档治理。
 何时查看：实现或审查任何功能前；判断某做法是否允许；文档冲突时。
 
-`docs/project-data.md`：
+`docs/01-规范/项目数据.md`：
 内容：测试数量/设备结果/性能/构建产物/环境版本/开发数据统计/固定 UI 文案/
 Agent 预算的单一事实源。
 何时查看：需要任何当前数值、环境版本、固定文案或预算；更新测试/设备/构建
 记录时。
 
-`docs/design-tokens.md`：
+`docs/01-规范/设计规范.md`：
 内容：UI 视觉/布局/交互强制规范（颜色/字号/间距/圆角/组件/转场/页面结构/
 Agent 对话式 UI）；实现入口为 `lib/core/theme/app_tokens.dart`。
 何时查看：新增或修改任何 UI 前；检查页面是否硬编码颜色/字号/间距。
 
-`docs/project_tips.md`：
-内容：项目误区/踩坑与解决方案（`T-001`–`T-136`），含症状 → 处理速查附录。
+`docs/01-规范/误区与踩坑.md`：
+内容：项目误区/踩坑与解决方案（`T-001`–`T-138`），含症状 → 处理速查附录。
 何时查看：遇到报错、异常行为或准备重复试错前；接手 OCR/UniDic/MDict/采集/UI/
 Agent 改动前。**今后的误区只在该文件新增。**
 
-`docs/DEVELOPMENT_PLAN.md`：
+`docs/04-历史/开发计划.md`：
 内容：MVP 阶段计划与范围。
 何时查看：确认当前阶段目标/边界；规划新阶段前。
 
-`docs/phase0-status.md`：
-内容：Phase 0 基建（vendored MeCab、`rikai_ocr` 骨架、ORT、模型 manifest、
+`docs/04-历史/阶段0状态.md`：
+内容：阶段 0 基建（vendored MeCab、`rikai_ocr` 骨架、ORT、模型 manifest、
 许可）的验证记录。
-何时查看：追溯 Phase 0 实现细节；历史值不作当前值。
+何时查看：追溯 阶段 0 实现细节；历史值不作当前值。
 
-`docs/phase1-status.md`：
-内容：Phase 1（UniDic/MeCab、权限、阅读器、真实词典）验证记录。
+`docs/04-历史/阶段1状态.md`：
+内容：阶段 1（UniDic/MeCab、权限、阅读器、真实词典）验证记录。
 何时查看：追溯 UniDic/MeCab 与权限实现；历史值不作当前值。
 
-`docs/phase2-status.md`：
-内容：Phase 2（MDict worker、查词/渲染/词典管理）验证记录。
+`docs/04-历史/阶段2状态.md`：
+内容：阶段 2（MDict worker、查词/渲染/词典管理）验证记录。
 何时查看：追溯 MDict/WebView 实现；历史值不作当前值。
 
-`docs/phase3-status.md`：
-内容：Phase 3（横向 PaddleOCR、拍照、模型管理）验证记录。
+`docs/04-历史/阶段3状态.md`：
+内容：阶段 3（横向 PaddleOCR、拍照、模型管理）验证记录。
 何时查看：追溯横向 OCR/采集实现；历史值不作当前值。
 
-`docs/phase3.5-status.md`：
-内容：Phase 3.5（采集/导入/语料/模型目录修复）验证记录。
+`docs/04-历史/阶段3.5状态.md`：
+内容：阶段 3.5（采集/导入/语料/模型目录修复）验证记录。
 何时查看：追溯采集与词典导入的修复来源；历史值不作当前值。
 
-`docs/phase4-status.md`：
-内容：Phase 4（纵向 MangaOCR、自动方向、设备合成测试）验证记录。
+`docs/04-历史/阶段4状态.md`：
+内容：阶段 4（纵向 MangaOCR、自动方向、设备合成测试）验证记录。
 何时查看：追溯纵向 OCR/方向路由实现；历史值不作当前值。
 
-`docs/phase4.5-status.md`：
-内容：Phase 4.5 OCR 质量/性能收敛与第二轮设备反馈（已完成，2026-10-30
+`docs/04-历史/阶段4.5状态.md`：
+内容：阶段 4.5 OCR 质量/性能收敛与第二轮设备反馈（已完成，2026-10-30
 关闭）。
 何时查看：追溯 OCR 懒加载/方向/双引擎评分与设备反馈修复；历史值不作当前值。
 
-`docs/phase5-status.md`：
-内容：Phase 5（首次引导、语料/历史、设置、发布打磨）完成记录。
+`docs/04-历史/阶段5状态.md`：
+内容：阶段 5（首次引导、语料/历史、设置、发布打磨）完成记录。
 何时查看：追溯引导/语料/发布实现；历史值不作当前值。
 
-`docs/project-history.md`：
-内容：Phase 0–Phase 5 的实现/修复/验收流水、已完成路径保护说明与历史提交锚点；
+`docs/04-历史/项目历史.md`：
+内容：阶段 0–阶段 5 的实现/修复/验收流水、已完成路径保护说明与历史提交锚点；
 不等于当前状态或当前数据。
 何时查看：追溯“当时做了什么、为什么这样修”；不要把它当当前任务清单。
 
-`docs/phase6-agent-design.md`：
-内容：Phase 6 词典助手设计 v2（固定流水线、模型无工具、隐私边界、任务工作流）。
+`docs/02-设计/助手/助手设计.md`：
+内容：阶段 6 词典助手设计 v2（固定流水线、模型无工具、隐私边界、任务工作流）。
 何时查看：开发/修改 Agent 前；确认产品与流水线设计。
 
-`docs/phase6-agent-contracts.md`：
+`docs/02-设计/助手/助手契约.md`：
 内容：Agent 契约/schema/状态机/错误码/请求与响应字段。
 何时查看：改 Agent DTO/provider/schema/validator 前；核对字段与错误码。
 
-`docs/phase6-status.md`：
-内容：Phase 6 当前实现记录（P6.1–P6.5、Wave 进展、已知差距）。
+`docs/03-进度/阶段6实现状态.md`：
+内容：阶段 6 当前实现记录（P6.1–P6.5、反馈波次进展、已知差距）。
 何时查看：确认 Agent 已实现/未实现范围；更新进度时。
 
-`docs/agent_output/`：
+`docs/06-样本/`：
 内容：Agent 实际输出的 Markdown 质检样本；文件名
 `YYYY-MM-DD-HH-mm.txt`，一次运行一个文件，不含图片/路径/Key。
 何时查看：质检 Agent 译文/理解/依据、对比管线修复前后输出时；新增样本按
 该目录 README 命名。
 
-`docs/agent_docs/README.md`：
+`docs/02-设计/助手/助手文档索引.md`：
 内容：Agent 文档导航与硬规则（开发前必读顺序）。
 何时查看：开发 Agent 前先读；需要当前评审/生命周期文档入口。
 
-`docs/agent_docs/device-feedback-2026-10-31.md`：
+`docs/03-进度/设备反馈-2026-10-31.md`：
 内容：2026-10-31 实机反馈 F1–F17 的修正方案、依赖与执行波次；当前优先工作
 队列。
-何时查看：开发 Agent 或安排下一步前；决定 Wave 顺序时。
+何时查看：开发 Agent 或安排下一步前；决定反馈波次顺序时。
 
-`docs/agent_docs/agent-runtime-roadmap-2026-11-08.md`：
+`docs/03-进度/执行路线-2026-11-08.md`：
 内容：2026-11-08 修正版执行路线：P6.7 收尾（provider 测试/Markdown 预览/
 装饰规则 v1）、P6.8-lite（译文预览/可选证据缓存）、P7-lite（路由/遥测/预算）；
-与旧 P6.8/P7 规划冲突时以本文为准。
-何时查看：安排 P6.7 后续/P6.8/P7 工作前；决定暂缓或启动任务拆分时。
+与旧 P6.8（完整）/P7（完整）规划冲突时以本文为准。
+何时查看：安排 P6.7 后续/P6.8-lite/P7-lite 工作前；决定暂缓或启动任务拆分时。
 
-`docs/agent_docs/task-level-streaming-plan.md`：
+`docs/04-历史/已废弃/任务级流式方案.md`：
 内容：任务级流式完整设计（标签块增量渲染、局部校验、证据缓存重试）；已被
 2026-11-08 roadmap 收窄为 P6.8-lite，完整 segment streaming 暂缓；当前代码
 已有流式续传，文档中“不做断点续生成”为过时描述。
 何时查看：需要完整设计参考时；实现前先看 roadmap。
 
-`docs/agent_docs/p7-task-decomposition-plan.md`：
-内容：P7 任务解耦完整规划（翻译/语法拆分、模型路由、`Future.wait` 并发）；
+`docs/04-历史/已废弃/任务拆分方案.md`：
+内容：P7（完整）任务解耦规划（翻译/语法拆分、模型路由、`Future.wait` 并发）；
 已被 2026-11-08 roadmap 收窄为 P7-lite，P7.1/P7.3/P7.4 暂缓；P7.0 富文本
 后处理已落地。
 何时查看：评估未来任务拆分时；当前实施以 roadmap 为准。
 
-`docs/agent_docs/agent-refactor-idea-plan.md`：
+`docs/02-设计/助手/助手重构计划.md`：
 内容：Agent 重构实施计划（Agent-Refactor-Idea）：档案编译器、单次分析、
-F7 复合词补查、Phase 1a–4；Phase 1a–3 与 Phase 4 安全子集已实现，词表仅表示
+F7 复合词补查、R1a–4；R1a–3 与 阶段 4 安全子集已实现，词表仅表示
 语义覆盖（非 POS），采样截断已有显式告警；词表 UI/导入/非日语 tokenizer 未实现，
 决策见 ADR 0005。
 何时查看：实施或评审 Agent 重构时；不要当作当前能力。
 
-`docs/agent_docs/phase6-pipeline-review.md`：
+`docs/04-历史/评审/阶段6管线评审.md`：
 内容：Agent 管线评审与已知问题（含 file:line 证据）。
 何时查看：排查 Agent 管线问题；作为历史 gap 证据，不作当前任务清单。
 
-`docs/agent_docs/agent-lifecycle-and-edge-cases.md`：
+`docs/02-设计/助手/助手生命周期.md`：
 内容：Agent 运行生命周期、离开/返回页面、取消、并发、进程死亡等规范。
 何时查看：改 Agent 运行状态/取消/并发逻辑前。
 
-`docs/agent_docs/agent-maintainability-review.md`：
+`docs/04-历史/评审/助手可维护性评审.md`：
 内容：Agent 代码可维护性评审（死抽象、god 文件、controller/测试、schema 债务）。
 何时查看：重构 Agent 前；评估维护成本时。
 
-`docs/agent_docs/non-agent-regression-review.md`：
+`docs/04-历史/评审/非助手回归评审.md`：
 内容：Agent 以外功能的回归检查（旧 integration test 文案、帮助页、构建风险）。
 何时查看：Agent 改动后做非 Agent 回归前。
 
-`docs/schemas/agent/`：
+`docs/02-设计/接口模式/agent/`：
 内容：Agent 内部 DTO/输入/证据 schema（input/evidence/analysis/quote/profile/
 coverage/tool-result，以及 P6.7 的 history-entry/history-result/pitch/
 annotation-rules）；模型响应用方括号标签协议，不是 JSON 响应 schema。
 何时查看：改 DTO/请求/证据/历史/声调/DSL 结构或校验器前。
 
-`docs/adr/`：
+`docs/02-设计/架构决策/`：
 内容：五个架构决策（ONNX OCR、UniDic 原地读取、MDict `dict_reader`、Agent
-能力边界、Agent 档案编译器/单次分析；0005 为 Phase 0 提案，Phase 1a–3 与
-Phase 4 安全子集已实现）。
+能力边界、Agent 档案编译器/单次分析；0005 为 阶段 0 提案，R1a–3 与
+阶段 4 安全子集已实现）。
 何时查看：质疑/修改核心架构前；需要决策理由时。
 
-`docs/dev-setup.md`：
+`docs/05-参考/开发环境与构建.md`：
 内容：环境/字体/图标/构建/模拟器/adb 数据/网络/Gradle 排障，以及 MeCab/
 MDict/MDD 音频/OCR 设备集成测试的完整命令。
 何时查看：搭环境、跑设备测试、处理 Gradle/权限/模型目录/网络问题。
 
-`docs/phase3-review.md`：
-内容：Phase 3 代码评审与修复清单（H/M/L）。
-何时查看：追溯 Phase 3/3.5 修复来源；不要当当前任务清单。
+`docs/04-历史/评审/阶段3评审.md`：
+内容：阶段 3 代码评审与修复清单（H/M/L）。
+何时查看：追溯 阶段 3/3.5 修复来源；不要当当前任务清单。
 
-`docs/models.md`：
+`docs/05-参考/模型.md`：
 内容：OCR 模型来源/许可/下载与目录说明。
 何时查看：处理模型下载/校验/导入/许可前。
 
-`docs/licenses.md`：
+`docs/05-参考/第三方许可.md`：
 内容：第三方许可与来源汇总。
 何时查看：新增依赖/模型/词典或发布前。
 
@@ -197,14 +197,20 @@ MDict/MDD 音频/OCR 设备集成测试的完整命令。
 内容：OCR 模型文件名/URL/SHA-256/角色清单（不含模型本体）。
 何时查看：改模型下载/校验/导入逻辑前。
 
-`docs/archive/capture-redesign-requirements.md`：
+`docs/04-历史/原始需求/Rikai阶段/采集重构需求.md`：
 内容：2026-10-28 词典导入/查词/OCR/拍照重构的原始需求记录（已归档；当前 UI 以
-`docs/design-tokens.md` 与 `docs/project-data.md` §7 为准）。
-何时查看：追溯 Phase 3.5/4/5 的需求来源；不要当作当前规则。
+`docs/01-规范/设计规范.md` 与 `docs/01-规范/项目数据.md` §7 为准）。
+何时查看：追溯 阶段 3.5/4/5 的需求来源；不要当作当前规则。
 
-`项目初始文档.txt`：
-内容：2026-10 中期 UI/功能修正的原始需求记录（历史）。
+`docs/04-历史/原始需求/Rikai阶段/（旧）项目目标与简介.txt`：
+内容：2026-10 中期 UI/功能修正的原始需求记录（历史，Rikai 阶段）。
 何时查看：追溯当时的中期 UI 修正来源；不要当作当前规则。
+
+`docs/04-历史/原始需求/LexiCandy阶段/`：
+内容：项目转型后的当前定位：**释书糖 / LexiCandy**——本地优先、证据可追溯、
+可定制的多语深读与写作工作台；含 `释书糖LexiCandy概念.txt` 与
+`项目成熟化处理.txt`。**当前项目定位以本目录为准**；Rikai 阶段文档是上一阶段归档。
+何时查看：规划新功能/阶段、判断产品边界与端云架构前。
 
 ## 1. 项目是什么
 
@@ -212,40 +218,40 @@ Android 单端的 Flutter 日语阅读/查词应用。**核心离线**：拍照�
 横向 PaddleOCR / 纵向 MangaOCR → UniDic（用户自备）分词与注音 → 点击单词查询
 用户自备的 MDict 词典；另有搜索查词、词典偏好、语料保存。
 
-**Phase 4.5（OCR 质量与性能收敛）已于 2026-10-30 通过 arm64/真实设备验收并关闭；
-Phase 5（语料/历史、首次引导与发布打磨）也已于 2026-10-30 完成并由用户在冷启动
-模拟器上确认测试通过。** Phase 5 包含首次引导、文本/照片语料保存、自动保存开关、
-语料清空/删除、图片压缩、设置页存储/许可入口和 arm64 release APK。Phase 5 已由
+**阶段 4.5（OCR 质量与性能收敛）已于 2026-10-30 通过 arm64/真实设备验收并关闭；
+阶段 5（语料/历史、首次引导与发布打磨）也已于 2026-10-30 完成并由用户在冷启动
+模拟器上确认测试通过。** 阶段 5 包含首次引导、文本/照片语料保存、自动保存开关、
+语料清空/删除、图片压缩、设置页存储/许可入口和 arm64 release APK。阶段 5 已由
 用户发布为 1.0 release。
 
-Phase 6（`docs/phase6-agent-design.md`，**设计 v2；P6.1–P6.5 与 P6.6 多 OCR
+阶段 6（`docs/02-设计/助手/助手设计.md`，**设计 v2；P6.1–P6.5 与 P6.6 多 OCR
 核心及失败态/逐版本预览已实现，P6.6 真机验收未完成；P6.7-1 历史/持久化与
-P6.7-2 UniDic 声调已于 2026-11-03 实现，DSL/发布仍未完成**；契约见 `docs/phase6-agent-contracts.md`）
+P6.7-2 UniDic 声调已于 2026-11-03 实现，DSL/发布仍未完成**；契约见 `docs/02-设计/助手/助手契约.md`）
 增加「词典助手」：可选地调用
 用户配置的远程文本 LLM（DeepSeek/Claude 等），把本地 OCR、UniDic、MDict 作为
 schema 化证据；采用固定流水线，模型无工具调用（2026-10-31 决策）。图片仅在本机
-OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）；
-核心离线功能不得依赖该 Agent。实现进度见 `docs/phase6-status.md`。
+OCR，禁止视觉上云（固定隐私文案见 `docs/01-规范/项目数据.md` §7）；
+核心离线功能不得依赖该 Agent。实现进度见 `docs/03-进度/阶段6实现状态.md`。
 **2026-10-31 实机反馈 F1–F17 的修正计划见
-`docs/agent_docs/device-feedback-2026-10-31.md`；Wave 4 设备验收未完成前优先按
+`docs/03-进度/设备反馈-2026-10-31.md`；反馈波次 4 设备验收未完成前优先按
 该文档执行，不要在 P6.7 上叠加功能。**
 
 - 项目根目录：`C:\Projects\Rikai-Mobile`（ASCII 路径，旧的 `E:\MyData\大工\...` 已不存在）
 - 包名/applicationId/namespace：`com.rikai.mobile`
 - Flutter 工程名：`rikai_mobile`
-- 环境/版本/SDK/NDK/模拟器基线见 `docs/project-data.md` §1；本文件不重复具体值。
-- 仅 Android；不做 iOS、不做云 OCR/云翻译。Phase 6 可选 Agent 允许用户配置的
+- 环境/版本/SDK/NDK/模拟器基线见 `docs/01-规范/项目数据.md` §1；本文件不重复具体值。
+- 仅 Android；不做 iOS、不做云 OCR/云翻译。阶段 6 可选 Agent 允许用户配置的
   **文本 LLM**（不是云 OCR/视觉）；未实现前不得默认联网或把图片发给模型。
-- **UI 强制规范**：所有现有与新增界面必须遵循 `docs/design-tokens.md`
+- **UI 强制规范**：所有现有与新增界面必须遵循 `docs/01-规范/设计规范.md`
   （视觉数值、页面结构、控件位置与交互顺序的唯一权威）和
   `lib/core/theme/app_tokens.dart`；页面不得硬编码颜色/字号/间距/圆角。
-  固定按钮文案见 `docs/project-data.md` §7；Phase 6 新 UI 仍须先补 token/测试。
+  固定按钮文案见 `docs/01-规范/项目数据.md` §7；阶段 6 新 UI 仍须先补 token/测试。
 - **字体/图标**：HarmonyOS Sans SC Regular 由用户按 `assets/fonts/README.md`
-  下载（字体不入库）；构建前必须存在，图标生成见 `docs/dev-setup.md`。
-- 历史提交锚点见 `docs/project-history.md`；当前工作区以 `git status` 为准。
+  下载（字体不入库）；构建前必须存在，图标生成见 `docs/05-参考/开发环境与构建.md`。
+- 历史提交锚点见 `docs/04-历史/项目历史.md`；当前工作区以 `git status` 为准。
   不要擅自 `reset`/`commit`，除非用户明确要求。
 
-## 2. 已确认的架构决策（不要随意改；第 9 项为 Phase 6 设计边界）
+## 2. 已确认的架构决策（不要随意改；第 9 项为 阶段 6 设计边界）
 
 1. **统一 ONNX Runtime OCR**：
    - 横向：PaddleOCR PP-OCRv5 mobile det + rec（官方 ONNX）。
@@ -261,20 +267,20 @@ OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）�
    - Android 11+ 使用 `MANAGE_EXTERNAL_STORAGE`（所有文件访问）；拒绝时引导放到
      `/sdcard/Android/data/com.rikai.mobile/files/`。
    - 不实现“导入时复制大型 UniDic”作为默认行为；数据规模见
-     `docs/project-data.md` §6。不要在用户 UniDic 目录创建 `mecabrc`。
+     `docs/01-规范/项目数据.md` §6。不要在用户 UniDic 目录创建 `mecabrc`。
 4. **MeCab**：vendored `mecab_for_dart` 2.0.5（BSD-3）在 `packages/mecab_for_dart`，
    路径依赖。已打补丁：`src/dart_ffi.cpp` 仅在 `<dicdir>/mecabrc` 存在时才传 `-r`。
    应用必须自己创建**私有** `mecabrc`，并通过 `Mecab.create(..., options: '-r "<私有rc路径>"')`
    传入。`options` 字符串由 `generateArgs()` 按空格/双引号解析。
    该方式已在 Android x86_64 模拟器 + 真实大型 UniDic 上验证成功（见
-   `docs/phase1-status.md`；数据规模见 `docs/project-data.md` §6），不需要改 C++ 的
+   `docs/04-历史/阶段1状态.md`；数据规模见 `docs/01-规范/项目数据.md` §6），不需要改 C++ 的
    `rcPath` 参数。
    **注意**：UniDic 的 feature 行是带双引号的 CSV，例如
    `"動詞%F2@1,形容詞%F4@-2"`；不能直接 `split(',')`，必须用
    `lib/services/mecab/mecab_output_parser.dart`。
 5. **MDict**：`dict_reader` 1.6.1（MIT），长生命周期 worker isolate。
    - 开发测试词典为 MDict v2.0、UTF-8、zlib、未加密；条目数/大小见
-     `docs/project-data.md` §6；
+     `docs/01-规范/项目数据.md` §6；
    - `locateAll` 命中后必须解析 `@@@LINK=目标` 重定向，再渲染；
    - 不支持 LZO / record block 加密 / checksum；导入时要预检并给出明确错误。
 6. **词典 HTML 渲染**：离线 `flutter_inappwebview`，禁用 JS 与网络，HTML 清洗后加载；
@@ -283,7 +289,7 @@ OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）�
 8. **MangaOCR 模型**：默认从 `l0wgear/manga-ocr-2025-onnx` 下载；模型卡许可未声明，
    **不得随包分发/不得提交**，下载前显示提示，支持本地导入。原项目 kha-white 是
    Apache-2.0，但当前下载源不是。INT8 draft 解码器 MVP 不做。
-9. **Phase 6 词典助手（设计边界）**：
+9. **阶段 6 词典助手（设计边界）**：
    - 核心 OCR/UniDic/MDict 仍在本机；Agent 是可选在线模块，只有用户配置
      API Key/provider 并主动发送请求时才联网。
    - 图片只能经本机 OCR；严禁把图片作为 LLM 视觉输入或调用 provider 的图像能力。
@@ -301,10 +307,10 @@ OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）�
    - 词典熟悉档案按词典指纹缓存并经用户确认；注音/标注规则使用受验证的安全 DSL，
      禁止执行任意代码（首版不实现 DSL）。
    - API Key 用 `flutter_secure_storage`/Android Keystore，不进
-     SharedPreferences/日志/导出；Phase 6 不得破坏未配置 Agent 时的离线核心。
-     契约/schema/状态机细节见 `docs/phase6-agent-contracts.md`，产品细节见
-     `docs/phase6-agent-design.md`。
-10. **Phase 4.5 OCR 运行时（已完成）**：
+     SharedPreferences/日志/导出；阶段 6 不得破坏未配置 Agent 时的离线核心。
+     契约/schema/状态机细节见 `docs/02-设计/助手/助手契约.md`，产品细节见
+     `docs/02-设计/助手/助手设计.md`。
+10. **阶段 4.5 OCR 运行时（已完成）**：
    - PaddleOCR 必需；MangaOCR/orientation 只在 auto/vertical 需要时懒加载，
      横向模式不得创建 Manga session。`prepare(mode)` 只做后台预热。
    - readiness 区分 `mangaAvailable`/`mangaLoaded` 等；UI 的“已安装”看 available。
@@ -323,9 +329,9 @@ OCR，禁止视觉上云（固定隐私文案见 `docs/project-data.md` §7）�
 
 ## 3. 当前状态
 
-Phase 0–5 已全部完成并发布 1.0（验收记录见 `docs/project-history.md` 与各
-`phase*-status.md`）。Phase 6 P6.1–P6.5 已实现；2026-10-31 实机反馈 Wave 1–3
-（F1b/F6/F7）已实现，Wave 4 设备回归验收待做；P6.6 多 OCR 核心已于 2026-11-02
+阶段 0–5 已全部完成并发布 1.0（验收记录见 `docs/04-历史/项目历史.md` 与各
+`phase*-status.md`）。阶段 6 P6.1–P6.5 已实现；2026-10-31 实机反馈 反馈波次 1–3
+（F1b/F6/F7）已实现，反馈波次 4 设备回归验收待做；P6.6 多 OCR 核心已于 2026-11-02
 实现（自动化测试）。同日后续修正：provider 请求预校验/非法字符清理/400 按真实
 error body 分类（不设统一 max_tokens 上限；OpenAI-compatible 默认不发送
 max_tokens，provider 可选 maxOutputTokens 覆盖；只有 reasoning、无正文时快速失败
@@ -336,8 +342,8 @@ max_tokens，provider 可选 maxOutputTokens 覆盖；只有 reasoning、无正�
 结果生成模型用 `[YOMI]` 标记 `[MEANING]`
 读音，后处理允许整块删除 YOMI，保留块必须内容/位置不变；YOMI 内容/RUBY 读音
 清洗全半角标点；剥离标签逐字符 diff，冗余 RUBY 取消，失败降级纯文本；Markdown
-导出转 `base（reading）`；P7.0 增量，完整 P7 计划见
-`docs/agent_docs/p7-task-decomposition-plan.md`）、覆盖审查紧凑输入/单项容错/独立预算
+导出转 `base（reading）`；P7.0 增量，P7（完整）计划见
+`docs/04-历史/已废弃/任务拆分方案.md`）、覆盖审查紧凑输入/单项容错/独立预算
 （`AgentLimits.coverage*`，CJK 系数 1.0）/自动修正日志/规范化后修复、多 OCR
 每图独立 loading/可点缩略图、UniDic 空输入清除。多 OCR 显式对比改为
 `(engine, mode)` 组合（Paddle 横向/Manga 纵向/Paddle 纵向/auto，最多 4 个），
@@ -347,7 +353,7 @@ OCR 插件新增可选 `engine` 约束；版本 chip 左对齐/自动换行/固�
 统一为右下角蓝色大按钮，至少选中一个才启用。多个“可能的
 理解”不再显示解析器原始 0.5/0.7 权重，而是在 `normalizeAnalysis`/
 `salvageAnalysis` 中归一化为总和 100%（模型仍不输出概率）。Agent 输出质检样本
-存于 `docs/agent_output/YYYY-MM-DD-HH-mm.txt`。流式结束后先渲染已解析/校验的主
+存于 `docs/06-样本/YYYY-MM-DD-HH-mm.txt`。流式结束后先渲染已解析/校验的主
 结果（“结果已出，正在复核…”），不等待格式/语言/富文本后置调用；provider 在
 `finish_reason`/`[DONE]`/`message_stop` 到达时立即停止读取。P6.6 真机验收仍待
 另一工作流；P6.7-1 历史/持久化、P6.7-2 UniDic 声调、P6.6 失败态/逐版本预览、
@@ -370,36 +376,36 @@ P6.7 行、`agent-runtime-roadmap-2026-11-08.md`）；完整 text/group DSL 与�
 后台/通知与真机视觉验收仍未进行。
 当前进度、验证记录与工作队列只维护在以下文档，本文件不再复述：
 
-- 实现进度与验证记录：`docs/phase6-status.md`
-- F1–F17 状态、Wave 计划与验收：`docs/agent_docs/device-feedback-2026-10-31.md`
-- 测试/设备/性能/构建数据：`docs/project-data.md` §2–§5
+- 实现进度与验证记录：`docs/03-进度/阶段6实现状态.md`
+- F1–F17 状态、Wave 计划与验收：`docs/03-进度/设备反馈-2026-10-31.md`
+- 测试/设备/性能/构建数据：`docs/01-规范/项目数据.md` §2–§5
 
 ## 4. 未完成事项（按优先级）
 
-### Phase 6：Mdict Agent
+### 阶段 6：Mdict Agent
 
-设计与契约先读 `docs/phase6-agent-design.md`、`docs/phase6-agent-contracts.md`；
-规则边界见 §2 第 9 条，实现进度见 `docs/phase6-status.md`。剩余工作：
+设计与契约先读 `docs/02-设计/助手/助手设计.md`、`docs/02-设计/助手/助手契约.md`；
+规则边界见 §2 第 9 条，实现进度见 `docs/03-进度/阶段6实现状态.md`。剩余工作：
 
-- 按 `docs/agent_docs/device-feedback-2026-10-31.md` 完成 Wave 4 设备回归验收
+- 按 `docs/03-进度/设备反馈-2026-10-31.md` 完成 反馈波次 4 设备回归验收
   （真实 provider/API Key、arm64 Agent 端到端、大词典 suffix/incremental 冒烟、
-  secure storage 设备 I/O）；Wave 1–3 的自动化测试不能替代设备验收。
+  secure storage 设备 I/O）；反馈波次 1–3 的自动化测试不能替代设备验收。
 - P6.6 多 OCR 版本/词典辅助修复：核心已实现（显式多版本、质量/diff、词典候选、
   用户确认后重新分析）；剩余真机视觉/OCR/词典质量验收，不能把图片发给模型。
 - P6.7：历史/持久化、UniDic 声调、P6.6 失败态多 OCR 入口/逐版本依据预览、
   provider 测试连接、受限 Markdown 档案预览、annotation v1（装饰规则，阅读器/
-  照片集/语料）已实现（`docs/phase6-agent-design.md` §17.2、契约 §14、
-  `docs/project-rules.md` R-AGENT-24–27、`agent-runtime-roadmap-2026-11-08.md`）。
+  照片集/语料）已实现（`docs/02-设计/助手/助手设计.md` §17.2、契约 §14、
+  `docs/01-规范/项目规则.md` R-AGENT-24–27、`agent-runtime-roadmap-2026-11-08.md`）。
   剩余：P6.7-4b 无障碍/200%/许可/签名与真机视觉验收；完整 `text/group` DSL 与
-  用户规则编辑器列后续，不写成已支持。Wave 4 由另一工作流继续。
+  用户规则编辑器列后续，不写成已支持。反馈波次 4 由另一工作流继续。
 - P6.8-lite：译文预览（完整 `[TRANSLATION]` 块、续传去重）与文本 run 的内存
   LRU 证据缓存已实现；完整 segment streaming/块级 validator 未实现，图片 run
   暂不缓存。
-- P7：P7.0 富文本后处理、P7-lite 路由表与 `formattingCalls` 遥测已实现；
+- P7（完整）：P7.0 富文本后处理、P7-lite 路由表与 `formattingCalls` 遥测已实现；
   P7.1/P7.3/P7.4 任务拆分/并发/额外审查按 roadmap 暂缓，不得写成已支持。
 
 设备验收项见下文「真机/网络验收」；禁止事项（图片/密钥/未实现能力）见
-`docs/project-rules.md` R-AGENT/R-SEC。
+`docs/01-规范/项目规则.md` R-AGENT/R-SEC。
 
 ### 分发前
 
@@ -432,19 +438,19 @@ P6.7 行、`agent-runtime-roadmap-2026-11-08.md`）；完整 text/group DSL 与�
 
 ### 不要重写已验证路径
 
-- UniDic/MeCab、Phase 2 MDict、Phase 3 横向 OCR、Phase 4 纵向 MangaOCR 的
-  实现细节与已知限制见 `docs/project-history.md` 的“已完成路径的保护说明”与
+- UniDic/MeCab、阶段 2 MDict、阶段 3 横向 OCR、阶段 4 纵向 MangaOCR 的
+  实现细节与已知限制见 `docs/04-历史/项目历史.md` 的“已完成路径的保护说明”与
   对应 `phase*-status.md`；修改前先读，不要重写已验证的 Paddle 横向路径或
   MangaOCR 基础流水线。
 
 ## 5. 项目误区 → 解决方案
 
 > **已迁移**：原 §5.1–§5.14 的 129 条误区/解决方案已移至
-> `docs/project_tips.md`（`T-001`–`T-136`）。**今后的误区只在该文件新增**；
+> `docs/01-规范/误区与踩坑.md`（`T-001`–`T-138`）。**今后的误区只在该文件新增**；
 > 本文件不再保留误区正文。
 >
 > 何时查看：遇到报错/异常行为/准备重复试错前；先查
-> `docs/project_tips.md` 附录 A 的症状表，再按 `T-###` 阅读完整条目。
+> `docs/01-规范/误区与踩坑.md` 附录 A 的症状表，再按 `T-###` 阅读完整条目。
 
 ## 6. 关键文件
 
@@ -534,8 +540,8 @@ third_party/overlay-translator/                               # Apache 许可/�
 third_party/paddleocr4android/                                # MIT 许可/可选后端说明
 ```
 
-Phase 6 新增（P6.1–P6.5、Wave 3 与 P6.6 多 OCR 核心已创建；P6.7 历史/声调/
-DSL/受限 Markdown 预览文件待建）：
+阶段 6 新增（P6.1–P6.5、反馈波次 3 与 P6.6 多 OCR 核心已创建；P6.7 历史/声调、
+annotation v1、受限 Markdown 预览已实现）：
 
 ```text
 lib/features/agent/                                           # Agent 页/输入/模式/证据卡/OCR 版本/档案 sheet
@@ -558,8 +564,8 @@ lib/core/models/agent/agent_ocr.dart                          # P6.6 质量/diff
 lib/services/agent/ocr_consensus.dart                         # P6.6 质量评分/diff/排序/词典候选
 lib/state/agent_ocr_variants.dart                             # P6.6 应用级多版本识别控制器
 lib/features/agent/agent_ocr_variants_panel.dart              # P6.6 版本 chip/差异/修复 UI
-lib/services/agent/annotation/                                # 注音/标注安全 DSL 与统一渲染（P6.7 planned）
-lib/services/agent/markdown_renderer.dart                     # 受限 Markdown 档案预览（P6.7 planned；不做通用渲染器）
+lib/core/models/annotation_rules.dart                         # 注音/标注安全 DSL 与统一渲染（已实现）
+lib/core/ui/restricted_markdown.dart                          # 受限 Markdown 档案预览（已实现；不做通用渲染器）
 lib/core/models/agent/agent_history.dart                      # P6.7 历史 entry codec（已实现）
 lib/features/agent/agent_history_page.dart                    # P6.7 历史列表（已实现）
 lib/features/agent/agent_history_detail_page.dart             # P6.7 历史只读详情（已实现）
@@ -574,9 +580,9 @@ lib/services/storage/agent_store.dart                         # 会话/消息/�
 lib/services/security/secret_store.dart                       # API Key 安全存储
 lib/services/agent/agent_background_service.dart              # 后台运行 MethodChannel 桥（dataSync 前台服务）
 lib/services/lookup/lookup_gateway.dart                       # 纯查词提取（UI/Agent 共用）
-assets/agent/grammar_patterns_ja.json                         # 语法模式白名单
-assets/agent/dictionary_probes.json                           # 词典熟悉有界探针
-assets/agent/prompts/                                         # Prompt 版本文件
+lib/services/agent/grammar_patterns_ja.dart                   # 语法模式白名单（Dart 常量）
+lib/services/agent/familiarization/dictionary_probes.dart      # 词典熟悉有界探针（12+7）
+lib/services/agent/familiarization/built_in_word_lists.dart    # 内置覆盖词表（ja/zh/en）
 ```
 
 开发数据（不入库）：
@@ -586,40 +592,43 @@ C:\Projects\Rikai-Mobile\unidic\unidic-cwj-202512\
 C:\Projects\Rikai-Mobile\mdicts\講談社 日本語大辞典 第二版 双解版\
 ```
 
-文件大小、条目数、编码和资源统计见 `docs/project-data.md` §6。
+文件大小、条目数、编码和资源统计见 `docs/01-规范/项目数据.md` §6。
 
 ## 7. 构建与验证
 
-- 环境/版本/测试/性能基线统一见 `docs/project-data.md` §1–§5；本文件不重复具体值。
+- 环境/版本/测试/性能基线统一见 `docs/01-规范/项目数据.md` §1–§5；本文件不重复具体值。
 - 常规流程（在 `C:\Projects\Rikai-Mobile`）：
 
 ```powershell
 flutter pub get
-flutter analyze
-flutter test
+dart tool/verify.dart              # check_docs + analyze + test
+dart tool/verify.dart --build      # 再加 debug APK
 flutter build apk --debug
 ```
 
+单独跑文档检查：`dart tool/check_docs.dart`（不要用 `dart run`，避免触发
+mecab_for_dart 的 native build hook）。
+
 - 设备端集成测试（MeCab/MDict/MDD 音频/OCR/真实图片）、模拟器启动、`adb push`
   数据、网络与 Gradle 缓存排障、字体/图标生成、release `--config-only` 步骤，
-  全部见 `docs/dev-setup.md`；不要在常规代码工作中展开这些长命令。
+  全部见 `docs/05-参考/开发环境与构建.md`；不要在常规代码工作中展开这些长命令。
 - 构建前必须按 `assets/fonts/README.md` 放置 HarmonyOS Sans SC 字体；字体与模型
   文件不入库。修改 `assets/Rikai_Icon.jpg` 后运行
   `dart run flutter_launcher_icons`。
-- Phase 6 自动化测试只用 fake provider；不得用真实 API Key 跑测试。P6.6 多 OCR
+- 阶段 6 自动化测试只用 fake provider；不得用真实 API Key 跑测试。P6.6 多 OCR
   已有 quality/diff/ranking/repair、controller、prepared-variant orchestrator 与
-  widget 测试（全部 fake OCR/lookup）；P6.7 历史/声调测试已编写（设计见
-  design §17.2、contracts §14），DSL 测试尚未编写；真实 OCR 质量、真实词典
-  候选、provider/secure storage/arm64 仍需设备验收。
+  widget 测试（全部 fake OCR/lookup）；P6.7 历史/声调/annotation v1 测试已编写
+  （设计见 design §17.2、contracts §14），完整 text/group DSL 测试尚未编写；
+  真实 OCR 质量、真实词典候选、provider/secure storage/arm64 仍需设备验收。
 - 每个阶段结束运行 analyze/test/debug build；当前测试数量、设备套件结果与构建
-  产物见 `docs/project-data.md` §2/§3/§5。
+  产物见 `docs/01-规范/项目数据.md` §2/§3/§5。
 
 ## 8. 建议的下一个动作
 
 1. 运行 `git status`；不要覆盖未提交改动，不要擅自 commit/reset，除非用户明确要求。
-   历史提交锚点见 `docs/project-history.md`。
+   历史提交锚点见 `docs/04-历史/项目历史.md`。
 2. 按 §4 的优先级推进；不要重写已验证的 Paddle 横向路径或 MangaOCR 基础流水线。
-3. 新 UI 必须遵循 `docs/design-tokens.md` 与 `app_tokens.dart`；不得硬编码
-   颜色/字号，字体与模型文件不入库。Phase 6 的功能按钮/Agent UI 必须先补 token。
+3. 新 UI 必须遵循 `docs/01-规范/设计规范.md` 与 `app_tokens.dart`；不得硬编码
+   颜色/字号，字体与模型文件不入库。阶段 6 的功能按钮/Agent UI 必须先补 token。
 4. 每个阶段结束运行 analyze/test/debug build；测试数量、设备结果与构建产物见
-   `docs/project-data.md` §2/§3/§5；设备端测试命令见 `docs/dev-setup.md`。
+   `docs/01-规范/项目数据.md` §2/§3/§5；设备端测试命令见 `docs/05-参考/开发环境与构建.md`。

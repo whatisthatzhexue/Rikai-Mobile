@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/ocr_model.dart';
+import '../../core/models/ocr_model_copy.dart';
 import '../../core/theme/app_tokens.dart';
 import '../../core/ui/rikai_toast.dart';
 import '../../core/utils/format_bytes.dart';
@@ -817,8 +818,7 @@ class _ModelPageState extends ConsumerState<ModelPage> {
     );
   }
 
-  String _licenseLabel(String license) =>
-      license == 'UNKNOWN' ? '许可未声明' : license;
+  String _licenseLabel(String license) => OcrModelCopy.licenseLabel(license);
 
   String _errorText(Object error) {
     if (error is OcrModelException) return error.message;

@@ -1,12 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/agent/word_list_pack.dart';
-import 'package:rikai_mobile/services/agent/familiarization/word_list_coverage.dart';
+import 'package:rikai_mobile/services/agent/familiarization/built_in_word_lists.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
-  test('built-in word list packs are static, valid and tagged', () async {
-    final packs = await loadBuiltInWordListPacks();
+  test('built-in word list packs are static, valid and tagged', () {
+    final packs = builtInWordListPacks;
     expect(packs, hasLength(3));
     expect(
       packs.map((pack) => pack.language),

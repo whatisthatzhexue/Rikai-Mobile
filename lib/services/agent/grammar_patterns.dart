@@ -1,7 +1,3 @@
-import 'dart:convert';
-
-import 'package:flutter/services.dart' show AssetBundle, rootBundle;
-
 import '../../core/models/token.dart';
 
 class GrammarPattern {
@@ -115,23 +111,4 @@ class GrammarPatternCatalog {
     }
     return matches;
   }
-}
-
-Future<GrammarPatternCatalog> loadGrammarPatterns({
-  AssetBundle? bundle,
-  String path = 'assets/agent/grammar_patterns_ja.json',
-}) async {
-  try {
-    final raw = await (bundle ?? rootBundle).loadString(path);
-    final decoded = jsonDecode(raw);
-    if (decoded is Map) {
-      return GrammarPatternCatalog.fromJson(
-        decoded.map((key, value) => MapEntry(key.toString(), value)),
-      );
-    }
-  } catch (_) {
-    // Missing/invalid asset is non-fatal; the orchestrator can still run
-    // token-level lookups without grammar patterns.
-  }
-  return GrammarPatternCatalog(const <GrammarPattern>[]);
 }

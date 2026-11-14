@@ -92,3 +92,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+# Gradle wrapper copies kept out of the index; the tracked wrapper itself is
+# re-included by android/.gitignore so a fresh clone can still run ./gradlew.
+/android/gradlew
+/android/gradlew.bat
+/android/**/gradle-wrapper.jar

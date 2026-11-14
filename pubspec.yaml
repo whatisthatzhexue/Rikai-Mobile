@@ -88,8 +88,6 @@ flutter:
   assets:
     - assets/models/
     - assets/Rikai_Icon.jpg
-    - assets/agent/
-    - assets/agent/word_lists/
 
   # assets/licenses/ is intentionally not bundled: the in-app license page shows
   # a summary, and the authoritative texts stay in the repository for
@@ -97,7 +95,7 @@ flutter:
 
   # HarmonyOS Sans SC is NOT distributed with this repository. Download it and
   # place it at assets/fonts/HarmonyOS_Sans_SC_Regular.ttf before building.
-  # See assets/fonts/README.md and docs/design-tokens.md.
+  # See assets/fonts/README.md and docs/01-规范/设计规范.md.
   fonts:
     - family: HarmonyOS Sans SC
       fonts:

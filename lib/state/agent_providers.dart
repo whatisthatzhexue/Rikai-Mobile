@@ -14,6 +14,7 @@ import '../services/agent/evidence_cache.dart';
 import '../services/agent/familiarization/profile_fingerprint.dart';
 import '../services/agent/familiarization/profile_repository.dart';
 import '../services/agent/grammar_patterns.dart';
+import '../services/agent/grammar_patterns_ja.dart';
 import '../services/agent/ports/secret_port.dart';
 import '../services/security/secret_store.dart';
 import '../services/storage/agent_store.dart';
@@ -62,9 +63,8 @@ final agentProfileRepositoryProvider = Provider<DictionaryProfileRepository>(
   (ref) => ref.watch(agentStoreProvider),
 );
 
-final agentGrammarCatalogProvider = FutureProvider<GrammarPatternCatalog>(
-  (ref) => loadGrammarPatterns(),
-  retry: (retryCount, error) => null,
+final agentGrammarCatalogProvider = Provider<GrammarPatternCatalog>(
+  (ref) => GrammarPatternCatalog(builtInGrammarPatternsJa),
 );
 
 final agentImagePickerProvider = Provider<AgentImagePicker>(

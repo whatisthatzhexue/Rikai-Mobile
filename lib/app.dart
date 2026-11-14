@@ -182,7 +182,7 @@ class _RikaiAppState extends ConsumerState<RikaiApp> {
     return MaterialApp.router(
       title: 'Rikai',
       debugShowCheckedModeBanner: false,
-      // Canonical v1 design is light blue/white; see docs/design-tokens.md.
+      // Canonical v1 design is light blue/white; see docs/01-规范/设计规范.md.
       theme: AppTheme.light(fontFamily: fontFamily),
       darkTheme: AppTheme.light(fontFamily: fontFamily),
       themeMode: ThemeMode.light,

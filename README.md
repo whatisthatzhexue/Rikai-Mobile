@@ -6,16 +6,17 @@ tokenize with the user's UniDic, show furigana, and look up any word in the
 user's MDict dictionaries. OCR models may be downloaded during setup; after
 that, OCR, tokenization, and dictionary lookup are offline. Phase 6 adds an
 optional dictionary assistant that can call a user-configured LLM provider;
-P6.1–P6.5, the 2026-10-31 feedback Waves 1–3 and the P6.6 multi-OCR core are
-implemented. Wave 4 device acceptance, P6.6 device-quality checks and P6.7 are
-pending.
+P6.1–P6.5, the 2026-10-31 feedback waves 1–3, the P6.6 multi-OCR core, and
+P6.7 history/pitch/provider-test/Markdown/annotation v1 are implemented.
+Feedback wave 4 device acceptance, P6.6 device-quality checks, full text/group
+DSL and release polish remain pending.
 
 > Current test/device/performance/build/environment data lives in
-> [docs/project-data.md](docs/project-data.md). Normative MUST/MUST NOT rules
-> live in [docs/project-rules.md](docs/project-rules.md). Pitfalls and proven
-> fixes live in [docs/project_tips.md](docs/project_tips.md). Phase 0–5
+> [docs/01-规范/项目数据.md](docs/01-规范/项目数据.md). Normative MUST/MUST NOT rules
+> live in [docs/01-规范/项目规则.md](docs/01-规范/项目规则.md). Pitfalls and proven
+> fixes live in [docs/01-规范/误区与踩坑.md](docs/01-规范/误区与踩坑.md). Phase 0–5
 > implementation history lives in
-> [docs/project-history.md](docs/project-history.md). Other documents link to
+> [docs/04-历史/项目历史.md](docs/04-历史/项目历史.md). Other documents link to
 > them instead of copying current values, rule text, pitfall text or historical
 > detail.
 
@@ -29,10 +30,11 @@ user-confirmed on a cold-booted emulator on 2026-10-30.** Phase 6 (dictionary
 assistant) is in progress: P6.1–P6.5 core is implemented (capability ports,
 provider adapters, secure key storage, dictionary familiarization, fixed
 orchestrator/evidence/citation pipeline, Agent page and provider settings).
-The 2026-10-31 feedback Waves 1–3 are implemented. P6.6 multi-OCR comparison and
+The 2026-10-31 feedback waves 1–3 are implemented. P6.6 multi-OCR comparison and
 dictionary-assisted repair core is implemented (2026-11-02, automated tests);
-its real-device quality acceptance and P6.7 (annotation DSL, Markdown/ruby/
-pitch, history/release polish) remain.
+its real-device quality acceptance remains. P6.7 history/pitch, provider test
+connection, restricted Markdown preview and annotation v1 are implemented;
+full text/group DSL, release polish and device/visual acceptance remain.
 
 - In-place MeCab/UniDic tokenization in a long-lived worker isolate, private
   `mecabrc`, CSV-aware parsing of quoted UniDic fields
@@ -74,7 +76,7 @@ pitch, history/release polish) remain.
   per photo/mode/text; settings also clear the extracted MDict resource cache
   without touching dictionary files
 - Phase 5 release packaging: arm64 release APK builds successfully
-  (`app-arm64-v8a-release.apk`; size 见 [project-data](docs/project-data.md) §5);
+  (`app-arm64-v8a-release.apk`; size 见 [project-data](docs/01-规范/项目数据.md) §5);
   the onboarding/corpus/settings
   flows were user-confirmed on a cold-booted emulator. The APK currently uses
   the debug keystore for development.
@@ -111,7 +113,7 @@ pitch, history/release polish) remain.
 ### Phase 6 in progress: dictionary assistant
 
 Phase 6 P6.1–P6.5 core is implemented; 主页功能按钮的数量、顺序和固定文案见
-[project-data](docs/project-data.md) §7，不在本文件重复。
+[project-data](docs/01-规范/项目数据.md) §7，不在本文件重复。
 
 - Capability ports wrap the existing OCR/UniDic/MDict services; a pure
   `LookupGateway` keeps UI and Agent lookup behavior aligned; the unused
@@ -134,35 +136,35 @@ Phase 6 P6.1–P6.5 core is implemented; 主页功能按钮的数量、顺序和
   that open the existing entry page. Provider settings are available under
   Settings → 词典助手.
 
-Still pending: Wave 4 device acceptance for the 2026-10-31 feedback backlog
+Still pending: feedback wave 4 device acceptance for the 2026-10-31 backlog
 (real provider/API key, arm64 Agent end-to-end, large-dictionary
 suffix/incremental smoke, secure-storage device I/O), P6.6 real-device visual/
-OCR/dictionary-candidate acceptance, and P6.7 annotation DSL/Markdown/ruby/
-pitch/history/release polish. P6.6's explicit multi-OCR comparison, diff,
+OCR/dictionary-candidate acceptance, P6.7 full text/group DSL, release polish
+and device/visual acceptance. P6.6's explicit multi-OCR comparison, diff,
 quality ranking and user-confirmed dictionary repair are implemented and
 covered by fake-OCR/fake-lookup tests; this does not replace device
 verification. The feedback plan and wave order are in
-[docs/agent_docs/device-feedback-2026-10-31.md](docs/agent_docs/device-feedback-2026-10-31.md).
-See [docs/phase6-status.md](docs/phase6-status.md) for the current implementation
-record, [docs/phase6-agent-design.md](docs/phase6-agent-design.md) for the design
-and [docs/phase6-agent-contracts.md](docs/phase6-agent-contracts.md) for the
-tool/JSON-schema contracts.
+[docs/03-进度/设备反馈-2026-10-31.md](docs/03-进度/设备反馈-2026-10-31.md).
+See [docs/03-进度/阶段6实现状态.md](docs/03-进度/阶段6实现状态.md) for the current implementation
+record, [docs/02-设计/助手/助手设计.md](docs/02-设计/助手/助手设计.md) for the design
+and [docs/02-设计/助手/助手契约.md](docs/02-设计/助手/助手契约.md) for the
+field/state-machine/bracket-tag contracts (JSON Schemas are internal DTO/storage docs).
 
-Next: finish Wave 4 device acceptance for the feedback backlog, P6.6 device
-quality checks and P6.7. See
-[docs/phase5-status.md](docs/phase5-status.md),
-[docs/phase4.5-status.md](docs/phase4.5-status.md),
-[docs/phase6-agent-design.md](docs/phase6-agent-design.md),
-[docs/phase4-status.md](docs/phase4-status.md),
-[docs/phase3-status.md](docs/phase3-status.md),
-[docs/phase2-status.md](docs/phase2-status.md),
-[docs/phase1-status.md](docs/phase1-status.md) and
-[docs/phase0-status.md](docs/phase0-status.md) for design and verified results.
+Next: finish feedback wave 4 device acceptance for the backlog, P6.6 device
+quality checks and P6.7 device/visual acceptance. See
+[docs/04-历史/阶段5状态.md](docs/04-历史/阶段5状态.md),
+[docs/04-历史/阶段4.5状态.md](docs/04-历史/阶段4.5状态.md),
+[docs/02-设计/助手/助手设计.md](docs/02-设计/助手/助手设计.md),
+[docs/04-历史/阶段4状态.md](docs/04-历史/阶段4状态.md),
+[docs/04-历史/阶段3状态.md](docs/04-历史/阶段3状态.md),
+[docs/04-历史/阶段2状态.md](docs/04-历史/阶段2状态.md),
+[docs/04-历史/阶段1状态.md](docs/04-历史/阶段1状态.md) and
+[docs/04-历史/阶段0状态.md](docs/04-历史/阶段0状态.md) for design and verified results.
 
 ## Requirements
 
 - 精确的 Flutter/Dart/SDK/NDK、测试和设备基线统一见
-  [docs/project-data.md](docs/project-data.md) §1；本文件不重复具体版本号。
+  [docs/01-规范/项目数据.md](docs/01-规范/项目数据.md) §1；本文件不重复具体版本号。
 - User-supplied UniDic (MeCab compiled dictionary) and MDict `.mdx` files
 - **HarmonyOS Sans SC Regular**, downloaded by the user (not in this repository):
   place it at `assets/fonts/HarmonyOS_Sans_SC_Regular.ttf`; see
@@ -184,42 +186,44 @@ Download the font first (see above), then:
 ```powershell
 cd C:\Projects\Rikai-Mobile
 flutter pub get
-flutter analyze
-flutter test
+dart tool/verify.dart              # docs + analyze + test
+dart tool/verify.dart --build      # also builds a debug APK
 flutter build apk --debug
 ```
 
-For an arm64 release build, see [docs/dev-setup.md](docs/dev-setup.md): if a
+For an arm64 release build, see [docs/05-参考/开发环境与构建.md](docs/05-参考/开发环境与构建.md): if a
 previous debug/integration-test run left `integration_test` in the generated
 plugin registrant, run the `--config-only` release command once before
 `flutter build apk --release --target-platform android-arm64 --split-per-abi`.
-UI work must follow [docs/design-tokens.md](docs/design-tokens.md). The current
-build contains P6.1–P6.5, the 2026-10-31 feedback Waves 1–3 and the P6.6
-multi-OCR core; Wave 4 device acceptance and P6.7 are not yet implemented.
+UI work must follow [docs/01-规范/设计规范.md](docs/01-规范/设计规范.md). The current
+build contains P6.1–P6.5, the 2026-10-31 feedback waves 1–3, the P6.6
+multi-OCR core, and P6.7 history/pitch/provider-test/Markdown/annotation v1;
+feedback wave 4 device acceptance, full text/group DSL and release polish are
+not yet implemented.
 
 ## Documents
 
-- [Development plan](docs/DEVELOPMENT_PLAN.md)
-- [Project rules](docs/project-rules.md)
-- [Project data (single source)](docs/project-data.md)
-- [Design tokens](docs/design-tokens.md)
-- [Project tips (pitfalls)](docs/project_tips.md)
-- [Project history (Phase 0–5)](docs/project-history.md)
-- [Phase 0 status](docs/phase0-status.md)
-- [Phase 1 status](docs/phase1-status.md)
-- [Phase 2 status](docs/phase2-status.md)
-- [Phase 3 status](docs/phase3-status.md)
-- [Phase 3.5 capture/import status](docs/phase3.5-status.md)
-- [Phase 4 vertical OCR status](docs/phase4-status.md)
-- [Phase 4.5 OCR convergence status](docs/phase4.5-status.md)
-- [Phase 5 corpus/onboarding/release status](docs/phase5-status.md)
-- [Phase 6 agent design v2](docs/phase6-agent-design.md)
-- [Phase 6 agent contracts](docs/phase6-agent-contracts.md)
-- [Phase 6 implementation status](docs/phase6-status.md)
-- [Agent docs / current Device feedback](docs/agent_docs/README.md)
-- [Development setup](docs/dev-setup.md)
-- [Models](docs/models.md)
-- [Architecture decisions](docs/adr/)
+- [Development plan](docs/04-历史/开发计划.md)
+- [Project rules](docs/01-规范/项目规则.md)
+- [Project data (single source)](docs/01-规范/项目数据.md)
+- [Design tokens](docs/01-规范/设计规范.md)
+- [Project tips (pitfalls)](docs/01-规范/误区与踩坑.md)
+- [Project history (Phase 0–5)](docs/04-历史/项目历史.md)
+- [Phase 0 status](docs/04-历史/阶段0状态.md)
+- [Phase 1 status](docs/04-历史/阶段1状态.md)
+- [Phase 2 status](docs/04-历史/阶段2状态.md)
+- [Phase 3 status](docs/04-历史/阶段3状态.md)
+- [Phase 3.5 capture/import status](docs/04-历史/阶段3.5状态.md)
+- [Phase 4 vertical OCR status](docs/04-历史/阶段4状态.md)
+- [Phase 4.5 OCR convergence status](docs/04-历史/阶段4.5状态.md)
+- [Phase 5 corpus/onboarding/release status](docs/04-历史/阶段5状态.md)
+- [Phase 6 agent design v2](docs/02-设计/助手/助手设计.md)
+- [Phase 6 agent contracts](docs/02-设计/助手/助手契约.md)
+- [Phase 6 implementation status](docs/03-进度/阶段6实现状态.md)
+- [Agent docs / current Device feedback](docs/02-设计/助手/助手文档索引.md)
+- [Development setup](docs/05-参考/开发环境与构建.md)
+- [Models](docs/05-参考/模型.md)
+- [Architecture decisions](docs/02-设计/架构决策/)
 - [Third-party notices](THIRD_PARTY_NOTICES.md), [NOTICE](NOTICE)
 
 ## Licenses
@@ -234,4 +238,4 @@ user-selected remote LLM provider. Provider terms and privacy policies apply;
 Rikai-Mobile does not redistribute LLM weights, keys, or conversations. Images
 remain on-device; only locally extracted text and cleaned evidence are sent when
 the user explicitly initiates a request. Binding privacy/security rules:
-[docs/project-rules.md](docs/project-rules.md) R-SEC.
+[docs/01-规范/项目规则.md](docs/01-规范/项目规则.md) R-SEC.

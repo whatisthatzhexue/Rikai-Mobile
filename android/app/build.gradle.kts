@@ -23,10 +23,9 @@ android {
         applicationId = "com.rikai.mobile"
         minSdk = 26
         targetSdk = 36
+        // Single source: pubspec.yaml `version:` supplies both values.
         versionCode = flutter.versionCode
-        // Product-facing version for the 1.1 release; keep the build number
-        // from pubspec (1.1.0+2) as versionCode.
-        versionName = "1.1"
+        versionName = flutter.versionName
     }
 
     packaging {

@@ -3,6 +3,7 @@ import 'package:rikai_mobile/core/models/dict_info.dart';
 import 'package:rikai_mobile/core/models/lookup_match_mode.dart';
 import 'package:rikai_mobile/core/models/lookup_models.dart';
 import 'package:rikai_mobile/core/models/lookup_request.dart';
+import 'package:rikai_mobile/services/agent/familiarization/built_in_word_lists.dart';
 import 'package:rikai_mobile/services/agent/familiarization/word_list_coverage.dart';
 import 'package:rikai_mobile/services/agent/ports/lookup_port.dart';
 
@@ -64,7 +65,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('word list coverage counts exact/prefix hits by tag', () async {
-    final packs = await loadBuiltInWordListPacks();
+    final packs = builtInWordListPacks;
     final pack = packs.firstWhere((item) => item.language == 'ja');
     final lookup = _FakeLookup(
       exactHits: <String>{pack.entries[0].term, pack.entries[1].term},
@@ -92,7 +93,7 @@ void main() {
   });
 
   test('coverage reports zero when every lookup misses', () async {
-    final packs = await loadBuiltInWordListPacks();
+    final packs = builtInWordListPacks;
     final pack = packs.firstWhere((item) => item.language == 'zh');
 
     final coverage = await evaluateWordListCoverage(

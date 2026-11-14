@@ -1,6 +1,6 @@
 /// Small, dependency-free helpers for the Agent JSON contracts.
 ///
-/// Agent wire models use snake_case keys (see `docs/phase6-agent-contracts.md`);
+/// Agent wire models use snake_case keys (see `docs/02-设计/助手/助手契约.md`);
 /// these helpers keep `fromJson` implementations tolerant of missing fields and
 /// isolate the casts in one place.
 List<String> agentStringList(Object? value) {

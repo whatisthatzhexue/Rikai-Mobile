@@ -1,0 +1,40 @@
+Phase -1 我们今后如何避免人工Phase 0 / Phase 1，也能较好地维护工程质量？
+
+Phase 0 维护期
+目标：
+根目录文件夹每个文件夹的作用、文件夹下的重要文件、所有代码文件的架构
+结果：
+总体：结构文件整理重排
+文档格式、名称、语言统一为中文（需要详细说明），文档规范化，减少冗余文档。
+界面与功能解耦。功能模块更加结构化、可维护。搞清楚.gitignore。减少冗余代码，摸清项目逻辑。
+测试流程/代码规范化。
+验收：
+所有原功能仍然可用。
+
+Phase 1 修剪期
+带review的方式优化修建代码使其符合 Phase 0 探索的项目逻辑
+
+具体Review内容（人工）：
+
+docs文件夹下文档很散，中英文夹杂，不适合中国人团队协作。并且项目开发历史文档非常散，这边有个phase7，那边有个p7，那边又有个DEVELOPMENT_PLAN
+docs文件夹之间信息极度不同步，并且版本更新标识各个都不同，Wave 4 P6.7 P6.8 还有P0 P1 P2 Phase 1 Phase 2这样，非常反常理不方便阅读。
+
+计划：在对内容最小改动的情况下，优先整理文档文件夹结构（位置、文件名等等）而不是内容的语言转换或维护。将相同或类似的文档聚到一起便于后续统一合并
+
+一句话说明文件夹作用
+.claude Claude Code权限设置，防止Coding Agent去动一些本地静态资源，已经在.gitignore忽略
+.dart_tool 构建生成的临时文件夹，已经在.gitignore忽略
+.idea 目前没有什么重要内容，并且也已经在.gitignore忽略了
+
+在.gitignore新增了若干忽略项。
+grammar_patterns_ja.json 这个文件的作用是什么
+assets\models\manifest.json 字符硬编码了，这是拒绝多语言的硬伤
+assets\agent\word_list 这里面的东西没有必要打包。词表内容我们长周期内都不会更新。写入dart文件统一管理即可。
+dictionary_probes.json 这个是干什么的，是否是多余文件
+像grammar_patterns_ja.json 推荐写成带类型的 const 列表，而不是 Map 硬编码
+
+assets\agent\word_list 和 dictionary_probes.json，结构简单，更新频度低，放入dart代码中统一管理即可
+grammar_patterns_ja.json 这个也是，日语语法模式相对固定，几乎没有更新的必要
+整个assets\agent\都是很没必要打包进去的文件
+
+正面例子：assets\models\manifest.json 结构复杂、字段多、未来会扩展模型集，可以打包进assets

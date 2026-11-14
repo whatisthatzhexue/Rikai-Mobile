@@ -7,7 +7,7 @@ import 'agent_error_mapper.dart';
 
 class DictionarySamplePortAdapter implements DictionarySamplePort {
   DictionarySamplePortAdapter(this._service, {DictionaryProbeSet? probes})
-    : _probes = probes ?? DictionaryProbeSet.fallback;
+    : _probes = probes ?? DictionaryProbeSet.builtIn;
 
   final MdictService _service;
   final DictionaryProbeSet _probes;

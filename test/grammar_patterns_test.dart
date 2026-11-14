@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rikai_mobile/core/models/token.dart';
 import 'package:rikai_mobile/services/agent/grammar_patterns.dart';
+import 'package:rikai_mobile/services/agent/grammar_patterns_ja.dart';
 
 Token _token(String surface, int start, {String lemma = ''}) {
   final features = List<String>.filled(Token.expectedFeatureCount, '*');
@@ -16,6 +17,18 @@ Token _token(String surface, int start, {String lemma = ''}) {
 }
 
 void main() {
+  test('built-in grammar patterns are complete and match ている', () {
+    expect(builtInGrammarPatternsJa, hasLength(28));
+    final catalog = GrammarPatternCatalog(builtInGrammarPatternsJa);
+    final tokens = <Token>[
+      _token('て', 0),
+      _token('いる', 1),
+    ];
+    final matches = catalog.match(tokens);
+    expect(matches, hasLength(1));
+    expect(matches.single.pattern.id, 'te-iru');
+  });
+
   test('matches the longest non-overlapping pattern first', () {
     final catalog = GrammarPatternCatalog.fromJson(<String, Object?>{
       'patterns': <Object?>[

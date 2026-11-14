@@ -11,10 +11,10 @@ void main() {
     expect(probes.prefix, ['あ', '漢']);
   });
 
-  test('malformed probe JSON keeps the fallback lists', () {
+  test('malformed probe JSON keeps the built-in lists', () {
     final probes = DictionaryProbeSet.fromJson(const <String, Object?>{});
-    expect(probes.exact, DictionaryProbeSet.fallback.exact);
-    expect(probes.prefix, DictionaryProbeSet.fallback.prefix);
+    expect(probes.exact, DictionaryProbeSet.builtIn.exact);
+    expect(probes.prefix, DictionaryProbeSet.builtIn.prefix);
     expect(probes.exact, isNotEmpty);
     expect(probes.prefix, isNotEmpty);
   });
